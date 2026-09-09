@@ -3982,6 +3982,13 @@ export const asaasRouter = router({
        * Refletido como `groupName` no painel Asaas.
        */
       responsavelId: z.number().optional(),
+      /**
+       * Um número, um cadastro: o telefone já tem ficha no CRM (a que o
+       * WhatsApp criou). "Usar esse cadastro" liga a cobrança a ela em vez
+       * de abrir a segunda; "forcarSeparado" é o clique consciente.
+       */
+      usarContatoId: z.number().int().positive().optional(),
+      forcarSeparado: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "financeiro", "criar");
@@ -4069,16 +4076,50 @@ export const asaasRouter = router({
             .where(eq(contatos.id, contatoId));
         }
       } else {
-        const [novo] = await db.insert(contatos).values({
-          escritorioId: esc.escritorio.id,
-          nome: input.nome,
-          cpfCnpj: cpfLimpo,
-          email: input.email || null,
-          telefone: input.telefone || null,
-          origem: "manual",
-          responsavelId: input.responsavelId ?? null,
-        }).$returningId();
-        contatoId = novo.id;
+        // Um número, um cadastro: sem CPF batendo, o telefone decide. A ficha
+        // que o WhatsApp criou recebe o CPF e a cobrança em vez de ganhar
+        // uma irmã com o mesmo número.
+        const { buscarContatosPorTelefone } = await import("../escritorio/db-crm");
+        const telDigitos = (input.telefone || "").replace(/\D/g, "");
+        let porTelefone: typeof contatos.$inferSelect | null = null;
+        if (input.usarContatoId) {
+          const [alvo] = await db.select().from(contatos)
+            .where(and(eq(contatos.id, input.usarContatoId), eq(contatos.escritorioId, esc.escritorio.id)))
+            .limit(1);
+          if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "O cadastro escolhido não foi encontrado." });
+          porTelefone = alvo;
+        } else if (telDigitos.length >= 10 && !input.forcarSeparado) {
+          const [achado] = await buscarContatosPorTelefone(esc.escritorio.id, telDigitos, { limite: 1 });
+          if (achado) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Telefone já cadastrado para "${achado.nome}" [ID:${achado.id}]`,
+            });
+          }
+        }
+
+        if (porTelefone) {
+          await db.update(contatos).set({
+            nome: input.nome,
+            cpfCnpj: cpfLimpo,
+            email: input.email || porTelefone.email || null,
+            telefone: porTelefone.telefone || input.telefone || null,
+            responsavelId: input.responsavelId ?? porTelefone.responsavelId ?? null,
+            estagio: "cliente",
+          }).where(eq(contatos.id, porTelefone.id));
+          contatoId = porTelefone.id;
+        } else {
+          const [novo] = await db.insert(contatos).values({
+            escritorioId: esc.escritorio.id,
+            nome: input.nome,
+            cpfCnpj: cpfLimpo,
+            email: input.email || null,
+            telefone: input.telefone || null,
+            origem: "manual",
+            responsavelId: input.responsavelId ?? null,
+          }).$returningId();
+          contatoId = novo.id;
+        }
       }
 
       // Vincular

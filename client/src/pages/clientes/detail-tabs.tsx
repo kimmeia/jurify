@@ -920,6 +920,24 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     }
   }, [cpfExistente, open, cpfDebounced, cpfDuplicataAck]);
 
+  // Um número, um cadastro: enquanto o telefone é digitado, o servidor diz se
+  // aquele número já tem ficha (mesma régua que reconhece quem escreve no
+  // WhatsApp). O card oferece completar a ficha que existe; criar separado
+  // é um clique consciente, lembrado por número (`telSeparadoAck`).
+  const [telDebounced, setTelDebounced] = useState("");
+  const [telSeparadoAck, setTelSeparadoAck] = useState<string | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setTelDebounced(tel), 400);
+    return () => clearTimeout(t);
+  }, [tel]);
+  const telDigitos = telDebounced.replace(/\D/g, "");
+  const { data: telExistente } = (trpc as any).clientes.verificarTelefone.useQuery(
+    { telefone: telDebounced },
+    { enabled: open && telDigitos.length >= 10, retry: false },
+  );
+  const telReconhecido = telDigitos.length >= 10 && telExistente ? telExistente : null;
+  const telAguardandoEscolha = !!telReconhecido && telSeparadoAck !== telDigitos;
+
   const fecharDuplicataAlerta = () => {
     // Lembra do CPF reconhecido pra não reabrir o alert se o user mantiver
     // o mesmo CPF (caso ele escolha "voltar e ajustar" mas não muda nada).
@@ -935,6 +953,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     // Sem isso, query cacheada de verificarCpf reabriria o alert no
     // próximo "Novo cliente".
     setCpfDebounced(""); setCpfDuplicataAck(null);
+    setTelDebounced(""); setTelSeparadoAck(null);
   };
 
   const criar = trpc.clientes.criar.useMutation({
@@ -1001,9 +1020,103 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   // mostra) dava "(55) 85997-9657" — e era ESSE número que ia pro cadastro.
   const formatTel = (v: string) => mascararTelefoneBR(v);
 
+  const origemCadastroLabel = (o: string) =>
+    o === "whatsapp" ? "Contato do WhatsApp"
+      : o === "asaas" ? "Sincronizado do Asaas"
+        : o === "manual" ? "Cadastro manual"
+          : o === "site" ? "Veio do site"
+            : o;
+
+  /**
+   * Um envio só pros três caminhos: cadastro novo, "Completar esse cadastro"
+   * (preenche a ficha que já tem este telefone) e "Criar separado mesmo
+   * assim" (o clique consciente vira `forcarSeparado`).
+   */
+  const submeter = (extra?: { completarContatoId?: number; forcarSeparado?: boolean }) => {
+    if (!validar()) {
+      // `validar` já preenche `erros` que aparecem inline. Mas pra
+      // qualificação/endereço o erro vai no `erros.qualif` agregado —
+      // mostra como toast porque o componente é separado.
+      const qualifFaltando = validarQualificacaoCompleta(qualif);
+      if (qualifFaltando.length > 0) {
+        toast.error(`Faltam: ${qualifFaltando.join(", ")}`);
+      }
+      return;
+    }
+    if (defsCampos && defsCampos.length > 0) {
+      const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
+      if (faltando.length > 0) { toast.error(`Preencha: ${faltando.join(", ")}`); return; }
+    }
+    const escolha = extra ?? (telSeparadoAck === telDigitos ? { forcarSeparado: true } : {});
+    criar.mutate({
+      nome,
+      telefone: tel || undefined,
+      email: email || undefined,
+      cpfCnpj: cpf || undefined,
+      responsavelId: responsavelId ? Number(responsavelId) : undefined,
+      documentacaoPendente: docPendente,
+      documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined,
+      camposPersonalizados: camposExtras,
+      profissao: qualif.profissao || null,
+      estadoCivil: qualif.estadoCivil || null,
+      nacionalidade: qualif.nacionalidade || null,
+      cep: qualif.cep || null,
+      logradouro: qualif.logradouro || null,
+      numeroEndereco: qualif.numeroEndereco || null,
+      complemento: qualif.complemento || null,
+      bairro: qualif.bairro || null,
+      cidade: qualif.cidade || null,
+      uf: qualif.uf || null,
+      // Marca como conversão (cria lead automático com fechado_ganho)
+      // quando o operador indica que cliente já fechou contrato fora
+      // do pipeline (ligação/indicação/etc).
+      jaFechado: jaFechado || undefined,
+      valorFechamento: jaFechado && valorFechamento ? valorFechamento : undefined,
+      origemFechamento: jaFechado ? origemFechamento : undefined,
+      ...escolha,
+    });
+  };
+
   return (<><Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
     <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-danger/30" : ""} />{erros.nome && <p className="text-[10px] text-danger">{erros.nome}</p>}</div>
     <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-danger/30" : ""} />{erros.tel && <p className="text-[10px] text-danger">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-danger/30" : ""} />{erros.email && <p className="text-[10px] text-danger">{erros.email}</p>}</div></div>
+    {telReconhecido && (
+      <div className="rounded-lg border border-info/30 bg-info-bg/60 p-3 space-y-2" data-testid="telefone-reconhecido">
+        <p className="text-xs font-semibold text-info-fg">⚡ Este WhatsApp já está em um cadastro</p>
+        <div className="rounded-md border bg-background px-2.5 py-2 flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-[11px] font-bold shrink-0">
+            {String(telReconhecido.nome || "?").split(/\s+/).slice(0, 2).map((p: string) => p.charAt(0)).join("").toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold truncate">{telReconhecido.nome}</p>
+            <p className="text-[10.5px] text-muted-foreground leading-snug">
+              {origemCadastroLabel(telReconhecido.origem)}
+              {telReconhecido.createdAt ? ` · desde ${new Date(telReconhecido.createdAt).toLocaleDateString("pt-BR")}` : ""}
+              {telReconhecido.conversasAbertas > 0
+                ? ` · ${telReconhecido.conversasAbertas} conversa${telReconhecido.conversasAbertas > 1 ? "s" : ""} em atendimento${telReconhecido.atendenteNome ? ` com ${telReconhecido.atendenteNome}` : ""}`
+                : ""}
+              {telReconhecido.temCpf ? " · com CPF" : " · sem CPF"}
+            </p>
+          </div>
+          <span className="text-[10px] font-semibold text-muted-foreground shrink-0 tabular-nums">{mascararTelefoneBR(telReconhecido.telefone)}</span>
+        </div>
+        {telSeparadoAck === telDigitos ? (
+          <p className="text-[10.5px] text-muted-foreground">Vai criar um cadastro separado com o mesmo número.</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" className="h-7 text-xs" disabled={criar.isPending} onClick={() => submeter({ completarContatoId: telReconhecido.id })}>
+              Completar esse cadastro
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={criar.isPending} onClick={() => setTelSeparadoAck(telDigitos)}>
+              Criar separado mesmo assim
+            </Button>
+          </div>
+        )}
+        <p className="text-[10.5px] text-info-fg/80 leading-snug">
+          Completar preenche nome, CPF e o resto <b>na ficha que já existe</b>: a conversa, o histórico e o atendente ficam onde estão. Nada é apagado.
+        </p>
+      </div>
+    )}
     <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-danger/30" : ""} />{erros.cpf && <p className="text-[10px] text-danger">{erros.cpf}</p>}</div>
     <CamposQualificacaoEndereco
       obrigatorios
@@ -1109,48 +1222,11 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       )}
     </div>
     <CamposPersonalizadosForm value={camposExtras} onChange={setCamposExtras} />
-  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => {
-    if (!validar()) {
-      // `validar` já preenche `erros` que aparecem inline. Mas pra
-      // qualificação/endereço o erro vai no `erros.qualif` agregado —
-      // mostra como toast porque o componente é separado.
-      const qualifFaltando = validarQualificacaoCompleta(qualif);
-      if (qualifFaltando.length > 0) {
-        toast.error(`Faltam: ${qualifFaltando.join(", ")}`);
-      }
-      return;
-    }
-    if (defsCampos && defsCampos.length > 0) {
-      const faltando = validarCamposObrigatorios(camposExtras, defsCampos);
-      if (faltando.length > 0) { toast.error(`Preencha: ${faltando.join(", ")}`); return; }
-    }
-    criar.mutate({
-      nome,
-      telefone: tel || undefined,
-      email: email || undefined,
-      cpfCnpj: cpf || undefined,
-      responsavelId: responsavelId ? Number(responsavelId) : undefined,
-      documentacaoPendente: docPendente,
-      documentacaoObservacoes: docPendente && docObs.trim() ? docObs.trim() : undefined,
-      camposPersonalizados: camposExtras,
-      profissao: qualif.profissao || null,
-      estadoCivil: qualif.estadoCivil || null,
-      nacionalidade: qualif.nacionalidade || null,
-      cep: qualif.cep || null,
-      logradouro: qualif.logradouro || null,
-      numeroEndereco: qualif.numeroEndereco || null,
-      complemento: qualif.complemento || null,
-      bairro: qualif.bairro || null,
-      cidade: qualif.cidade || null,
-      uf: qualif.uf || null,
-      // Marca como conversão (cria lead automático com fechado_ganho)
-      // quando o operador indica que cliente já fechou contrato fora
-      // do pipeline (ligação/indicação/etc).
-      jaFechado: jaFechado || undefined,
-      valorFechamento: jaFechado && valorFechamento ? valorFechamento : undefined,
-      origemFechamento: jaFechado ? origemFechamento : undefined,
-    });
-  }} disabled={!nome || criar.isPending}>{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent>
+  </div><DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button
+    onClick={() => submeter()}
+    disabled={!nome || criar.isPending || telAguardandoEscolha}
+    title={telAguardandoEscolha ? "Este telefone já tem cadastro — escolha completar ou criar separado" : undefined}
+  >{criar.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null} Cadastrar</Button></DialogFooter></DialogContent>
   </Dialog>
   {/* Aberto APÓS criar cliente quando "já fechou contrato" estava marcado.
       Fica fora do Dialog principal pra não ser desmontado quando ele fecha. */}

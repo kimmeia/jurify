@@ -469,6 +469,13 @@ export const clientesRouter = router({
     valorFechamento: z.string().max(20).optional(),
     /** Origem da indicação ("indicacao", "ligacao", "evento", etc). */
     origemFechamento: z.string().max(128).optional(),
+    /**
+     * Um número, um cadastro: o telefone já tem ficha (a que o WhatsApp
+     * criou). "Completar" preenche essa ficha em vez de abrir a segunda;
+     * "forcarSeparado" é o clique consciente de quem quer duas mesmo.
+     */
+    completarContatoId: z.number().int().positive().optional(),
+    forcarSeparado: z.boolean().optional(),
   }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
@@ -484,7 +491,7 @@ export const clientesRouter = router({
       // com cadastros antigos com formatação variada). Operador recebe
       // nome+ID do cliente existente pra clicar e abrir a ficha.
       if (input.cpfCnpj) {
-        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj);
+        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.completarContatoId);
         if (dup) {
           // ID embutido na mensagem `[ID:n]` pra o frontend extrair via regex
           // e oferecer link "Abrir cliente existente" (TRPCError.cause não
@@ -504,8 +511,64 @@ export const clientesRouter = router({
       // Campos personalizados — só persiste o que tiver chave válida (string)
       // e pelo menos um valor não-vazio.
       const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
-      const contatoId = (r as { insertId: number }).insertId;
+
+      // Um número, um cadastro. A mesma régua que reconhece quem escreve no
+      // WhatsApp vale pra quem cadastra à mão: telefone que já tem ficha não
+      // vira segunda ficha em silêncio.
+      const { buscarContatosPorTelefone } = await import("./db-crm");
+      const { mesmoTelefone } = await import("../../shared/telefone");
+      const telDigitos = (input.telefone || "").replace(/\D/g, "");
+      let contatoId: number;
+      if (input.completarContatoId) {
+        const [alvo] = await db
+          .select()
+          .from(contatos)
+          .where(and(eq(contatos.id, input.completarContatoId), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "O cadastro pra completar não foi encontrado." });
+        if (alvo.telefone && input.telefone && !mesmoTelefone(alvo.telefone, input.telefone)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O cadastro escolhido tem outro telefone — confira o número." });
+        }
+        // Preenche o que faltava e corrige o nome (era o nome do perfil do
+        // WhatsApp). Conversa, histórico e atendente ficam onde estão: o
+        // responsável só entra quando a ficha não tinha nenhum.
+        await db.update(contatos).set({
+          nome: input.nome,
+          telefone: alvo.telefone || input.telefone || null,
+          email: input.email || alvo.email || null,
+          cpfCnpj: input.cpfCnpj || alvo.cpfCnpj || null,
+          observacoes: input.observacoes || alvo.observacoes || null,
+          tags: input.tags || alvo.tags || null,
+          responsavelId: alvo.responsavelId ?? respId,
+          documentacaoPendente: input.documentacaoPendente ?? alvo.documentacaoPendente,
+          documentacaoObservacoes: input.documentacaoObservacoes || alvo.documentacaoObservacoes || null,
+          camposPersonalizados: camposJson ?? alvo.camposPersonalizados,
+          profissao: input.profissao || alvo.profissao || null,
+          estadoCivil: input.estadoCivil || alvo.estadoCivil || null,
+          nacionalidade: input.nacionalidade || alvo.nacionalidade || null,
+          cep: input.cep || alvo.cep || null,
+          logradouro: input.logradouro || alvo.logradouro || null,
+          numeroEndereco: input.numeroEndereco || alvo.numeroEndereco || null,
+          complemento: input.complemento || alvo.complemento || null,
+          bairro: input.bairro || alvo.bairro || null,
+          cidade: input.cidade || alvo.cidade || null,
+          uf: input.uf || alvo.uf || null,
+          estagio: "cliente",
+        }).where(and(eq(contatos.id, alvo.id), eq(contatos.escritorioId, perm.escritorioId)));
+        contatoId = alvo.id;
+      } else {
+        if (telDigitos.length >= 10 && !input.forcarSeparado) {
+          const [existente] = await buscarContatosPorTelefone(perm.escritorioId, telDigitos, { limite: 1 });
+          if (existente) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Telefone já cadastrado para "${existente.nome}" [ID:${existente.id}]`,
+            });
+          }
+        }
+        const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
+        contatoId = (r as { insertId: number }).insertId;
+      }
 
       // Se marcado "já fechado", cria lead com etapa fechado_ganho — entra
       // no relatório comercial como conversão. Não-fatal: se falhar, o
@@ -1674,4 +1737,192 @@ export const clientesRouter = router({
       if (cpfLimpo.length !== 11 && cpfLimpo.length !== 14) return null;
       return buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.excluirId);
     }),
+
+  /**
+   * Um número, um cadastro: enquanto o operador digita o telefone, a tela
+   * pergunta se aquele número já tem ficha — com a MESMA régua que reconhece
+   * quem escreve no WhatsApp (com/sem 9, com/sem 55, com/sem máscara).
+   * Devolve a ficha que sobreviveria numa unificação (com CPF; senão, a mais
+   * antiga) e o bastante pra tela explicar o que "Completar" faz.
+   */
+  verificarTelefone: protectedProcedure
+    .input(z.object({
+      telefone: z.string().max(32),
+      excluirId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) return null;
+      const digitos = input.telefone.replace(/\D/g, "");
+      if (digitos.length < 10) return null;
+      const { buscarContatosPorTelefone } = await import("./db-crm");
+      const { escolherSobrevivente } = await import("./reconhecer-cadastro");
+      const achados = await buscarContatosPorTelefone(perm.escritorioId, digitos, { excetoId: input.excluirId });
+      if (achados.length === 0) return null;
+      const melhor = achados.reduce((m, c) => escolherSobrevivente(m, c).principal);
+
+      let conversasAbertas = 0;
+      let atendenteNome: string | null = null;
+      const db = await getDb();
+      if (db) {
+        const abertas = await db
+          .select({ id: conversas.id, atendenteId: conversas.atendenteId })
+          .from(conversas)
+          .where(and(
+            eq(conversas.contatoId, melhor.id),
+            eq(conversas.escritorioId, perm.escritorioId),
+            inArray(conversas.status, ["aguardando", "em_atendimento"]),
+          ));
+        conversasAbertas = abertas.length;
+        const atendenteId = abertas.find((a) => a.atendenteId)?.atendenteId;
+        if (atendenteId) {
+          const [u] = await db
+            .select({ nome: users.name })
+            .from(colaboradores)
+            .innerJoin(users, eq(colaboradores.userId, users.id))
+            .where(eq(colaboradores.id, atendenteId))
+            .limit(1);
+          atendenteNome = u?.nome ?? null;
+        }
+      }
+      return {
+        id: melhor.id,
+        nome: melhor.nome,
+        telefone: melhor.telefone,
+        origem: melhor.origem,
+        estagio: melhor.estagio,
+        temCpf: !!melhor.cpfCnpj?.trim(),
+        temEmail: !!melhor.email?.trim(),
+        createdAt: toIsoString(melhor.createdAt) ?? null,
+        conversasAbertas,
+        atendenteNome,
+        outros: achados.length - 1,
+      };
+    }),
+
+  /**
+   * Faxina do que já duplicou: fichas do escritório agrupadas pelo telefone
+   * (DDD + 8 dígitos). Em cada grupo, quem sobrevive é a ficha com CPF (em
+   * empate, a mais antiga) — a mesma regra da unificação automática. Só quem
+   * pode excluir clientes vê a lista, que é a permissão do "Mesclar".
+   */
+  possiveisDuplicadosTelefone: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+    if (!perm.allowed) return { podeVer: false, grupos: [] as PossivelDuplicadoGrupo[] };
+    const db = await getDb();
+    if (!db) return { podeVer: true, grupos: [] as PossivelDuplicadoGrupo[] };
+    const { agruparPorTelefone, escolherSobrevivente } = await import("./reconhecer-cadastro");
+    const { clienteProcessos } = await import("../../drizzle/schema");
+
+    const todos = await db
+      .select({
+        id: contatos.id, nome: contatos.nome, telefone: contatos.telefone,
+        cpfCnpj: contatos.cpfCnpj, email: contatos.email, estagio: contatos.estagio,
+        origem: contatos.origem, createdAt: contatos.createdAt,
+      })
+      .from(contatos)
+      .where(and(
+        eq(contatos.escritorioId, perm.escritorioId),
+        sql`${contatos.telefone} IS NOT NULL`,
+        sql`${contatos.telefone} <> ''`,
+      ));
+    const grupos = agruparPorTelefone(todos);
+    if (grupos.length === 0) return { podeVer: true, grupos: [] as PossivelDuplicadoGrupo[] };
+
+    const ids = grupos.flatMap((g) => g.contatos.map((c) => c.id));
+    const contar = async (tabela: any, coluna: any): Promise<Map<number, number>> => {
+      const mapa = new Map<number, number>();
+      try {
+        const rows = await db
+          .select({ contatoId: coluna, n: sql<number>`COUNT(*)` })
+          .from(tabela)
+          .where(inArray(coluna, ids))
+          .groupBy(coluna);
+        for (const r of rows) if (r.contatoId != null) mapa.set(Number(r.contatoId), Number(r.n));
+      } catch { /* tabela pode não existir — conta zero */ }
+      return mapa;
+    };
+    const [nConversas, nCobrancas, nProcessos] = await Promise.all([
+      contar(conversas, conversas.contatoId),
+      contar(asaasCobrancas, asaasCobrancas.contatoId),
+      contar(clienteProcessos, clienteProcessos.contatoId),
+    ]);
+    const resumo = (c: (typeof todos)[number]): PossivelDuplicadoFicha => ({
+      id: c.id,
+      nome: c.nome,
+      origem: c.origem,
+      estagio: c.estagio,
+      temCpf: !!c.cpfCnpj?.trim(),
+      createdAt: toIsoString(c.createdAt) ?? null,
+      conversas: nConversas.get(c.id) ?? 0,
+      cobrancas: nCobrancas.get(c.id) ?? 0,
+      processos: nProcessos.get(c.id) ?? 0,
+    });
+    return {
+      podeVer: true,
+      grupos: grupos.map((g) => {
+        const principal = g.contatos.reduce((m, c) => escolherSobrevivente(m, c).principal);
+        return {
+          chave: g.chave,
+          telefone: principal.telefone,
+          sobrevivente: resumo(principal),
+          mescladas: g.contatos.filter((c) => c.id !== principal.id).map(resumo),
+        };
+      }),
+    };
+  }),
+
+  /** Mescla os pares escolhidos na lista de duplicados — cada um com registro pra "Desfazer". */
+  mesclarDuplicados: protectedProcedure
+    .input(z.object({
+      pares: z.array(z.object({
+        principalId: z.number().int().positive(),
+        duplicadoId: z.number().int().positive(),
+      })).min(1).max(50),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes mescla cadastros." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { unificarComRegistro } = await import("./reconhecer-cadastro");
+      const feitos: number[] = [];
+      const falhas: Array<{ duplicadoId: number; erro: string }> = [];
+      for (const par of input.pares) {
+        try {
+          await unificarComRegistro(db, {
+            escritorioId: perm.escritorioId,
+            principalId: par.principalId,
+            duplicadoId: par.duplicadoId,
+            origem: "manual",
+            executadoPor: perm.colaboradorId,
+          });
+          feitos.push(par.duplicadoId);
+        } catch (err: any) {
+          falhas.push({ duplicadoId: par.duplicadoId, erro: err?.message || "falhou" });
+        }
+      }
+      return { feitos, falhas };
+    }),
 });
+
+type PossivelDuplicadoFicha = {
+  id: number;
+  nome: string;
+  origem: string;
+  estagio: string;
+  temCpf: boolean;
+  createdAt: string | null;
+  conversas: number;
+  cobrancas: number;
+  processos: number;
+};
+
+type PossivelDuplicadoGrupo = {
+  chave: string;
+  telefone: string | null;
+  sobrevivente: PossivelDuplicadoFicha;
+  mescladas: PossivelDuplicadoFicha[];
+};
