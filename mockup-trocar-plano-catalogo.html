@@ -217,13 +217,13 @@ b,strong{font-weight:700}
 
             <!-- caminho preço público -->
             <div class="fecha" id="fecha-preco">
-              <div class="info" id="info-preco"><b>O que acontece ao confirmar:</b> cria a assinatura do <b id="nome-preco">Básico</b> no Asaas com o preço de tabela (<b id="preco-preco">R$ 97,00</b>/mês) e manda o link da 1ª cobrança. A assinatura atual continua valendo até o pagamento cair.</div>
+              <div class="info" id="info-preco"><b>O que acontece ao confirmar:</b> cria a assinatura do <b id="nome-preco">Básico</b> no Asaas com o preço de tabela (<b id="preco-preco">R$ 97,00</b>/mês) e manda o link da 1ª cobrança. Na proposta, a assinatura atual continua valendo até o pagamento cair (hoje ela é cancelada assim que a nova é criada — decisão 1).</div>
               <div class="rodmodal"><span class="btn ghost">Cancelar</span><span class="btn prim">↻ Trocar plano</span></div>
             </div>
 
             <!-- atual -->
             <div class="fecha" id="fecha-atual">
-              <div class="info">Este já é o plano atual. Pra fechar o valor dele, use <b>Ativar assinatura paga</b> na ficha.</div>
+              <div class="info">Este já é o plano atual. Pra fechar o valor dele: cliente em teste usa <b>Ativar assinatura paga</b> na ficha; cliente que já paga ajusta o valor no card <b>Módulos &amp; cobrança</b> — os dois como hoje.</div>
               <div class="rodmodal"><span class="btn ghost">Cancelar</span><span class="btn prim off">Trocar plano</span></div>
             </div>
 
@@ -237,8 +237,8 @@ b,strong{font-weight:700}
     <div class="sec">Os três caminhos, lado a lado</div>
     <div class="fluxo">
       <div><span class="n">1</span><b>Plano sob consulta</b>Escolheu → digita o valor fechado, CPF/CNPJ e ciclo → "Fechar valor e trocar". Nasce a assinatura nova no Asaas com o valor digitado; a atual fica até o pagamento.</div>
-      <div><span class="n">2</span><b>Plano com preço</b>Escolheu → "Trocar plano". Nasce a assinatura nova com o preço de tabela; a atual fica até o pagamento (é o que o "Trocar plano" já faz desde ontem).</div>
-      <div><span class="n">3</span><b>Plano atual</b>Não troca nada. Pra cobrar o plano que ele já tem: "Ativar assinatura paga", como hoje.</div>
+      <div><span class="n">2</span><b>Plano com preço</b>Escolheu → "Trocar plano". Nasce a assinatura nova com o preço de tabela. Hoje a atual é cancelada assim que a nova existe no Asaas; na proposta ela espera o pagamento da nova (decisão 1).</div>
+      <div><span class="n">3</span><b>Plano atual</b>Não troca nada. Pra cobrar o plano que ele já tem: "Ativar assinatura paga" (teste) ou o card Módulos &amp; cobrança (já pagante), como hoje.</div>
     </div>
   </div>
 
@@ -301,7 +301,7 @@ b,strong{font-weight:700}
     </div>
 
     <div class="dec"><h4>⚖ Decisões suas</h4>
-      <div><b>1 · Cliente que já paga e troca pra plano sob consulta</b> — a assinatura atual espera o pagamento da nova (regra de 03/09) ou é cancelada na hora do clique?</div>
+      <div><b>1 · Cliente que já paga e troca de plano (sob consulta ou com preço)</b> — a assinatura atual espera o pagamento da nova e é encerrada pelo webhook (regra de 03/09, como o "Trocar plano" do próprio cliente) ou é cancelada na hora, como o painel faz hoje?</div>
       <div class="op"><span class="rec">Espera o pagamento da nova (proposta)</span><span>Cancela na hora</span></div>
       <div><b>2 · Planos fora da vitrine no seletor</b> — aparecem dobrados no fim (nada some) ou o seletor mostra só a vitrine?</div>
       <div class="op"><span class="rec">Aparecem na dobra "Fora da vitrine" (proposta)</span><span>Só a vitrine (é esconder — só com seu ok)</span></div>
