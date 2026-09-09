@@ -268,6 +268,37 @@ describe("admin.trocarPlanoAdmin — painel → ficha → “Trocar plano”", (
   });
 });
 
+describe("admin.metricasChurn — LTV lê o catálogo, não a lista fixa", () => {
+  const DIA = 24 * 60 * 60 * 1000;
+  it("ARPU = MRR real (valor negociado ou preço de tabela) ÷ pagantes ativos, e o LTV sai disso", async () => {
+    const agora = Date.now();
+    // Foto do churn: 2 assinaturas antigas, uma cancelada neste mês → 50% no
+    // mês, média dos 3 últimos = 16,67%.
+    filas["subscriptions"] = [
+      [
+        { id: 1, status: "active", cortesia: false, planId: "completo", createdAt: new Date(agora - 90 * DIA), updatedAt: new Date(agora - 90 * DIA) },
+        { id: 2, status: "canceled", cortesia: false, planId: "pago", createdAt: new Date(agora - 120 * DIA), updatedAt: new Date(agora - 1 * DIA) },
+      ],
+      // Agregado do banco: 2 pagantes, R$ 300,00 de MRR (COALESCE negociado/tabela).
+      [{ total: 2, mrr: 30000 }],
+    ];
+    const r = await admin().admin.metricasChurn();
+    const churn = r.meses[r.meses.length - 1].churnRate;
+    expect(churn).toBe(50);
+    expect(r.churnAtual).toBeCloseTo(16.67, 1);
+    // ARPU 15000 centavos ÷ (50/3)% = 90.000 centavos — e NÃO 49700×N da lista fixa.
+    expect(r.ltvEstimado).toBe(90000);
+  });
+
+  it("o agregado usa a mesma regra do receitaMensal: negociado, senão tabela, só ativas sem cortesia", () => {
+    const adm = ler("server/routers/admin.ts");
+    const trecho = adm.slice(adm.indexOf("metricasChurn: adminProcedure"), adm.indexOf("cancelarAssinaturaAdmin: adminProcedure"));
+    expect(trecho).toContain("SUM(COALESCE(${subscriptionsTable.valorNegociadoCentavos}, ${planosTable.precoMensalCentavos}, 0))");
+    expect(trecho).toContain("eq(subscriptionsTable.cortesia, false)");
+    expect(trecho).not.toContain("PLANS.find");
+  });
+});
+
 describe("admin.editarPlano / criarPlano — um só “Mais popular”", () => {
   it("ligar o selo num plano desliga nos outros (WHERE slug <> o editado)", async () => {
     filas["planos"] = [[{ id: 2, slug: "monitoramento-profissional" }]];
