@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mascararTelefoneBR } from "@shared/telefone";
+import { FALTA_TIPOS, ROTULO_FALTA, type FaltaTipo } from "@shared/conferencia-cadastros";
 import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,7 +33,7 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown,
+  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown, ClipboardCheck,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -398,6 +399,12 @@ export default function Clientes() {
       : FILTROS_VAZIOS;
   });
   const qtdFiltros = contarFiltros(filtros);
+  // "Ver na lista" da Conferência de cadastros chega como ?conferencia=<falta>:
+  // a lista mostra exatamente as fichas que o relatório contou.
+  const [conferencia, setConferencia] = useState<FaltaTipo | null>(() => {
+    const v = new URLSearchParams(window.location.search).get("conferencia") ?? "";
+    return (FALTA_TIPOS as readonly string[]).includes(v) ? (v as FaltaTipo) : null;
+  });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
     // Se veio com ?id=X na URL, abre direto no detalhe.
@@ -455,7 +462,7 @@ export default function Clientes() {
   // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
   useEffect(() => {
     setSelecionados(new Set());
-  }, [filtros, buscaDebounced, pagina, aba]);
+  }, [filtros, buscaDebounced, pagina, aba, conferencia]);
 
   // Trocar de aba (Clientes ↔ Leads) ou de segmento volta pra página 1 —
   // senão a paginação herdada pode cair fora do range da nova lista. O
@@ -463,7 +470,7 @@ export default function Clientes() {
   // os controles de paginação por perto pra corrigir à mão.
   useEffect(() => {
     setPagina(1);
-  }, [aba, filtros]);
+  }, [aba, filtros, conferencia]);
 
   // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
   // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
@@ -486,10 +493,11 @@ export default function Clientes() {
     const params = new URLSearchParams();
     if (selId) params.set("id", String(selId));
     if (filtros.marcas.includes("docs")) params.set("aguardandoDocs", "1");
+    if (conferencia) params.set("conferencia", conferencia);
     const search = params.toString();
     const url = `${window.location.pathname}${search ? "?" + search : ""}`;
     window.history.replaceState({}, "", url);
-  }, [selId, filtros]);
+  }, [selId, filtros, conferencia]);
 
   const { data: stats, refetch: refetchStats } = trpc.clientes.estatisticas.useQuery();
   // Todos os segmentos (incluindo com_debito) filtram no servidor — antes
@@ -508,6 +516,7 @@ export default function Clientes() {
     marcas: filtros.marcas.length ? filtros.marcas : undefined,
     cadastroDe: filtros.cadastroDe || undefined,
     cadastroAte: filtros.cadastroAte || undefined,
+    conferencia: conferencia ?? undefined,
   });
 
   // Nomes pro filtro "Responsável" — a mesma procedure dos outros filtros do
@@ -700,6 +709,18 @@ export default function Clientes() {
                     {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
                   </Button>
                   <PossiveisDuplicadosButton onMesclado={() => { refetch(); refetchStats(); }} />
+                  {podeExcluirCliente && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setLocation("/clientes/conferencia")}
+                      className="text-foreground hover:bg-muted border border-border h-8 text-xs"
+                      title="Duplicados por telefone e por CPF, dados divergentes, faltas — com PDF e planilha"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                      Conferência de cadastros
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
@@ -820,14 +841,22 @@ export default function Clientes() {
                     {qtdFiltros && busca ? " · " : ""}
                     {busca ? `busca “${busca}”` : ""}
                   </>
-                ) : (
+                ) : conferencia ? null : (
                   "sem filtro"
                 )}
               </span>
-              {(qtdFiltros || busca) && (
+              {conferencia && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info-bg px-2 py-0.5 text-[11px] font-semibold text-info-fg">
+                  Conferência: {ROTULO_FALTA[conferencia]}
+                  <button type="button" onClick={() => setConferencia(null)} aria-label="Tirar o filtro da conferência">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {(qtdFiltros || busca || conferencia) && (
                 <button
                   type="button"
-                  onClick={() => { setFiltros(FILTROS_VAZIOS); setBusca(""); }}
+                  onClick={() => { setFiltros(FILTROS_VAZIOS); setBusca(""); setConferencia(null); }}
                   className="ml-1 inline-flex items-center gap-1 font-semibold text-info-fg hover:underline"
                 >
                   <X className="h-3 w-3" /> limpar tudo
@@ -869,7 +898,7 @@ export default function Clientes() {
               <CardContent className="py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  {qtdFiltros || busca
+                  {qtdFiltros || busca || conferencia
                     ? `Nenhum ${aba === "lead" ? "lead" : "cliente"} com esses filtros.`
                     : aba === "lead"
                       ? "Nenhum lead em atendimento. Leads aparecem aqui quando alguém entra em contato."

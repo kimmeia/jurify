@@ -865,6 +865,23 @@ export const contatosUnificacoes = mysqlTable("contatos_unificacoes", {
   idxEscData: index("idx_unif_esc_data").on(t.escritorioId, t.createdAt),
 }));
 
+/**
+ * "Não é duplicado": grupo de fichas com o mesmo telefone ou CPF que o dono
+ * conferiu e declarou serem pessoas diferentes (casal com o mesmo número).
+ * Sai da conta em toda tela e volta com um clique.
+ */
+export const contatosNaoDuplicados = mysqlTable("contatos_nao_duplicados", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdNaoDup").notNull(),
+  tipo: mysqlEnum("tipoNaoDup", ["telefone", "cpf"]).notNull(),
+  /** DDD + 8 dígitos (telefone) ou só dígitos (CPF/CNPJ) — a chave do agrupamento. */
+  chave: varchar("chaveNaoDup", { length: 32 }).notNull(),
+  marcadoPor: int("marcadoPorNaoDup"),
+  createdAt: timestamp("createdAtNaoDup").defaultNow().notNull(),
+}, (t) => ({
+  uq: uniqueIndex("uq_nao_dup").on(t.escritorioId, t.tipo, t.chave),
+}));
+
 export const conversas = mysqlTable("conversas", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdConv").notNull(),

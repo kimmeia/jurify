@@ -618,6 +618,63 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   mutações vermelhas (`scratchpad/mutar-um-numero.py`; a de "@lid vira
   endereço" é mutante equivalente: `isLidJid` e o regex de JID-telefone
   barram os dois, de propósito).
+- **Entregue 09/09 (madrugada), Conferência de cadastros — mockup
+  `mockup-conferencia-cadastros.html`, "aprovado, pode fazer" do dono com
+  as 4 decisões da proposta** (CPFs diferentes travam; "Não é duplicado"
+  existe e é reversível; página própria em Clientes; planilha com CPF
+  inteiro). Origem: "quero verificar quantos contatos duplicados, dados
+  divergentes e etc. — o botão possíveis duplicados não gera o relatório
+  para conferência". Achado do estudo: o `unificarContatos` nunca teve
+  trava pra duas fichas com CPFs diferentes (descartava o CPF da absorvida
+  em silêncio) e não existia jeito de dizer "são pessoas diferentes".
+  - **Um cálculo, três saídas**: `server/escritorio/conferencia-cadastros.ts`
+    — `carregarBaseConferencia` (fichas + contagens por ESCRITÓRIO + nomes
+    dos responsáveis + ignorados) e `montarConferencia` PURA (grupos por
+    telefone via `agruparPorTelefone`, por CPF pelos dígitos, cruzamento
+    `tambemNoTelefone`, divergências, `faltasDasFichas`, resumo).
+    `conferenciaParaTela` mascara o CPF e troca a chave do grupo de CPF por
+    `cpf-<sobrevivente>` (a chave É o CPF — nunca sobe pro client; por isso
+    `marcarNaoDuplicado`/`desmarcarNaoDuplicado` recebem `contatoId` e
+    `chaveDoNaoDuplicado` resolve no servidor, escopado). Planilha
+    `gerarConferenciaCsv` (`;` + BOM, 16 colunas, telefone e CPF como
+    gravados, divergências separadas por VÍRGULA dentro da célula — o
+    mockup escrevia "17 colunas" e "ponto-e-vírgula": contagem errada e
+    conflito com o separador, ajustados); PDF em `conferencia-pdf.ts` (só
+    Helvetica: sem emoji/seta, o pdfkit imprime lixo).
+  - Regras em `shared/conferencia-cadastros.ts`: divergência = campo
+    PREENCHIDO nos dois lados com valores diferentes (cpf, nome, email,
+    responsavel; `telefone` só no grupo de CPF); `nomesCompativeis` = o
+    nome curto cabe no longo, na ordem, por prefixo ("Maria C." em "Maria
+    Clara", "Fran" em "Francisco"); `nomeIncompleto` é chip cinza, não
+    divergência; `telefoneInvalido` (DDD da lista `DDDS_BR`, 11 dígitos
+    exige o 9, DDI estrangeiro = inválido, vazio NÃO é inválido);
+    `mascararCpfCnpj`; `classeDoGrupo` (cpfs_diferentes > com_divergencia >
+    so_falta) e `grupoPassaNoFiltro`.
+  - `possiveisDuplicadosTelefone` passou a ler a MESMA conferência (mesmos
+    grupos, mesmos ignorados — o "(N)" do botão é o N do card; teste trava)
+    e devolve `cpfsDiferentes`; `mesclarDuplicados` ganhou a trava: par com
+    dois CPFs preenchidos e diferentes vira falha `MENSAGEM_CPFS_DIFERENTES`
+    sem mesclar, salvo `confirmarCpfDiferente: true` (a tela pede
+    confirmação nomeando o CPF descartado; "Mesclar todos" pula esses — no
+    diálogo antigo E na página). `crm.unificarContatos` (Mesclar da
+    ficha/Vincular) NÃO ganhou a trava: não foi pedido.
+  - `contatos_nao_duplicados` (migration 0219, UNIQUE escritório+tipo+chave,
+    entra no backup). `listar` ganhou `conferencia: <falta>` (mesmos ids de
+    `faltasDasFichas`; categoria vazia = `1 = 0`, não a base inteira);
+    Clientes lê `?conferencia=` da URL, mostra chip "Conferência: …" e o
+    "limpar tudo" apaga junto.
+  - Tela `client/src/pages/clientes/ConferenciaCadastros.tsx` em
+    `/clientes/conferencia` (rota ANTES de `/clientes` no App.tsx; cai no
+    módulo clientes por prefixo). Botão "Conferência de cadastros" no
+    cabeçalho de Clientes só com `podeExcluirCliente`; a página, o Mesclar,
+    o "Não é duplicado" e os arquivos exigem `clientes.excluir`. 6 cards, 4
+    abas (Mesmo telefone · Mesmo CPF · Faltando ou inválido · Não é
+    duplicado), filtros, 20 por página, célula divergente em amarelo (CPF
+    em vermelho), "Mesclar todos os 'só falta preencher'" em lotes de 50
+    com AlertDialog. "Duplicatas (PDF)" e "Possíveis duplicados" continuam.
+  Amarras: `conferencia-cadastros` (37 testes) — 28 mutações vermelhas
+  (`scratchpad/mutar-conferencia.py`); `um-numero-um-cadastro` ajustado
+  (a trava consulta os CPFs antes de cada par).
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
