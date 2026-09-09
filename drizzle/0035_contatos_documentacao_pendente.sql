@@ -40,8 +40,12 @@ SET @idx_exists := (
     AND table_name = 'contatos'
     AND index_name = 'contatos_doc_pendente_idx'
 );
+-- A coluna física é `escritorioIdContato` — `contatos` é uma das tabelas
+-- que sufixam o nome. Com `escritorioId` o CREATE INDEX falhava com "Key
+-- column doesn't exist", a migration nunca era marcada como aplicada, e
+-- o erro se repetia em todo boot de todo ambiente desde então.
 SET @sql := IF(@idx_exists = 0,
-  'CREATE INDEX contatos_doc_pendente_idx ON contatos (escritorioId, documentacaoPendente)',
+  'CREATE INDEX contatos_doc_pendente_idx ON contatos (escritorioIdContato, documentacaoPendente)',
   'SELECT 1');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
