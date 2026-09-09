@@ -43,6 +43,58 @@ async function varrer(page: Page): Promise<Map<string, ResultadoAcao>> {
   return new Map(resultados.map((r) => [r.nome, r]));
 }
 
+/**
+ * Reproduz uma SPA: `domcontentloaded` dispara com o corpo vazio e os
+ * controles só aparecem quando o JS monta. Sem spinner nenhum no meio —
+ * que é justamente o que enganava a versão anterior da prontidão.
+ */
+const PAGINA_SPA_LENTA = `<!doctype html><html><body>
+  <div id="root"></div>
+  <script>
+    setTimeout(function () {
+      document.getElementById('root').innerHTML =
+        '<main><button onclick="void 0">Alternar visualização</button></main>';
+    }, 2500);
+  </script>
+</body></html>`;
+
+test.describe("prontidão da tela", () => {
+  test.setTimeout(60_000);
+
+  test("espera a SPA montar antes de contar a superfície", async ({ page }) => {
+    await page.route("**/*", (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: PAGINA_SPA_LENTA,
+      }),
+    );
+    const sonda = instalarSonda(page, watchConsoleErrors(page), watchNetwork5xx(page));
+    const resultados = await exercitarRota(sonda, "/clientes");
+
+    // Medido contra o app real: no `domcontentloaded` a rota tinha 0
+    // botões e 0 spinners, e o robô fechava a varredura com "0 de 0,
+    // nenhum problema". Verde sem ter medido nada é o defeito que este
+    // robô existe pra caçar — uma camada acima.
+    expect(resultados.map((r) => r.nome)).toEqual(["Alternar visualização"]);
+  });
+
+  test("rota que não expõe nada vira linha, não silêncio", async ({ page }) => {
+    await page.route("**/*", (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: '<!doctype html><html><body><main><button aria-label=""></button><p>Só texto</p></main></body></html>',
+      }),
+    );
+    const sonda = instalarSonda(page, watchConsoleErrors(page), watchNetwork5xx(page));
+    const resultados = await exercitarRota(sonda, "/relatorios");
+
+    expect(resultados).toHaveLength(1);
+    expect(resultados[0]!.veredito.estado).toBe("nao_verificada");
+  });
+});
+
 test.describe("veredito do robô de ação", () => {
   // Um dos casos espera 4s pela prova que nunca chega, e outro espera o
   // ciclo de erro de JS; a varredura inteira recarrega a rota por ação.

@@ -18,12 +18,16 @@
 import type { Page } from "@playwright/test";
 import { provaPara } from "./catalogo";
 import { cercaQueBarra } from "./cercas";
-import { descobrirAcoes } from "./descoberta";
+import { descobrirAcoes, SELETOR_ALVOS } from "./descoberta";
 import type { ConsoleErrorMonitor, NetworkMonitor } from "../lib/page-helpers";
 import { MOTIVO_TEXTO, type AcaoDescoberta, type ResultadoAcao, type Veredito } from "./tipos";
 
 const ESPERA_SPINNER = 8_000;
 const ESPERA_ROTA = 20_000;
+/** Primeira pintura da SPA passa por compilação de módulo em dev. */
+const ESPERA_MONTAGEM = 20_000;
+/** Teto pra superfície parar de crescer; sem ela o robô inventa achado. */
+const ESPERA_ESTABILIDADE = 10_000;
 
 export interface Sonda {
   page: Page;
@@ -62,17 +66,71 @@ async function carregarRota(page: Page, rota: string): Promise<boolean> {
     .then(() => true)
     .catch(() => false);
   if (!abriu) return false;
-  return esperarTelaPronta(page);
+  if (!(await esperarTelaPronta(page, ESPERA_MONTAGEM))) return false;
+  await esperarSuperficieEstavel(page);
+  return true;
 }
 
-function esperarTelaPronta(page: Page): Promise<boolean> {
-  // `networkidle` não serve: o Inbox faz polling a cada 5s e a página
-  // nunca fica ociosa. O sinal utilizável é o esqueleto sair.
+/**
+ * Espera a superfície parar de crescer.
+ *
+ * "Tem controle e não tem spinner" é o começo da tela, não o fim dela:
+ * as abas de filtro de /clientes chegam depois, junto com a query que
+ * alimenta os contadores. O robô descobria 10 ações, recarregava,
+ * redescobria 5, e as outras 5 viravam "o controle não apareceu na
+ * segunda carga" — ruído puro, com o app inteiro funcionando.
+ *
+ * Aqui ele conta os controles até o número repetir algumas vezes
+ * seguidas. Não dá garantia (nada dá, contra render assíncrono), mas
+ * troca um falso achado quase certo por uma espera de ~1,5s.
+ */
+async function esperarSuperficieEstavel(page: Page): Promise<void> {
+  await page
+    .waitForFunction(
+      (seletor) => {
+        const janela = window as unknown as { _roboN?: number; _roboEstavel?: number };
+        const agora = document.querySelectorAll(seletor).length;
+        if (janela._roboN === agora) janela._roboEstavel = (janela._roboEstavel ?? 0) + 1;
+        else {
+          janela._roboN = agora;
+          janela._roboEstavel = 0;
+        }
+        return (janela._roboEstavel ?? 0) >= 3;
+      },
+      SELETOR_ALVOS,
+      { timeout: ESPERA_ESTABILIDADE, polling: 500 },
+    )
+    .catch(() => {
+      // Tela que nunca para de mudar (polling que remonta lista) não é
+      // motivo pra abortar: segue com o que está na tela agora.
+    });
+}
+
+/**
+ * Prontidão é afirmação, não ausência.
+ *
+ * A primeira versão perguntava só "sumiu o spinner?" — e numa SPA logo
+ * depois de `domcontentloaded` não existe spinner porque não existe
+ * nada: o React ainda não montou. Medido contra o app: no instante do
+ * `domcontentloaded`, `/clientes` tinha 0 botões e 0 spinners; seis
+ * segundos depois, 47 botões. O robô varria a tela em branco, achava
+ * zero ação e fechava a varredura com "0 de 0, nenhum problema".
+ *
+ * Verde sem ter medido nada é o mesmo defeito que este robô existe pra
+ * caçar, uma camada acima. Por isso agora ele exige ver um controle
+ * renderizado ANTES de aceitar que a tela está pronta.
+ *
+ * `networkidle` continua fora: o Inbox faz polling a cada 5s e a página
+ * nunca fica ociosa.
+ */
+function esperarTelaPronta(page: Page, timeout: number): Promise<boolean> {
   return page
     .waitForFunction(
-      () => !document.querySelector('[role="progressbar"], .animate-spin'),
+      () =>
+        document.querySelector('button, [role="button"]') !== null &&
+        document.querySelector('[role="progressbar"], .animate-spin') === null,
       null,
-      { timeout: ESPERA_SPINNER },
+      { timeout },
     )
     .then(() => true)
     .catch(() => false);
@@ -103,6 +161,23 @@ export async function exercitarRota(
 
   const acoes = await descobrirAcoes(page, rota);
   const resultados: ResultadoAcao[] = [];
+
+  // Rota que renderizou e não expôs nada some do relatório em silêncio, e
+  // silêncio soma como saúde. Vira linha.
+  if (acoes.length === 0) {
+    resultados.push({
+      id: `${rota}::<superfície>::0`,
+      rota,
+      nome: "<nenhuma ação encontrada>",
+      ocorrencia: 0,
+      ocorrenciaDom: 0,
+      veredito: {
+        estado: "nao_verificada",
+        motivo: "efeito_nao_observavel",
+        evidencia: "a tela carregou e não expôs nenhum controle com nome acessível",
+      },
+    });
+  }
 
   for (const acao of acoes) {
     const cerca = cercaQueBarra(acao.rota, acao.nome);
@@ -193,7 +268,7 @@ async function exercitar(sonda: Sonda, acao: AcaoDescoberta): Promise<Veredito> 
       evidencia: `o clique gerou ${f.status || "falha de rede"} em ${f.url}`,
     };
   }
-  if (!(await esperarTelaPronta(page))) {
+  if (!(await esperarTelaPronta(page, ESPERA_SPINNER))) {
     return {
       estado: "falhou",
       evidencia: `a tela ficou carregando por mais de ${ESPERA_SPINNER / 1000}s depois do clique`,

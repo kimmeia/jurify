@@ -23,7 +23,7 @@ import type { AcaoDescoberta } from "./tipos";
  * Controles que contam como ação. `a[href]` fora daqui de propósito:
  * link é navegação, e navegação já é coberta pelo robô de jornada.
  */
-const SELETOR_ALVOS = 'button, [role="button"], [role="menuitem"], [role="tab"]';
+export const SELETOR_ALVOS = 'button, [role="button"], [role="menuitem"], [role="tab"]';
 
 /** Regiões que não são conteúdo — repetem em toda rota. */
 const REGIOES_IGNORADAS = '[data-sidebar], nav, header, [role="navigation"]';
@@ -73,14 +73,32 @@ export async function descobrirAcoes(
 
   const vistos = new Map<string, number>();
   return nomes.map((nome, ocorrenciaDom) => {
-    const ocorrencia = vistos.get(nome) ?? 0;
-    vistos.set(nome, ocorrencia + 1);
+    const chave = identidade(nome);
+    const ocorrencia = vistos.get(chave) ?? 0;
+    vistos.set(chave, ocorrencia + 1);
     return {
-      id: `${rota}::${nome}::${ocorrencia}`,
+      id: `${rota}::${chave}::${ocorrencia}`,
       rota,
       nome,
       ocorrencia,
       ocorrenciaDom,
     };
   });
+}
+
+/**
+ * Identidade não pode depender de dado.
+ *
+ * Meia dúzia de abas do app cola o contador no rótulo — o nome acessível
+ * sai "Clientes5", "Todos5", "Leadsem atendimento0". O número chega
+ * depois da primeira pintura, então o robô descobria "Clientes5",
+ * recarregava a rota e reencontrava "Clientes": id diferente, controle
+ * dado como sumido. Medido: 7 das 11 ações de /clientes viraram "a tela
+ * não é estável entre visitas" por causa disso, sem nada estar quebrado.
+ *
+ * O dígito sai da identidade e fica no `nome`, que é o que o relatório
+ * mostra pra pessoa.
+ */
+function identidade(nome: string): string {
+  return nome.replace(/\d+/g, "").replace(/\s+/g, " ").trim();
 }

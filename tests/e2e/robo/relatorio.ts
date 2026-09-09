@@ -42,7 +42,13 @@ export function formatarRelatorio(resultados: readonly ResultadoAcao[]): string 
     linhas.push("", "NÃO VERIFICADAS");
     for (const [motivo, itens] of porMotivo) {
       linhas.push(`  ${itens.length}× ${MOTIVO_TEXTO[motivo]}`);
-      for (const i of itens.slice(0, 8)) linhas.push(`      ${i.rota} · ${i.nome}`);
+      for (const i of itens.slice(0, 8)) {
+        linhas.push(`      ${i.rota} · ${i.nome}`);
+        // O motivo é o balde; a evidência é o que dá pra agir. Sem ela o
+        // grupo `efeito_nao_observavel` mistura causas diferentes debaixo
+        // de uma frase genérica.
+        linhas.push(`        ${i.veredito.evidencia}`);
+      }
       if (itens.length > 8) linhas.push(`      … e mais ${itens.length - 8}`);
     }
   }
