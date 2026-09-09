@@ -255,16 +255,16 @@ describe("admin.trocarPlanoAdmin — painel → ficha → “Trocar plano”", (
     expect(capturado.updates.filter((u) => u.set?.status === "canceled")).toHaveLength(0);
   });
 
-  it("com a nova criada, aí sim a antiga é cancelada — nessa ordem", async () => {
+  it("com a nova criada, a antiga NÃO é cancelada — o webhook encerra quando o pagamento cai (decisão do dono, 09/09)", async () => {
     filas["users"] = [[CLIENTE], [CLIENTE]];
     filas["subscriptions"] = [[]];
     getActiveSubscriptionMock.mockResolvedValue(ATUAL);
     const r = await admin().admin.trocarPlanoAdmin({ userId: 7, newPlanId: "pago", interval: "monthly" });
     expect(r.success).toBe(true);
-    expect(cancelarAssinatura).toHaveBeenCalledWith("sub_old");
-    expect(criarAssinatura.mock.invocationCallOrder[0]).toBeLessThan(cancelarAssinatura.mock.invocationCallOrder[0]);
+    expect(criarAssinatura).toHaveBeenCalledTimes(1);
+    expect(cancelarAssinatura).not.toHaveBeenCalled();
     expect(capturado.inserts.find((i) => i.table === "subscriptions")?.values).toEqual(expect.objectContaining({ userId: 7, planId: "pago", status: "incomplete" }));
-    expect(capturado.updates.find((u) => u.set?.status === "canceled")?.where).toBe("id = 40");
+    expect(capturado.updates.filter((u) => u.set?.status === "canceled")).toHaveLength(0);
   });
 });
 
