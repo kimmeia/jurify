@@ -68,17 +68,14 @@ export default function AdminEmailLog() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Log de Emails</h1>
-        <p className="text-muted-foreground mt-1">
-          Histórico de envios via Resend. Use pra auditar falhas e reenviar manualmente.
-        </p>
-      </div>
+      <p className="text-muted-foreground">
+        Histórico de envios via Resend. Use pra auditar falhas e reenviar manualmente.
+      </p>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-emerald-500/10" iconFg="text-emerald-600" valueColor="text-emerald-600" />
-        <KPICard label="Falhas (24h)" value={resumo?.falha24h ?? "—"} icon={XCircle} iconBg="bg-rose-500/10" iconFg="text-rose-600" valueColor="text-rose-600" />
-        <KPICard label="Total (24h)" value={resumo?.total24h ?? "—"} icon={Mail} iconBg="bg-slate-500/10" iconFg="text-slate-600" />
+        <KPICard label="Enviados (24h)" value={resumo?.sucesso24h ?? "—"} icon={CheckCircle2} iconBg="bg-success/10" iconFg="text-success-fg" valueColor="text-success-fg" />
+        <KPICard label="Falhas (24h)" value={resumo?.falha24h ?? "—"} icon={XCircle} iconBg="bg-danger/10" iconFg="text-danger-fg" valueColor="text-danger-fg" />
+        <KPICard label="Total (24h)" value={resumo?.total24h ?? "—"} icon={Mail} iconBg="bg-muted-foreground/10" iconFg="text-muted-foreground" />
       </div>
 
       <Card>
@@ -130,9 +127,9 @@ export default function AdminEmailLog() {
               className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/30 transition-colors"
             >
               {item.status === "sucesso" ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                <CheckCircle2 className="h-5 w-5 text-success-fg shrink-0" />
               ) : (
-                <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+                <AlertCircle className="h-5 w-5 text-danger-fg shrink-0" />
               )}
 
               <div className="flex-1 min-w-0">
@@ -151,7 +148,7 @@ export default function AdminEmailLog() {
                   {item.assunto}
                 </div>
                 {item.erro && (
-                  <div className="text-xs text-red-600 mt-1 truncate" title={item.erro}>
+                  <div className="text-xs text-danger-fg mt-1 truncate" title={item.erro}>
                     {item.erro}
                   </div>
                 )}

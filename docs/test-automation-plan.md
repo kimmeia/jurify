@@ -1,6 +1,11 @@
 # Plano — Robô de Testes Automatizado End-to-End
 
-> Objetivo: construir uma suíte que simule uso humano do JuridFlow pra **descobrir bugs que ninguém testou ainda**, validar UX, e mapear comportamento real do sistema. Não substitui CI atual (910+ vitest verdes), complementa.
+> Objetivo: construir uma suíte que simule uso humano do JuridFlow pra **descobrir bugs que ninguém testou ainda**, validar UX, e mapear comportamento real do sistema. Não substitui CI atual (4.696 vitest verdes em 03/09/2026), complementa.
+
+> **Estado em 03/09/2026**: o robô de jornada existe (`server/admin/jornada/`,
+> aba em `/admin/saude`), mas as conferências só rodam pelo spec Playwright e
+> não há cron — ver `CLAUDE.md`, pendências 1 e 4. Este plano segue como
+> referência; as fases 3 e 4 (fuzz tRPC, crawler) não começaram.
 
 ## 1. O que queremos achar
 

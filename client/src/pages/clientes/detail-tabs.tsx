@@ -27,7 +27,7 @@ import { NovaCobrancaDialog } from "@/pages/financeiro/dialogs";
 import {
   Loader2, Plus, Trash2, Upload, FileText, ExternalLink, PenLine, Send,
   Clock, StickyNote, CheckSquare, Check, Calendar, Download, Folder,
-  ChevronRight, MoreVertical, FolderPlus, Pencil, ArrowLeft, CheckCircle2,
+  ChevronRight, ChevronLeft, MoreVertical, FolderPlus, Pencil, ArrowLeft, CheckCircle2,
 } from "lucide-react";
 import JSZip from "jszip";
 import {
@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
+import { mascararTelefoneBR, telefoneParaWaMe } from "@shared/telefone";
 
 function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -130,8 +131,8 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     <Card>
       <CardContent className="pt-4 space-y-4">
         {todosFaltando.length > 0 && (
-          <div className={`rounded-md border p-3 text-xs ${ehLead ? "border-blue-300/60 bg-blue-50/50 dark:bg-blue-950/20" : "border-warning/40 bg-warning-bg/40"}`}>
-            <p className={`font-medium ${ehLead ? "text-blue-700 dark:text-blue-300" : "text-warning-fg"}`}>
+          <div className={`rounded-md border p-3 text-xs ${ehLead ? "border-info/30 bg-info-bg/50" : "border-warning/40 bg-warning-bg/40"}`}>
+            <p className={`font-medium ${ehLead ? "text-info-fg" : "text-warning-fg"}`}>
               {ehLead
                 ? `Dica: ${todosFaltando.length} campo(s) ainda incompleto(s). Você pode salvar mesmo assim — só serão obrigatórios quando virar cliente.`
                 : `Faltam ${todosFaltando.length} campo(s) obrigatório(s) pra gerar contratos:`}
@@ -195,7 +196,7 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
               type="checkbox"
               checked={docPendente}
               onChange={(e) => setDocPendente(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+              className="mt-0.5 h-4 w-4 accent-info cursor-pointer"
             />
             <div>
               <span className="text-sm font-medium">Documentação pendente</span>
@@ -276,7 +277,7 @@ export function AnotacoesTab({ contatoId, anotacoes, onRefresh }: { contatoId: n
     onSuccess: () => { onRefresh(); },
     onError: (e) => toast.error(e.message),
   });
-  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div>{n.podeExcluir && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button>}</div>))}</div>}</CardContent></Card>);
+  return (<Card><CardContent className="pt-4 space-y-4"><div className="space-y-2 p-3 rounded-lg border bg-muted/20"><Input placeholder="Título (opcional)" value={titulo} onChange={e => setTitulo(e.target.value)} className="h-8 text-sm" /><Textarea placeholder="Escreva..." value={conteudo} onChange={e => setConteudo(e.target.value)} rows={2} /><Button size="sm" onClick={() => criar.mutate({ contatoId, titulo: titulo || undefined, conteudo })} disabled={!conteudo || criar.isPending}><Plus className="h-3 w-3 mr-1" /> Adicionar</Button></div>{!anotacoes.length ? <p className="text-sm text-muted-foreground text-center py-4">Nenhuma anotação.</p> : <div className="space-y-2">{anotacoes.map((n: any) => (<div key={n.id} className="flex gap-3 p-3 rounded-lg border"><StickyNote className="h-4 w-4 text-warning mt-0.5 shrink-0" /><div className="flex-1 min-w-0">{n.titulo && <p className="text-sm font-medium">{n.titulo}</p>}<p className="text-sm text-muted-foreground whitespace-pre-wrap">{n.conteudo}</p><p className="text-[10px] text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString("pt-BR")}</p></div>{n.podeExcluir && <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive shrink-0" onClick={() => excluir.mutate({ id: n.id })}><Trash2 className="h-3 w-3" /></Button>}</div>))}</div>}</CardContent></Card>);
 }
 
 type Breadcrumb = Array<{ id: number | null; nome: string }>;
@@ -303,8 +304,12 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
   const [novaPastaNome, setNovaPastaNome] = useState("");
   const [criandoPasta, setCriandoPasta] = useState(false);
   const [renomeando, setRenomeando] = useState<{ id: number; nome: string } | null>(null);
+  const [renomeandoArq, setRenomeandoArq] = useState<{ id: number; nome: string } | null>(null);
   const [zipEmProgresso, setZipEmProgresso] = useState<number | null>(null);
   const [excluirPastaAlvo, setExcluirPastaAlvo] = useState<{ id: number; nome: string } | null>(null);
+  // Índice do arquivo aberto no visualizador (dentro da pasta atual).
+  // null = fechado. Navegar troca o índice sem fechar a janela.
+  const [viewerIdx, setViewerIdx] = useState<number | null>(null);
 
   const { data: pastas = [] } = trpc.clientes.listarPastas.useQuery({ contatoId, parentId: pastaAtualId });
   const { data: arquivos = [] } = trpc.clientes.listarArquivos.useQuery({ contatoId, pastaId: pastaAtualId });
@@ -343,6 +348,23 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
     onSuccess: (r) => { invalidar(); toast.success("Pasta excluída", { description: `${r.pastasExcluidas} pasta(s) e ${r.arquivosExcluidos} arquivo(s) removidos.` }); },
     onError: (e) => toast.error("Erro", { description: e.message }),
   });
+  const renomearArqMut = (trpc.clientes as any).renomearArquivo.useMutation({
+    onSuccess: () => { setRenomeandoArq(null); invalidar(); toast.success("Arquivo renomeado"); },
+    onError: (e: any) => toast.error("Erro ao renomear", { description: e.message }),
+  });
+
+  // ← → trocam de documento e Esc fecha — o visualizador é uma esteira,
+  // não uma janela por arquivo.
+  useEffect(() => {
+    if (viewerIdx === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowRight") setViewerIdx((i) => (i === null ? i : Math.min(arquivos.length - 1, i + 1)));
+      if (e.key === "ArrowLeft") setViewerIdx((i) => (i === null ? i : Math.max(0, i - 1)));
+      if (e.key === "Escape") setViewerIdx(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewerIdx, arquivos.length]);
 
   const handleFiles = async (files: FileList | File[]) => {
     setUploading(true);
@@ -381,6 +403,8 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
     setCriandoPasta(false);
     setNovaPastaNome("");
     setRenomeando(null);
+    setRenomeandoArq(null);
+    setViewerIdx(null);
     setUrl("");
     setNome("");
   };
@@ -525,116 +549,157 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-[10px] text-muted-foreground">PDF, imagens, docs · Máx 2GB</p>
         </div>
 
-        {/* Pastas */}
+        {/* Pastas — blocos estilo explorador (aprovado no mockup de 20/08) */}
         {pastas.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Pastas</p>
-            {pastas.map((p: any) => {
-              const r = renomeando;
-              const estaRenomeando = r !== null && r.id === p.id;
-              return (
-              <div key={p.id} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/20 transition-colors group">
-                {estaRenomeando && r ? (
-                  <>
-                    <Folder className="h-4 w-4 text-amber-500 shrink-0" />
-                    <Input
-                      value={r.nome}
-                      onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
-                      onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearMut.mutate({ id: p.id, nome: r.nome }); if (e.key === "Escape") setRenomeando(null); }}
-                      className="h-7 text-sm flex-1"
-                      autoFocus
-                    />
-                    <Button size="sm" className="h-7" disabled={!r.nome.trim() || renomearMut.isPending}
-                      onClick={() => renomearMut.mutate({ id: p.id, nome: r.nome })}>
-                      OK
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7" onClick={() => setRenomeando(null)}>
-                      Cancelar
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => entrarNaPasta(p.id, p.nome)}>
-                      <Folder className="h-4 w-4 text-amber-500 shrink-0" />
-                      <span className="text-sm font-medium truncate">{p.nome}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
-                      </span>
-                    </button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Baixar pasta (ZIP)"
-                      disabled={zipEmProgresso === p.id}
-                      onClick={() => baixarPastaZip(p.id, p.nome)}>
-                      {zipEmProgresso === p.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setRenomeando({ id: p.id, nome: p.nome })}>
-                          <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </>
-                )}
-              </div>
-              );
-            })}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {pastas.map((p: any) => {
+                const r = renomeando;
+                const estaRenomeando = r !== null && r.id === p.id;
+                return (
+                  <div key={p.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
+                    {estaRenomeando && r ? (
+                      <div className="space-y-1.5">
+                        <Folder className="h-8 w-8 text-warning mx-auto" />
+                        <Input
+                          value={r.nome}
+                          onChange={(e) => setRenomeando({ id: p.id, nome: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearMut.mutate({ id: p.id, nome: r.nome }); if (e.key === "Escape") setRenomeando(null); }}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <div className="flex gap-1 justify-center">
+                          <Button size="sm" className="h-6 text-[10px] px-2" disabled={!r.nome.trim() || renomearMut.isPending}
+                            onClick={() => renomearMut.mutate({ id: p.id, nome: r.nome })}>OK</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setRenomeando(null)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button className="w-full" onClick={() => entrarNaPasta(p.id, p.nome)}>
+                          <Folder className="h-8 w-8 text-warning mx-auto" />
+                          <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug">{p.nome}</p>
+                          <p className="text-[9.5px] text-muted-foreground mt-0.5">
+                            {p.totalSubpastas > 0 ? `${p.totalSubpastas} pasta(s) · ` : ""}{p.totalArquivos} arquivo(s)
+                          </p>
+                        </button>
+                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => setRenomeando({ id: p.id, nome: p.nome })}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled={zipEmProgresso === p.id} onClick={() => baixarPastaZip(p.id, p.nome)}>
+                                {zipEmProgresso === p.id ? <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-2" />}
+                                Baixar (ZIP)
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => setExcluirPastaAlvo({ id: p.id, nome: p.nome })}
+                              >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir pasta
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        {/* Arquivos */}
+        {/* Arquivos — blocos com ícone por tipo; clique abre o visualizador */}
         {arquivos.length > 0 && (
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Arquivos</p>
-            {arquivos.map((a: any) => (
-              <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-                {isImage(a.tipo)
-                  ? <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted shrink-0"><img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} /></div>
-                  : <FileText className="h-4 w-4 text-blue-500 shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">{a.nome}</a>
-                  <p className="text-[10px] text-muted-foreground">{a.tipo || "Documento"} {a.tamanho ? `· ${formatSize(a.tamanho)}` : ""} · {new Date(a.createdAt).toLocaleDateString("pt-BR")}</p>
-                </div>
-                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-blue-600 shrink-0" title="Baixar" onClick={() => {
-                  const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
-                }}>
-                  <Download className="h-3 w-3" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0">
-                      <MoreVertical className="h-3 w-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
-                    <DropdownMenuItem onClick={() => moverArq.mutate({ id: a.id, pastaId: null })} disabled={a.pastaId == null}>
-                      Mover para raiz
-                    </DropdownMenuItem>
-                    {todasPastas.length > 0 && <DropdownMenuSeparator />}
-                    {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
-                      <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
-                        <Folder className="h-3.5 w-3.5 mr-2 text-amber-500" /> {p.nome}
-                      </DropdownMenuItem>
-                    ))}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluirArq.mutate({ id: a.id })}>
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir arquivo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+              {arquivos.map((a: any, idx: number) => {
+                const r = renomeandoArq;
+                const estaRenomeando = r !== null && r.id === a.id;
+                return (
+                  <div key={a.id} className="relative rounded-xl border hover:bg-muted/30 transition-colors group p-3 text-center">
+                    {estaRenomeando && r ? (
+                      <div className="space-y-1.5">
+                        <FileText className="h-8 w-8 text-info mx-auto" />
+                        <Input
+                          value={r.nome}
+                          onChange={(e) => setRenomeandoArq({ id: a.id, nome: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter" && r.nome.trim()) renomearArqMut.mutate({ id: a.id, nome: r.nome }); if (e.key === "Escape") setRenomeandoArq(null); }}
+                          className="h-7 text-xs"
+                          autoFocus
+                        />
+                        <div className="flex gap-1 justify-center">
+                          <Button size="sm" className="h-6 text-[10px] px-2" disabled={!r.nome.trim() || renomearArqMut.isPending}
+                            onClick={() => renomearArqMut.mutate({ id: a.id, nome: r.nome })}>OK</Button>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => setRenomeandoArq(null)}>Cancelar</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <button className="w-full" onClick={() => setViewerIdx(idx)} title="Abrir no visualizador">
+                          {isImage(a.tipo) ? (
+                            <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted mx-auto">
+                              <img src={a.url} alt={a.nome} className="h-full w-full object-cover" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                            </div>
+                          ) : (
+                            <FileText className={`h-8 w-8 mx-auto ${(a.tipo || "").includes("pdf") || /\.pdf$/i.test(a.nome || "") ? "text-danger" : "text-info"}`} />
+                          )}
+                          <p className="text-xs font-semibold mt-1.5 line-clamp-2 leading-snug break-all">{a.nome}</p>
+                          <p className="text-[9.5px] text-muted-foreground mt-0.5">
+                            {a.tamanho ? `${formatSize(a.tamanho)} · ` : ""}{new Date(a.createdAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </button>
+                        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                <MoreVertical className="h-3.5 w-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+                              <DropdownMenuItem onClick={() => setViewerIdx(idx)}>
+                                <ExternalLink className="h-3.5 w-3.5 mr-2" /> Abrir
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setRenomeandoArq({ id: a.id, nome: a.nome })}>
+                                <Pencil className="h-3.5 w-3.5 mr-2" /> Renomear
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => {
+                                const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+                              }}>
+                                <Download className="h-3.5 w-3.5 mr-2" /> Baixar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => moverArq.mutate({ id: a.id, pastaId: null })} disabled={a.pastaId == null}>
+                                Mover para raiz
+                              </DropdownMenuItem>
+                              {todasPastas.filter((p: any) => p.id !== a.pastaId).map((p: any) => (
+                                <DropdownMenuItem key={p.id} onClick={() => moverArq.mutate({ id: a.id, pastaId: p.id })}>
+                                  <Folder className="h-3.5 w-3.5 mr-2 text-warning" /> {p.nome}
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => excluirArq.mutate({ id: a.id })}>
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir arquivo
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -642,6 +707,118 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <p className="text-sm text-muted-foreground text-center py-4">Nenhuma pasta ou arquivo aqui.</p>
         )}
       </CardContent>
+
+      {/* Visualizador — uma esteira sobre os arquivos da pasta atual: setas
+          (na tela e no teclado) e a fita de miniaturas trocam de documento
+          sem fechar a janela. */}
+      <Dialog open={viewerIdx !== null} onOpenChange={(o) => !o && setViewerIdx(null)}>
+        {/* sm:max-w é obrigatório: o DialogContent base traz sm:max-w-lg, que
+            vence qualquer max-w sem prefixo no CSS final — max-w-5xl nunca
+            valeu; a janela vivia no teto de 512px. */}
+        <DialogContent className="w-[96vw] max-w-[96vw] sm:max-w-[1720px] h-[94vh] flex flex-col gap-0 p-0 overflow-hidden">
+          {viewerIdx !== null && arquivos[viewerIdx] && (() => {
+            const a = arquivos[viewerIdx];
+            const rv = renomeandoArq;
+            const renomeandoEste = rv !== null && rv.id === a.id;
+            return (
+              <>
+                <DialogHeader className="px-4 py-3 border-b flex-row items-center gap-2 space-y-0">
+                  {renomeandoEste && rv ? (
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Input
+                        value={rv.nome}
+                        onChange={(e) => setRenomeandoArq({ id: a.id, nome: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === "Enter" && rv.nome.trim()) renomearArqMut.mutate({ id: a.id, nome: rv.nome }); if (e.key === "Escape") setRenomeandoArq(null); }}
+                        className="h-8 text-sm max-w-md"
+                        autoFocus
+                      />
+                      <Button size="sm" className="h-8" disabled={!rv.nome.trim() || renomearArqMut.isPending}
+                        onClick={() => renomearArqMut.mutate({ id: a.id, nome: rv.nome })}>OK</Button>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => setRenomeandoArq(null)}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <DialogTitle className="text-sm font-bold truncate flex items-center gap-2 flex-1 min-w-0">
+                      <span className="truncate">{a.nome}</span>
+                      <button
+                        className="text-info-fg shrink-0"
+                        title="Renomear arquivo"
+                        onClick={() => setRenomeandoArq({ id: a.id, nome: a.nome })}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </DialogTitle>
+                  )}
+                  <span className="text-[11px] font-bold text-muted-foreground tabular-nums shrink-0">
+                    {viewerIdx + 1} de {arquivos.length}
+                  </span>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0" onClick={() => {
+                    const link = document.createElement("a"); link.href = a.url; link.download = a.nome || "arquivo"; link.target = "_blank"; link.click();
+                  }}>
+                    <Download className="h-3.5 w-3.5 mr-1.5" /> Baixar
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 shrink-0" title="Abrir em nova aba"
+                    onClick={() => window.open(a.url, "_blank")}>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </DialogHeader>
+
+                <div className="flex-1 min-h-0 relative bg-muted/40">
+                  {isImage(a.tipo ?? "") ? (
+                    <div className="h-full w-full flex items-center justify-center p-4">
+                      <img src={a.url} alt={a.nome} className="max-h-full max-w-full object-contain rounded" />
+                    </div>
+                  ) : (
+                    // PDFs e docs: o navegador renderiza no iframe. URL externa
+                    // que recusar moldura tem a saída "Abrir em nova aba" acima.
+                    <iframe src={a.url} title={a.nome} className="h-full w-full border-0" />
+                  )}
+                  {viewerIdx > 0 && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full shadow-md"
+                      onClick={() => setViewerIdx(viewerIdx - 1)}
+                      title="Documento anterior (←)"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {viewerIdx < arquivos.length - 1 && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 p-0 rounded-full shadow-md"
+                      onClick={() => setViewerIdx(viewerIdx + 1)}
+                      title="Próximo documento (→)"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <div className="border-t px-4 py-2 flex items-center gap-2 overflow-x-auto">
+                  {arquivos.map((f: any, i: number) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setViewerIdx(i)}
+                      title={f.nome}
+                      className={`shrink-0 w-14 h-16 rounded-md border-2 flex flex-col items-center justify-center gap-1 overflow-hidden transition-colors ${
+                        i === viewerIdx ? "border-info/30 bg-info-bg" : "border-border bg-card hover:bg-muted"
+                      }`}
+                    >
+                      {isImage(f.tipo) ? (
+                        <img src={f.url} alt={f.nome} className="h-9 w-11 object-cover rounded-sm" onError={(e) => { (e.target as any).style.display = "none"; }} />
+                      ) : (
+                        <FileText className={`h-5 w-5 ${(f.tipo || "").includes("pdf") || /\.pdf$/i.test(f.nome || "") ? "text-danger" : "text-info"}`} />
+                      )}
+                      <span className="text-[7.5px] text-muted-foreground max-w-[48px] truncate px-0.5">{f.nome}</span>
+                    </button>
+                  ))}
+                  <span className="ml-auto text-[10px] text-muted-foreground shrink-0 pl-2">← → do teclado navegam</span>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!excluirPastaAlvo} onOpenChange={(o) => !o && setExcluirPastaAlvo(null)}>
         <AlertDialogContent>
@@ -655,7 +832,7 @@ export function ArquivosTab({ contatoId }: { contatoId: number; arquivos?: any[]
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-danger hover:bg-danger"
               onClick={() => {
                 if (excluirPastaAlvo) {
                   excluirPastaMut.mutate({ id: excluirPastaAlvo.id });
@@ -820,15 +997,14 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     if (d.length <= 12) return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8)}`; return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
   };
 
-  const formatTel = (v: string) => {
-    const d = v.replace(/\D/g, "").slice(0, 11);
-    if (d.length <= 2) return d; if (d.length <= 7) return `(${d.slice(0,2)}) ${d.slice(2)}`; return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
-  };
+  // Corta o DDI antes de mascarar: colar "5585997965706" (como o WhatsApp
+  // mostra) dava "(55) 85997-9657" — e era ESSE número que ia pro cadastro.
+  const formatTel = (v: string) => mascararTelefoneBR(v);
 
   return (<><Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>Novo Cliente</DialogTitle></DialogHeader><div className="space-y-3 py-2">
-    <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-red-400" : ""} />{erros.nome && <p className="text-[10px] text-red-500">{erros.nome}</p>}</div>
-    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-red-400" : ""} />{erros.tel && <p className="text-[10px] text-red-500">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-red-400" : ""} />{erros.email && <p className="text-[10px] text-red-500">{erros.email}</p>}</div></div>
-    <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-red-400" : ""} />{erros.cpf && <p className="text-[10px] text-red-500">{erros.cpf}</p>}</div>
+    <div className="space-y-1.5"><Label>Nome <span className="text-destructive">*</span></Label><Input placeholder="Nome completo" value={nome} onChange={e => setNome(e.target.value)} className={erros.nome ? "border-danger/30" : ""} />{erros.nome && <p className="text-[10px] text-danger">{erros.nome}</p>}</div>
+    <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone <span className="text-destructive">*</span></Label><Input placeholder="(85) 99999-0000" value={tel} onChange={e => setTel(formatTel(e.target.value))} className={erros.tel ? "border-danger/30" : ""} />{erros.tel && <p className="text-[10px] text-danger">{erros.tel}</p>}</div><div className="space-y-1.5"><Label>Email</Label><Input placeholder="opcional" value={email} onChange={e => setEmail(e.target.value)} className={erros.email ? "border-danger/30" : ""} />{erros.email && <p className="text-[10px] text-danger">{erros.email}</p>}</div></div>
+    <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-danger/30" : ""} />{erros.cpf && <p className="text-[10px] text-danger">{erros.cpf}</p>}</div>
     <CamposQualificacaoEndereco
       obrigatorios
       value={qualif}
@@ -862,7 +1038,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           type="checkbox"
           checked={jaFechado}
           onChange={(e) => setJaFechado(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-emerald-600 cursor-pointer"
+          className="mt-0.5 h-4 w-4 accent-success cursor-pointer"
         />
         <div>
           <span className="text-sm font-medium">✅ Cliente já fechou contrato</span>
@@ -911,7 +1087,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           type="checkbox"
           checked={docPendente}
           onChange={(e) => setDocPendente(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-violet-600 cursor-pointer"
+          className="mt-0.5 h-4 w-4 accent-info cursor-pointer"
         />
         <div>
           <span className="text-sm font-medium">Documentação pendente</span>
@@ -928,7 +1104,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           onChange={(e) => setDocObs(e.target.value)}
           maxLength={1000}
           rows={2}
-          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400"
+          className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-info"
         />
       )}
     </div>
@@ -1027,7 +1203,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const STATUS_ASSINATURA_LABELS: Record<string, string> = { pendente: "Pendente", enviado: "Enviado", visualizado: "Visualizado", assinado: "Assinado", recusado: "Recusado", expirado: "Expirado" };
-const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-gray-600 bg-gray-100", enviado: "text-blue-600 bg-blue-100", visualizado: "text-amber-600 bg-amber-100", assinado: "text-emerald-600 bg-emerald-100", recusado: "text-red-600 bg-red-100", expirado: "text-gray-500 bg-gray-100" };
+const STATUS_ASSINATURA_CORES: Record<string, string> = { pendente: "text-muted-foreground bg-muted", enviado: "text-info-fg bg-info-bg", visualizado: "text-warning-fg bg-warning-bg", assinado: "text-success-fg bg-success-bg", recusado: "text-danger-fg bg-danger-bg", expirado: "text-muted-foreground bg-muted" };
 
 export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: { contatoId: number; cliente: any; assinaturas: any[]; onRefresh: () => void }) {
   const [showNovo, setShowNovo] = useState(false);
@@ -1086,7 +1262,11 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     // "wa.me/?text=..." (URL quebrada) e mandaríamos `enviarMut({id: undefined})`
     // que falha silenciosamente.
     const tel = (cliente.telefone || "").replace(/\D/g, "");
-    if (!tel) {
+    // O cadastro à mão guarda o número sem o 55 e o wa.me exige formato
+    // internacional — sem o prefixo o WhatsApp abria "número inválido" e o
+    // documento ficava marcado como enviado mesmo assim.
+    const linkWa = telefoneParaWaMe(tel);
+    if (!tel || !linkWa) {
       toast.error("Cliente sem telefone cadastrado.");
       return;
     }
@@ -1098,7 +1278,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     const nome = cliente.nome || "tudo bem";
     const link = `${window.location.origin}/assinar/${token}`;
     const msg = encodeURIComponent(`Olá ${nome}! Segue o documento para assinatura digital:\n\n${link}\n\nPor favor, revise e assine o documento.`);
-    window.open(`https://wa.me/${tel}?text=${msg}`, "_blank");
+    window.open(`${linkWa}?text=${msg}`, "_blank");
     enviarMut.mutate({ id: assin.id });
   };
 
@@ -1110,9 +1290,9 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
       </div>
 
       {linkCopiado && (
-        <div className="p-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 space-y-2">
-          <p className="text-xs font-medium text-emerald-700">Link de assinatura criado:</p>
-          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-white" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
+        <div className="p-3 rounded-lg border border-success/30 bg-success-bg space-y-2">
+          <p className="text-xs font-medium text-success-fg">Link de assinatura criado:</p>
+          <div className="flex gap-2"><Input value={linkCopiado} readOnly className="h-8 text-xs bg-card" /><Button size="sm" variant="outline" className="h-8" onClick={() => { navigator.clipboard.writeText(linkCopiado); toast.success("Copiado!"); }}>Copiar</Button></div>
           <Button size="sm" variant="outline" className="h-7 text-xs w-full" onClick={() => setLinkCopiado(null)}>Fechar</Button>
         </div>
       )}
@@ -1138,7 +1318,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
         <div className="space-y-2">
           {assinaturas.map((a: any) => (
             <div key={a.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/20 transition-colors">
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-rose-600" /></div>
+              <div className="h-9 w-9 rounded-lg bg-danger-bg flex items-center justify-center shrink-0"><PenLine className="h-4 w-4 text-danger-fg" /></div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{a.titulo}</p>
                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -1151,13 +1331,13 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
               <div className="flex gap-1 shrink-0">
                 {a.documentoUrl && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Ver documento original" onClick={() => abrirArquivoOuAvisar(a.documentoUrl, "Documento original indisponível")}><ExternalLink className="h-3 w-3" /></Button>}
                 {a.status === "assinado" && a.documentoAssinadoUrl && (
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Baixar PDF assinado (com carimbo + página de certificação)" onClick={() => abrirArquivoOuAvisar(a.documentoAssinadoUrl, "PDF assinado indisponível")}>
                     <Download className="h-3 w-3" />
                   </Button>
                 )}
                 {a.tokenAssinatura && a.status !== "assinado" && a.status !== "expirado" && (<>
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
-                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Copiar link" onClick={() => copiarLink(a.tokenAssinatura)}><FileText className="h-3 w-3" /></Button>
+                  {cliente.telefone && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Enviar WhatsApp" onClick={() => enviarWhatsApp(a.tokenAssinatura)}><Send className="h-3 w-3" /></Button>}
                 </>)}
                 {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
               </div>
@@ -1179,7 +1359,7 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-danger hover:bg-danger"
             onClick={() => {
               if (excluirAssinAlvo) {
                 excluirMut.mutate({ id: excluirAssinAlvo.id });
@@ -1201,8 +1381,8 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
 // Aba Tarefas do Cliente
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const PRIOR_DOT: Record<string, string> = { urgente: "bg-red-500", alta: "bg-orange-400", normal: "bg-blue-400", baixa: "bg-gray-300" };
-const ST_COR: Record<string, string> = { pendente: "bg-amber-100 text-amber-700", em_andamento: "bg-blue-100 text-blue-700", concluida: "bg-emerald-100 text-emerald-700", cancelada: "bg-gray-100 text-gray-500" };
+const PRIOR_DOT: Record<string, string> = { urgente: "bg-danger", alta: "bg-warning", normal: "bg-info", baixa: "bg-muted-foreground/50" };
+const ST_COR: Record<string, string> = { pendente: "bg-warning-bg text-warning-fg", em_andamento: "bg-info-bg text-info-fg", concluida: "bg-success-bg text-success-fg", cancelada: "bg-muted text-muted-foreground" };
 const ST_LBL: Record<string, string> = { pendente: "Pendente", em_andamento: "Em andamento", concluida: "Concluída", cancelada: "Cancelada" };
 
 export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
@@ -1247,14 +1427,14 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
     {!lista.length ? <div className="text-center py-6"><CheckSquare className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" /><p className="text-sm text-muted-foreground">Nenhuma tarefa.</p></div> : (
       <div className="space-y-1.5">{lista.map((t: any) => (
         <div key={t.id} className="flex items-center gap-2 p-2 rounded-lg border hover:bg-muted/20 group">
-          <button className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${t.status === "concluida" ? "bg-emerald-500 border-emerald-500 text-white" : "border-muted-foreground/30 hover:border-emerald-400"}`}
+          <button className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${t.status === "concluida" ? "bg-success border-success/30 text-success-on" : "border-muted-foreground/30 hover:border-success/30"}`}
             onClick={() => atualizar.mutate({ id: t.id, status: t.status === "concluida" ? "pendente" : "concluida" })}>
             {t.status === "concluida" && <Check className="h-2.5 w-2.5" />}
           </button>
-          <div className={`w-0.5 h-5 rounded-full ${PRIOR_DOT[t.prioridade] || "bg-gray-300"}`} />
+          <div className={`w-0.5 h-5 rounded-full ${PRIOR_DOT[t.prioridade] || "bg-muted-foreground/50"}`} />
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-medium truncate ${t.status === "concluida" ? "line-through text-muted-foreground" : ""}`}>{t.titulo}</p>
-            {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-red-500" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
+            {t.dataVencimento && <p className={`text-[9px] flex items-center gap-0.5 ${t.vencida ? "text-danger" : "text-muted-foreground"}`}><Calendar className="h-2 w-2" />{new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</p>}
           </div>
           <Badge className={`text-[8px] px-1 py-0 ${ST_COR[t.status] || ""}`}>{ST_LBL[t.status]}</Badge>
           <Button variant="ghost" size="sm" className="h-5 w-5 p-0 text-destructive opacity-0 group-hover:opacity-100" onClick={() => setExcluirTarefaAlvo({ id: t.id, titulo: t.titulo })}><Trash2 className="h-2.5 w-2.5" /></Button>
@@ -1275,7 +1455,7 @@ export function TarefasClienteTab({ contatoId }: { contatoId: number }) {
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-danger hover:bg-danger"
             onClick={() => {
               if (excluirTarefaAlvo) {
                 excluir.mutate({ id: excluirTarefaAlvo.id });
@@ -1377,7 +1557,7 @@ export function RegistrarFechamentoDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            <CheckCircle2 className="h-5 w-5 text-success-fg" />
             Registrar fechamento
           </DialogTitle>
         </DialogHeader>
@@ -1389,11 +1569,11 @@ export function RegistrarFechamentoDialog({
           </p>
 
           {fechamentosExistentes.length > 0 && (
-            <div className="rounded-md border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-900 p-2.5 space-y-1">
-              <p className="text-[11px] font-medium text-emerald-800 dark:text-emerald-200">
+            <div className="rounded-md border border-success/30 bg-success-bg dark:border-success/30 p-2.5 space-y-1">
+              <p className="text-[11px] font-medium text-success-fg">
                 Já registrados: {fechamentosExistentes.length} fechamento(s)
               </p>
-              <ul className="text-[10px] text-emerald-700/90 dark:text-emerald-300/90 space-y-0.5">
+              <ul className="text-[10px] text-success-fg/90 space-y-0.5">
                 {fechamentosExistentes.slice(0, 5).map((f, i) => (
                   <li key={i}>
                     {f.valorEstimado

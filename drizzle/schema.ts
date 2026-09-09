@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, tinyint, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -51,6 +51,21 @@ export const users = mysqlTable("users", {
    */
   aceitouTermosEm: timestamp("aceitouTermosEm"),
   /**
+   * Versão dos Termos aceita (shared/termos.ts). 0 = nunca registrou
+   * versão (conta antiga ou Google sem aceite) — o TermosGate trava o
+   * DONO até aceitar a vigente. O histórico completo fica em
+   * `aceites_termos` (data/hora/IP/versão, auditável).
+   */
+  termosVersaoAceita: int("termosVersaoAceita").default(0).notNull(),
+  /**
+   * Caderninho comercial do admin da plataforma (funil de remarketing em
+   * /admin/clients): quando e por onde o dono do JuridFlow falou com este
+   * cadastro pela última vez. O histórico completo fica nas notas da ficha
+   * (cliente_notas_admin, categoria comercial).
+   */
+  ultimoContatoComercialEm: timestamp("ultimoContatoComercialEm"),
+  ultimoContatoComercialCanal: varchar("ultimoContatoComercialCanal", { length: 16 }),
+  /**
    * Confirmação de email (Fase 2 do roadmap de Planos).
    * Signup novo: false até clicar no link enviado por Resend.
    * Login Google: marca true automaticamente (Google já valida).
@@ -64,6 +79,11 @@ export const users = mysqlTable("users", {
    * automaticamente após `confirmarEmail`. Null = não escolheu.
    */
   planoPretendido: varchar("plano_pretendido", { length: 64 }),
+  /**
+   * WhatsApp informado no cadastro (só dígitos, sem DDI). Obrigatório pra
+   * conta nova de dono; NULL em contas antigas e colaboradores convidados.
+   */
+  whatsapp: varchar("whatsapp", { length: 20 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -90,6 +110,29 @@ export type EmailConfirmationToken = typeof emailConfirmationTokens.$inferSelect
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
+
+/**
+ * Trilha de aceites dos Termos de Uso — uma linha por aceite, com IP e
+ * versão. `users.termosVersaoAceita` é o cache da última; ESTA tabela é a
+ * prova em caso de disputa (nunca sobrescrita, só acrescida).
+ */
+export const aceitesTermos = mysqlTable(
+  "aceites_termos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userIdAceite").notNull(),
+    versao: int("versaoAceite").notNull(),
+    /** De onde veio: cadastro, reaceite (gate bloqueante). */
+    contexto: varchar("contextoAceite", { length: 32 }).default("cadastro").notNull(),
+    ip: varchar("ipAceite", { length: 64 }),
+    aceitoEm: timestamp("aceitoEmAceite").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxUser: index("idx_aceites_termos_user").on(t.userId),
+  }),
+);
+
+export type AceiteTermos = typeof aceitesTermos.$inferSelect;
 
 /**
  * Subscriptions table — assinaturas SaaS JuridFlow (uma por usuário-dono).
@@ -142,6 +185,12 @@ export const subscriptions = mysqlTable("subscriptions", {
   trialAvisado3d: boolean("trial_avisado_3d").default(false).notNull(),
   trialAvisado1d: boolean("trial_avisado_1d").default(false).notNull(),
   trialConvertido: boolean("trial_convertido").default(false).notNull(),
+  /**
+   * Valor fechado na conversa (planos sob consulta). Quando presente, a
+   * fatura composta usa este valor como preço do pacote deste cliente,
+   * no lugar do preço de tabela.
+   */
+  valorNegociadoCentavos: int("valor_negociado_centavos"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -328,6 +377,16 @@ export const escritorios = mysqlTable("escritorios", {
   msgDividirRitmo: mysqlEnum("msgDividirRitmo", ["rapido", "natural", "calmo"])
     .default("natural")
     .notNull(),
+  /**
+   * Desconto comercial do escritório — aplicado na fatura inteira (pacote +
+   * módulos avulsos + atendentes adicionais). NULL em descontoTipo = sem
+   * desconto. Valor: pontos percentuais (tipo "percentual") ou centavos
+   * (tipo "fixo"). Validade NULL = não vence.
+   */
+  descontoTipo: varchar("desconto_tipo", { length: 16 }),
+  descontoValor: int("desconto_valor").default(0).notNull(),
+  descontoValidoAte: timestamp("desconto_valido_ate"),
+  descontoObservacao: varchar("desconto_observacao", { length: 255 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -800,9 +859,25 @@ export const conversas = mysqlTable("conversas", {
    * destaque na lista). NULL = nunca aberta — todas as entradas contam.
    */
   lidaPeloAtendenteEm: timestamp("lidaPeloAtendenteEm"),
+  /**
+   * Marcação MANUAL de "não lida" (menu rápido da lista / menu da conversa).
+   * NULL = sem marcação. Na lista vira o destaque de não lida com bolinha sem
+   * número — o contador continua vindo de lidaPeloAtendenteEm × mensagens de
+   * entrada. Abrir a conversa limpa junto com o carimbo de leitura.
+   */
+  marcadaNaoLidaEm: timestamp("marcadaNaoLidaEmConv"),
   // Pasta Arquivadas: NULL = ativa. Arquivada sai das vistas padrão sem ser
   // apagada; mensagem nova do contato limpa o campo (desarquiva sozinha).
   arquivadaEm: timestamp("arquivadaEmConv"),
+  /**
+   * Início do ATENDIMENTO atual (episódio): gravado na criação da conversa e
+   * RE-gravado quando mensagem de ENTRADA chega com a conversa
+   * resolvida/fechada — o cliente voltou = novo atendimento (regra do dono,
+   * 27/08). É a data que o filtro de período do Inbox usa no modo "início do
+   * atendimento". NULL só em linha antiga sem backfill — o filtro cobre com
+   * COALESCE(createdAt).
+   */
+  atendimentoIniciadoEm: timestamp("atendimentoIniciadoEmConv"),
   tempoEspera: int("tempoEspera"),
   tempoConclusao: int("tempoConclusao"),
   avaliacaoCliente: int("avaliacaoCliente"),
@@ -1467,6 +1542,13 @@ export const tarefas = mysqlTable("tarefas", {
   descricao: text("descricaoTarefa"),
   status: mysqlEnum("statusTarefa", ["pendente", "em_andamento", "concluida", "cancelada"]).default("pendente").notNull(),
   prioridade: mysqlEnum("prioridadeTarefa", ["baixa", "normal", "alta", "urgente"]).default("normal").notNull(),
+  /**
+   * O par de datas de um prazo: `dataInicial` é quando se começa (ou quando a
+   * contagem se inicia) e `dataVencimento` é a data FATAL, o limite que não se
+   * move. Só a segunda existia, então quem criava tarefa a partir de uma
+   * movimentação tinha que escolher qual das duas gravar.
+   */
+  dataInicial: timestamp("dataInicial"),
   dataVencimento: timestamp("dataVencimento"),
   concluidaAt: timestamp("concluidaAt"),
   createdAt: timestamp("createdAtTarefa").defaultNow().notNull(),
@@ -2060,6 +2142,18 @@ export const motorMonitoramentos = mysqlTable(
     ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
     ultimoErro: text("ultimo_erro"),
     /**
+     * Monitoramento por CPF em vários estados: JSON array dos tribunais
+     * vigiados (["tjce","tjpe",...]). NULL = só o legado `tribunal`.
+     */
+    tribunais: text("tribunais"),
+    /**
+     * Tribunais que já passaram pela 1ª varredura silenciosa (baseline).
+     * Adicionar um estado depois não pode alarmar o estoque antigo de lá.
+     */
+    tribunaisBaseline: text("tribunais_baseline"),
+    /** Última varredura por tribunal: {em, resultados:[{tribunal,ok,erro?,total?}]}. */
+    varreduraJson: text("varredura_json"),
+    /**
      * Indicador de que o processo parece ter subido pro 2º grau (recurso),
      * detectado pelas movimentações do 1º grau. Base da opção C do
      * monitoramento por grau (issue #529); `indicios2grau` guarda os trechos
@@ -2188,6 +2282,21 @@ export const planos = mysqlTable("planos", {
   /** JSON array de strings — bullets que aparecem na LP e em /plans. */
   features: json("features").notNull(),
 
+  /** Preço não aparece na LP — o card mostra "Sob consulta" e o botão de
+   *  conversa. O dono liga/desliga por plano no painel. */
+  precoSobConsulta: boolean("preco_sob_consulta").notNull().default(false),
+  /** Limite de monitoramentos por CPF/CNPJ (novas ações). NULL = sem limite.
+   *  Separado de maxMonitoramentosProcessos (movimentações por CNJ) — são
+   *  serviços e custos diferentes. */
+  maxMonitoramentosCpf: int("max_monitoramentos_cpf"),
+  /** Card da LP com "Agendar demonstração" como botão principal (Completo). */
+  ctaDemonstracao: boolean("cta_demonstracao").notNull().default(false),
+  /** Assentos de atendente inclusos no pacote. NULL = plano sem cobrança
+   *  por assento (todos os planos pré-existentes ficam assim). */
+  atendentesInclusos: int("atendentes_inclusos"),
+  /** Preço do atendente além dos inclusos. 0 = não cobra excedente. */
+  precoAtendenteAdicionalCentavos: int("preco_atendente_adicional_centavos").notNull().default(0),
+
   popular: boolean("popular").notNull().default(false),
   oculto: boolean("oculto").notNull().default(false),
   ordem: int("ordem").notNull().default(0),
@@ -2203,6 +2312,34 @@ export const planos = mysqlTable("planos", {
 
 export type PlanoRow = typeof planos.$inferSelect;
 export type InsertPlanoRow = typeof planos.$inferInsert;
+
+/**
+ * Catálogo de preços por módulo — preço mensal da venda avulsa, editável
+ * pelo admin sem deploy. Também alimenta a "soma da cesta" na montagem de
+ * pacotes. Módulo sem linha (ou com 0) = preço a definir: não aparece como
+ * vendável avulso até o admin dar valor.
+ */
+export const modulosCatalogo = mysqlTable("modulos_catalogo", {
+  id: int("id").autoincrement().primaryKey(),
+  modulo: varchar("modulo", { length: 48 }).notNull().unique(),
+  precoMensalCentavos: int("preco_mensal_centavos").notNull().default(0),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ModuloCatalogoRow = typeof modulosCatalogo.$inferSelect;
+
+/**
+ * Configurações globais do sistema — chave/valor editável pelo admin sem
+ * deploy (ex: whatsapp_comercial dos botões "Falar com a gente" da LP).
+ */
+export const configSistema = mysqlTable("config_sistema", {
+  id: int("id").autoincrement().primaryKey(),
+  chave: varchar("chave", { length: 64 }).notNull().unique(),
+  valor: text("valor"),
+  atualizadoPor: int("atualizado_por"),
+  atualizadoEm: timestamp("atualizado_em").defaultNow().onUpdateNow().notNull(),
+});
 
 /**
  * Cupons de desconto — admin cria, cliente aplica no checkout.
@@ -2425,6 +2562,7 @@ export const smartflowPassos = mysqlTable("smartflow_passos", {
     "whatsapp_enviar",               // envia mensagem no WhatsApp
     "whatsapp_aguardar_resposta",    // envia mensagem e pausa esperando resposta
     "whatsapp_pergunta_opcoes",      // botões/lista interativa Cloud API + pausa
+    "whatsapp_enviar_template",      // template aprovado (HSM) + pausa esperando o clique
     "transferir",                    // transfere pra humano
     "encerrar_conversa",             // fecha o atendimento (resolvido/fechado)
     "distribuir_atendimento",        // escolhe atendente de um setor e seta dono da conversa
@@ -2999,6 +3137,15 @@ export const comissoesFechadas = mysqlTable(
      *  automático e clique manual ambos tentam versao=0 → segundo INSERT
      *  cai em ER_DUP_ENTRY (capturado em db-comissoes.fecharComissao). */
     versao: int("versao").default(0).notNull(),
+    /** Trilha da comissão. 'venda' = a do atendente que vendeu (o único
+     *  tipo que existia); 'gestao' = percentual do gestor sobre o recebido
+     *  de todos os clientes fechados a partir de `dataCorteUsada`. Cada
+     *  trilha tem o seu próprio anti-duplicidade, então as duas podem
+     *  incidir sobre a MESMA cobrança sem se anular. */
+    tipo: mysqlEnum("tipoComFech", ["venda", "gestao"]).default("venda").notNull(),
+    /** Corte de fechamento aplicado, congelado junto com a alíquota.
+     *  NULL na trilha de venda (que não tem corte). */
+    dataCorteUsada: varchar("dataCorteUsadaComFech", { length: 10 }),
   },
   (t) => ({
     idxEscritorioAtendente: index("com_fech_escr_atendente_idx").on(
@@ -3012,6 +3159,7 @@ export const comissoesFechadas = mysqlTable(
     uqPeriodoVersao: uniqueIndex("com_fech_periodo_versao_uq").on(
       t.escritorioId,
       t.atendenteId,
+      t.tipo,
       t.periodoInicio,
       t.periodoFim,
       t.versao,
@@ -3021,6 +3169,83 @@ export const comissoesFechadas = mysqlTable(
 
 export type ComissaoFechada = typeof comissoesFechadas.$inferSelect;
 export type InsertComissaoFechada = typeof comissoesFechadas.$inferInsert;
+
+/**
+ * Quem recebe comissão de GESTÃO, com qual percentual e a partir de quando.
+ *
+ * Tabela separada de `regra_comissao` porque aquela é singleton por
+ * escritório (uma alíquota pra todo mundo) e aqui cada gestor tem o seu
+ * percentual e o seu corte. `dataCorte` é a data de FECHAMENTO do contrato
+ * do cliente a partir da qual os recebimentos passam a comissionar: cliente
+ * que fechou antes fica de fora para sempre, mesmo pagando depois.
+ */
+export const comissaoGestao = mysqlTable(
+  "comissao_gestao",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdComGest").notNull(),
+    colaboradorId: int("colaboradorIdComGest").notNull(),
+    /** Alíquota do modo "flat". No modo "faixas" quem manda é a tabela. */
+    aliquotaPercent: decimal("aliquotaPercentComGest", { precision: 5, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** Mesma semântica da regra de venda: "flat" usa `aliquotaPercent`;
+     *  "faixas" usa `comissao_gestao_faixas` como tabela cumulativa. */
+    modo: mysqlEnum("modoComGest", ["flat", "faixas"]).default("flat").notNull(),
+    /** O que classifica a faixa: o recebido bruto ou só o comissionável. */
+    baseFaixa: mysqlEnum("baseFaixaComGest", ["bruto", "comissionavel"])
+      .default("comissionavel")
+      .notNull(),
+    /** Cobrança abaixo disso não conta, nos dois modos. Por gestor: a regra
+     *  do escritório é a da venda e pode ter um piso diferente. */
+    valorMinimo: decimal("valorMinimoComGest", { precision: 12, scale: 2 })
+      .default("0")
+      .notNull(),
+    /** YYYY-MM-DD. Compara com `leads.fechadoEm` do cliente da cobrança. */
+    dataCorte: varchar("dataCorteComGest", { length: 10 }).notNull(),
+    /** Desliga sem perder a configuração (e sem apagar histórico). */
+    ativo: boolean("ativoComGest").default(true).notNull(),
+    criadoPorUserId: int("criadoPorUserIdComGest").notNull(),
+    criadoEm: timestamp("criadoEmComGest").defaultNow().notNull(),
+    atualizadoEm: timestamp("atualizadoEmComGest").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uqEscritorioColaborador: uniqueIndex("comissao_gestao_escr_colab_uq").on(
+      t.escritorioId,
+      t.colaboradorId,
+    ),
+  }),
+);
+
+export type ComissaoGestao = typeof comissaoGestao.$inferSelect;
+export type InsertComissaoGestao = typeof comissaoGestao.$inferInsert;
+
+/**
+ * Faixas progressivas da comissão de gestão (um gestor → N faixas).
+ *
+ * Mesma convenção da tabela de faixas da venda: lidas em ordem crescente de
+ * `ordem`, a faixa encaixa o total da base quando este é ≤ `limiteAte`, e a
+ * última pode ter `limiteAte = NULL` para representar "sem teto".
+ */
+export const comissaoGestaoFaixas = mysqlTable(
+  "comissao_gestao_faixas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    comissaoGestaoId: int("comissaoGestaoIdFaixa").notNull(),
+    ordem: int("ordemFaixaGest").notNull(),
+    /** Cota superior da faixa (inclusiva). NULL = sem teto (última faixa). */
+    limiteAte: decimal("limiteAteFaixaGest", { precision: 14, scale: 2 }),
+    aliquotaPercent: decimal("aliquotaPercentFaixaGest", { precision: 5, scale: 2 })
+      .notNull(),
+    createdAt: timestamp("createdAtFaixaGest").defaultNow().notNull(),
+  },
+  (t) => ({
+    idxGestaoOrdem: index("comissao_gestao_faixa_idx").on(t.comissaoGestaoId, t.ordem),
+  }),
+);
+
+export type ComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferSelect;
+export type InsertComissaoGestaoFaixa = typeof comissaoGestaoFaixas.$inferInsert;
 
 /**
  * Itens (cobranças) que entraram no snapshot de comissão fechada.
@@ -3350,10 +3575,72 @@ export const cofreSessoes = mysqlTable("cofre_sessoes", {
   /** Estimativa baseada em TTL típico do tribunal (geralmente 24-72h) */
   expiraEmEstimado: timestamp("expiraEmEstimado"),
   ultimoUsoEm: timestamp("ultimoUsoEm"),
+  /**
+   * De qual PJe é esta sessão.
+   *
+   * Uma credencial do PDPJ vale em todos os estados, mas cada portal tem
+   * cookies próprios. Sem esta coluna, a sessão de um estado sobrescrevia a
+   * do outro e o tribunal passava a ver login atrás de login da mesma conta.
+   *
+   * NULL = sessão anterior à separação, tratada como inutilizável.
+   */
+  tribunal: varchar("tribunalSessao", { length: 16 }),
 });
 
 export type CofreSessao = typeof cofreSessoes.$inferSelect;
+
+/**
+ * Situação de uma credencial em UM tribunal.
+ *
+ * Dos estados que o motor conhece, só o TJCE foi validado com login real —
+ * os outros têm a URL derivada do padrão. Guardar o resultado por tribunal é
+ * o que permite a tela dizer "não testado" em vez de prometer que funciona.
+ */
+export const cofreCredencialTribunais = mysqlTable(
+  "cofre_credencial_tribunais",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    credencialId: int("credencialIdCT").notNull(),
+    tribunal: varchar("tribunalCT", { length: 16 }).notNull(),
+    /** 1 ou 2. No PJe os dois graus são portais separados — endereço, sessão e
+     *  às vezes cadastro diferentes —, então cada um tem o seu resultado. */
+    grau: tinyint("grauCT").default(1).notNull(),
+    status: mysqlEnum("statusCT", ["nao_testado", "ativa", "erro"]).default("nao_testado").notNull(),
+    ultimoErro: text("ultimoErroCT"),
+    ultimoSucessoEm: timestamp("ultimoSucessoEmCT"),
+    ultimaTentativaEm: timestamp("ultimaTentativaEmCT"),
+    createdAt: timestamp("createdAtCT").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtCT").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porCredencial: uniqueIndex("uq_cofre_cred_tribunal").on(t.credencialId, t.tribunal, t.grau),
+  }),
+);
+
+export type CofreCredencialTribunal = typeof cofreCredencialTribunais.$inferSelect;
 export type InsertCofreSessao = typeof cofreSessoes.$inferInsert;
+
+/**
+ * "Avisar quando chegar": interesse em tribunal que ainda não cobrimos.
+ * Cada clique é um voto na fila de prioridade de novos adapters — melhor
+ * perder o cadastro da credencial hoje do que ganhar um churn no dia 3.
+ */
+export const interesseTribunais = mysqlTable(
+  "interesse_tribunais",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdIntTrib").notNull(),
+    userId: int("userIdIntTrib").notNull(),
+    tribunal: varchar("tribunalIntTrib", { length: 120 }).notNull(),
+    criadoEm: timestamp("criadoEmIntTrib").defaultNow().notNull(),
+  },
+  (t) => ({
+    porTribunal: index("idx_interesse_tribunais_trib").on(t.tribunal),
+    porEscritorio: index("idx_interesse_tribunais_esc").on(t.escritorioId),
+  }),
+);
+
+export type InteresseTribunal = typeof interesseTribunais.$inferSelect;
 
 /**
  * Eventos detectados pelo motor próprio — granularidade superior a
@@ -3429,6 +3716,14 @@ export const eventosProcesso = mysqlTable(
     teorTentativas: int("teorTentativas").default(0).notNull(),
     teorErro: varchar("teorErro", { length: 255 }),
     teorObtidoEm: timestamp("teorObtidoEm"),
+    /**
+     * Id e tipo da peça, lidos do próprio rótulo do movimento
+     * ("… 226277277 - Despacho"). É o que permite dizer que o documento
+     * EXISTE quando o link da timeline não é seguível por HTTP, e é o ponto
+     * de partida do download sob demanda.
+     */
+    documentoIdTribunal: varchar("documentoIdTribunal", { length: 32 }),
+    documentoTipo: varchar("documentoTipo", { length: 64 }),
     /** Análise IA estruturada — ver `AnaliseMovimentacao` em resumir-movimentacao.ts. */
     analiseJson: text("analiseJson"),
     lido: boolean("lido").default(false).notNull(),
@@ -3440,6 +3735,13 @@ export const eventosProcesso = mysqlTable(
      * Só aplicável a tipo='nova_acao'; nos demais eventos fica no default.
      */
     resolucao: mysqlEnum("resolucaoEvento", ["pendente", "monitorando", "lida", "falso"]).default("pendente").notNull(),
+    /**
+     * Lado em que o cliente monitorado está na nova ação — é o que separa as
+     * gavetas da aba (passivo = alerta; ativo = só consulta; desconhecido =
+     * alguém decide). Gravado pelo cron na detecção ou pela pessoa, à mão.
+     * Só aplicável a tipo='nova_acao'.
+     */
+    poloCliente: mysqlEnum("poloClienteEvento", ["ativo", "passivo", "terceiro", "desconhecido"]).default("desconhecido").notNull(),
     resolvidoPorUserId: int("resolvidoPorUserIdEvento"),
     resolvidoEm: timestamp("resolvidoEmEvento"),
     alertaEnviado: boolean("alertaEnviado").default(false).notNull(),
@@ -4246,3 +4548,86 @@ export const roboAuditorVarreduras = mysqlTable(
 );
 
 export type RoboAuditorVarredura = typeof roboAuditorVarreduras.$inferSelect;
+
+/**
+ * Execuções do robô de jornada — o que navega o app como usuário.
+ *
+ * Ele já existia e rodava só por comando de terminal, então ninguém rodava e
+ * o achado morria no console de quem executou. Guardar cada execução é o que
+ * separa "roda quando alguém lembra" de "está de pé e eu sei quando foi a
+ * última vez".
+ */
+export const jornadaVarreduras = mysqlTable(
+  "jornada_varreduras",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    runId: varchar("runId", { length: 64 }).notNull(),
+    origem: mysqlEnum("origemJV", ["manual", "cron"]).default("manual").notNull(),
+    /** Onde rodou. Achado sem saber de qual ambiente veio não serve pra nada. */
+    baseUrl: varchar("baseUrlJV", { length: 255 }).notNull(),
+    /** `rodando` existe pra tela mostrar progresso: a execução leva minutos. */
+    status: mysqlEnum("statusJV", ["rodando", "concluida", "falhou"]).default("rodando").notNull(),
+    iniciadoEm: timestamp("iniciadoEmJV").defaultNow().notNull(),
+    terminadoEm: timestamp("terminadoEmJV"),
+    duracaoMs: int("duracaoMsJV"),
+    rotasVisitadas: int("rotasVisitadasJV").default(0).notNull(),
+    rotasComAchado: int("rotasComAchadoJV").default(0).notNull(),
+    conferenciasTotal: int("conferenciasTotalJV").default(0).notNull(),
+    conferenciasFalhas: int("conferenciasFalhasJV").default(0).notNull(),
+    /** Execução que termina sem limpar deixa dado de mentira no banco. */
+    escritorioLimpo: boolean("escritorioLimpoJV").default(false).notNull(),
+    erro: varchar("erroJV", { length: 500 }),
+    /** JSON: { rotas: [...], conferencias: [...] }. */
+    detalheJson: text("detalheJson"),
+    createdAt: timestamp("createdAtJV").defaultNow().notNull(),
+  },
+  (t) => ({
+    porInicio: index("idx_jornada_recentes").on(t.iniciadoEm),
+  }),
+);
+
+export type JornadaVarredura = typeof jornadaVarreduras.$inferSelect;
+
+/**
+ * Atendimento como EPISÓDIO — o recorte de trabalho dentro da conversa.
+ *
+ * A conversa é o fio contínuo com a pessoa; o atendimento tem início, fim e
+ * dono próprios. Os dois campos de atendente são o ponto: `atendenteAbriu`
+ * fica congelado (responde "quem iniciou") e `atendenteAtual` muda na
+ * transferência, sem reescrever o passado de ninguém.
+ */
+export const atendimentos = mysqlTable(
+  "atendimentos",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    escritorioId: int("escritorioIdAtd").notNull(),
+    conversaId: int("conversaIdAtd").notNull(),
+    /** Redundante com a conversa: todo relatório recorta por pessoa. */
+    contatoId: int("contatoIdAtd").notNull(),
+
+    abertoEm: timestamp("abertoEmAtd").defaultNow().notNull(),
+    fechadoEm: timestamp("fechadoEmAtd"),
+    motivoFechamento: mysqlEnum("motivoFechamentoAtd", ["resolvido", "silencio", "manual"]),
+
+    /** Congelado. É o que responde "quem iniciou atendimento no período". */
+    atendenteAbriu: int("atendenteAbriuAtd"),
+    /** Muda na transferência. */
+    atendenteAtual: int("atendenteAtualAtd"),
+
+    /** O relógio da regra do silêncio. */
+    ultimaMensagemEm: timestamp("ultimaMensagemEmAtd"),
+    /** Primeira resposta do escritório NESTE episódio. */
+    primeiraRespostaEm: timestamp("primeiraRespostaEmAtd"),
+
+    createdAt: timestamp("createdAtAtd").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtAtd").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porConversa: index("idx_atd_conversa").on(t.conversaId, t.fechadoEm),
+    porEscritorio: index("idx_atd_esc_aberto").on(t.escritorioId, t.abertoEm),
+    porContato: index("idx_atd_contato").on(t.contatoId),
+    porAbriu: index("idx_atd_abriu").on(t.atendenteAbriu, t.abertoEm),
+  }),
+);
+
+export type Atendimento = typeof atendimentos.$inferSelect;

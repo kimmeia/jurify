@@ -6,13 +6,21 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import SignaturePad from "signature_pad";
+import * as Sentry from "@sentry/react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 import "react-pdf/dist/Page/TextLayer.css";
 // Worker do pdfjs servido localmente via Vite `?url`. Atrelado à mesma
 // versão de pdfjs-dist (5.4.296) que o react-pdf bundla — alinhar via
 // package.json é crítico, caret/range causa mismatch.
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+//
+// Build LEGACY de propósito: o build moderno usa `Promise.withResolvers`,
+// que só existe em Safari 17.4+ / Chromium 119+. Quem assina é o cliente do
+// escritório, no aparelho que ele tem — iPhone parado no iOS 16.7 e Samsung
+// Internet antigo são base instalada enorme no Brasil, e neles o preview
+// morria. O legacy traz o polyfill (o vite.config aponta o pdfjs inteiro
+// pra ele; worker e biblioteca precisam ser da MESMA variante).
+import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,10 +41,10 @@ const TIPO_ICONE: Record<CampoTipo, any> = {
   ASSINATURA: PenLine, DATA: Calendar, NOME: User, CPF: IdCard,
 };
 const TIPO_COR: Record<CampoTipo, string> = {
-  ASSINATURA: "bg-amber-200/70 border-amber-500 text-amber-900",
-  DATA: "bg-blue-200/70 border-blue-500 text-blue-900",
-  NOME: "bg-emerald-200/70 border-emerald-500 text-emerald-900",
-  CPF: "bg-violet-200/70 border-violet-500 text-violet-900",
+  ASSINATURA: "bg-warning-bg/70 border-warning/30 text-warning-fg",
+  DATA: "bg-info-bg/70 border-info/30 text-info-fg",
+  NOME: "bg-success-bg/70 border-success/30 text-success-fg",
+  CPF: "bg-info-bg/70 border-info/30 text-info-fg",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -84,12 +92,27 @@ export default function AssinarDocumento({ token }: { token: string }) {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    canvas.width = canvas.offsetWidth * ratio;
-    canvas.height = canvas.offsetHeight * ratio;
+    const largura = Math.round(canvas.offsetWidth * ratio);
+    const altura = Math.round(canvas.offsetHeight * ratio);
+    // No celular `resize` dispara sem o canvas mudar de tamanho: teclado do
+    // Android abrindo no campo Nome/CPF, barra de endereço do iOS colapsando
+    // na rolagem. Redimensionar à toa limpava a assinatura recém-desenhada e
+    // desabilitava o botão Assinar de novo.
+    if (canvas.width === largura && canvas.height === altura) return;
+    const tracos = padRef.current?.toData();
+    canvas.width = largura;
+    canvas.height = altura;
     const ctx = canvas.getContext("2d");
     if (ctx) ctx.scale(ratio, ratio);
     padRef.current?.clear();
-    setAssinaturaVazia(true);
+    if (tracos && tracos.length > 0) {
+      // Rotação de tela redimensiona de verdade — devolve os traços em vez
+      // de exigir que o cliente assine tudo de novo.
+      padRef.current?.fromData(tracos);
+      setAssinaturaVazia(false);
+    } else {
+      setAssinaturaVazia(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -139,7 +162,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Loading
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900">
+      <div className="min-h-screen flex items-center justify-center bg-muted">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -148,10 +171,10 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Não encontrado
   if (!doc || error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <XCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <XCircle className="h-12 w-12 text-danger mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">Documento não encontrado</h2>
             <p className="text-sm text-muted-foreground">O link pode estar incorreto ou o documento foi removido.</p>
           </CardContent>
@@ -169,13 +192,13 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Já assinado
   if (jaAssinado) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950 dark:to-green-950 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-success-bg to-success-bg dark:to-success p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <div className="h-16 w-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="h-8 w-8 text-emerald-600" />
+            <div className="h-16 w-16 rounded-full bg-success-bg flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="h-8 w-8 text-success-fg" />
             </div>
-            <h2 className="text-xl font-bold text-emerald-800 dark:text-emerald-200 mb-2">Documento Assinado!</h2>
+            <h2 className="text-xl font-bold text-success-fg mb-2">Documento Assinado!</h2>
             <p className="text-sm text-muted-foreground mb-4">{doc.titulo}</p>
             <p className="text-xs text-muted-foreground">Sua assinatura digital foi registrada com sucesso. Você pode fechar esta página.</p>
           </CardContent>
@@ -187,10 +210,10 @@ export default function AssinarDocumento({ token }: { token: string }) {
   // Expirado ou cancelado
   if (expirado || cancelado) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
         <Card className="w-full max-w-md text-center">
           <CardContent className="pt-8 pb-8">
-            <AlertTriangle className="h-12 w-12 text-amber-400 mx-auto mb-4" />
+            <AlertTriangle className="h-12 w-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold mb-2">{expirado ? "Documento Expirado" : "Documento Cancelado"}</h2>
             <p className="text-sm text-muted-foreground">{doc.titulo}</p>
             <p className="text-xs text-muted-foreground mt-2">
@@ -206,12 +229,24 @@ export default function AssinarDocumento({ token }: { token: string }) {
 
   // Tela de assinatura
   const temCamposPosicionais = (campos as any[]).length > 0;
+
+  /**
+   * Para onde o botão de leitura aponta.
+   *
+   * Sempre a rota por token — inclusive para documento cadastrado como link
+   * externo (Google Docs, PDF de terceiro), que o servidor resolve com um
+   * redirect. A tela não recebe mais endereço nenhum: quem abre aqui não tem
+   * sessão, e caminho de arquivo no payload é caminho que vaza.
+   */
+  // url-do-servidor-ok: `temDocumento` é booleano, não endereço — o destino é
+  // sempre a rota por token, montada aqui a partir do token da própria URL.
+  const urlLeitura = doc.temDocumento ? `/api/assinatura/pdf/token/${token}` : null;
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 dark:from-slate-950 dark:to-gray-900 p-4">
+    <div className="min-h-screen bg-muted p-4">
       <div className={`mx-auto ${temCamposPosicionais ? "max-w-5xl" : "max-w-lg"} space-y-4`}>
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center mx-auto shadow-lg">
+          <div className="h-14 w-14 rounded-2xl bg-danger flex items-center justify-center mx-auto shadow-lg">
             <PenLine className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">Assinatura Digital</h1>
@@ -235,7 +270,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">
-              <FileText className="h-5 w-5 text-blue-500 shrink-0" />
+              <FileText className="h-5 w-5 text-info shrink-0" />
               <div className="flex-1">
                 <CardTitle className="text-base">{doc.titulo}</CardTitle>
                 {doc.descricao && <p className="text-xs text-muted-foreground mt-0.5">{doc.descricao}</p>}
@@ -244,11 +279,15 @@ export default function AssinarDocumento({ token }: { token: string }) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Link do documento */}
-            {doc.documentoUrl && (
-              <Button variant="outline" className="w-full justify-start gap-2 h-10" onClick={() => window.open(doc.documentoUrl, "_blank")}>
-                <ExternalLink className="h-4 w-4" />
-                <span className="text-sm">Abrir documento para leitura</span>
+            {/* Âncora de verdade em vez de window.open: navegador de celular
+                bloqueia pop-up aberto por JS em vários contextos. Destino
+                calculado em `urlLeitura` (arquivo interno → rota por token). */}
+            {urlLeitura && (
+              <Button asChild variant="outline" className="w-full justify-start gap-2 h-10">
+                <a href={urlLeitura} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="text-sm">Abrir documento para leitura</span>
+                </a>
               </Button>
             )}
 
@@ -301,7 +340,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
                       Limpar
                     </Button>
                   </div>
-                  <div className="rounded-lg border-2 border-dashed bg-white">
+                  <div className="rounded-lg border-2 border-dashed bg-card">
                     {/* touch-none é crítico em mobile: sem ele o scroll do
                         navegador captura o gesto e não dá pra desenhar. */}
                     <canvas
@@ -330,7 +369,7 @@ export default function AssinarDocumento({ token }: { token: string }) {
                 </label>
 
                 <Button
-                  className="w-full h-11 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold"
+                  className="w-full h-11 bg-danger text-danger-on font-semibold"
                   onClick={handleAssinar}
                   disabled={
                     !nomeCompleto ||
@@ -384,6 +423,23 @@ function PreviewPdfComCampos({
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [pageSizePt, setPageSizePt] = useState<{ w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  // Largura útil da tela. Fixo em 600px, num celular de 360px o PDF
+  // transbordava dos DOIS lados (flex centralizado) — e o que sobra à
+  // esquerda não tem como ser alcançado, não existe rolagem pra lá.
+  const [larguraPagina, setLarguraPagina] = useState(600);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const medir = () => {
+      const disponivel = el.clientWidth - 16;
+      if (disponivel > 0) setLarguraPagina(Math.min(600, disponivel));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Memoiza options pra Document não recriar transport a cada render
   // (causa "sendWithPromise null" no Page).
@@ -400,7 +456,7 @@ function PreviewPdfComCampos({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="text-sm flex items-center gap-2">
-            <FileText className="h-4 w-4 text-amber-500" />
+            <FileText className="h-4 w-4 text-warning" />
             Onde sua assinatura vai aparecer
           </CardTitle>
           {totalPaginas > 0 && (
@@ -433,7 +489,7 @@ function PreviewPdfComCampos({
           {paginasComCampos.join(", ")}.
         </p>
       </CardHeader>
-      <CardContent className="bg-muted/20 flex justify-center pt-2">
+      <CardContent ref={boxRef} className="bg-muted/20 flex justify-start sm:justify-center overflow-x-auto pt-2">
         <Document
           // key={documentoUrl} força remount limpo se a URL mudar
           key={documentoUrl}
@@ -447,6 +503,13 @@ function PreviewPdfComCampos({
               error: err?.message,
               name: err?.name,
             });
+            // Sem isto a falha morre no console de um celular que ninguém
+            // aqui vai inspecionar. O user-agent é o que diz se foi aparelho
+            // velho (pdfjs sem suporte) ou arquivo/rede.
+            Sentry.captureException(err, {
+              tags: { tela: "assinar-documento" },
+              extra: { documentoUrl, ua: typeof navigator !== "undefined" ? navigator.userAgent : "" },
+            });
           }}
           loading={
             <div className="p-12 text-center text-sm text-muted-foreground">
@@ -455,15 +518,15 @@ function PreviewPdfComCampos({
             </div>
           }
           error={
-            <div className="p-12 text-center text-sm text-red-600">
+            <div className="p-12 text-center text-sm text-danger-fg">
               Não foi possível exibir o documento.
             </div>
           }
         >
-          <div ref={containerRef} className="relative inline-block shadow-md bg-white">
+          <div ref={containerRef} className="relative inline-block shadow-md bg-card">
             <Page
               pageNumber={paginaAtual}
-              width={600}
+              width={larguraPagina}
               renderTextLayer={false}
               renderAnnotationLayer={false}
               // originalWidth/Height = pontos PDF reais (não pixels

@@ -12,14 +12,17 @@ import {
   criarContato, criarOuReutilizarContato, listarContatos, atualizarContato, unificarContatos,
   buscarContatoPorTelefone,
   criarConversa, listarConversas, contarConversasPorStatus, contarAbertasPorAtendente,
+  conversasForaDoPeriodoInicio,
   atualizarConversa, excluirConversa,
   definirArquivada, resumoArquivadas as resumoArquivadasDB, arquivarConversasDeCanaisDesativados,
   enviarMensagem, listarMensagens,
   criarLead, listarLeads, atualizarLead, excluirLead,
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
-import { conversas, contatos, leads } from "../../drizzle/schema";
+import { conversas, contatos, leads, canaisIntegrados } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
+import { toIsoString } from "../_core/dates";
+import { estadoDoNumero } from "../../shared/conversa-existente";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { mensagemTransferencia, nomeCurto } from "./transferencia-conversa";
 import { createLogger } from "../_core/logger";
@@ -58,6 +61,35 @@ async function colaboradorDoEscritorio(
     .select({ id: colaboradores.id })
     .from(colaboradores)
     .where(and(eq(colaboradores.id, colaboradorId), eq(colaboradores.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+
+async function contatoDoEscritorio(db: Db, escritorioId: number, contatoId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: contatos.id })
+    .from(contatos)
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+async function conversaDoEscritorio(db: Db, escritorioId: number, conversaId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: conversas.id })
+    .from(conversas)
+    .where(and(eq(conversas.id, conversaId), eq(conversas.escritorioId, escritorioId)))
+    .limit(1);
+  return !!c;
+}
+
+async function canalDoEscritorio(db: Db, escritorioId: number, canalId: number): Promise<boolean> {
+  const [c] = await db
+    .select({ id: canaisIntegrados.id })
+    .from(canaisIntegrados)
+    .where(and(eq(canaisIntegrados.id, canalId), eq(canaisIntegrados.escritorioId, escritorioId)))
     .limit(1);
   return !!c;
 }
@@ -214,6 +246,14 @@ export const crmRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      if (!(await contatoDoEscritorio(db, esc.escritorio.id, input.contatoId))) {
+        throw new Error("Contato não encontrado.");
+      }
+      if (!(await canalDoEscritorio(db, esc.escritorio.id, input.canalId))) {
+        throw new Error("Canal não encontrado.");
+      }
 
       // Distribuir automaticamente
       const atendenteId = (await distribuirLead(esc.escritorio.id, input.contatoId).catch(() => null)) ?? esc.colaborador.id;
@@ -244,6 +284,10 @@ export const crmRouter = router({
       busca: z.string().trim().max(120).optional(),
       // Só quem teve o PRIMEIRO contato dentro do período (lead novo).
       somenteNovos: z.boolean().optional(),
+      // Como o período conta: "inicio" (default — início do atendimento
+      // atual) × "mensagens" (qualquer mensagem na janela, comportamento
+      // antigo, mantido como opção).
+      modoPeriodo: z.enum(["inicio", "mensagens"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -276,6 +320,8 @@ export const crmRouter = router({
       // lista mostrava quando havia busca ou pasta Arquivadas aberta.
       busca: z.string().optional(),
       arquivadas: z.boolean().optional(),
+      // Idem: pills têm que contar o MESMO conjunto que a lista mostra.
+      modoPeriodo: z.enum(["inicio", "mensagens"]).optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
@@ -287,6 +333,182 @@ export const crmRouter = router({
         delete filtros.setorId;
       }
       return contarConversasPorStatus(perm.escritorioId, filtros);
+    }),
+
+  /**
+   * Nota de transparência do modo "início do atendimento": conversas que
+   * trocaram mensagem no período mas cujo atendimento começou ANTES dele —
+   * a lista as deixa de fora e o Inbox avisa quem são, pra conversa não
+   * "sumir" em silêncio.
+   */
+  conversasForaDoPeriodo: protectedProcedure
+    .input(z.object({
+      atendenteIds: z.array(z.number()).optional(),
+      setorId: z.number().optional(),
+      canalId: z.number().optional(),
+      dataInicio: z.string(),
+      dataFim: z.string().optional(),
+      busca: z.string().trim().max(120).optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return { total: 0, nomes: [] as string[] };
+      const filtros: any = { ...input };
+      if (!perm.verTodos && perm.verProprios) {
+        filtros.atendenteId = perm.colaboradorId;
+        delete filtros.atendenteIds;
+        delete filtros.setorId;
+      }
+      return conversasForaDoPeriodoInicio(perm.escritorioId, filtros);
+    }),
+
+  /**
+   * "Este número já tem conversa?" — consultado enquanto o atendente digita o
+   * telefone em Nova Conversa.
+   *
+   * O contato é procurado com `buscarContatoPorTelefone`, a MESMA função que
+   * `iniciarConversa` usa por baixo. Tem que ser a mesma: se o aviso dissesse
+   * "número livre" e o envio reaproveitasse um contato existente, a tela
+   * estaria mentindo no momento em que mais importa.
+   */
+  conversaPorTelefone: protectedProcedure
+    .input(z.object({ telefone: z.string().trim().max(24) }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return { estado: "incompleto" as const };
+
+      const { normalizePhoneBR } = await import("../../shared/whatsapp-types");
+      const normalizado = normalizePhoneBR(input.telefone);
+      // 12 = 55 + DDD + 8 dígitos. Abaixo disso o número ainda está sendo
+      // digitado e não há o que consultar.
+      if (normalizado.length < 12) return { estado: "incompleto" as const };
+
+      const contato = await buscarContatoPorTelefone(perm.escritorioId, normalizado);
+      const db = await getDb();
+      if (!contato || !db) {
+        return { estado: estadoDoNumero({
+          contatoEncontrado: false, conversa: null,
+          soAsMinhas: !perm.verTodos && perm.verProprios,
+          meuColaboradorId: perm.colaboradorId,
+        }) };
+      }
+
+      const { desc: descOrd, sql } = await import("drizzle-orm");
+      const [conv] = await db
+        .select({
+          id: conversas.id,
+          status: conversas.status,
+          atendenteId: conversas.atendenteId,
+          ultimaMensagemAt: conversas.ultimaMensagemAt,
+          createdAt: conversas.createdAt,
+        })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          eq(conversas.contatoId, contato.id),
+        ))
+        .orderBy(descOrd(conversas.ultimaMensagemAt), descOrd(conversas.id))
+        .limit(1);
+
+      const estado = estadoDoNumero({
+        contatoEncontrado: true,
+        conversa: conv ? { status: conv.status, atendenteId: conv.atendenteId } : null,
+        soAsMinhas: !perm.verTodos && perm.verProprios,
+        meuColaboradorId: perm.colaboradorId,
+      });
+
+      if (estado === "cadastrado") {
+        return { estado, contatoId: contato.id, contatoNome: contato.nome };
+      }
+      // Aviso seco: nada de nome, histórico ou id de conversa vai junto.
+      if (estado === "sem_acesso") return { estado };
+      if (!conv) return { estado: "livre" as const };
+
+      let atendenteNome: string | undefined;
+      if (conv.atendenteId) {
+        const { colaboradores, users } = await import("../../drizzle/schema");
+        const [colab] = await db
+          .select({ nome: users.name })
+          .from(colaboradores)
+          .innerJoin(users, eq(colaboradores.userId, users.id))
+          .where(eq(colaboradores.id, conv.atendenteId))
+          .limit(1);
+        atendenteNome = colab?.nome || undefined;
+      }
+
+      let totalMensagens = 0;
+      try {
+        const { mensagens } = await import("../../drizzle/schema");
+        const [c] = await db
+          .select({ n: sql<number>`COUNT(*)` })
+          .from(mensagens)
+          .where(eq(mensagens.conversaId, conv.id));
+        totalMensagens = Number(c?.n ?? 0);
+      } catch { /* contagem é enfeite — o aviso vale sem ela */ }
+
+      return {
+        estado,
+        contatoId: contato.id,
+        contatoNome: contato.nome,
+        conversaId: conv.id,
+        status: conv.status,
+        atendenteNome,
+        ultimaMensagemAt: toIsoString(conv.ultimaMensagemAt ?? conv.createdAt),
+        totalMensagens,
+      };
+    }),
+
+  /**
+   * Uma conversa específica, com os MESMOS campos que a lista devolve.
+   *
+   * A tela lia os dados do contato de dentro da lista já carregada do Inbox —
+   * que é filtrada por período. Conversa aberta por link, por aviso de número
+   * repetido ou pela pasta Arquivadas não está nessa lista, e o cabeçalho
+   * chegava "Contato · Sem atendente" com o cliente ali, vinculado, o tempo
+   * todo. Aqui a conversa responde por si.
+   */
+  conversaPorId: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return null;
+      const filtros: any = { ids: [input.id], limite: 1 };
+      // verProprios continua valendo: não é porque tem o id que passa a ver
+      // o atendimento de outra pessoa.
+      if (!perm.verTodos && perm.verProprios) filtros.atendenteId = perm.colaboradorId;
+      const [conv] = await listarConversas(perm.escritorioId, filtros);
+      return conv ?? null;
+    }),
+
+  /**
+   * Conversa mais recente de um contato — o que o link `?contatoId=` precisa
+   * saber antes de concluir que "não existe conversa".
+   *
+   * Procurar só na lista carregada fazia a tela oferecer criar uma segunda
+   * conversa com quem já tinha uma, bastando ela estar fora do período.
+   */
+  conversaDoContato: protectedProcedure
+    .input(z.object({ contatoId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const { desc: descOrd } = await import("drizzle-orm");
+      const [achada] = await db
+        .select({ id: conversas.id })
+        .from(conversas)
+        .where(and(
+          eq(conversas.escritorioId, perm.escritorioId),
+          eq(conversas.contatoId, input.contatoId),
+        ))
+        .orderBy(descOrd(conversas.ultimaMensagemAt), descOrd(conversas.id))
+        .limit(1);
+      if (!achada) return null;
+      const filtros: any = { ids: [achada.id], limite: 1 };
+      if (!perm.verTodos && perm.verProprios) filtros.atendenteId = perm.colaboradorId;
+      const [conv] = await listarConversas(perm.escritorioId, filtros);
+      return conv ?? null;
     }),
 
   /** Arquiva/desarquiva uma conversa. Arquivada sai das vistas padrão sem
@@ -330,6 +552,15 @@ export const crmRouter = router({
       if (!esc) throw new Error("Escritório não encontrado.");
       const { id, ...dados } = input;
       await atualizarConversa(id, esc.escritorio.id, dados);
+
+      // Resolver encerra o EPISÓDIO, não a conversa: a conversa segue viva
+      // como fio com a pessoa, e a próxima mensagem dela abre um atendimento
+      // novo em vez de ressuscitar este. É a decisão explícita de que o
+      // trabalho acabou — o silêncio só existe pra quem esquece de tomá-la.
+      if (dados.status === "resolvido" || dados.status === "fechado") {
+        const { fecharEpisodioDaConversa } = await import("../atendimento/episodios");
+        await fecharEpisodioDaConversa(id, "resolvido");
+      }
       return { success: true };
     }),
 
@@ -368,6 +599,12 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
+      const dbGuard = await getDb();
+      if (!dbGuard) throw new Error("Database indisponível");
+      if (!(await conversaDoEscritorio(dbGuard, esc.escritorio.id, input.conversaId))) {
+        throw new Error("Conversa não encontrada.");
+      }
+
       // Salvar mensagem no banco
       const id = await enviarMensagem({
         conversaId: input.conversaId,
@@ -380,6 +617,35 @@ export const crmRouter = router({
 
       // Marcar conversa como em_atendimento se estava aguardando
       await atualizarConversa(input.conversaId, esc.escritorio.id, { status: "em_atendimento" });
+
+      // Resposta do escritório entra no episódio. É aqui que a 1ª resposta é
+      // marcada — POR EPISÓDIO, e não por conversa: medir o tempo de resposta
+      // de um cliente que voltou contra a primeira mensagem que ele mandou
+      // meses atrás dá um número que não descreve atendimento nenhum.
+      {
+        const { registrarMensagemNoEpisodio } = await import("../atendimento/episodios");
+        const { getDb: pegarDb } = await import("../db");
+        const { conversas: convTbl } = await import("../../drizzle/schema");
+        const { eq: igual } = await import("drizzle-orm");
+        const dbEp = await pegarDb();
+        if (dbEp) {
+          const [c] = await dbEp
+            .select({ contatoId: convTbl.contatoId, atendenteId: convTbl.atendenteId })
+            .from(convTbl)
+            .where(and(igual(convTbl.id, input.conversaId), igual(convTbl.escritorioId, esc.escritorio.id)))
+            .limit(1);
+          if (c) {
+            await registrarMensagemNoEpisodio({
+              escritorioId: esc.escritorio.id,
+              conversaId: input.conversaId,
+              contatoId: c.contatoId,
+              atendenteId: c.atendenteId ?? esc.colaborador.id,
+              em: new Date(),
+              daEquipe: true,
+            });
+          }
+        }
+      }
 
       // Enviar via WhatsApp se a conversa for de um canal WhatsApp
       try {
@@ -398,7 +664,7 @@ export const crmRouter = router({
             .from(conversas)
             .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
             .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
-            .where(eq(conversas.id, input.conversaId))
+            .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)))
             .limit(1);
 
           log.debug({
@@ -567,6 +833,12 @@ export const crmRouter = router({
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado.");
 
+      const dbCanal = await getDb();
+      if (!dbCanal) throw new Error("Database indisponível");
+      if (!(await canalDoEscritorio(dbCanal, esc.escritorio.id, input.canalId))) {
+        throw new Error("Canal não encontrado.");
+      }
+
       // Normaliza telefone: remove formatação e garante DDI 55 (Brasil).
       // O frontend manda só os dígitos do DDD+número (10 ou 11 chars) e o
       // backend prepende o 55 — assim o JID gerado é sempre válido para
@@ -706,8 +978,15 @@ export const crmRouter = router({
       // nome de outra pessoa".
       const { responsavelId: respEscolhido, ...rest } = input;
       const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      if (!(await contatoDoEscritorio(db, perm.escritorioId, input.contatoId))) {
+        throw new Error("Contato não encontrado.");
+      }
+      if (input.conversaId != null && !(await conversaDoEscritorio(db, perm.escritorioId, input.conversaId))) {
+        throw new Error("Conversa não encontrada.");
+      }
       const responsavelId =
-        respEscolhido && db && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
+        respEscolhido && (await colaboradorDoEscritorio(db, perm.escritorioId, respEscolhido))
           ? respEscolhido
           : perm.colaboradorId;
       const id = await criarLead({ escritorioId: perm.escritorioId, responsavelId, ...rest });
@@ -869,6 +1148,12 @@ export const crmRouter = router({
         atendenteId: input.novoAtendenteId,
         status: "em_atendimento",
       });
+
+      // O episódio troca de DONO, não de identidade: transferir é a mesma
+      // demanda mudando de mão. Quem abriu continua registrado, e é por isso
+      // que o SDR não perde o atendimento que ele trabalhou.
+      const { transferirEpisodioDaConversa } = await import("../atendimento/episodios");
+      await transferirEpisodioDaConversa(input.conversaId, input.novoAtendenteId);
 
       const paraNome = nomes.get(input.novoAtendenteId) ?? null;
       await enviarMensagem({
@@ -1052,7 +1337,8 @@ export const crmRouter = router({
 
   /**
    * Zera o contador de não lidas da conversa — chamado quando o atendente
-   * a abre no inbox (e a cada mensagem que chega com ela aberta).
+   * a abre no inbox (e a cada mensagem que chega com ela aberta). Limpa
+   * também a marcação manual de "não lida": abrir é ler.
    */
   marcarConversaLida: protectedProcedure
     .input(z.object({ conversaId: z.number() }))
@@ -1063,7 +1349,29 @@ export const crmRouter = router({
       if (!db) throw new Error("DB indisponível");
 
       await db.update(conversas)
-        .set({ lidaPeloAtendenteEm: new Date() })
+        .set({ lidaPeloAtendenteEm: new Date(), marcadaNaoLidaEm: null })
+        .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
+
+      return { success: true };
+    }),
+
+  /**
+   * Marcação manual de "não lida" — devolve a conversa pro radar do inbox
+   * sem depender de mensagem nova (ex: abriu sem querer). Na lista ela
+   * ganha o destaque de não lida com bolinha sem número; se chegar mensagem
+   * de verdade, o contador numérico assume. Abrir a conversa limpa
+   * (marcarConversaLida).
+   */
+  marcarConversaNaoLida: protectedProcedure
+    .input(z.object({ conversaId: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado.");
+      const db = await getDb();
+      if (!db) throw new Error("DB indisponível");
+
+      await db.update(conversas)
+        .set({ marcadaNaoLidaEm: new Date() })
         .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorio.id)));
 
       return { success: true };

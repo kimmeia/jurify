@@ -55,6 +55,9 @@ export const agendamentoRouter = router({
       responsavelId: z.number().optional(),
       processoId: z.number().optional(),
       contatoId: z.number().optional(),
+      // Telefone do contato no compromisso. Sem ele o evento nasce sem número
+      // e o clique no telefone da Agenda não tem pra onde ir.
+      contatoTelefone: z.string().max(64).optional(),
       corHex: z.string().max(7).optional(),
       lembretes: z.array(z.object({
         tipo: z.enum(["notificacao_app", "email", "whatsapp"]),
@@ -64,6 +67,18 @@ export const agendamentoRouter = router({
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
       if (!esc) throw new Error("Escritório não encontrado. Configure seu escritório primeiro.");
+
+      // `responsavelId` é um int livre vindo do cliente: sem isto dá pra
+      // apontar pra colaborador de outro escritório, ou despachar prazo pra
+      // um colega sem ter o poder de coordenar.
+      const { checkPermission } = await import("./check-permission");
+      const { validarResponsavel } = await import("./atribuicao-responsavel");
+      const { getDb } = await import("../db");
+      const db = await getDb();
+      if (input.responsavelId != null && db) {
+        const perm = await checkPermission(ctx.user.id, "agenda", "criar");
+        await validarResponsavel(db, perm, input.responsavelId);
+      }
 
       const id = await criarAgendamento({
         escritorioId: esc.escritorio.id,
@@ -79,6 +94,7 @@ export const agendamentoRouter = router({
         prioridade: input.prioridade,
         processoId: input.processoId,
         contatoId: input.contatoId,
+        contatoTelefone: input.contatoTelefone,
         corHex: input.corHex,
         lembretes: input.lembretes,
       });

@@ -67,6 +67,43 @@ export default function Plans() {
   const [, setLocation] = useLocation();
 
   const { data: plans, isLoading } = trpc.subscription.plans.useQuery();
+  const { data: contatoComercial } = trpc.subscription.contatoComercial.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Plano sob consulta não tem checkout self-service — o caminho é a conversa.
+  const abrirConversaComercial = (texto: string, assunto: string) => {
+    const url = contatoComercial?.whatsapp
+      ? `https://wa.me/${contatoComercial.whatsapp}?text=${encodeURIComponent(texto)}`
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent(assunto)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+  const falarComAGente = (nomePlano: string, demonstracao = false) =>
+    abrirConversaComercial(
+      demonstracao
+        ? `Olá! Quero agendar uma demonstração do ${nomePlano}.`
+        : `Olá! Tenho interesse no plano ${nomePlano} do JuridFlow.`,
+      demonstracao ? `Demonstração do ${nomePlano}` : `Interesse no plano ${nomePlano}`,
+    );
+  const fecharValorComAGente = (nomePlano: string, emTeste: boolean) =>
+    abrirConversaComercial(
+      emTeste
+        ? `Olá! Estou no teste do ${nomePlano} e quero fechar o valor.`
+        : `Olá! Tenho o plano ${nomePlano} no JuridFlow e quero fechar o valor.`,
+      `Fechar valor do ${nomePlano}`,
+    );
+
+  // "Anual" só existe quando algum plano tem preço anual cadastrado. Sem isso o
+  // toggle prometia dois meses de desconto e o ciclo anual cobraria 12× o mensal.
+  const temPrecoAnual = (plans ?? []).some((p) => !!(p as any).temPrecoAnual);
+  const intervalo: "monthly" | "yearly" = temPrecoAnual ? billingInterval : "monthly";
+  // Plano sem preço anual fica no mensal mesmo com "Anual" ligado — senão o
+  // card mostrava 12× o mensal como "/ano" e o servidor recusava o clique.
+  const cicloDoPlano = (planId: string | null | undefined): "monthly" | "yearly" => {
+    const p = (plans ?? []).find((x) => x.id === planId);
+    return p && (p as any).temPrecoAnual ? intervalo : "monthly";
+  };
   const { data: currentSub } = trpc.subscription.current.useQuery(undefined, {
     enabled: !!user,
     retry: false,
@@ -75,12 +112,27 @@ export default function Plans() {
     refetchInterval: awaitingPayment ? 3000 : false,
   });
   const { data: billingOk } = trpc.subscription.billingConfigured.useQuery();
+  const { data: trialOk } = trpc.subscription.trialDisponivel.useQuery(undefined, {
+    enabled: !!user,
+    retry: false,
+  });
+  const { data: trocaPendente } = trpc.subscription.trocaPendente.useQuery(undefined, {
+    enabled: !!user && !!currentSub,
+    retry: false,
+    refetchInterval: awaitingPayment ? 3000 : false,
+  });
+  // Assinatura cujo pagamento estamos esperando. Sem isso, na troca de plano
+  // a atual (que continua ativa) faria o polling "confirmar" na hora.
+  const [aguardandoSubId, setAguardandoSubId] = useState<string | null>(null);
 
   // Detecta ativação: se estávamos aguardando E agora tem sub ativa,
   // para o polling, mostra sucesso e redireciona pro dashboard.
   useEffect(() => {
-    if (awaitingPayment && currentSub && currentSub.status === "active") {
+    const ehAEsperada =
+      !aguardandoSubId || (currentSub as any)?.asaasSubscriptionId === aguardandoSubId;
+    if (awaitingPayment && currentSub && currentSub.status === "active" && ehAEsperada) {
       setAwaitingPayment(false);
+      setAguardandoSubId(null);
       toast.success("Pagamento confirmado! Bem-vindo ao JuridFlow 🎉", {
         duration: 5000,
       });
@@ -89,13 +141,14 @@ export default function Plans() {
         setLocation("/dashboard");
       }, 1500);
     }
-  }, [awaitingPayment, currentSub, setLocation]);
+  }, [awaitingPayment, currentSub, setLocation, aguardandoSubId]);
 
   const createCheckout = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.url) {
         toast.info("Abrindo página de pagamento do Asaas...");
         window.open(data.url, "_blank");
+        setAguardandoSubId(data.asaasSubscriptionId ?? null);
         setAwaitingPayment(true); // inicia polling
       } else {
         toast.warning(
@@ -118,13 +171,41 @@ export default function Plans() {
       if (data.url) {
         toast.info("Abrindo checkout pra troca de plano...");
         window.open(data.url, "_blank");
+        setAguardandoSubId(data.asaasSubscriptionId ?? null);
         setAwaitingPayment(true);
       }
+      utils.subscription.trocaPendente.invalidate();
       setLoadingPlan(null);
     },
     onError: (error) => {
       toast.error("Erro ao trocar de plano: " + error.message);
       setLoadingPlan(null);
+    },
+  });
+
+  const iniciarTrial = trpc.subscription.iniciarTrial.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Teste grátis de ${data.trialDias} dias liberado. Bom trabalho!`);
+      utils.subscription.current.invalidate();
+      utils.subscription.statusTrial.invalidate();
+      utils.subscription.trialDisponivel.invalidate();
+      setTimeout(() => setLocation("/dashboard"), 800);
+    },
+    onError: (error) => {
+      toast.error("Não foi possível iniciar o teste: " + error.message);
+    },
+  });
+
+  const desistirTroca = trpc.subscription.desistirTroca.useMutation({
+    onSuccess: () => {
+      toast.success("Troca de plano cancelada. Seu plano atual continua como está.");
+      setAwaitingPayment(false);
+      setAguardandoSubId(null);
+      utils.subscription.trocaPendente.invalidate();
+      utils.subscription.current.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Erro ao desistir da troca: " + error.message);
     },
   });
 
@@ -153,7 +234,7 @@ export default function Plans() {
     // Se já tem subscription ativa → trocar plano (não pede CPF de novo)
     if (currentSub && currentSub.asaasCustomerId) {
       setLoadingPlan(planId);
-      changePlan.mutate({ newPlanId: planId, interval: billingInterval });
+      changePlan.mutate({ newPlanId: planId, interval: cicloDoPlano(planId) });
       return;
     }
 
@@ -171,7 +252,7 @@ export default function Plans() {
     setLoadingPlan(pendingPlanId);
     createCheckout.mutate({
       planId: pendingPlanId,
-      interval: billingInterval,
+      interval: cicloDoPlano(pendingPlanId),
       cpfCnpj: cpfInput.replace(/\D/g, ""),
     });
   };
@@ -212,9 +293,28 @@ export default function Plans() {
 
   const currentPlanName = plans?.find((p) => p.id === currentPlanId)?.name ?? currentPlanId;
   const currentPlanData = plans?.find((p) => p.id === currentPlanId);
-  const currentPrice = currentPlanData
-    ? (billingInterval === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
+  // Plano sob consulta não tem preço público: o cabeçalho mostrava R$ 497,00
+  // (o número antigo que ficou no banco) em cima de um plano "sob consulta".
+  const sobConsultaAtual = !!(currentPlanData as any)?.precoSobConsulta;
+  const currentPrice = currentPlanData && !sobConsultaAtual
+    ? (cicloDoPlano(currentPlanId) === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
     : 0;
+  const emTeste = currentSub?.status === "trialing";
+  // Quem já fechou o valor na conversa (assinatura negociada pelo painel) vê o
+  // número combinado — não "Sob consulta" com botão de fechar de novo.
+  const valorNegociado = (currentSub as any)?.valorNegociadoCentavos ?? null;
+  const valorFechado = sobConsultaAtual && typeof valorNegociado === "number" && valorNegociado > 0;
+  const todosSobConsulta =
+    subscriptionPlans.length > 0 && subscriptionPlans.every((p) => !!(p as any).precoSobConsulta);
+  // "Mais escolhido" é um selo só. O servidor já desliga os outros ao ligar um;
+  // aqui a tela garante que dado antigo com dois ligados não mostre dois.
+  const popularId = subscriptionPlans.find((p) => p.popular)?.id ?? null;
+  const economiaAnual = Math.max(
+    0,
+    ...subscriptionPlans
+      .filter((p) => !!(p as any).temPrecoAnual)
+      .map((p) => p.priceMonthly * 12 - p.priceYearly),
+  );
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-2 space-y-5">
@@ -232,15 +332,31 @@ export default function Plans() {
                 <p className="text-2xl font-extrabold tracking-tight">{currentPlanName}</p>
                 <StatusPlanoBadge status={resolverStatusVisual(currentSub)} />
               </div>
-              {currentPrice > 0 && (
+              {valorFechado ? (
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-lg font-bold tabular-nums">{formatPrice(valorNegociado)}</span>
+                  <span className="text-[10px] text-white/70">/mês · valor fechado com a gente</span>
+                </div>
+              ) : sobConsultaAtual ? (
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-lg font-bold">Sob consulta</span>
+                  <span className="text-[10px] text-white/70">· o valor é fechado na conversa</span>
+                </div>
+              ) : currentPrice > 0 && (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-lg font-bold tabular-nums">{formatPrice(currentPrice)}</span>
-                  <span className="text-[10px] text-white/70">/{billingInterval === "monthly" ? "mês" : "ano"}</span>
+                  <span className="text-[10px] text-white/70">/{cicloDoPlano(currentPlanId) === "monthly" ? "mês" : "ano"}</span>
                 </div>
               )}
               <p className="text-[11px] text-white/80 mt-2">
                 {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
-                  ? `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}`
+                  ? sobConsultaAtual && !(currentSub as any).pagamentoEmAndamento
+                    ? `Teste termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}. Nada é cobrado sem você fechar o valor.`
+                    : `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}${
+                      (currentSub as any).pagamentoEmAndamento
+                        ? " · pagamento em andamento: quando o Asaas confirmar, o plano entra no lugar do teste"
+                        : ""
+                    }`
                   : currentSub.currentPeriodEnd
                     ? `Próxima cobrança em ${new Date(currentSub.currentPeriodEnd).toLocaleDateString("pt-BR")}`
                     : null}
@@ -253,7 +369,7 @@ export default function Plans() {
               <ul className="space-y-1">
                 {(currentPlanData?.features || []).slice(0, 4).map((feature, i) => (
                   <li key={i} className="flex items-center gap-1.5 text-[11px] text-white/90">
-                    <Check className="h-3 w-3 text-emerald-300 shrink-0" />
+                    <Check className="h-3 w-3 text-success shrink-0" />
                     <span className="truncate">{feature}</span>
                   </li>
                 ))}
@@ -262,6 +378,15 @@ export default function Plans() {
 
             {/* Ações */}
             <div className="flex flex-col gap-2">
+              {sobConsultaAtual && !valorFechado && (
+                <Button
+                  size="sm"
+                  onClick={() => fecharValorComAGente(currentPlanName ?? "JuridFlow", emTeste)}
+                  className="bg-white text-primary hover:bg-white/90 font-bold shadow-sm"
+                >
+                  💬 Fechar valor com a gente
+                </Button>
+              )}
               {currentSub.status !== "trialing" && (
                 <Button
                   variant="ghost"
@@ -287,19 +412,56 @@ export default function Plans() {
       ) : (
         <div className="text-center space-y-3 py-6">
           <h1 className="text-3xl font-bold tracking-tight">Escolha seu plano</h1>
-          <p className="text-sm text-slate-500 max-w-lg mx-auto">
+          <p className="text-sm text-muted-foreground max-w-lg mx-auto">
             Selecione o plano ideal para o seu escritório jurídico.
           </p>
         </div>
       )}
 
+      {/* Troca de plano pedida e ainda não paga — a atual segue valendo */}
+      {trocaPendente && (
+        <div className="rounded-xl border-l-[3px] border-l-primary border border-primary/30 bg-primary/5 p-3.5 flex items-start gap-3">
+          <Clock className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-bold text-foreground">
+              Troca para o {trocaPendente.planName} aguardando pagamento
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Seu plano atual continua valendo até o pagamento ser confirmado. Aí a troca acontece sozinha.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {trocaPendente.invoiceUrl && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] border-primary/40 text-primary hover:bg-primary/10"
+                  onClick={() => window.open(trocaPendente.invoiceUrl, "_blank")}
+                >
+                  <ArrowRight className="h-3 w-3 mr-1" /> Abrir cobrança
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-[11px] text-primary"
+                disabled={desistirTroca.isPending}
+                onClick={() => desistirTroca.mutate()}
+              >
+                {desistirTroca.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <XCircle className="h-3 w-3 mr-1" />}
+                Desistir da troca
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Aviso quando o sistema de cobrança não está configurado */}
       {billingOk === false && (
-        <div className="rounded-xl border-l-[3px] border-l-amber-500 border border-amber-200 bg-amber-50/50 p-3.5 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+        <div className="rounded-xl border-l-[3px] border-l-warning border border-warning/30 bg-warning-bg/50 p-3.5 flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-warning-fg mt-0.5 shrink-0" />
           <div>
-            <p className="text-sm font-bold text-amber-900">Sistema de cobrança em configuração</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">
+            <p className="text-sm font-bold text-warning-fg">Sistema de cobrança em configuração</p>
+            <p className="text-[11px] text-warning-fg mt-0.5">
               A integração com o Asaas ainda não foi configurada. Os botões de assinatura ficarão disponíveis em breve.
             </p>
           </div>
@@ -308,26 +470,26 @@ export default function Plans() {
 
       {/* Estado "aguardando pagamento" — polling ativo */}
       {awaitingPayment && (
-        <div className="rounded-xl border-l-[3px] border-l-blue-500 border border-blue-200 bg-blue-50/50 p-3.5 flex items-start gap-3">
+        <div className="rounded-xl border-l-[3px] border-l-info border border-info/30 bg-info-bg/50 p-3.5 flex items-start gap-3">
           <div className="relative shrink-0">
-            <Clock className="h-5 w-5 text-blue-600 mt-0.5" />
-            <Loader2 className="h-3 w-3 text-blue-600 absolute -bottom-0.5 -right-0.5 animate-spin" />
+            <Clock className="h-5 w-5 text-info-fg mt-0.5" />
+            <Loader2 className="h-3 w-3 text-info-fg absolute -bottom-0.5 -right-0.5 animate-spin" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-bold text-blue-900">Aguardando confirmação do pagamento</p>
-            <p className="text-[11px] text-blue-700 mt-0.5">
+            <p className="text-sm font-bold text-info-fg">Aguardando confirmação do pagamento</p>
+            <p className="text-[11px] text-info-fg mt-0.5">
               Complete o pagamento na aba do Asaas que foi aberta. Esta página vai atualizar automaticamente.
             </p>
             <Button
               size="sm"
               variant="outline"
-              className="mt-2 h-7 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-100"
+              className="mt-2 h-7 text-[11px] border-info/30 text-info-fg hover:bg-info-bg"
               onClick={() => { utils.subscription.current.invalidate(); toast.info("Verificando..."); }}
             >
               <Loader2 className="h-3 w-3 mr-1" /> Verificar agora
             </Button>
           </div>
-          <button onClick={() => setAwaitingPayment(false)} className="text-slate-400 hover:text-slate-700" aria-label="Cancelar espera">
+          <button onClick={() => setAwaitingPayment(false)} className="text-muted-foreground/70 hover:text-foreground" aria-label="Cancelar espera">
             <XCircle className="h-4 w-4" />
           </button>
         </div>
@@ -339,41 +501,51 @@ export default function Plans() {
           <p className="text-sm font-bold tracking-tight">
             {currentSub ? "Trocar de plano" : "Planos disponíveis"}
           </p>
-          <p className="text-[11px] text-slate-500">
-            {currentSub ? "Upgrade pra desbloquear recursos · downgrade reduz limites" : "Escolha o melhor pro tamanho do seu escritório"}
+          <p className="text-[11px] text-muted-foreground">
+            {todosSobConsulta
+              ? `Todos os planos são fechados na conversa — clique e a gente responde ${contatoComercial?.whatsapp ? "no WhatsApp" : "por e-mail"}.`
+              : currentSub
+                ? "Upgrade pra desbloquear recursos · downgrade reduz limites"
+                : "Escolha o melhor pro tamanho do seu escritório"}
           </p>
         </div>
-        <div className="bg-slate-100 border border-slate-200 rounded-lg p-1 inline-flex gap-0.5">
-          <button
-            onClick={() => setBillingInterval("monthly")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-              billingInterval === "monthly"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Mensal
-          </button>
-          <button
-            onClick={() => setBillingInterval("yearly")}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
-              billingInterval === "yearly"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            Anual
-            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full">−2 meses</span>
-          </button>
-        </div>
+        {temPrecoAnual && (
+          <div className="bg-muted border border-border rounded-lg p-1 inline-flex gap-0.5">
+            <button
+              onClick={() => setBillingInterval("monthly")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                intervalo === "monthly"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Mensal
+            </button>
+            <button
+              onClick={() => setBillingInterval("yearly")}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all inline-flex items-center gap-1.5 ${
+                intervalo === "yearly"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Anual
+              {economiaAnual > 0 && (
+                <span className="text-[9px] font-bold text-success-fg bg-success-bg px-1.5 py-0.5 rounded-full">
+                  economize até {formatPrice(economiaAnual)}/ano
+                </span>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Plans Grid */}
       <div className="grid gap-6 md:grid-cols-3">
         {subscriptionPlans.map((plan) => {
-          const price =
-            billingInterval === "monthly" ? plan.priceMonthly : plan.priceYearly;
-          const isPopular = plan.popular;
+          const ciclo = cicloDoPlano(plan.id);
+          const price = ciclo === "monthly" ? plan.priceMonthly : plan.priceYearly;
+          const isPopular = plan.id === popularId;
           const isCurrentPlan = currentPlanId === plan.id;
           const planIndex = subscriptionPlans.findIndex((p) => p.id === plan.id);
           const currentIndex = subscriptionPlans.findIndex(
@@ -383,93 +555,138 @@ export default function Plans() {
           const isDowngrade = currentSub && planIndex < currentIndex;
 
           const isTrial = currentSub?.status === "trialing";
+          const sobConsulta = !!(plan as any).precoSobConsulta;
+          const demonstracao = !!(plan as any).ctaDemonstracao;
 
           let buttonLabel = "Assinar";
           if (isCurrentPlan && isTrial) buttonLabel = "Continuar com este plano";
           else if (isCurrentPlan) buttonLabel = "Plano Atual";
           else if (isUpgrade) buttonLabel = "Fazer Upgrade";
           else if (isDowngrade) buttonLabel = "Fazer Downgrade";
+          if (sobConsulta && !isCurrentPlan) buttonLabel = demonstracao ? "💬 Agendar demonstração" : "💬 Falar com a gente";
+          const podeFecharValor = sobConsulta && isCurrentPlan && isTrial && !valorFechado;
+          if (podeFecharValor) buttonLabel = "💬 Fechar valor com a gente";
 
           return (
             <div
               key={plan.id}
-              className={`relative flex flex-col rounded-2xl border bg-white p-6 ${
+              className={`relative flex flex-col rounded-2xl border bg-card p-6 ${
                 isCurrentPlan
-                  ? "border-2 border-violet-500 bg-violet-50/30 ring-4 ring-violet-100"
+                  ? "border-2 border-info/30 bg-info-bg/30 ring-4 ring-info"
                   : isPopular
-                    ? "border-2 border-amber-300 bg-gradient-to-br from-amber-50/40 to-orange-50/40 shadow-lg"
-                    : "border-slate-200"
+                    ? "border-2 border-warning/30 bg-warning-bg/40 shadow-lg"
+                    : "border-border"
               }`}
             >
               {isPopular && !isCurrentPlan && (
-                <span className="absolute -top-2.5 right-3 px-2 py-0.5 bg-amber-500 text-white text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
+                <span className="absolute -top-2.5 right-3 px-2 py-0.5 bg-warning text-warning-on text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
                   🏆 Mais escolhido
                 </span>
               )}
               {isCurrentPlan && (
-                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-violet-600 text-white text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
+                <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-info text-info-on text-[9px] rounded-full font-bold tracking-wider uppercase shadow-sm">
                   ✓ Plano atual
                 </span>
               )}
 
               <div>
                 <p className={`text-[11px] font-bold uppercase tracking-wider ${
-                  isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-500"
+                  isCurrentPlan ? "text-info-fg" : isPopular ? "text-warning-fg" : "text-muted-foreground"
                 }`}>
                   {plan.name}
                 </p>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
-                    isCurrentPlan ? "text-violet-700" : isPopular ? "text-amber-700" : "text-slate-900"
-                  }`}>
-                    {formatPrice(price)}
-                  </span>
-                  <span className="text-xs text-slate-400 font-normal">
-                    /{billingInterval === "monthly" ? "mês" : "ano"}
-                  </span>
+                  {sobConsulta ? (
+                    <span className={`text-2xl font-extrabold tracking-tight ${
+                      isCurrentPlan ? "text-info-fg" : isPopular ? "text-warning-fg" : "text-foreground"
+                    }`}>
+                      Sob consulta
+                    </span>
+                  ) : (
+                    <>
+                      <span className={`text-3xl font-extrabold tracking-tight tabular-nums ${
+                        isCurrentPlan ? "text-info-fg" : isPopular ? "text-warning-fg" : "text-foreground"
+                      }`}>
+                        {formatPrice(price)}
+                      </span>
+                      <span className="text-xs text-muted-foreground/70 font-normal">
+                        /{ciclo === "monthly" ? "mês" : "ano"}
+                      </span>
+                    </>
+                  )}
                 </div>
-                {billingInterval === "yearly" && (
-                  <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                {!sobConsulta && ciclo === "yearly" && (
+                  <p className="text-[10px] text-success-fg font-semibold mt-1">
                     Economia de {formatPrice(plan.priceMonthly * 12 - plan.priceYearly)}/ano
                   </p>
                 )}
-                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">{plan.description}</p>
+                {!sobConsulta && intervalo === "yearly" && ciclo === "monthly" && (
+                  <p className="text-[10px] text-muted-foreground mt-1">só no mensal</p>
+                )}
+                <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
               </div>
 
               <ul className="space-y-2 mt-5 flex-1">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-start gap-2 text-[11.5px]">
                     <Check className={`h-3.5 w-3.5 mt-0.5 shrink-0 ${
-                      isCurrentPlan ? "text-violet-600" : isPopular ? "text-amber-600" : "text-emerald-600"
+                      isCurrentPlan ? "text-info-fg" : isPopular ? "text-warning-fg" : "text-success-fg"
                     }`} />
-                    <span className="text-slate-700">{feature}</span>
+                    <span className="text-foreground">{feature}</span>
                   </li>
                 ))}
               </ul>
 
+              {!currentSub && trialOk?.disponivel && ((plan as any).trialDias ?? 0) > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-5 border-dashed border-primary/50 text-primary hover:bg-primary/10"
+                  disabled={iniciarTrial.isPending}
+                  onClick={() => iniciarTrial.mutate({ planoSlug: (plan as any).slug || plan.id })}
+                >
+                  {iniciarTrial.isPending && iniciarTrial.variables?.planoSlug === ((plan as any).slug || plan.id) ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <>🎁 </>
+                  )}
+                  Testar grátis por {(plan as any).trialDias} dias
+                </Button>
+              )}
+
               <Button
-                className={`w-full mt-5 ${
+                className={`w-full ${!currentSub && trialOk?.disponivel && ((plan as any).trialDias ?? 0) > 0 ? "mt-2" : "mt-5"} ${
                   isCurrentPlan
-                    ? "bg-violet-100 text-violet-700 hover:bg-violet-100 cursor-default"
+                    ? "bg-info-bg text-info-fg hover:bg-info-bg cursor-default"
                     : isPopular
-                      ? "bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-sm"
+                      ? "bg-warning text-warning-on shadow-sm"
                       : ""
                 }`}
                 variant={isCurrentPlan || isPopular ? "default" : "outline"}
                 size="sm"
-                disabled={loadingPlan !== null || isCurrentPlan || billingOk === false}
-                onClick={() => handleSelectPlan(plan.id)}
+                disabled={
+                  loadingPlan !== null ||
+                  (isCurrentPlan && !podeFecharValor) ||
+                  (!sobConsulta && billingOk === false)
+                }
+                onClick={() =>
+                  sobConsulta
+                    ? isCurrentPlan
+                      ? fecharValorComAGente(plan.name, isTrial)
+                      : falarComAGente(plan.name, demonstracao)
+                    : handleSelectPlan(plan.id)
+                }
               >
                 {loadingPlan === plan.id ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
                   </>
-                ) : isCurrentPlan ? (
+                ) : isCurrentPlan && !podeFecharValor ? (
                   <>✓ Você está aqui</>
                 ) : (
                   <>
-                    {isUpgrade && <>↑ </>}
-                    {isDowngrade && <>↓ </>}
+                    {isUpgrade && !sobConsulta && <>↑ </>}
+                    {isDowngrade && !sobConsulta && <>↓ </>}
                     {buttonLabel}
                     {!isCurrentPlan && <ArrowRight className="ml-1.5 h-3.5 w-3.5" />}
                   </>
@@ -481,9 +698,9 @@ export default function Plans() {
       </div>
 
       {!currentSub && (
-        <div className="text-center text-[11px] text-slate-500 mt-6 space-y-0.5">
+        <div className="text-center text-[11px] text-muted-foreground mt-6 space-y-0.5">
           <p>
-            Pagamento seguro via <b className="text-slate-700">Asaas</b> · PIX · Boleto · Cartão
+            Pagamento seguro via <b className="text-foreground">Asaas</b> · PIX · Boleto · Cartão
           </p>
           <p>O acesso é liberado automaticamente após confirmação do pagamento.</p>
         </div>
@@ -516,7 +733,7 @@ export default function Plans() {
                 autoFocus
               />
               {cpfInput && !isValidCpfCnpj(cpfInput) && (
-                <p className="text-[11px] text-red-500">
+                <p className="text-[11px] text-danger">
                   CPF (11 dígitos) ou CNPJ (14 dígitos) inválido
                 </p>
               )}
@@ -529,13 +746,13 @@ export default function Plans() {
                 </strong>
                 {" — "}
                 {formatPrice(
-                  billingInterval === "monthly"
+                  cicloDoPlano(pendingPlanId) === "monthly"
                     ? plans?.find((p) => p.id === pendingPlanId)
                         ?.priceMonthly ?? 0
                     : plans?.find((p) => p.id === pendingPlanId)
                         ?.priceYearly ?? 0,
                 )}
-                /{billingInterval === "monthly" ? "mês" : "ano"}
+                /{cicloDoPlano(pendingPlanId) === "monthly" ? "mês" : "ano"}
               </p>
             )}
           </div>

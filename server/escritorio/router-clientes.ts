@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
-import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { verificarLimite } from "../billing/plan-limits";
@@ -54,9 +54,82 @@ function sanitizarCamposPersonalizados(
  * milhares de clientes) não justifica a complexidade.
  */
 /**
+ * "Este cliente é meu?" para quem tem `verProprios`.
+ *
+ * Responde pelo cadastro OU por lead: contato que nasce de mensagem no
+ * WhatsApp entra com `contatos.responsavelId` vazio, enquanto o lead
+ * correspondente fica com quem atendeu. Olhar só o cadastro escondia de quem
+ * tem verProprios justamente os leads que são dele — e como o campo do
+ * cadastro nasce vazio, isso valia pra quase todo lead do WhatsApp.
+ */
+async function ehResponsavelPeloContato(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+  responsavelDoCadastro: number | null,
+): Promise<boolean> {
+  if (responsavelDoCadastro === colabId) return true;
+  const [l] = await db
+    .select({ id: leads.id })
+    .from(leads)
+    .where(and(
+      eq(leads.contatoId, contatoId),
+      eq(leads.escritorioId, escritorioId),
+      eq(leads.responsavelId, colabId),
+    ))
+    .limit(1);
+  return !!l;
+}
+
+/**
+ * Quem ATENDE uma conversa deste contato pode operar o cadastro dele.
+ *
+ * Decisão do dono (02/09): a pessoa que está falando com o cliente precisa
+ * abrir a ficha, corrigir o cadastro e registrar o fechamento — sem depender
+ * de alguém lhe atribuir o cliente antes. O contato que nasce do WhatsApp
+ * nasce sem responsável, e a distribuição automática não preenche esse campo
+ * de propósito (preencher grudaria o cliente no primeiro atendente e mataria
+ * o rodízio), então sem isto o atendente fica trancado do lado de fora do
+ * cadastro de quem ele está atendendo.
+ *
+ * Concede ACESSO, não posse: nada é gravado, o responsável do cadastro
+ * continua como está e a comissão — que vive na cobrança — não é tocada.
+ */
+async function atendeConversaDoContato(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  contatoId: number,
+  escritorioId: number,
+  colabId: number,
+): Promise<boolean> {
+  const [c] = await db
+    .select({ id: conversas.id })
+    .from(conversas)
+    .where(and(
+      eq(conversas.contatoId, contatoId),
+      eq(conversas.escritorioId, escritorioId),
+      eq(conversas.atendenteId, colabId),
+    ))
+    .limit(1);
+  return !!c;
+}
+
+/** Ids de contato que são "meus" por lead — para filtrar listagem em SQL. */
+function contatosMeusPorLead(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  colabId: number,
+) {
+  return db
+    .select({ id: leads.contatoId })
+    .from(leads)
+    .where(and(eq(leads.escritorioId, escritorioId), eq(leads.responsavelId, colabId)));
+}
+
+/**
  * Verifica se o colaborador tem acesso ao cliente. Respeita verProprios:
  *  - verTodos: qualquer cliente do escritório passa
- *  - verProprios: só passa quando responsavelId === colaboradorId
+ *  - verProprios: passa quando é responsável pelo cadastro OU por um lead dele
  *  - retorna false quando o cliente não existe no escritório
  *
  * Usado pelas procedures que recebem `contatoId` na input — anotações,
@@ -77,7 +150,7 @@ async function podeVerCliente(
     .limit(1);
   if (!c) return false;
   if (verTodos) return true;
-  return c.responsavelId === colabId;
+  return ehResponsavelPeloContato(db, contatoId, escritorioId, colabId, c.responsavelId);
 }
 
 async function buscarClienteDuplicadoCpf(
@@ -130,14 +203,41 @@ export const clientesRouter = router({
      * Agenda, vincular conversa no Atendimento).
      */
     estagio: z.enum(["lead", "cliente", "todos"]).optional(),
+    /**
+     * Filtros que se CRUZAM entre si e SOMAM por dentro: marcar dois
+     * responsáveis traz os dois (OU), e somar Responsável com Financeiro
+     * pede quem satisfaz os dois (E). Marcar duas opções do mesmo campo e
+     * receber lista vazia seria o contrário do que o clique quer dizer.
+     *
+     * Convivem com `segmento`, que é recorte único e continua servindo as
+     * outras telas — os dois se aplicam por cima do mesmo WHERE.
+     */
+    responsaveis: z.array(z.number().int().positive()).max(50).optional(),
+    /** "vencida" repete a regra do segmento com_debito; "nenhuma" é sem cobrança alguma. */
+    cobranca: z.array(z.enum(["vencida", "em_dia", "nenhuma"])).max(3).optional(),
+    origens: z.array(z.enum(["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"])).max(7).optional(),
+    /**
+     * Recortes do cadastro. Os três últimos são os antigos segmentos
+     * `inativo`/`suspensos`/`encerrados`: entraram aqui pra que a barra de
+     * filtro nova não custasse a capacidade de filtrar por eles.
+     */
+    marcas: z.array(z.enum(["vip", "docs", "semResp", "inativo", "suspenso", "encerrado"])).max(6).optional(),
+    /** Data de cadastro do contato, inclusive nas duas pontas (YYYY-MM-DD). */
+    cadastroDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    cadastroAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
     const db = await getDb(); if (!db) return { clientes: [], total: 0 };
     const limite = input?.limite || 50; const offset = ((input?.pagina || 1) - 1) * limite;
     let where: any = eq(contatos.escritorioId, perm.escritorioId);
-    // Se só pode ver próprios, filtra por responsável
-    if (!perm.verTodos && perm.verProprios) { where = and(where, eq(contatos.responsavelId, perm.colaboradorId)); }
+    // Se só pode ver próprios, filtra por responsável — do cadastro OU do lead
+    if (!perm.verTodos && perm.verProprios) {
+      where = and(where, or(
+        eq(contatos.responsavelId, perm.colaboradorId),
+        inArray(contatos.id, contatosMeusPorLead(db, perm.escritorioId, perm.colaboradorId)),
+      ));
+    }
     if (input?.busca) {
       const b = `%${input.busca}%`;
       // CPF e telefone são gravados só com dígitos; busca com pontuação
@@ -215,6 +315,63 @@ export const clientesRouter = router({
       where = and(where, eq(contatos.situacaoServico, "suspenso"));
     }
 
+    // ── Filtros combináveis ────────────────────────────────────────────────
+    // Cada bloco é uma pergunta; dentro dela as opções somam, entre elas
+    // cruzam. Lista vazia = campo não perguntado, então não estreita nada.
+    if (input?.responsaveis?.length) {
+      where = and(where, inArray(contatos.responsavelId, input.responsaveis));
+    }
+    if (input?.origens?.length) {
+      where = and(where, inArray(contatos.origem, input.origens));
+    }
+    if (input?.marcas?.length) {
+      const trintaDiasM = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const porMarca = input.marcas.map((m) =>
+        m === "vip" ? sql`${contatos.tags} LIKE '%vip%'`
+        : m === "docs" ? eq(contatos.documentacaoPendente, true)
+        : m === "semResp" ? sql`${contatos.responsavelId} IS NULL`
+        // Mesma definição do segmento "inativo": cadastrado há mais de 30d E
+        // sem conversa nos últimos 30d. `contatos.updatedAt` não serve porque
+        // webhook de sync toca a coluna e o filtro ficaria sempre vazio.
+        : m === "inativo" ? sql`(${contatos.createdAt} < ${trintaDiasM} AND ${contatos.id} NOT IN (
+            SELECT ${conversas.contatoId} FROM ${conversas}
+            WHERE ${conversas.escritorioId} = ${perm.escritorioId}
+              AND ${conversas.ultimaMensagemAt} >= ${trintaDiasM}))`
+        : m === "suspenso" ? eq(contatos.situacaoServico, "suspenso")
+        : sql`${contatos.situacaoServico} NOT IN ('ativo', 'suspenso')`,
+      );
+      where = and(where, or(...porMarca));
+    }
+    if (input?.cobranca?.length) {
+      const hojeCob = dataHojeBR();
+      // A mesma sub-query do segmento com_debito, escopada por escritório.
+      const vencida = sql`${contatos.id} IN (
+        SELECT ${asaasCobrancas.contatoId} FROM ${asaasCobrancas}
+        WHERE ${asaasCobrancas.escritorioId} = ${perm.escritorioId}
+          AND (${asaasCobrancas.status} = 'OVERDUE'
+               OR (${asaasCobrancas.status} = 'PENDING' AND ${asaasCobrancas.vencimento} < ${hojeCob}))
+      )`;
+      const temAlguma = sql`${contatos.id} IN (
+        SELECT ${asaasCobrancas.contatoId} FROM ${asaasCobrancas}
+        WHERE ${asaasCobrancas.escritorioId} = ${perm.escritorioId}
+      )`;
+      const porCobranca = input.cobranca.map((c) =>
+        c === "vencida" ? vencida
+        // "em dia" é ter cobrança E não ter nenhuma vencida — sem o NOT, quem
+        // deve apareceria nos dois recortes ao mesmo tempo.
+        : c === "em_dia" ? sql`(${temAlguma} AND NOT ${vencida})`
+        : sql`NOT ${temAlguma}`,
+      );
+      where = and(where, or(...porCobranca));
+    }
+    if (input?.cadastroDe) {
+      where = and(where, gte(contatos.createdAt, new Date(`${input.cadastroDe}T00:00:00`)));
+    }
+    if (input?.cadastroAte) {
+      // Inclusivo na ponta de cima: quem cadastrou às 15h do dia final entra.
+      where = and(where, lte(contatos.createdAt, new Date(`${input.cadastroAte}T23:59:59.999`)));
+    }
+
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
 
@@ -242,12 +399,26 @@ export const clientesRouter = router({
       }
     }
 
+    // Nome do atendente responsável, em lote — a coluna da lista mostra quem
+    // cuida de cada cliente sem precisar abrir o cadastro.
+    const respIds = [...new Set(rows.map((r) => r.responsavelId).filter((v): v is number => typeof v === "number"))];
+    const nomeResp = new Map<number, string>();
+    if (respIds.length > 0) {
+      const respRows = await db
+        .select({ id: colaboradores.id, nome: users.name })
+        .from(colaboradores)
+        .innerJoin(users, eq(users.id, colaboradores.userId))
+        .where(and(eq(colaboradores.escritorioId, perm.escritorioId), inArray(colaboradores.id, respIds)));
+      for (const r of respRows) nomeResp.set(r.id, r.nome ?? "");
+    }
+
     return {
       clientes: rows.map((r) => ({
         ...r,
         createdAt: toIsoString(r.createdAt) ?? "",
         updatedAt: toIsoString(r.updatedAt) ?? "",
         ultimaConversaAt: dateMap.get(r.id) ?? null,
+        responsavelNome: r.responsavelId ? nomeResp.get(r.responsavelId) ?? null : null,
       })),
       total: Number((cnt as { count: number } | undefined)?.count || 0),
       pagina: input?.pagina || 1,
@@ -263,7 +434,12 @@ export const clientesRouter = router({
     const [c] = await db.select().from(contatos).where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId))).limit(1);
     if (!c) return null;
     // verProprios: bloqueia acesso ao detalhe de cliente que não é seu
-    if (!perm.verTodos && perm.verProprios && c.responsavelId !== perm.colaboradorId) {
+    if (
+      !perm.verTodos &&
+      perm.verProprios &&
+      !(await ehResponsavelPeloContato(db, input.id, perm.escritorioId, perm.colaboradorId, c.responsavelId)) &&
+      !(await atendeConversaDoContato(db, input.id, perm.escritorioId, perm.colaboradorId))
+    ) {
       return null;
     }
     const esc = { escritorio: { id: perm.escritorioId } };
@@ -408,11 +584,15 @@ export const clientesRouter = router({
         )
         .limit(1);
       if (!contato) throw new Error("Cliente não encontrado.");
-      if (
-        !perm.verTodos &&
-        perm.verProprios &&
-        contato.responsavelId !== perm.colaboradorId
-      ) {
+      // Sem esta saída havia um impasse: o atendente que fechou a venda não
+      // conseguia registrá-la, porque registrar é o que criaria o lead que
+      // lhe daria acesso ao cadastro.
+      const podeFechar =
+        perm.verTodos ||
+        !perm.verProprios ||
+        contato.responsavelId === perm.colaboradorId ||
+        (await atendeConversaDoContato(db, input.contatoId, perm.escritorioId, perm.colaboradorId));
+      if (!podeFechar) {
         throw new Error("Sem permissão para registrar fechamento neste cliente.");
       }
 
@@ -489,7 +669,12 @@ export const clientesRouter = router({
       if (!db) throw new Error("Database indisponível");
 
       // verProprios: atendente só mexe no estágio de quem é responsável.
-      const pode = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+      // "Transformar em cliente" é o outro caminho da conversão (o selo do
+      // cadastro). Quem atende entra aqui pelo mesmo motivo que entra no
+      // registrar fechamento.
+      const pode =
+        (await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos)) ||
+        (await atendeConversaDoContato(db, input.contatoId, perm.escritorioId, perm.colaboradorId));
       if (!pode) throw new Error("Cliente não encontrado ou sem permissão.");
 
       await db
@@ -582,7 +767,13 @@ export const clientesRouter = router({
         .where(and(eq(contatos.id, input.id), eq(contatos.escritorioId, perm.escritorioId)))
         .limit(1);
       if (!contatoAtual) throw new Error("Cliente não encontrado.");
-      if (!perm.verTodos && perm.verProprios && contatoAtual.responsavelId !== perm.colaboradorId) {
+      // Quem atende a conversa também edita o cadastro de quem está atendendo.
+      const podeEditar =
+        perm.verTodos ||
+        !perm.verProprios ||
+        contatoAtual.responsavelId === perm.colaboradorId ||
+        (await atendeConversaDoContato(db, input.id, perm.escritorioId, perm.colaboradorId));
+      if (!podeEditar) {
         // Snapshot do estado real pra diagnóstico — sem isso, dono fica
         // travado quando a UI mostra "Ver todos ✓" e o backend bloqueia.
         // Aparece no AdminErros via logger error.
@@ -930,6 +1121,26 @@ export const clientesRouter = router({
     }
     await db.update(clienteArquivos).set({ pastaId: input.pastaId })
       .where(eq(clienteArquivos.id, input.id));
+    return { success: true };
+  }),
+  renomearArquivo: protectedProcedure.input(z.object({
+    id: z.number(),
+    nome: z.string().min(1).max(255),
+  })).mutation(async ({ ctx, input }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "editar");
+    if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão." });
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const [arquivo] = await db.select({ contatoId: clienteArquivos.contatoId })
+      .from(clienteArquivos)
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)))
+      .limit(1);
+    if (!arquivo) throw new TRPCError({ code: "NOT_FOUND", message: "Arquivo não encontrado." });
+    const okClient = await podeVerCliente(db, arquivo.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
+    if (!okClient) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão neste cliente." });
+    // Só o rótulo muda — a URL/blob fica intacta, então nenhum link quebra.
+    await db.update(clienteArquivos).set({ nome: input.nome.trim() })
+      .where(and(eq(clienteArquivos.id, input.id), eq(clienteArquivos.escritorioId, perm.escritorioId)));
     return { success: true };
   }),
 

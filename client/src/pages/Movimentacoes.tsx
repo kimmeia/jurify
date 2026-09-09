@@ -10,6 +10,10 @@ import { useMemo, useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
+import { useModulosContratados } from "@/components/ModuloGuard";
+import { contratoLibera } from "@shared/modulos-contratacao";
+import { formatarDataCalendario } from "@shared/data-calendario";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,7 +46,6 @@ import {
   ChevronUp,
   ChevronRight,
   FileX,
-  Mail,
   Send,
 } from "lucide-react";
 import MovimentacaoDetalheDrawer from "@/components/MovimentacaoDetalheDrawer";
@@ -54,9 +57,9 @@ type Grupo = "exigem_acao" | "relevante" | "rotina";
  * plataforma e ainda desalinham a linha de base do texto ao lado.
  */
 const DESFECHO_SELO: Record<string, { label: string; cls: string }> = {
-  favoravel: { label: "Favorável", cls: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" },
-  desfavoravel: { label: "Desfavorável", cls: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300" },
-  parcial: { label: "Parcial", cls: "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300" },
+  favoravel: { label: "Favorável", cls: "bg-success-bg text-success-fg dark:text-success" },
+  desfavoravel: { label: "Desfavorável", cls: "bg-danger-bg text-danger-fg dark:text-danger" },
+  parcial: { label: "Parcial", cls: "bg-warning-bg text-warning-fg dark:text-warning" },
   neutro: { label: "Sem mérito", cls: "bg-muted text-muted-foreground" },
 };
 
@@ -90,11 +93,16 @@ const TIPOS: { valor: Tipo; label: string; chave?: Grupo }[] = [
   { valor: "rotina", label: "Só a rotina", chave: "rotina" },
 ];
 
+/**
+ * Período como segmentado com contagem, não select: o badge do menu conta 30
+ * dias e a tela abria em 7 — o usuário via 99 no menu e "nada pendente" na
+ * tela, cada um certo no seu período. Com o número em cada opção (e o
+ * default igual ao do menu), a conta fecha à vista.
+ */
 const JANELAS = [
-  { valor: 1, label: "Últimas 24h" },
-  { valor: 7, label: "Últimos 7 dias" },
-  { valor: 30, label: "Últimos 30 dias" },
-  { valor: 90, label: "Últimos 90 dias" },
+  { valor: 7, label: "Esta semana" },
+  { valor: 30, label: "30 dias" },
+  { valor: 90, label: "90 dias" },
 ];
 
 const POLO_LABEL: Record<string, string> = { ativo: "Autor", passivo: "Réu", terceiro: "Terceiro" };
@@ -116,14 +124,13 @@ function haQuantoTempo(d: Date | string) {
   return `há ${dias} dias`;
 }
 
-export default function Movimentacoes() {
+export function MovimentacoesCentral() {
   const [busca, setBusca] = useState("");
-  const [dias, setDias] = useState(7);
+  const [dias, setDias] = useState(30);
   const [estado, setEstado] = useState<Estado>("a_resolver");
   const [tipo, setTipo] = useState<Tipo>("todos");
   const [eventoAberto, setEventoAberto] = useState<number | null>(null);
   const [rotinaAberta, setRotinaAberta] = useState(false);
-  const [configAberta, setConfigAberta] = useState(false);
 
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.movimentacoes.central.useQuery({
@@ -132,17 +139,25 @@ export default function Movimentacoes() {
     grupos: tipo === "todos" ? undefined : [tipo],
     estado,
   });
+  // Mesma fonte do badge do menu — é o que faz "30 dias · 99" aqui e o 99
+  // do menu serem por construção o mesmo número.
+  const { data: contadorMenu } = trpc.movimentacoes.contador.useQuery();
+
+  const invalidarContagens = () => {
+    utils.movimentacoes.central.invalidate();
+    utils.movimentacoes.contador.invalidate();
+  };
 
   const marcarRotinaMut = trpc.movimentacoes.marcarRotinaLida.useMutation({
     onSuccess: () => {
       toast.success("Rotina marcada como lida");
-      utils.movimentacoes.central.invalidate();
+      invalidarContagens();
     },
     onError: (e) => toast.error("Falha ao marcar", { description: e.message }),
   });
 
   const marcarMut = trpc.movimentacoes.marcarLidas.useMutation({
-    onSuccess: () => utils.movimentacoes.central.invalidate(),
+    onSuccess: invalidarContagens,
   });
 
   const itens = data?.itens ?? [];
@@ -176,57 +191,13 @@ export default function Movimentacoes() {
         ? "tudo_resolvido"
         : "nada_resolvido";
 
+  const contagemJanela: Record<number, number | undefined> = {
+    7: contadorMenu?.naoLidasSemana,
+    30: contadorMenu?.naoLidas,
+  };
+
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[27px] font-bold tracking-tight leading-none">Movimentações</h1>
-          <p className="text-[13.5px] text-muted-foreground mt-1.5">
-            O que os tribunais publicaram nos seus processos
-          </p>
-        </div>
-        <Button size="sm" variant="outline" onClick={() => setConfigAberta(true)}>
-          <Mail className="h-4 w-4 mr-1.5" />
-          Resumo diário
-        </Button>
-      </div>
-
-      {/* As três respondem a mesma pergunta em estados diferentes, e somam:
-          a resolver + resolvidas = o período inteiro. Por isso viram uma
-          escolha só, e não pastilha de leitura ao lado de aba de filtro
-          repetindo o mesmo número. */}
-      <div className="flex items-stretch gap-2.5 flex-wrap">
-        <CartaoEstado
-          valor={isLoading ? null : contagem.aResolver}
-          titulo="a resolver"
-          descricao="ainda esperando você — é aqui que o dia acontece"
-          ativo={estado === "a_resolver"}
-          onClick={() => setEstado("a_resolver")}
-        />
-        <CartaoEstado
-          valor={isLoading ? null : contagem.resolvidas}
-          titulo="resolvidas"
-          descricao="você já providenciou ou marcou como vista"
-          ativo={estado === "resolvidas"}
-          onClick={() => setEstado("resolvidas")}
-        />
-        <CartaoEstado
-          valor={isLoading ? null : data?.total ?? 0}
-          titulo="no período"
-          descricao={`tudo que foi publicado ${janela}`}
-          ativo={estado === "todas"}
-          onClick={() => setEstado("todas")}
-        />
-        <div className="flex-1 min-w-[280px] rounded-xl border border-dashed bg-card px-4 py-3 flex items-center gap-2.5">
-          <Check className="h-4 w-4 text-muted-foreground shrink-0" />
-          <p className="text-[12px] text-muted-foreground leading-snug">
-            Uma movimentação sai de <b className="text-foreground">A resolver</b> quando você clica em{" "}
-            <b className="text-foreground">Já resolvi</b> — ou quando cria o prazo a partir dela. Nada
-            some sozinho.
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       {/* Filtros */}
       <div className="rounded-xl border bg-card p-2.5 flex flex-wrap items-center gap-2.5">
         <div className="relative flex-1 min-w-[240px]">
@@ -239,18 +210,33 @@ export default function Movimentacoes() {
           />
         </div>
 
-        <Select value={String(dias)} onValueChange={(v) => setDias(Number(v))}>
-          <SelectTrigger className="h-9 w-[170px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {JANELAS.map((j) => (
-              <SelectItem key={j.valor} value={String(j.valor)}>
+        <div className="flex items-center gap-1 rounded-[9px] bg-muted p-[3px]">
+          {JANELAS.map((j) => {
+            const n = contagemJanela[j.valor];
+            const ativo = dias === j.valor;
+            return (
+              <button
+                key={j.valor}
+                type="button"
+                onClick={() => setDias(j.valor)}
+                className={`flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                  ativo ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+                }`}
+              >
                 {j.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+                {typeof n === "number" && (
+                  <span
+                    className={`rounded-full px-1.5 py-px text-[9.5px] font-extrabold ${
+                      ativo ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
+                    }`}
+                  >
+                    {n}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
 
         {/* A classificação continua acessível, mas como filtro — que é o que
             ela sempre foi. Os números das opções vêm do período inteiro, senão
@@ -268,6 +254,17 @@ export default function Movimentacoes() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* As resolvidas continuam a um clique, sem ocupar um cartão inteiro. */}
+        <Button
+          size="sm"
+          variant={estado === "resolvidas" ? "secondary" : "ghost"}
+          className="h-9"
+          onClick={() => setEstado(estado === "resolvidas" ? "a_resolver" : "resolvidas")}
+        >
+          <Check className="h-3.5 w-3.5 mr-1.5" />
+          Resolvidas{isLoading ? "" : ` (${contagem.resolvidas})`}
+        </Button>
       </div>
 
       {isLoading ? (
@@ -282,7 +279,12 @@ export default function Movimentacoes() {
         <div className="space-y-5">
           {porGrupo.exigem_acao.length > 0 && (
             <section>
-              <CabecalhoGrupo titulo="Exigem ação sua" total={porGrupo.exigem_acao.length} tom="alerta" />
+              <CabecalhoGrupo
+                titulo="Exigem ação"
+                total={porGrupo.exigem_acao.length}
+                tom="alerta"
+                dica="resolvidas aqui, o dia está feito"
+              />
               <div className="space-y-2.5">
                 {porGrupo.exigem_acao.map((m) => (
                   <CardAcao
@@ -298,7 +300,11 @@ export default function Movimentacoes() {
 
           {porGrupo.relevante.length > 0 && (
             <section>
-              <CabecalhoGrupo titulo="Relevantes, sem prazo pra você" total={porGrupo.relevante.length} />
+              <CabecalhoGrupo
+                titulo="Vale ler"
+                total={porGrupo.relevante.length}
+                dica="nada a fazer agora, mas você quer saber"
+              />
               <div className="rounded-xl border bg-card divide-y overflow-hidden">
                 {porGrupo.relevante.map((m) => (
                   <LinhaRelevante
@@ -367,16 +373,17 @@ export default function Movimentacoes() {
       )}
 
       <MovimentacaoDetalheDrawer eventoId={eventoAberto} onClose={() => setEventoAberto(null)} />
-      <ConfigResumoDiario open={configAberta} onClose={() => setConfigAberta(false)} />
     </div>
   );
 }
 
+export default MovimentacoesCentral;
+
 const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
-  enviado: { label: "Enviado", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  falha: { label: "Falhou", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+  enviado: { label: "Enviado", cls: "bg-success-bg text-success-fg border-success/30" },
+  falha: { label: "Falhou", cls: "bg-danger-bg text-danger-fg border-danger/30" },
   sem_conteudo: { label: "Nada a enviar", cls: "bg-muted text-muted-foreground border-border" },
-  nao_configurado: { label: "Não configurado", cls: "bg-amber-50 text-amber-800 border-amber-200" },
+  nao_configurado: { label: "Não configurado", cls: "bg-warning-bg text-warning-fg border-warning/30" },
 };
 
 /**
@@ -386,9 +393,13 @@ const STATUS_ENVIO: Record<string, { label: string; cls: string }> = {
  * calada faz o painel dizer "ativo" enquanto ninguém recebe nada. Aqui o
  * status vem do que aconteceu de fato em cada canal.
  */
-function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: () => void }) {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.resumoDiario.obter.useQuery(undefined, { enabled: open });
+  // Sem o módulo Atendimento não há canal Meta — o campo ganha cadeado com
+  // explicação em vez de aceitar um número que nunca vai receber nada.
+  const modulosContratados = useModulosContratados();
+  const temAtendimento = contratoLibera(modulosContratados, ["atendimento"]);
 
   const [ativo, setAtivo] = useState(false);
   const [hora, setHora] = useState("7");
@@ -487,31 +498,46 @@ function ConfigResumoDiario({ open, onClose }: { open: boolean; onClose: () => v
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs">WhatsApp</Label>
-                <Input
-                  className="h-9"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
-                  placeholder="5585999999999"
-                />
+            {temAtendimento ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">WhatsApp</Label>
+                    <Input
+                      className="h-9"
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="5585999999999"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Template aprovado na Meta</Label>
+                    <Input
+                      className="h-9"
+                      value={template}
+                      onChange={(e) => setTemplate(e.target.value)}
+                      placeholder="resumo_diario"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
+                  O WhatsApp sai fora da janela de 24h, então a Meta só aceita template aprovado (HSM)
+                  com uma variável de texto no corpo. Sem template configurado, o resumo vai só por
+                  e-mail.
+                </p>
+              </>
+            ) : (
+              <div className="rounded-lg border border-dashed bg-muted/40 p-3 opacity-80">
+                <p className="text-xs font-semibold flex items-center gap-1.5">
+                  Enviar por WhatsApp
+                  <Badge variant="outline" className="text-[9px] text-muted-foreground">🔒 módulo Atendimento</Badge>
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                  Precisa de um canal WhatsApp conectado — disponível ao contratar o módulo
+                  Atendimento. O resumo por e-mail funciona normalmente.
+                </p>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">Template aprovado na Meta</Label>
-                <Input
-                  className="h-9"
-                  value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
-                  placeholder="resumo_diario"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
-              O WhatsApp sai fora da janela de 24h, então a Meta só aceita template aprovado (HSM)
-              com uma variável de texto no corpo. Sem template configurado, o resumo vai só por
-              e-mail.
-            </p>
+            )}
 
             {data?.ultimosEnvios?.length ? (
               <div className="rounded-lg border">
@@ -593,68 +619,13 @@ function resumoRotina(titulos: string[]): string {
     .join(" · ");
 }
 
-/**
- * Cartão-aba: o número e a escolha no mesmo controle.
- *
- * A descrição embaixo não é enfeite — é ela que dispensa descobrir por
- * tentativa o que cada estado contém.
- */
-function CartaoEstado({
-  valor,
-  titulo,
-  descricao,
-  ativo,
-  onClick,
-}: {
-  valor: number | null;
-  titulo: string;
-  descricao: string;
-  ativo: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      className={`w-[236px] shrink-0 text-left rounded-xl border-2 px-3.5 py-3 transition-colors ${
-        ativo
-          ? "border-violet-400 bg-violet-50 dark:border-violet-700 dark:bg-violet-950/40"
-          : "border-border bg-card hover:bg-muted/50"
-      }`}
-    >
-      <div className="flex items-baseline gap-2">
-        <b
-          className={`text-[26px] font-bold tabular-nums leading-none ${
-            ativo ? "text-violet-700 dark:text-violet-300" : ""
-          }`}
-        >
-          {valor === null ? "—" : valor}
-        </b>
-        <span
-          className={`text-[14px] font-bold ${ativo ? "text-violet-800 dark:text-violet-200" : ""}`}
-        >
-          {titulo}
-        </span>
-      </div>
-      <p
-        className={`text-[11.5px] leading-snug mt-1 ${
-          ativo ? "text-violet-700 dark:text-violet-300" : "text-muted-foreground"
-        }`}
-      >
-        {descricao}
-      </p>
-    </button>
-  );
-}
-
 type MotivoVazio = "busca" | "periodo" | "tudo_resolvido" | "nada_resolvido";
 
 function Vazio({ motivo, janela, total }: { motivo: MotivoVazio; janela: string; total: number }) {
   if (motivo === "tudo_resolvido") {
     return (
       <div className="rounded-xl border bg-card py-14 flex flex-col items-center gap-2 text-center">
-        <span className="h-11 w-11 rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 flex items-center justify-center">
+        <span className="h-11 w-11 rounded-full bg-success-bg text-success-fg dark:text-success flex items-center justify-center">
           <Check className="h-6 w-6" />
         </span>
         <p className="text-sm font-bold">Nada pendente {janela}</p>
@@ -698,10 +669,12 @@ function CabecalhoGrupo({
   titulo,
   total,
   tom = "neutro",
+  dica,
 }: {
   titulo: string;
   total: number;
   tom?: "neutro" | "alerta";
+  dica?: string;
 }) {
   return (
     <div className="flex items-center gap-2 mb-2">
@@ -710,11 +683,14 @@ function CabecalhoGrupo({
       </span>
       <span
         className={`text-[10.5px] font-extrabold rounded-full px-2 py-0.5 tabular-nums ${
-          tom === "alerta" ? "bg-rose-600 text-white" : "bg-muted text-muted-foreground"
+          tom === "alerta" ? "bg-danger text-danger-on" : "bg-muted text-muted-foreground"
         }`}
       >
         {total}
       </span>
+      {dica && (
+        <span className="ml-auto text-[10.5px] text-muted-foreground/70 hidden sm:inline">{dica}</span>
+      )}
       <span className="flex-1 h-px bg-border" />
     </div>
   );
@@ -744,7 +720,7 @@ function CardAcao({
 
   return (
     <div className="rounded-xl border bg-card overflow-hidden flex">
-      <div className="w-[3px] shrink-0 bg-rose-500" />
+      <div className="w-[3px] shrink-0 bg-danger" />
       <div className="flex-1 min-w-0 p-4 flex flex-col sm:flex-row items-start gap-4">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -792,12 +768,12 @@ function CardAcao({
               <span
                 className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-bold inline-flex items-center gap-1.5 ${
                   urgente
-                    ? "bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-900 dark:text-rose-300"
+                    ? "bg-danger-bg border-danger/30 text-danger-fg dark:border-danger/30"
                     : "bg-muted border-border text-foreground/80"
                 }`}
               >
                 <CalendarClock className="h-3.5 w-3.5" />
-                {audiencia ? "Audiência" : "Vence"} {dataCurta(p.data)}
+                {audiencia ? "Audiência" : "Vence"} {formatarDataCalendario(p.data, { ano: false })}
                 {typeof restantes === "number" &&
                   ` · ${
                     restantes < 0

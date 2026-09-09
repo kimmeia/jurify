@@ -220,13 +220,22 @@ export const whatsappCloudRouter = router({
         bodyParams: input.parametrosCorpo,
         headerImageUrl: input.headerImageUrl,
       });
-      // Template é iniciado pela empresa (proativo): passa pelas travas anti-ban
-      // (disjuntor + teto diário + rate). Sem opt-in — é envio manual do operador,
-      // que escolheu o destinatário. Antes este endpoint furava TODAS as travas.
+      // Template é iniciado pela empresa (proativo): travas anti-ban + OPT-IN.
+      // "Sem opt-in porque o operador escolheu o destinatário" foi a exceção
+      // que virou porta: número que nunca escreveu recebendo template é
+      // exatamente a mensagem que gera denúncia — e a conta levou o aviso de
+      // spam em 19/08. O modelo da casa é inbound-first: responde-se quem
+      // iniciou (ou cliente com relação registrada).
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: c.canalId, telefone: input.telefone, proativo: true });
+        const permitido = await guard.podeEnviar({
+          db,
+          canalId: c.canalId,
+          telefone: input.telefone,
+          proativo: true,
+          exigirOptin: true,
+        });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       try {
@@ -331,7 +340,15 @@ export const whatsappCloudRouter = router({
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, telefone: input.telefone, proativo: true });
+        const permitido = await guard.podeEnviar({
+          db,
+          canalId: input.canalId,
+          telefone: input.telefone,
+          proativo: true,
+          // Inbound-first: interativo proativo pra quem nunca escreveu é a
+          // mesma porta de denúncia do template frio.
+          exigirOptin: true,
+        });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");
@@ -390,7 +407,15 @@ export const whatsappCloudRouter = router({
       const db = await getDb();
       const guard = db ? await import("../integracoes/whatsapp-envio-guard") : null;
       if (db && guard) {
-        const permitido = await guard.podeEnviar({ db, canalId: input.canalId, telefone: input.telefone, proativo: true });
+        const permitido = await guard.podeEnviar({
+          db,
+          canalId: input.canalId,
+          telefone: input.telefone,
+          proativo: true,
+          // Inbound-first: interativo proativo pra quem nunca escreveu é a
+          // mesma porta de denúncia do template frio.
+          exigirOptin: true,
+        });
         if (!permitido.ok) throw new Error(permitido.erro);
       }
       const { WhatsAppCloudClient } = await import("../integracoes/whatsapp-cloud");

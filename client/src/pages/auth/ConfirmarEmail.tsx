@@ -77,7 +77,7 @@ export default function ConfirmarEmail() {
 
         {estado === "sucesso" && (
           <CardContent className="py-12 text-center space-y-3">
-            <CheckCircle2 className="h-14 w-14 mx-auto text-emerald-500" />
+            <CheckCircle2 className="h-14 w-14 mx-auto text-success" />
             <h2 className="text-xl font-semibold">Email confirmado!</h2>
             <p className="text-sm text-muted-foreground">
               Redirecionando para escolha do plano...
@@ -88,8 +88,8 @@ export default function ConfirmarEmail() {
         {estado === "erro" && (
           <>
             <CardHeader className="text-center">
-              <div className="mx-auto h-14 w-14 rounded-full bg-amber-100 flex items-center justify-center mb-2 dark:bg-amber-900/40">
-                <AlertCircle className="h-7 w-7 text-amber-700 dark:text-amber-200" />
+              <div className="mx-auto h-14 w-14 rounded-full bg-warning-bg flex items-center justify-center mb-2 dark:bg-warning/40">
+                <AlertCircle className="h-7 w-7 text-warning-fg" />
               </div>
               <CardTitle>Não foi possível confirmar</CardTitle>
               <CardDescription>{mensagemErro}</CardDescription>

@@ -16,6 +16,7 @@ import {
   TIPO_LABELS, TIPO_CORES, PRIORIDADE_LABELS,
   type TipoAgendamento, type PrioridadeAgendamento,
 } from "@shared/agendamento-constants";
+import { mascararTelefoneBR } from "@shared/telefone";
 
 type Lembrete = {
   tipo: "notificacao_app" | "email" | "whatsapp";
@@ -31,6 +32,12 @@ const LEMBRETE_PRESETS: Array<{ label: string; minutos: number }> = [
   { label: "2 dias antes", minutos: 2880 },
 ];
 
+const CANAIS_LEMBRETE: Array<{ id: Lembrete["tipo"]; label: string; Icon: typeof Bell }> = [
+  { id: "notificacao_app", label: "Notificação", Icon: Bell },
+  { id: "email", label: "Email", Icon: Mail },
+  { id: "whatsapp", label: "WhatsApp", Icon: MessageCircle },
+];
+
 const DURACOES: Array<{ label: string; min: number }> = [
   { label: "15 minutos", min: 15 },
   { label: "30 minutos", min: 30 },
@@ -43,6 +50,9 @@ const DURACOES: Array<{ label: string; min: number }> = [
 export type NovoCompromissoContexto = {
   contatoId?: number;
   contatoNome?: string;
+  /** Telefone do contato. Sem ele o compromisso nasce sem número e o clique
+   *  no telefone da Agenda não tem pra onde ir. */
+  contatoTelefone?: string;
 };
 
 export function NovoCompromissoDialog({
@@ -114,6 +124,7 @@ export function NovoCompromissoDialog({
       local: local.trim() || undefined,
       prioridade,
       contatoId: contexto?.contatoId,
+      contatoTelefone: contexto?.contatoTelefone || undefined,
       corHex: TIPO_CORES[tipo],
       lembretes: lembretes.length > 0 ? lembretes : undefined,
     });
@@ -142,16 +153,25 @@ export function NovoCompromissoDialog({
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-indigo-600" />
+            <Calendar className="h-5 w-5 text-info-fg" />
             Novo Compromisso
           </DialogTitle>
-          {contexto?.contatoId && contexto?.contatoNome && (
+          {/* Aparece também sem `contatoId`: conversa que ainda não virou
+              cliente cadastrado leva nome e número do mesmo jeito — é o que
+              faz o telefone da Agenda ter pra onde clicar. */}
+          {(contexto?.contatoNome || contexto?.contatoTelefone) && (
             <div className="flex items-center gap-2 mt-1.5">
-              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-violet-100 text-violet-800 text-xs font-semibold">
-                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-white text-[10px] font-bold">
-                  {iniciais(contexto.contatoNome)}
+              <span className="inline-flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-info-bg text-info-fg text-xs font-semibold">
+                <span className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gradient-to-br from-info to-danger text-white text-[10px] font-bold">
+                  {iniciais(contexto.contatoNome || "?")}
                 </span>
-                Vinculado a: {contexto.contatoNome}
+                {contexto.contatoNome ? `Vinculado a: ${contexto.contatoNome}` : "Contato da conversa"}
+                {contexto.contatoTelefone && (
+                  <>
+                    <span className="opacity-40">·</span>
+                    {mascararTelefoneBR(contexto.contatoTelefone)}
+                  </>
+                )}
               </span>
             </div>
           )}
@@ -253,9 +273,17 @@ export function NovoCompromissoDialog({
                 <Select value={l.tipo} onValueChange={(v) => atualizarLembrete(idx, { tipo: v as Lembrete["tipo"] })}>
                   <SelectTrigger className="h-8 text-xs w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="notificacao_app"><span className="flex items-center gap-1.5"><Bell className="h-3 w-3" /> Notificação</span></SelectItem>
-                    <SelectItem value="email"><span className="flex items-center gap-1.5"><Mail className="h-3 w-3" /> Email</span></SelectItem>
-                    <SelectItem value="whatsapp"><span className="flex items-center gap-1.5"><MessageCircle className="h-3 w-3" /> WhatsApp</span></SelectItem>
+                    {CANAIS_LEMBRETE.map((c) => {
+                      const disabled = c.id !== "notificacao_app"; // Email/WhatsApp ainda não dispatcheados
+                      return (
+                        <SelectItem key={c.id} value={c.id} disabled={disabled}>
+                          <span className="flex items-center gap-1.5">
+                            <c.Icon className="h-3 w-3" /> {c.label}
+                            {disabled && <span className="text-muted-foreground">· em breve</span>}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
                 <Select value={String(l.minutosAntes)} onValueChange={(v) => atualizarLembrete(idx, { minutosAntes: Number(v) })}>
@@ -279,7 +307,7 @@ export function NovoCompromissoDialog({
             <button
               onClick={adicionarLembrete}
               type="button"
-              className="text-[11px] text-indigo-600 hover:underline font-semibold inline-flex items-center gap-1"
+              className="text-[11px] text-info-fg hover:underline font-semibold inline-flex items-center gap-1"
             >
               <Plus className="h-3 w-3" /> Adicionar lembrete
             </button>
@@ -291,7 +319,7 @@ export function NovoCompromissoDialog({
           <Button
             onClick={handleSubmit}
             disabled={!titulo.trim() || !data || criar.isPending}
-            className="bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700"
+            className="bg-info"
           >
             {criar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
             Agendar

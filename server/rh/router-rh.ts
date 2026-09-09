@@ -6,13 +6,14 @@
  *  - o PRÓPRIO ponto é um direito de quem trabalha. Qualquer colaborador vê o
  *    dele, sem gate de módulo. Esconder de alguém as horas que a empresa
  *    registrou sobre ele seria o avesso do que uma folha de ponto serve;
- *  - o ponto DOS OUTROS é gestão, e passa por `checkPermission("equipe")`.
- *    `verTodos` é o que separa quem enxerga a equipe de quem enxerga só a
- *    própria linha — e cargo personalizado com a flag entra junto, por isso o
- *    gate nunca compara `cargo === "dono"`.
+ *  - o ponto DOS OUTROS é gestão, e passa por `checkPermission("ponto")`.
+ *    O módulo é próprio, e não uma carona em "equipe": quem gerencia a equipe
+ *    não passa a ver, por consequência, a jornada, as faltas e a nota de
+ *    avaliação de cada colega. Isso é concessão explícita do dono na matriz de
+ *    cargos — por isso o gate nunca compara `cargo === "dono"`.
  *
- * O ajuste exige `editar` além de `verTodos`: corrigir a jornada de outra
- * pessoa é escrever no documento que vai pro pagamento dela.
+ * O ajuste exige `editar`: corrigir a jornada de outra pessoa é escrever no
+ * documento que vai pro pagamento dela.
  */
 
 import { z } from "zod";
@@ -373,13 +374,13 @@ async function lerAvaliacoes(
  * O gate de escrita do RH.
  *
  * Registrar falta, anexar atestado e abonar são atos que mexem no que a pessoa
- * recebe. Exigem `verTodos` E `editar` — quem só enxerga a própria linha não
- * pode escrever na de ninguém, inclusive na dela.
+ * recebe. Exigem `editar` no módulo Ponto — ver o cartão dos outros não
+ * autoriza reescrevê-lo.
  */
 async function exigirGestorDeEquipe(userId: number) {
-  const perm = await checkPermission(userId, "equipe", "editar");
-  if (!perm.allowed || !perm.verTodos || !perm.editar) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Só quem gerencia a equipe pode fazer isso." });
+  const perm = await checkPermission(userId, "ponto", "editar");
+  if (!perm.allowed || !perm.editar) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Só quem gerencia o ponto pode fazer isso." });
   }
   return perm;
 }
@@ -434,8 +435,8 @@ export const rhRouter = router({
     .input(z.object({ competencia: Competencia }))
     .query(async ({ ctx, input }) => {
       const { esc, fuso } = await contexto(ctx.user.id);
-      const perm = await checkPermission(ctx.user.id, "equipe", "ver");
-      if (!perm.allowed || !perm.verTodos) {
+      const perm = await checkPermission(ctx.user.id, "ponto", "ver");
+      if (!perm.allowed) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Sem acesso ao ponto da equipe." });
       }
 

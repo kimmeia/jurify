@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --duvida:#b45309; --duvida-bg:#fffbeb; --duvida-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+
+  /* ── linha do tempo ── */
+  .tl { flex:0 0 auto; padding:22px 140px 22px; }
+  .tl-cab { display:flex; align-items:baseline; justify-content:space-between; }
+  .tl-cab h2 { font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .tl-cab span { font-size:11.5px; color:var(--mudo); }
+
+  .trilho { position:relative; height:10px; border-radius:999px; background:var(--hairline); margin:92px 0 96px; }
+  .janela { position:absolute; top:0; bottom:0; left:0; right:0; border-radius:999px;
+            background:linear-gradient(90deg,#c4b5fd,#a78bfa 60%,#fca5a5); }
+  .marca { position:absolute; top:50%; transform:translate(-50%,-50%); }
+  .bola { width:22px; height:22px; border-radius:50%; background:#fff; border:4px solid var(--acento);
+          box-shadow:0 2px 6px #0f172a1f; }
+  .bola.fim { border-color:var(--alerta); }
+  .bola.hoje { width:18px; height:18px; border-width:5px; border-color:var(--tinta); }
+
+  .rot { position:absolute; left:50%; transform:translateX(-50%); text-align:center; width:220px; }
+  .rot.acima { bottom:26px; }
+  .rot.abaixo { top:26px; }
+  .rot .dt { font-size:17px; font-weight:700; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+  .rot .nm { font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; margin-top:2px; }
+  .rot .ex { font-size:11px; color:var(--mudo); margin-top:3px; line-height:1.4; }
+  .rot.roxo .dt, .rot.roxo .nm { color:var(--acento-forte); }
+  .rot.vermelho .dt, .rot.vermelho .nm { color:var(--alerta-forte); }
+  .rot.escuro .dt { font-size:14px; }
+  .rot.escuro .nm { color:var(--mudo); }
+
+  .selo-fatal { display:inline-block; margin-top:4px; background:var(--alerta-bg); color:var(--alerta-forte);
+                border:1px solid var(--alerta-borda); border-radius:999px; padding:2px 9px;
+                font-size:9.5px; font-weight:700; letter-spacing:.05em; }
+  .faixa-legenda { text-align:center; font-size:12px; color:var(--acento-forte); font-weight:600; }
+
+  /* ── colunas ── */
+  .colunas { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1.15fr 1fr; gap:22px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:13px; min-width:0; }
+  .titulo-col { font-family:'Poppins'; font-weight:700; font-size:14px; }
+  .sub-col { font-size:11.5px; color:var(--mudo); margin-top:2px; }
+
+  /* dia da agenda */
+  .dia { padding:14px 15px; }
+  .dia-cab { display:flex; align-items:center; gap:8px; }
+  .dia-cab .d { font-size:12.5px; font-weight:700; }
+  .dia-cab .s { font-size:11px; color:var(--mudo); }
+  .dia-cab .tag { margin-left:auto; font-size:9.5px; font-weight:700; letter-spacing:.04em;
+                  border-radius:999px; padding:2px 8px; }
+  .tag.hoje { background:var(--tinta); color:#fff; }
+
+  .ev { margin-top:8px; border-left:3px solid var(--acento); background:#fbfaff;
+        border:1px solid #ede9fe; border-left:3px solid var(--acento); border-radius:9px; padding:8px 10px; }
+  .ev.urgente { background:var(--alerta-bg); border-color:var(--alerta-borda); border-left-color:var(--alerta); }
+  .ev-topo { display:flex; align-items:center; gap:7px; }
+  .ev-tipo { font-size:9px; font-weight:700; letter-spacing:.05em; color:var(--acento-forte);
+             background:var(--acento-bg); border:1px solid #ddd6fe; border-radius:999px; padding:1px 7px; }
+  .ev.urgente .ev-tipo { color:var(--alerta-forte); background:#fff; border-color:var(--alerta-borda); }
+  .ev-tit { font-size:12.5px; font-weight:600; color:var(--tinta); }
+  .ev-meta { margin-top:4px; font-size:10.5px; color:var(--mudo); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .ev-meta b { color:var(--corpo); font-weight:600; }
+  .restante { margin-left:auto; font-size:11px; font-weight:700; color:var(--acento-forte); }
+  .ev.urgente .restante { color:var(--alerta-forte); }
+  .vazio { margin-top:8px; font-size:11.5px; color:var(--fantasma); font-style:italic; }
+
+  /* antes × depois */
+  .comp { padding:12px 14px; }
+  .comp h3 { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+  .comp.antes h3 { color:var(--mudo); }
+  .comp.depois h3 { color:var(--acento-forte); }
+  .comp p { font-size:11.5px; color:var(--corpo); line-height:1.5; margin-top:6px; }
+  .comp p b { font-weight:700; color:var(--tinta); }
+  .campos { display:flex; gap:8px; margin-top:9px; }
+  .cx { flex:1; border:1px solid var(--borda); border-radius:9px; padding:6px 9px; background:#fff; }
+  .cx.fatal { border:1.5px solid #fca5a5; background:#fffafa; }
+  .cx .k { font-size:9px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .cx.fatal .k { color:var(--alerta-forte); }
+  .cx .v { font-size:13px; font-weight:600; margin-top:2px; font-variant-numeric:tabular-nums; }
+
+  .nota { display:flex; align-items:flex-start; gap:10px; padding:11px 14px;
+          background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:12px; }
+  .nota .txt { font-size:11.5px; color:#4c1d95; line-height:1.5; }
+  .nota .txt b { font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div class="h1">Data inicial e data fatal</div>
+      <div class="sub">O prazo deixa de ser uma data só e passa a ser uma janela — com começo e com limite</div>
+    </div>
+
+    <!-- ══ linha do tempo ══ -->
+    <div class="card tl">
+      <div class="tl-cab">
+        <h2>Réplica à contestação — Andressa Barbosa × Banco Meridional</h2>
+        <span>Intimação em 17/08/2026 · 15 dias úteis (art. 350 do CPC)</span>
+      </div>
+
+      <div class="trilho">
+        <div class="janela"></div>
+
+        <div class="marca" style="left:0">
+          <div class="bola"></div>
+          <div class="rot acima roxo">
+            <div class="dt">18/08</div>
+            <div class="nm">Data inicial</div>
+          </div>
+          <div class="rot abaixo">
+            <div class="ex">Primeiro dia útil<br>depois da intimação</div>
+          </div>
+        </div>
+
+        <div class="marca" style="left:34%">
+          <div class="bola hoje"></div>
+          <div class="rot abaixo escuro">
+            <div class="dt">25/08</div>
+            <div class="nm">Hoje</div>
+          </div>
+        </div>
+
+        <div class="marca" style="left:100%">
+          <div class="bola fim"></div>
+          <div class="rot acima vermelho">
+            <div class="dt">09/09</div>
+            <div class="nm">Data fatal</div>
+            <div class="selo-fatal">NÃO SE MOVE</div>
+          </div>
+          <div class="rot abaixo">
+            <div class="ex">Depois disso<br>a peça não entra mais</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="faixa-legenda">o prazo fica na sua agenda todos os dias desta faixa</div>
+    </div>
+
+    <div class="colunas">
+
+      <!-- ══ como aparece na agenda ══ -->
+      <div class="col">
+        <div>
+          <div class="titulo-col">Como aparece na sua agenda</div>
+          <div class="sub-col">O mesmo prazo, em três dias diferentes</div>
+        </div>
+
+        <div class="card dia">
+          <div class="dia-cab">
+            <span class="d">17/08</span>
+            <span class="s">segunda-feira — dia da intimação</span>
+          </div>
+          <p class="vazio">Nada ainda. A contagem começa amanhã.</p>
+        </div>
+
+        <div class="card dia">
+          <div class="dia-cab">
+            <span class="d">18/08</span>
+            <span class="s">terça-feira</span>
+          </div>
+          <div class="ev">
+            <div class="ev-topo">
+              <span class="ev-tipo">PRAZO</span>
+              <span class="ev-tit">Andressa Barbosa: réplica à contestação</span>
+            </div>
+            <div class="ev-meta">
+              Marina Callado <span style="color:var(--fantasma)">·</span>
+              vence <b>09/09/2026</b>
+              <span class="restante">15 dias úteis</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card dia">
+          <div class="dia-cab">
+            <span class="d">25/08</span>
+            <span class="s">terça-feira</span>
+            <span class="tag hoje">HOJE</span>
+          </div>
+          <div class="ev">
+            <div class="ev-topo">
+              <span class="ev-tipo">PRAZO</span>
+              <span class="ev-tit">Andressa Barbosa: réplica à contestação</span>
+            </div>
+            <div class="ev-meta">
+              Marina Callado <span style="color:var(--fantasma)">·</span>
+              vence <b>09/09/2026</b>
+              <span class="restante">10 dias úteis</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card dia">
+          <div class="dia-cab">
+            <span class="d">09/09</span>
+            <span class="s">quarta-feira — data fatal</span>
+          </div>
+          <div class="ev urgente">
+            <div class="ev-topo">
+              <span class="ev-tipo">PRAZO</span>
+              <span class="ev-tit">Andressa Barbosa: réplica à contestação</span>
+            </div>
+            <div class="ev-meta">
+              Marina Callado <span style="color:var(--fantasma)">·</span>
+              <b>último dia</b>
+              <span class="restante">vence hoje</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ antes × depois ══ -->
+      <div class="col">
+        <div>
+          <div class="titulo-col">O que muda no formulário</div>
+          <div class="sub-col">Era um campo. Passa a ser dois.</div>
+        </div>
+
+        <div class="card comp antes">
+          <h3>Antes</h3>
+          <div class="campos">
+            <div class="cx">
+              <div class="k">Data limite</div>
+              <div class="v">09/09/2026</div>
+            </div>
+            <div class="cx" style="visibility:hidden"><div class="k">.</div><div class="v">.</div></div>
+          </div>
+          <p>
+            Uma data só, fazendo dois papéis. O prazo <b>aparecia na agenda no dia 09/09</b> — o
+            dia em que já era tarde pra começar. Até lá, ele não estava em lugar nenhum.
+          </p>
+        </div>
+
+        <div class="card comp depois">
+          <h3>Depois</h3>
+          <div class="campos">
+            <div class="cx">
+              <div class="k">Data inicial</div>
+              <div class="v">18/08/2026</div>
+            </div>
+            <div class="cx fatal">
+              <div class="k">Data fatal</div>
+              <div class="v">09/09/2026</div>
+            </div>
+          </div>
+          <p>
+            <b>Inicial</b> é quando o prazo entra na sua agenda — o dia em que ele passa a ser
+            trabalho seu. <b>Fatal</b> é o limite legal: aparece em todos os cards e é ela que
+            manda no vencimento. Você pode adiantar a inicial (começar antes) sem tocar na fatal.
+          </p>
+        </div>
+
+        <div class="card comp">
+          <h3 style="color:var(--corpo)">E se eu quiser só a data fatal?</h3>
+          <div class="campos">
+            <div class="cx">
+              <div class="k">Data inicial</div>
+              <div class="v">09/09/2026</div>
+            </div>
+            <div class="cx fatal">
+              <div class="k">Data fatal</div>
+              <div class="v">09/09/2026</div>
+            </div>
+          </div>
+          <p>
+            Coloque a mesma data nas duas. O prazo aparece só no dia do vencimento, exatamente
+            como antes — nada te obriga a usar a janela.
+          </p>
+          <div class="ev urgente" style="margin-top:10px">
+            <div class="ev-topo">
+              <span class="ev-tipo">PRAZO</span>
+              <span class="ev-tit">Aparece só em 09/09</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="nota">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><circle cx="12" cy="12" r="9.2" stroke="#7c3aed" stroke-width="2.1"/><path d="M12 11v5.2M12 7.6h.01" stroke="#7c3aed" stroke-width="2.1" stroke-linecap="round"/></svg>
+          <div class="txt">
+            <b>Se você preferir o comportamento antigo</b> — o prazo aparecendo só no dia fatal —
+            é troca de uma linha. As duas datas continuam gravadas de qualquer jeito; o que muda
+            é em qual delas o item entra na lista.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

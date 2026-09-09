@@ -59,6 +59,9 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     financeiro: perm(true, true, true, true, false),
     configuracoes: perm(true, true, true, true, false),
     equipe: perm(true, true, true, true, false),
+    // Fechado por padrão: ver o ponto é ver jornada, faltas e nota de
+    // avaliação de cada colega. O dono concede na matriz de cargos.
+    ponto: perm(false, false, false, false, false),
     // legados mantidos por retrocompat com dados antigos
     pipeline: perm(true, true, true, true, false),
     agendamento: perm(true, true, true, true, false),
@@ -79,6 +82,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     financeiro: perm(false, false, false, false, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(false, true, false, false, false),
+    ponto: perm(false, false, false, false, false),
     pipeline: perm(false, true, true, true, false),
     agendamento: perm(false, true, true, true, false),
   },
@@ -98,6 +102,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     financeiro: perm(false, false, false, false, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(false, true, false, false, false),
+    ponto: perm(false, false, false, false, false),
     pipeline: perm(false, false, false, false, false),
     agendamento: perm(false, true, false, false, false),
   },
@@ -123,6 +128,7 @@ const PERMISSOES_LEGADO: Record<string, Record<string, PermissionResult>> = {
     financeiro: perm(false, false, false, false, false),
     configuracoes: perm(false, false, false, false, false),
     equipe: perm(false, true, false, false, false),
+    ponto: perm(false, false, false, false, false),
     pipeline: perm(false, true, true, true, false),
     agendamento: perm(false, true, true, true, false),
   },

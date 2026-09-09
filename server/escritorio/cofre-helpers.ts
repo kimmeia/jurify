@@ -14,14 +14,14 @@
  * que vão usar imediatamente e descartar.
  */
 
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { authenticator } from "otplib";
 import { decrypt, encrypt } from "./crypto-utils";
 import { getDb } from "../db";
-import { cofreCredenciais, cofreSessoes } from "../../drizzle/schema";
+import { cofreCredencialTribunais, cofreCredenciais, cofreSessoes } from "../../drizzle/schema";
 import { createLogger } from "../_core/logger";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
-import { configPorSistema } from "../processos/tribunais-pdpj";
+import { getConfigTribunal } from "../processos/tribunais-pdpj";
 
 const log = createLogger("cofre-helpers");
 
@@ -117,6 +117,58 @@ export function deveReligarMonitoramento(m: {
   return c?.causa === "sessao_expirada" || c?.causa === "sem_credencial";
 }
 
+/**
+ * Anota como a credencial se saiu NAQUELE tribunal, naquele GRAU.
+ *
+ * É o que sustenta a grade de estados na tela: sem registro por tribunal, um
+ * login que falhou em MG derrubaria a credencial inteira e o CE, que funciona,
+ * apareceria quebrado junto. E sem o grau, o resultado do 2º sobrescreveria o
+ * do 1º — no PJe eles são portais distintos e podem ter sortes distintas.
+ */
+export async function registrarTribunal(
+  credencialId: number,
+  tribunal: string,
+  r: { ok: boolean; motivo?: string },
+  grau: 1 | 2 = 1,
+): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const agora = new Date();
+    const valores = r.ok
+      ? { status: "ativa" as const, ultimoErro: null, ultimoSucessoEm: agora, ultimaTentativaEm: agora }
+      : {
+          status: "erro" as const,
+          ultimoErro: (r.motivo ?? "Falha desconhecida").slice(0, 1000),
+          ultimaTentativaEm: agora,
+        };
+    await db
+      .insert(cofreCredencialTribunais)
+      .values({ credencialId, tribunal, grau, ...valores })
+      .onDuplicateKeyUpdate({ set: valores });
+  } catch {
+    /* registro de diagnóstico não derruba a operação */
+  }
+}
+
+/**
+ * A credencial foi apagada pelo dono?
+ *
+ * Consultado antes de qualquer escrita automática. O soft delete existe pra
+ * preservar auditoria, mas isso só funciona se nada além do próprio usuário
+ * puder tirar a linha desse estado.
+ */
+export async function estaRemovida(credencialId: number): Promise<boolean> {
+  const db = await getDb();
+  if (!db) return false;
+  const [row] = await db
+    .select({ status: cofreCredenciais.status })
+    .from(cofreCredenciais)
+    .where(eq(cofreCredenciais.id, credencialId))
+    .limit(1);
+  return row?.status === "removida";
+}
+
 async function religarMonitoramentosDaCredencial(credencialId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -157,6 +209,14 @@ export async function atualizarStatusAposLogin(
   if (!db) return;
   const agora = new Date();
 
+  // `removida` é decisão do usuário, e nenhuma rotina automática pode
+  // desfazê-la de raspão. Sem este filtro, uma tentativa de login numa
+  // credencial apagada trocava o status por "ativa"/"erro" e ela VOLTAVA pra
+  // lista do cofre — foi assim que uma credencial removida reapareceu sozinha
+  // em produção, arrastando junto os monitoramentos que ainda apontavam pra
+  // ela.
+  const naoRemovida = and(eq(cofreCredenciais.id, id), ne(cofreCredenciais.status, "removida"));
+
   if (resultado.ok) {
     await db
       .update(cofreCredenciais)
@@ -166,10 +226,13 @@ export async function atualizarStatusAposLogin(
         ultimoLoginTentativaEm: agora,
         ultimoErro: null,
       })
-      .where(eq(cofreCredenciais.id, id));
+      .where(naoRemovida);
 
     // Auto-cura: sem isto o painel seguia mostrando "credencial expirada"
-    // nos processos mesmo depois da revalidação dar certo.
+    // nos processos mesmo depois da revalidação dar certo. Religar
+    // monitoramento de credencial removida seria pior que não religar: eles
+    // voltariam a rodar apontando pra uma credencial que o dono apagou.
+    if (await estaRemovida(id)) return;
     const religados = await religarMonitoramentosDaCredencial(id);
     log.info(
       { credencialId: id, monitoramentosReligados: religados },
@@ -183,7 +246,7 @@ export async function atualizarStatusAposLogin(
         ultimoLoginTentativaEm: agora,
         ultimoErro: resultado.mensagemErro?.slice(0, 1000) ?? "Falha desconhecida no login",
       })
-      .where(eq(cofreCredenciais.id, id));
+      .where(naoRemovida);
     log.warn(
       { credencialId: id, erro: resultado.mensagemErro?.slice(0, 200) },
       "[cofre] login falhou — credencial marcada como erro",
@@ -201,22 +264,35 @@ export async function atualizarStatusAposLogin(
  */
 export async function salvarSessao(
   credencialId: number,
+  tribunal: string,
   storageStateJson: string,
   expiraEmEstimado?: Date,
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
+  // Um login que já estava em voo quando o dono apagou a credencial chegaria
+  // aqui depois da remoção e gravaria a sessão de volta — cookie válido por
+  // 90 minutos de um login que não deveria mais existir. `recuperarSessao` se
+  // recusaria a entregá-lo, mas ele ficaria no banco sem dono.
+  if (await estaRemovida(credencialId)) {
+    log.warn({ credencialId }, "[cofre] sessão descartada: credencial removida durante o login");
+    return;
+  }
+
   const enc = encrypt(storageStateJson);
   const agora = new Date();
 
-  // Apaga sessões anteriores da mesma credencial — política mais simples
-  // e evita lookup confuso ("qual a mais recente?"). Quando precisar de
-  // múltiplas sessões simultâneas (ex: desktop + mobile), revisar.
-  await db.delete(cofreSessoes).where(eq(cofreSessoes.credencialId, credencialId));
+  // Apaga só a sessão ANTERIOR DESTE tribunal. Apagar todas as da credencial
+  // era a política antiga, de quando uma credencial valia num estado só —
+  // mantê-la agora faria o acesso a MG derrubar a sessão viva do CE.
+  await db
+    .delete(cofreSessoes)
+    .where(and(eq(cofreSessoes.credencialId, credencialId), eq(cofreSessoes.tribunal, tribunal)));
 
   await db.insert(cofreSessoes).values({
     credencialId,
+    tribunal,
     cookiesEnc: enc.encrypted,
     cookiesIv: enc.iv,
     cookiesTag: enc.tag,
@@ -247,15 +323,29 @@ export async function salvarSessao(
  */
 export async function recuperarSessao(
   credencialId: number,
+  tribunal: string,
   options: { tentarRelogin?: boolean; forcarRelogin?: boolean } = {},
 ): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
 
+  // A sessão sobrevive à remoção da credencial: são tabelas separadas, e o
+  // cookie continua válido por até 90 minutos. Sem esta checagem, o sistema
+  // seguia entrando no portal do tribunal com um login que o dono apagou —
+  // o bloqueio no relogin não alcançava esse caso, porque sessão viva nem
+  // chega a tentar relogin.
+  if (await estaRemovida(credencialId)) {
+    log.warn({ credencialId }, "[cofre] sessão negada: credencial removida");
+    return null;
+  }
+
+  // Sessão DAQUELE tribunal. Linha antiga, com `tribunal` nulo, fica de fora
+  // de propósito: cookie de portal desconhecido não dá pra reaproveitar sem
+  // arriscar mandar o do CE pro portal de MG.
   const [row] = await db
     .select()
     .from(cofreSessoes)
-    .where(eq(cofreSessoes.credencialId, credencialId))
+    .where(and(eq(cofreSessoes.credencialId, credencialId), eq(cofreSessoes.tribunal, tribunal)))
     .limit(1);
 
   // Sessão presente e não expirada — caminho feliz (a menos que forcarRelogin,
@@ -285,7 +375,7 @@ export async function recuperarSessao(
 
   if (!options.tentarRelogin) return null;
 
-  return await tentarReloginAutomatico(credencialId);
+  return await tentarReloginAutomatico(credencialId, tribunal);
 }
 
 /**
@@ -299,19 +389,26 @@ export async function recuperarSessao(
 // credencial detectam a sessão caída ao mesmo tempo (ex: "Atualizar todos" com
 // 9 processos), só UM faz o login real; os outros aguardam e reusam a sessão
 // nova. Evita logins simultâneos no PDPJ (rate-limit / códigos 2FA colidindo).
-const reloginEmAndamento = new Map<number, Promise<string | null>>();
+const reloginEmAndamento = new Map<string, Promise<string | null>>();
 
-function tentarReloginAutomatico(credencialId: number): Promise<string | null> {
-  const emAndamento = reloginEmAndamento.get(credencialId);
+function tentarReloginAutomatico(credencialId: number, tribunal: string): Promise<string | null> {
+  // A chave inclui o tribunal: dois estados são dois logins diferentes, e
+  // deduplicar só por credencial faria o segundo esperar pelo primeiro e
+  // receber a sessão do portal errado.
+  const chave = `${credencialId}:${tribunal}`;
+  const emAndamento = reloginEmAndamento.get(chave);
   if (emAndamento) return emAndamento;
-  const promessa = tentarReloginAutomaticoImpl(credencialId).finally(() => {
-    reloginEmAndamento.delete(credencialId);
+  const promessa = tentarReloginAutomaticoImpl(credencialId, tribunal).finally(() => {
+    reloginEmAndamento.delete(chave);
   });
-  reloginEmAndamento.set(credencialId, promessa);
+  reloginEmAndamento.set(chave, promessa);
   return promessa;
 }
 
-async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string | null> {
+async function tentarReloginAutomaticoImpl(
+  credencialId: number,
+  tribunal: string,
+): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
 
@@ -322,14 +419,25 @@ async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string
     .limit(1);
   if (!cred) return null;
 
+  // Credencial apagada não faz login. Não é só higiene de status: seria o
+  // sistema entrando no portal do tribunal com um login que o dono mandou
+  // apagar. Quem chegou aqui foi um monitoramento que ficou apontando pra ela
+  // — o conserto é repontar o monitoramento, não ressuscitar a credencial.
+  if (cred.status === "removida") {
+    log.warn(
+      { credencialId },
+      "[cofre] relogin ignorado: credencial removida — monitoramento ainda aponta pra ela",
+    );
+    return null;
+  }
+
   // Login usa o portal do estado da credencial (config por sistema). Só PJe-TJ
   // PDPJ tem adapter; outros sistemas (e-SAJ, e-Proc, TRT) → sem relogin auto.
-  const cfgTribunal = configPorSistema(cred.sistema);
+  // O portal é o do TRIBUNAL pedido, não o do sistema gravado na credencial:
+  // com alcance nacional (`pje_*`) o sistema não nomeia estado nenhum.
+  const cfgTribunal = getConfigTribunal(tribunal);
   if (!cfgTribunal) {
-    log.info(
-      { credencialId, sistema: cred.sistema },
-      "[cofre] relogin automático não disponível pra esse sistema",
-    );
+    log.info({ credencialId, tribunal }, "[cofre] relogin não disponível pra esse tribunal");
     return null;
   }
 
@@ -356,16 +464,16 @@ async function tentarReloginAutomaticoImpl(credencialId: number): Promise<string
 
     if (resultado.ok && resultado.storageStateJson) {
       const expira = new Date(Date.now() + 90 * 60 * 1000);
-      await salvarSessao(credencialId, resultado.storageStateJson, expira);
+      await salvarSessao(credencialId, tribunal, resultado.storageStateJson, expira);
       await atualizarStatusAposLogin(credencialId, { ok: true });
+      await registrarTribunal(credencialId, tribunal, { ok: true });
       log.info({ credencialId }, "[cofre] relogin automático sucesso — sessão renovada");
       return resultado.storageStateJson;
     }
 
-    await marcarCredencialExpirada(
-      credencialId,
-      `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`,
-    );
+    const motivo = `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`;
+    await registrarTribunal(credencialId, tribunal, { ok: false, motivo });
+    await marcarCredencialExpirada(credencialId, motivo);
     return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -411,6 +519,11 @@ export async function marcarCredencialExpirada(
     .where(eq(cofreCredenciais.id, credencialId))
     .limit(1);
 
+  // Credencial apagada não expira: ela já não existe pro usuário. Marcar
+  // "expirada" aqui tirava a linha de `removida` e a fazia reaparecer no
+  // cofre — e ainda notificava o dono sobre uma credencial que ele apagou.
+  if (!anterior || anterior.status === "removida") return;
+
   await db
     .update(cofreCredenciais)
     .set({
@@ -418,7 +531,10 @@ export async function marcarCredencialExpirada(
       ultimoLoginTentativaEm: new Date(),
       ultimoErro: motivo.slice(0, 1000),
     })
-    .where(eq(cofreCredenciais.id, credencialId));
+    // Repetido no WHERE, e não só na checagem acima: o login demora dezenas de
+    // segundos, e nesse intervalo o dono pode ter apagado a credencial. Quem
+    // decide é o banco no instante da escrita.
+    .where(and(eq(cofreCredenciais.id, credencialId), ne(cofreCredenciais.status, "removida")));
   log.warn({ credencialId, motivo: motivo.slice(0, 200) }, "[cofre] credencial marcada como expirada");
 
   if (anterior && (anterior.status === "ativa" || anterior.status === "validando")) {

@@ -401,7 +401,9 @@ export interface SmartflowExecutores {
     proativo?: boolean;
     /** Disparo proativo automático: exige opt-in do contato. */
     exigirOptin?: boolean;
-  }) => Promise<boolean>;
+    // boolean é compat (mocks antigos); { ok, erro } carrega o motivo real
+    // da recusa (guard anti-ban / Meta) pro erro persistido na execução.
+  }) => Promise<boolean | { ok: boolean; erro?: string }>;
   /**
    * Envia um template (HSM) WhatsApp aprovado da Meta pelo canal oficial
    * (Cloud API). Opcional: ambientes/mocks sem Cloud API não implementam —
@@ -1066,9 +1068,26 @@ async function handleIaAtendente(
     consultas?: string[];
     consultaConfig?: { responsavelModo?: "auto" | "fixo"; responsavelId?: number; duracaoMin?: number; dias?: number };
     acumularSegundos?: number;
+    timeoutMinutos?: number;
   };
   if (typeof cfg.agenteId !== "number" || cfg.agenteId <= 0) {
     return { sucesso: false, contexto: ctx, mensagemErro: "Atendente IA: escolha um agente." };
+  }
+
+  // TIMEOUT: o cliente sumiu e o prazo estourou. Sai pela saída
+  // "nao_respondeu" SEM re-rodar o agente — re-executar aqui gerava uma
+  // resposta nova pra ninguém (e antes deste ramo era exatamente o que
+  // acontecia). Sem seta ligada, resolverProximo devolve null e o fluxo
+  // termina — comportamento de sempre, escolhido pelo dono como padrão.
+  if (
+    (ctx as any).__resumindoWaitClienteId === passo.clienteId &&
+    (ctx as any).__resumindoWaitMotivo === "timeout"
+  ) {
+    const novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+    delete (novoCtx as any).aguardandoNodeClienteId;
+    return { sucesso: true, contexto: novoCtx, proximoRamoId: "nao_respondeu" };
   }
   const acumularSegundos = Number(cfg.acumularSegundos) > 0 ? Math.floor(Number(cfg.acumularSegundos)) : 0;
   const ferramentas = Array.isArray(cfg.ferramentas) ? cfg.ferramentas.filter((f) => typeof f === "string") : [];
@@ -1184,7 +1203,9 @@ async function handleIaAtendente(
         mensagensEnviadas: resposta ? [...enviadas, resposta] : enviadas,
         aguardandoMensagem: true,
         aguardandoContatoId: contatoId,
-        aguardandoTimeoutMinutos: 1440,
+        // Teto de 1440 (24h) por decisão do dono: dentro da janela do
+        // WhatsApp. Ausente/inválido = 1440 (comportamento de sempre).
+        aguardandoTimeoutMinutos: Math.max(1, Math.min(1440, Number(cfg.timeoutMinutos) || 1440)),
         aguardandoNodeClienteId: passo.clienteId ?? null,
         aguardandoAcumularSegundos: acumularSegundos,
       },
@@ -1338,6 +1359,118 @@ async function enviarTemplateWhatsApp(
   return {
     sucesso: true,
     contexto: { ...ctx, mensagensEnviadas: [...enviadas, `[template: ${nome}]`] },
+  };
+}
+
+/**
+ * Passo `whatsapp_enviar_template` — envia um template aprovado e PAUSA
+ * esperando a resposta, ramificando pelos botões quick-reply (cond_<id>).
+ * É o "Pergunta com opções" de fora da janela de 24h: reusa o envio de
+ * template do `whatsapp_enviar` (componentes/validação/opt-in) e a pausa
+ * do `whatsapp_pergunta_opcoes` (timeout → sem_resposta; texto → fuzzy).
+ *
+ * Anti-punição: categoria MARKETING só sai com `confirmoMarketing` — a
+ * Meta limita marketing por contato/dia e denúncia derruba a qualidade.
+ */
+async function handleWhatsappEnviarTemplate(
+  passo: Passo,
+  ctx: SmartflowContexto,
+  exec: SmartflowExecutores,
+): Promise<PassoResultado> {
+  const cfg = passo.config as {
+    templateNome?: string;
+    templateCategoria?: string;
+    confirmoMarketing?: boolean;
+    opcoes?: Array<{ id: string; titulo: string; index: number }>;
+    timeoutMinutos?: number;
+    fallbackTexto?: "fuzzy" | "ignorar";
+  };
+  const opcoes = Array.isArray(cfg.opcoes) ? cfg.opcoes.filter((o) => o?.id) : [];
+
+  // MODO RETOMADA — mesma decisão de ramo da Pergunta com opções.
+  const resumindoEsseNo = (ctx as any).__resumindoWaitClienteId === passo.clienteId;
+  if (resumindoEsseNo) {
+    const motivo = (ctx as any).__resumindoWaitMotivo as string | undefined;
+    const novoCtx: SmartflowContexto = { ...ctx };
+    delete (novoCtx as any).__resumindoWaitClienteId;
+    delete (novoCtx as any).__resumindoWaitMotivo;
+    delete (novoCtx as any).aguardandoNodeClienteId;
+
+    if (motivo === "timeout") {
+      return { sucesso: true, contexto: novoCtx, proximoRamoId: "sem_resposta" };
+    }
+    // Clique no botão do template: o webhook chega como type "button" com
+    // {payload, text} e o parse injeta respostaOpcao — payload é o id (qrN).
+    const reply = (novoCtx as any).respostaOpcao as { id?: string; titulo?: string } | undefined;
+    if (reply && typeof reply.id === "string" && reply.id) {
+      // Payload conhecido roteia direto; payload estranho (ex: clique num
+      // template ANTIGO de outra conversa) cai no fuzzy pelo título.
+      if (opcoes.some((o) => o.id === reply.id)) {
+        return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${reply.id}` };
+      }
+      const porTitulo = reply.titulo
+        ? encontrarMatchPorTitulo(reply.titulo, opcoes.map((o) => ({ id: o.id, titulo: o.titulo })))
+        : null;
+      if (porTitulo) return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${porTitulo.id}` };
+    }
+    const fallback = cfg.fallbackTexto ?? "fuzzy";
+    if (fallback === "fuzzy") {
+      const texto = String((novoCtx as any).respostaUsuario || "").trim();
+      const match = encontrarMatchPorTitulo(texto, opcoes.map((o) => ({ id: o.id, titulo: o.titulo })));
+      if (match) return { sucesso: true, contexto: novoCtx, proximoRamoId: `cond_${match.id}` };
+    }
+    return { sucesso: true, contexto: novoCtx, proximoRamoId: "outra_resposta" };
+  }
+
+  // MODO ENVIO.
+  const contatoId = ctx.contatoId;
+  if (typeof contatoId !== "number") {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Enviar template: sem contato no contexto — use um gatilho/passo que traga o contato." };
+  }
+  if (!String(cfg.templateNome || "").trim()) {
+    return { sucesso: false, contexto: ctx, mensagemErro: "Enviar template: escolha um template aprovado no passo." };
+  }
+  const categoria = String(cfg.templateCategoria || "").toUpperCase();
+  if (categoria === "MARKETING" && cfg.confirmoMarketing !== true) {
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro:
+        "Template de MARKETING exige a confirmação extra no passo (a Meta limita marketing por contato/dia e denúncias derrubam a qualidade do número). Pra follow-up, prefira um template Utility.",
+    };
+  }
+
+  // Injeta o payload de cada quick-reply (qrN) — é ele que volta no clique
+  // e permite rotear cond_<id> sem depender do texto do botão.
+  const configEnvio = {
+    ...passo.config,
+    templateBotoes: [
+      ...(Array.isArray((passo.config as any).templateBotoes)
+        ? (passo.config as any).templateBotoes.filter((b: any) => String(b?.tipo).toUpperCase() !== "QUICK_REPLY")
+        : []),
+      ...opcoes.map((o) => ({ index: o.index, tipo: "QUICK_REPLY", valor: o.id })),
+    ],
+  };
+  const envio = await enviarTemplateWhatsApp({ ...passo, config: configEnvio }, ctx, exec);
+  if (!envio.sucesso) return envio;
+
+  // Sem botão configurado não há o que esperar — segue como envio simples
+  // pela saída default (fluxo pode continuar ou terminar ali).
+  if (opcoes.length === 0) {
+    return { sucesso: true, contexto: envio.contexto, proximoRamoId: "default" };
+  }
+
+  const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 1440));
+  return {
+    sucesso: true,
+    parar: true,
+    contexto: {
+      ...envio.contexto,
+      aguardandoMensagem: true,
+      aguardandoContatoId: contatoId,
+      aguardandoTimeoutMinutos: timeoutMinutos,
+      aguardandoNodeClienteId: passo.clienteId ?? null,
+    },
   };
 }
 
@@ -1653,8 +1786,9 @@ async function handleWhatsappPerguntaOpcoes(
   const veioDeMensagem =
     typeof ctx.canalId === "number" && ctx.canalId > 0 && (ctx as any).__retomadaPorTimeout !== true;
   let ok = false;
+  let erroEnvio: string | undefined;
   try {
-    ok = await exec.enviarWhatsAppInteractive({
+    const r = await exec.enviarWhatsAppInteractive({
       telefone,
       modo,
       body: bodyInterp,
@@ -1667,11 +1801,21 @@ async function handleWhatsappPerguntaOpcoes(
       proativo: !veioDeMensagem,
       exigirOptin: !veioDeMensagem,
     });
+    ok = typeof r === "boolean" ? r : r.ok;
+    erroEnvio = typeof r === "boolean" ? undefined : r.erro;
   } catch (err: any) {
     return { sucesso: false, contexto: ctx, mensagemErro: `WhatsApp interativo: ${err?.message || String(err)}` };
   }
   if (!ok) {
-    return { sucesso: false, contexto: ctx, mensagemErro: "Falha ao enviar mensagem interativa (verifique canal Cloud API conectado)." };
+    // Mostra o motivo REAL (guard anti-ban / canal / recusa da Meta) — o
+    // genérico só fica quando o executor não soube dizer o porquê.
+    return {
+      sucesso: false,
+      contexto: ctx,
+      mensagemErro: erroEnvio
+        ? `Falha ao enviar mensagem interativa: ${erroEnvio}`
+        : "Falha ao enviar mensagem interativa (verifique canal Cloud API conectado).",
+    };
   }
 
   const timeoutMinutos = Math.max(1, Math.min(7 * 24 * 60, Number(cfg.timeoutMinutos) || 60));
@@ -3029,6 +3173,7 @@ const HANDLERS: Record<string, (p: Passo, c: SmartflowContexto, e: SmartflowExec
   whatsapp_enviar: handleWhatsAppEnviar,
   whatsapp_aguardar_resposta: handleWhatsappAguardarResposta,
   whatsapp_pergunta_opcoes: handleWhatsappPerguntaOpcoes,
+  whatsapp_enviar_template: handleWhatsappEnviarTemplate,
   transferir: handleTransferir,
   distribuir_atendimento: handleDistribuirAtendimento,
   condicional: handleCondicional,
@@ -3276,6 +3421,21 @@ async function walkInterno(opts: {
       modoGrafo,
       passos,
     );
+
+    // Handler escolheu um ramo mas a seta não existe no grafo → o fluxo vai
+    // encerrar AQUI sem resposta nenhuma. É legítimo (fim intencional), mas é
+    // também o jeito clássico de "cliquei no botão e nada aconteceu" — deixa
+    // rastro no log pro diagnóstico não depender de reproduzir.
+    if (
+      atual === null &&
+      resultado.proximoRamoId &&
+      passoAtual.proximoSe &&
+      !passoAtual.proximoSe[resultado.proximoRamoId]
+    ) {
+      console.warn(
+        `[smartflow] fluxo encerrou sem seta pro ramo "${resultado.proximoRamoId}" no passo ${passoAtual.tipo} (id=${passoAtual.id}) — se era pra responder algo, ligue a saída desse ramo no editor`,
+      );
+    }
   }
 
   return { sucesso: true, contexto, passosExecutados: estadoGlobal.passosExecutados, respostas };

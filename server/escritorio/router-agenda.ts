@@ -16,10 +16,11 @@ import { getDb } from "../db";
 import { toIsoString } from "../_core/dates";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { agendamentos, agendamentoLembretes, agendamentoAnexos, tarefas, contatos, users, colaboradores, escritorios, setores } from "../../drizzle/schema";
-import { eq, and, desc, gte, lt, lte, or, like, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, lt, lte, or, like, asc, inArray, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
+import { validarResponsavel } from "./atribuicao-responsavel";
 import {
   listarBloqueios,
   criarBloqueio,
@@ -217,9 +218,24 @@ export const agendaRouter = router({
 
       // Teto de eventos: com intervalo de datas (calendário/Período) o resultado
       // já é limitado pelo período, então usa um teto alto pra não cortar dias
-      // de meses cheios (>200 eventos sumia do dia 22 em diante). Sem intervalo
-      // (lista aberta) mantém 200 como proteção contra acervo gigante.
+      // de meses cheios (>200 eventos sumia do dia 22 em diante).
       const limiteEventos = input?.dataInicio && input?.dataFim ? 3000 : 200;
+
+      /**
+       * Sem janela de datas — que é o caso da aba Eventos — o teto era
+       * aplicado sobre `ORDER BY data ASC`. Ou seja: sobravam os 200 MAIS
+       * ANTIGOS, e tudo que viesse depois era descartado em silêncio,
+       * inclusive o prazo que a pessoa tinha acabado de criar. O calendário
+       * passa janela, cai no teto alto e mostra — daí "entra no calendário,
+       * não aparece na lista".
+       *
+       * Agora o corte é feito pelos dois lados a partir de hoje: os próximos
+       * em ordem crescente e os passados em ordem decrescente. O que for
+       * cortado é arqueologia, nunca o que está por vir.
+       */
+      const semJanela = !(input?.dataInicio && input?.dataFim);
+      const inicioDeHoje = inicioDoDiaNoFuso(dataHojeBR(fusoHorario), fusoHorario);
+      const TETO_LADO = 300;
 
       // ─── COMPROMISSOS (agendamentos) ────────────────────────────────────
       if (input?.fonte !== "tarefa") {
@@ -262,12 +278,42 @@ export const agendaRouter = router({
           agConditions.push(or(like(agendamentos.titulo, b), like(agendamentos.descricao, b)));
         }
 
-        const ags = await db.select().from(agendamentos)
-          .where(and(...agConditions))
-          .orderBy(asc(agendamentos.dataInicio))
-          .limit(limiteEventos);
+        const ags = semJanela
+          ? [
+              ...(await db.select().from(agendamentos)
+                .where(and(...agConditions, gte(agendamentos.dataInicio, inicioDeHoje)))
+                .orderBy(asc(agendamentos.dataInicio))
+                .limit(TETO_LADO)),
+              ...(await db.select().from(agendamentos)
+                .where(and(...agConditions, lt(agendamentos.dataInicio, inicioDeHoje)))
+                .orderBy(desc(agendamentos.dataInicio))
+                .limit(TETO_LADO)),
+            ]
+          : await db.select().from(agendamentos)
+              .where(and(...agConditions))
+              .orderBy(asc(agendamentos.dataInicio))
+              .limit(limiteEventos);
+
+        // Nome (e telefone de reserva) do cliente vinculado. A tarefa já
+        // devolvia o nome; o compromisso devolvia só o `contatoId`, que a tela
+        // não sabe virar nome — daí o bloco "Cliente" nunca aparecer num
+        // compromisso. O telefone do próprio compromisso continua tendo
+        // prioridade: quem digitou um número diferente ali fez de propósito.
+        const contatoIdsAg = [...new Set(ags.filter(a => a.contatoId).map(a => a.contatoId!))];
+        const contatosAg = new Map<number, { nome: string; telefone: string | null }>();
+        if (contatoIdsAg.length > 0) {
+          const rows = await db
+            .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
+            .from(contatos)
+            .where(and(
+              eq(contatos.escritorioId, escritorioId),
+              inArray(contatos.id, contatoIdsAg),
+            ));
+          for (const c of rows) contatosAg.set(c.id, { nome: c.nome, telefone: c.telefone });
+        }
 
         for (const ag of ags) {
+          const doContato = ag.contatoId ? contatosAg.get(ag.contatoId) : undefined;
           eventos.push({
             id: ag.id,
             fonte: "compromisso",
@@ -284,7 +330,8 @@ export const agendaRouter = router({
             responsavelId: ag.responsavelId,
             responsavelNome: getColabName(ag.responsavelId),
             contatoId: ag.contatoId,
-            contatoTelefone: ag.contatoTelefone,
+            contatoNome: doContato?.nome,
+            contatoTelefone: ag.contatoTelefone || doContato?.telefone || null,
             processoId: ag.processoId,
             cor: ag.corHex || CORES_TIPO[ag.tipo] || "#3b82f6",
             createdAt: toIsoString(ag.createdAt) ?? "",
@@ -335,10 +382,26 @@ export const agendaRouter = router({
           tConditions.push(or(like(tarefas.titulo, b), like(tarefas.descricao, b)));
         }
 
-        const trs = await db.select().from(tarefas)
-          .where(and(...tConditions))
-          .orderBy(asc(tarefas.dataVencimento))
-          .limit(limiteEventos);
+        const trs = semJanela
+          ? [
+              ...(await db.select().from(tarefas)
+                .where(and(
+                  ...tConditions,
+                  // Tarefa sem vencimento cai aqui de propósito: `lt`/`gte`
+                  // descartam NULL nos dois lados, e ela sumiria da lista.
+                  or(gte(tarefas.dataVencimento, inicioDeHoje), isNull(tarefas.dataVencimento)),
+                ))
+                .orderBy(asc(tarefas.dataVencimento))
+                .limit(TETO_LADO)),
+              ...(await db.select().from(tarefas)
+                .where(and(...tConditions, lt(tarefas.dataVencimento, inicioDeHoje)))
+                .orderBy(desc(tarefas.dataVencimento))
+                .limit(TETO_LADO)),
+            ]
+          : await db.select().from(tarefas)
+              .where(and(...tConditions))
+              .orderBy(asc(tarefas.dataVencimento))
+              .limit(limiteEventos);
 
         // Buscar nomes dos contatos vinculados
         const contatoIds = [...new Set(trs.filter(t => t.contatoId).map(t => t.contatoId!))];
@@ -773,6 +836,8 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
+      await validarResponsavel(db, perm, input.responsavelId);
+
       // Se o compromisso é vinculado a um cliente, e o usuário não definiu
       // explicitamente um responsável, atribui automaticamente ao
       // responsável do próprio cliente — assim o agendamento "pertence"
@@ -834,6 +899,8 @@ export const agendaRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      await validarResponsavel(db, perm, input.responsavelId);
 
       // Se vinculada a cliente e sem responsável explícito, herda do cliente
       let responsavelId = input.responsavelId;
@@ -952,6 +1019,7 @@ export const agendaRouter = router({
       tipo: z.enum(["prazo_processual", "audiencia", "reuniao_comercial", "follow_up", "outro"]).optional(),
       local: z.string().max(512).nullable().optional(),
       prioridade: z.enum(["baixa", "normal", "alta", "critica", "urgente"]).optional(),
+      responsavelId: z.number().nullable().optional(),
       contatoId: z.number().nullable().optional(),
       contatoTelefone: z.string().max(64).nullable().optional(),
       processoId: z.number().nullable().optional(),
@@ -962,22 +1030,30 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      // Ownership check pra quem só pode editar próprios
+      // Ownership check pra quem só pode editar próprios.
+      //
+      // Vale responsável OU criador, igual ao `excluir` logo abaixo. Só
+      // responsável abria um buraco alcançável hoje: vincular um cliente de
+      // outra pessoa passa o evento pra ela na hora da criação (herança que
+      // já existe), e quem acabou de escrever perdia o direito de corrigir o
+      // que escreveu — mas continuava podendo excluir.
       if (!perm.verTodos) {
         if (input.fonte === "compromisso") {
-          const [r] = await db.select({ responsavelId: agendamentos.responsavelId })
+          const [r] = await db.select({ responsavelId: agendamentos.responsavelId, criadoPorId: agendamentos.criadoPorId })
             .from(agendamentos).where(and(eq(agendamentos.id, input.id), eq(agendamentos.escritorioId, perm.escritorioId))).limit(1);
-          if (!r || r.responsavelId !== perm.colaboradorId) {
+          if (!r || (r.responsavelId !== perm.colaboradorId && r.criadoPorId !== perm.colaboradorId)) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar seus próprios compromissos." });
           }
         } else {
-          const [r] = await db.select({ responsavelId: tarefas.responsavelId })
+          const [r] = await db.select({ responsavelId: tarefas.responsavelId, criadoPor: tarefas.criadoPor })
             .from(tarefas).where(and(eq(tarefas.id, input.id), eq(tarefas.escritorioId, perm.escritorioId))).limit(1);
-          if (!r || r.responsavelId !== perm.colaboradorId) {
+          if (!r || (r.responsavelId !== perm.colaboradorId && r.criadoPor !== perm.colaboradorId)) {
             throw new TRPCError({ code: "FORBIDDEN", message: "Você só pode editar suas próprias tarefas." });
           }
         }
       }
+
+      await validarResponsavel(db, perm, input.responsavelId);
 
       if (input.fonte === "compromisso") {
         const updates: Record<string, unknown> = {};
@@ -991,6 +1067,7 @@ export const agendaRouter = router({
           updates.corHex = CORES_TIPO[input.tipo] || "#3b82f6";
         }
         if (input.local !== undefined) updates.local = input.local;
+        if (input.responsavelId !== undefined) updates.responsavelId = input.responsavelId;
         if (input.prioridade !== undefined && input.prioridade !== "urgente") updates.prioridade = input.prioridade;
         if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
         if (input.contatoTelefone !== undefined) updates.contatoTelefone = input.contatoTelefone;
@@ -1003,6 +1080,7 @@ export const agendaRouter = router({
         if (input.titulo !== undefined) updates.titulo = input.titulo;
         if (input.descricao !== undefined) updates.descricao = input.descricao;
         if (input.dataInicio !== undefined) updates.dataVencimento = new Date(input.dataInicio);
+        if (input.responsavelId !== undefined) updates.responsavelId = input.responsavelId;
         if (input.prioridade !== undefined && input.prioridade !== "critica") updates.prioridade = input.prioridade;
         if (input.contatoId !== undefined) updates.contatoId = input.contatoId;
         if (input.processoId !== undefined) updates.processoId = input.processoId;
@@ -1073,10 +1151,28 @@ export const agendaRouter = router({
       const db = await getDb();
       if (!db) return [];
 
+      // `agendamento_lembretes` não tem escritorioId — a tenancy vem do pai.
+      // O `removerLembrete` abaixo sempre fez este join; a listagem não fazia,
+      // e aceitava id de agendamento de qualquer escritório.
       const rows = await db
-        .select()
+        .select({
+          id: agendamentoLembretes.id,
+          agendamentoId: agendamentoLembretes.agendamentoId,
+          tipo: agendamentoLembretes.tipo,
+          minutosAntes: agendamentoLembretes.minutosAntes,
+          destinatarioIds: agendamentoLembretes.destinatarioIds,
+          canais: agendamentoLembretes.canais,
+          dispararEm: agendamentoLembretes.dispararEm,
+          enviado: agendamentoLembretes.enviado,
+        })
         .from(agendamentoLembretes)
-        .where(eq(agendamentoLembretes.agendamentoId, input.agendamentoId))
+        .innerJoin(agendamentos, eq(agendamentoLembretes.agendamentoId, agendamentos.id))
+        .where(
+          and(
+            eq(agendamentoLembretes.agendamentoId, input.agendamentoId),
+            eq(agendamentos.escritorioId, perm.escritorioId),
+          ),
+        )
         .orderBy(asc(agendamentoLembretes.minutosAntes));
 
       return rows;
@@ -1249,6 +1345,10 @@ export const agendaRouter = router({
       id: r.id,
       nome: r.nome || r.email || `Colaborador #${r.id}`,
       cargo: r.cargo || null,
+      // Quem está pedindo a lista. O picker de responsável marca essa linha
+      // como "(você)" e a usa como padrão — sem isso a tela teria que
+      // adivinhar por nome, que colide quando há homônimo no escritório.
+      souEu: r.id === perm.colaboradorId,
     }));
   }),
 

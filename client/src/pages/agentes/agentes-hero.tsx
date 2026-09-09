@@ -27,25 +27,25 @@ export function AgentesHero({ onNovo }: { onNovo: () => void }) {
       className="relative overflow-hidden rounded-2xl p-5 border"
       style={{
         background:
-          "linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 50%, rgba(236,72,153,0.06) 100%)",
+          "color-mix(in oklab, var(--primary) 7%, transparent)",
         borderColor: "rgba(139,92,246,0.18)",
       }}
     >
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-600 via-indigo-600 to-blue-600 flex items-center justify-center shadow-md">
+        <div className="w-11 h-11 rounded-xl bg-info flex items-center justify-center shadow-md">
           <BrainCircuit className="h-5 w-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Agentes de IA</h1>
           <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
-            <Sparkles className="h-3 w-3 text-violet-500" />
+            <Sparkles className="h-3 w-3 text-info" />
             <span>Templates prontos · Agentes do escritório · Analytics em tempo real</span>
           </p>
         </div>
         <Button
           size="sm"
           onClick={onNovo}
-          className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md"
+          className="bg-info shadow-md"
         >
           <Plus className="h-4 w-4 mr-1.5" />
           Novo agente
@@ -91,10 +91,10 @@ function KpiCard({
   label: string;
 }) {
   const cores = {
-    violet: { bg: "bg-violet-100 dark:bg-violet-950/40", text: "text-violet-700 dark:text-violet-300" },
-    emerald: { bg: "bg-emerald-100 dark:bg-emerald-950/40", text: "text-emerald-700 dark:text-emerald-300" },
-    amber: { bg: "bg-amber-100 dark:bg-amber-950/40", text: "text-amber-700 dark:text-amber-300" },
-    fuchsia: { bg: "bg-fuchsia-100 dark:bg-fuchsia-950/40", text: "text-fuchsia-700 dark:text-fuchsia-300" },
+    violet: { bg: "bg-info-bg", text: "text-info-fg" },
+    emerald: { bg: "bg-success-bg", text: "text-success-fg" },
+    amber: { bg: "bg-warning-bg", text: "text-warning-fg" },
+    fuchsia: { bg: "bg-danger-bg", text: "text-danger-fg" },
   } as const;
   const c = cores[cor];
   return (

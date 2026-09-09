@@ -120,6 +120,15 @@ export interface CofreCredencialView {
   tem2fa: boolean;
   status: StatusCredencial;
   ultimoLoginSucessoEm: string | null;
+  /**
+   * Última TENTATIVA, dando certo ou não.
+   *
+   * Separado do sucesso porque a tela mostrava só o sucesso sob o rótulo
+   * "última validação": uma credencial que falhou hoje exibia a data do
+   * último acerto, semanas atrás, ao lado da mensagem de erro — e parecia
+   * que ela tinha validado bem naquele dia.
+   */
+  ultimoLoginTentativaEm: string | null;
   ultimoErro: string | null;
   criadoEm: string;
   atualizadoEm: string;

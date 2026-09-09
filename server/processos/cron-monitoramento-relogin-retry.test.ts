@@ -70,7 +70,7 @@ describe("poll movimentações — auto-relogin quando a sessão morre no uso", 
     await pollarUmMonitoramentoMovs(MON);
 
     expect(recuperarSessao).toHaveBeenCalledTimes(2);
-    expect(recuperarSessao).toHaveBeenNthCalledWith(2, 10, {
+    expect(recuperarSessao).toHaveBeenNthCalledWith(2, 10, "tjce", {
       tentarRelogin: true,
       forcarRelogin: true,
     });

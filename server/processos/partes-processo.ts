@@ -10,7 +10,9 @@
  * outra coisa: é assim que o advogado reconhece o caso.
  */
 
-export type PoloParte = "ativo" | "passivo" | "terceiro";
+import { lerPolo, type PoloParte } from "../../shared/polo-parte";
+
+export type { PoloParte };
 
 export type ParteResumo = {
   nome: string;
@@ -152,11 +154,9 @@ export function parsearPartes(json: string | null | undefined): ParteResumo[] {
     // Se a limpeza levar tudo (linha só com documento, por exemplo), fica o
     // original: nome estranho é melhor que parte sumida.
     const nome = limparNomeParte(bruto) || bruto;
-    const polo: PoloParte =
-      o?.polo === "passivo" ? "passivo" : o?.polo === "terceiro" ? "terceiro" : "ativo";
     out.push({
       nome: nome.slice(0, 160),
-      polo,
+      polo: lerPolo(o?.polo),
       documento:
         (typeof o?.documento === "string" ? o.documento : null) ?? documentoNoNome(bruto),
       papel: extrairPapel(bruto),

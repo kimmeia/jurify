@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Bot, Plus, Edit, Trash2, Upload, Link2, FileText, FileIcon, Loader2,
-  Send, Sparkles, AlertTriangle, CheckCircle2, ExternalLink, BrainCircuit, Play, Scale,
+  Bot, Plus, Edit, Trash2, Link2, FileText, FileIcon, Loader2,
+  Send, Sparkles, AlertTriangle, ExternalLink, BrainCircuit, Play,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -439,7 +439,7 @@ function TreinamentoDialog({
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-violet-600" />
+            <BrainCircuit className="h-5 w-5 text-info-fg" />
             Treinamento: {agente?.nome || "..."}
           </DialogTitle>
           <DialogDescription>
@@ -494,11 +494,11 @@ function TreinamentoDialog({
                     className="flex items-center gap-2 border rounded-md p-2 text-xs"
                   >
                     {d.tipo === "arquivo" ? (
-                      <FileIcon className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <FileIcon className="h-3.5 w-3.5 text-info-fg shrink-0" />
                     ) : d.tipo === "link" ? (
-                      <Link2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <Link2 className="h-3.5 w-3.5 text-success-fg shrink-0" />
                     ) : (
-                      <FileText className="h-3.5 w-3.5 text-violet-600 shrink-0" />
+                      <FileText className="h-3.5 w-3.5 text-info-fg shrink-0" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{d.nome}</p>
@@ -675,9 +675,9 @@ function TreinamentoDialog({
             </div>
 
             {testeResposta && (
-              <div className="border rounded-lg p-4 bg-violet-500/5 border-violet-500/20 space-y-2">
+              <div className="border rounded-lg p-4 bg-info/5 border-info/30 space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label className="flex items-center gap-1.5 text-violet-700">
+                  <Label className="flex items-center gap-1.5 text-info-fg">
                     <Sparkles className="h-3.5 w-3.5" />
                     Resposta do agente
                   </Label>
@@ -730,78 +730,23 @@ export default function AdminAgentesIA() {
     onError: (err) => toast.error("Erro", { description: err.message }),
   });
 
-  // Base jurídica (RAG) do Agente Jurídico — popular/indexar com 1 clique.
-  const { data: baseStatus, refetch: refetchBase } = (trpc as any).juridico.statusBaseGlobal.useQuery(undefined, { retry: false });
-  const seedBaseMut = (trpc as any).juridico.seedBaseRevisional.useMutation({
-    onSuccess: (r: any) => {
-      toast.success("Base jurídica atualizada", {
-        description: `${r.inseridas} nova(s) fonte(s), ${r.indexadas} indexada(s).${r.indexou ? "" : " (sem chave OpenAI — não indexou)"}`,
-      });
-      refetchBase();
-    },
-    onError: (err: any) => toast.error("Erro", { description: err.message }),
-  });
-
-  // Subir decisão/jurisprudência pra base GLOBAL (RAG) — amplia o conhecimento.
-  const [decisaoFile, setDecisaoFile] = useState<File | null>(null);
-  const [decisaoLink, setDecisaoLink] = useState("");
-  const [decisaoId, setDecisaoId] = useState("");
-  const [decisaoTitulo, setDecisaoTitulo] = useState("");
-  const subirDecisaoMut = (trpc as any).juridico.subirDecisao.useMutation({
-    onSuccess: (r: any) => {
-      toast.success("Decisão adicionada à base", { description: `${r.trechos} trecho(s), ${r.indexadas} indexado(s) (via ${r.via}).` });
-      setDecisaoFile(null); setDecisaoLink(""); setDecisaoId(""); setDecisaoTitulo("");
-      refetchBase(); fontesGlobaisQ.refetch();
-    },
-    onError: (err: any) => toast.error("Erro ao subir decisão", { description: err.message }),
-  });
-  async function enviarDecisao() {
-    if (decisaoId.trim().length < 2 || (!decisaoFile && !decisaoLink.trim())) return;
-    let base64: string | undefined; let nomeArquivo: string | undefined;
-    if (decisaoFile) {
-      nomeArquivo = decisaoFile.name;
-      base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
-        reader.onerror = reject;
-        reader.readAsDataURL(decisaoFile);
-      });
-    }
-    subirDecisaoMut.mutate({ identificador: decisaoId.trim(), titulo: decisaoTitulo.trim() || undefined, base64, nomeArquivo, link: decisaoLink.trim() || undefined });
-  }
-
-  // Gestão da base: filtro por área, busca, editar/excluir.
-  const [baseArea, setBaseArea] = useState<string>("");
-  const [baseBusca, setBaseBusca] = useState("");
-  const fontesGlobaisQ = (trpc as any).juridico.listarFontesGlobais.useQuery(
-    { area: baseArea || undefined, busca: baseBusca.trim() || undefined },
-    { retry: false },
-  );
-  const [fonteEdit, setFonteEdit] = useState<any | null>(null);
-  const editarFonteMut = (trpc as any).juridico.editarFonteGlobal.useMutation({
-    onSuccess: () => { toast.success("Fonte atualizada"); setFonteEdit(null); fontesGlobaisQ.refetch(); refetchBase(); },
-    onError: (e: any) => toast.error("Erro", { description: e.message }),
-  });
-  const [fonteExcluir, setFonteExcluir] = useState<any | null>(null);
-  const excluirFonteMut = (trpc as any).juridico.excluirFonteGlobal.useMutation({
-    onSuccess: () => { toast.success("Fonte excluída"); setFonteExcluir(null); fontesGlobaisQ.refetch(); refetchBase(); },
-    onError: (e: any) => toast.error("Erro", { description: e.message }),
-  });
-
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-900/40 dark:to-purple-900/40">
-            <BrainCircuit className="h-6 w-6 text-violet-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agentes de IA</h1>
-            <p className="text-muted-foreground mt-1">
-              Crie agentes treináveis que serão usados pelos módulos do JuridFlow (Atendimento, Resumos, etc).
-            </p>
-          </div>
-        </div>
+      {/* A descrição da aba mora no hub (ContextoAba) — aqui só o estado
+          e a ação, numa linha, sem banner ocupando a tela. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          {agentes?.length ?? 0} {(agentes?.length ?? 0) === 1 ? "agente" : "agentes"}
+          {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
+            <span className="ml-2 normal-case tracking-normal font-semibold text-success-fg">
+              ✓ {status.openaiConfigurado && status.anthropicConfigurado
+                ? "OpenAI + Claude conectados"
+                : status.openaiConfigurado
+                  ? "OpenAI conectado"
+                  : "Claude conectado"}
+            </span>
+          )}
+        </p>
         <Button onClick={() => { setEditandoId(null); setNovoOpen(true); }}>
           <Plus className="h-4 w-4 mr-1.5" />
           Novo agente
@@ -810,9 +755,9 @@ export default function AdminAgentesIA() {
 
       {/* Aviso se nenhuma IA estiver configurada */}
       {status && !status.openaiConfigurado && !status.anthropicConfigurado && (
-        <Card className="border-amber-500/30 bg-amber-50/30 dark:bg-amber-950/10">
+        <Card className="border-warning/30 bg-warning-bg/30">
           <CardContent className="pt-6 flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <AlertTriangle className="h-5 w-5 text-warning-fg shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground">Nenhuma IA configurada</p>
               <p className="text-sm text-muted-foreground mt-1">
@@ -827,184 +772,6 @@ export default function AdminAgentesIA() {
           </CardContent>
         </Card>
       )}
-
-      {status && (status.openaiConfigurado || status.anthropicConfigurado) && (
-        <Card className="border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10">
-          <CardContent className="pt-4 pb-4 flex items-center gap-3">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <p className="text-sm text-muted-foreground">
-              {status.openaiConfigurado && status.anthropicConfigurado
-                ? "OpenAI + Claude conectados — agentes GPT e Claude podem ser usados."
-                : status.openaiConfigurado
-                  ? "OpenAI conectado — agentes GPT podem ser testados. Para usar Claude, configure Anthropic."
-                  : "Claude conectado — agentes Claude podem ser testados. Para usar GPT, configure OpenAI."}
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Base jurídica (Agente Jurídico) — popular/indexar */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Scale className="h-4 w-4 text-violet-600" /> Base jurídica — Agente Jurídico
-          </CardTitle>
-          <CardDescription>
-            Súmulas, leis e precedentes usados pra avaliar a chance de sucesso e redigir peças.
-            Popule e indexe (embeddings) uma vez — depois o Agente Jurídico já funciona.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-4">
-          <div className="text-sm">
-            <span className="font-semibold">{baseStatus?.total ?? 0}</span> fontes ·{" "}
-            <span className="font-semibold text-emerald-600">{baseStatus?.indexadas ?? 0}</span> indexadas
-          </div>
-          <Button size="sm" onClick={() => seedBaseMut.mutate()} disabled={seedBaseMut.isPending}>
-            {seedBaseMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
-            Popular / indexar base (revisional)
-          </Button>
-          {(baseStatus?.total ?? 0) > 0 && (baseStatus?.indexadas ?? 0) < (baseStatus?.total ?? 0) && (
-            <span className="text-xs text-amber-600">
-              Há fontes não indexadas — clique pra indexar (precisa de chave OpenAI configurada).
-            </span>
-          )}
-
-          {/* Subir decisão/jurisprudência — amplia o conhecimento do Agente (RAG) */}
-          <div className="w-full border-t pt-3 mt-1">
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-              Subir decisão / jurisprudência
-            </p>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-xs">Identificador *</Label>
-                <Input className="mt-1 h-9" placeholder="Ex.: REsp 1.061.530/RS" value={decisaoId} onChange={(e) => setDecisaoId(e.target.value)} />
-              </div>
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-xs">Título (opcional)</Label>
-                <Input className="mt-1 h-9" placeholder="Resumo curto" value={decisaoTitulo} onChange={(e) => setDecisaoTitulo(e.target.value)} />
-              </div>
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-xs">Link (opcional)</Label>
-                <Input className="mt-1 h-9" placeholder="https://... (súmula/acórdão)" value={decisaoLink} onChange={(e) => setDecisaoLink(e.target.value)} />
-              </div>
-              <input
-                type="file"
-                accept=".pdf,.docx,.txt,.png,.jpg,.jpeg"
-                onChange={(e) => setDecisaoFile(e.target.files?.[0] ?? null)}
-                className="text-xs max-w-[220px]"
-              />
-              <Button size="sm" disabled={(!decisaoFile && !decisaoLink.trim()) || decisaoId.trim().length < 2 || subirDecisaoMut.isPending} onClick={enviarDecisao}>
-                {subirDecisaoMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
-                Subir decisão
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">Arquivo (PDF/DOCX/imagem — Vision), link (súmula/jurisprudência) ou os dois. O conteúdo é lido, fatiado e indexado.</p>
-            <p className="text-[10px] text-muted-foreground mt-1.5">
-              PDF/DOCX/TXT (texto) ou imagem/escaneado (Vision). O conteúdo é fatiado, indexado e passa a valer pra todos os escritórios.
-            </p>
-          </div>
-
-          {/* Gestão das fontes: filtro por área, busca, editar/excluir */}
-          <div className="w-full border-t pt-3 mt-1">
-            <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Fontes da base ({fontesGlobaisQ.data?.fontes?.length ?? 0})</p>
-              <Button size="sm" variant="outline" onClick={() => setFonteEdit({ id: null, tipo: "sumula", identificador: "", orgao: "", area: baseArea || "", titulo: "", texto: "", tags: "" })}>
-                <Plus className="h-3.5 w-3.5 mr-1" /> Nova fonte
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              <button className={"text-[11px] px-2.5 py-1 rounded-full border " + (!baseArea ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea("")}>Todas</button>
-              {(fontesGlobaisQ.data?.areas ?? []).map((a: any) => (
-                <button key={a.area} className={"text-[11px] px-2.5 py-1 rounded-full border " + (baseArea === a.area ? "bg-violet-600 text-white border-violet-600" : "bg-background")} onClick={() => setBaseArea(a.area)}>
-                  {a.area} <span className="opacity-60">{a.n}</span>
-                </button>
-              ))}
-            </div>
-            <Input className="h-9 mb-2" placeholder="Buscar por identificador, texto ou tag…" value={baseBusca} onChange={(e) => setBaseBusca(e.target.value)} />
-            <div className="border rounded-lg divide-y max-h-80 overflow-y-auto">
-              {fontesGlobaisQ.isLoading && <p className="text-xs text-muted-foreground p-3">Carregando…</p>}
-              {(fontesGlobaisQ.data?.fontes ?? []).map((f: any) => (
-                <div key={f.id} className="flex items-start gap-2 p-2.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold truncate">{f.identificador}</span>
-                      <span className="text-[10px] px-1.5 rounded bg-muted">{f.tipo}</span>
-                      <span className="text-[10px] text-muted-foreground">{f.area}</span>
-                      {!f.indexada && <span className="text-[10px] text-amber-600">não indexada</span>}
-                    </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-1">{f.titulo || f.texto}</p>
-                  </div>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => setFonteEdit({ ...f, orgao: f.orgao || "", titulo: f.titulo || "", tags: f.tags || "" })}><Edit className="h-3.5 w-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0 hover:text-rose-600" onClick={() => setFonteExcluir(f)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                </div>
-              ))}
-              {!fontesGlobaisQ.isLoading && (fontesGlobaisQ.data?.fontes?.length ?? 0) === 0 && (
-                <p className="text-xs text-muted-foreground p-3">Nenhuma fonte {baseArea ? `na área "${baseArea}"` : "ainda"}.</p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Editar / criar fonte (dialog) */}
-      <Dialog open={!!fonteEdit} onOpenChange={(o) => !o && setFonteEdit(null)}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{fonteEdit?.id ? "Editar fonte" : "Nova fonte"}</DialogTitle></DialogHeader>
-          {fonteEdit && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                <div><Label className="text-xs">Tipo</Label>
-                  <Select value={fonteEdit.tipo} onValueChange={(v) => setFonteEdit({ ...fonteEdit, tipo: v })}>
-                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sumula">Súmula</SelectItem>
-                      <SelectItem value="lei">Lei / artigo</SelectItem>
-                      <SelectItem value="precedente">Precedente</SelectItem>
-                      <SelectItem value="tese">Tese / modelo</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div><Label className="text-xs">Área</Label><Input className="mt-1" value={fonteEdit.area} onChange={(e) => setFonteEdit({ ...fonteEdit, area: e.target.value })} placeholder="Ex.: revisional_bancaria" /></div>
-              </div>
-              <div><Label className="text-xs">Identificador *</Label><Input className="mt-1" value={fonteEdit.identificador} onChange={(e) => setFonteEdit({ ...fonteEdit, identificador: e.target.value })} placeholder="Ex.: Súmula 297/STJ" /></div>
-              <div><Label className="text-xs">Título</Label><Input className="mt-1" value={fonteEdit.titulo} onChange={(e) => setFonteEdit({ ...fonteEdit, titulo: e.target.value })} /></div>
-              <div><Label className="text-xs">Texto *</Label><Textarea className="mt-1 min-h-[90px]" value={fonteEdit.texto} onChange={(e) => setFonteEdit({ ...fonteEdit, texto: e.target.value })} /></div>
-              <div><Label className="text-xs">Tags</Label><Input className="mt-1" value={fonteEdit.tags} onChange={(e) => setFonteEdit({ ...fonteEdit, tags: e.target.value })} /></div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFonteEdit(null)}>Cancelar</Button>
-            <Button
-              disabled={editarFonteMut.isPending || subirDecisaoMut.isPending || !fonteEdit || fonteEdit.identificador.trim().length < 2 || fonteEdit.texto.trim().length < 3}
-              onClick={() => {
-                if (fonteEdit.id) {
-                  editarFonteMut.mutate({ id: fonteEdit.id, tipo: fonteEdit.tipo, identificador: fonteEdit.identificador.trim(), orgao: fonteEdit.orgao || undefined, area: fonteEdit.area || undefined, titulo: fonteEdit.titulo || undefined, texto: fonteEdit.texto.trim(), tags: fonteEdit.tags || undefined });
-                } else {
-                  subirDecisaoMut.mutate({ identificador: fonteEdit.identificador.trim(), titulo: fonteEdit.titulo || undefined, area: fonteEdit.area || undefined, tipo: fonteEdit.tipo, texto: fonteEdit.texto.trim() }, { onSuccess: () => setFonteEdit(null) });
-                }
-              }}
-            >
-              {(editarFonteMut.isPending || subirDecisaoMut.isPending) ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null} Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Excluir fonte (confirmação) */}
-      <AlertDialog open={!!fonteExcluir} onOpenChange={(o) => !o && setFonteExcluir(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir fonte?</AlertDialogTitle>
-            <AlertDialogDescription>Remove <strong>{fonteExcluir?.identificador}</strong> da base global. O agente deixa de citá-la.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={excluirFonteMut.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={excluirFonteMut.isPending} onClick={(e) => { e.preventDefault(); if (fonteExcluir) excluirFonteMut.mutate({ id: fonteExcluir.id }); }}>
-              {excluirFonteMut.isPending ? "Excluindo…" : "Excluir"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Lista de agentes */}
       {isLoading ? (
@@ -1038,7 +805,7 @@ export default function AdminAgentesIA() {
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2 min-w-0">
-                    <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white shrink-0">
+                    <div className="h-9 w-9 rounded-lg bg-info flex items-center justify-center text-info-on shrink-0">
                       <Bot className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
@@ -1064,7 +831,7 @@ export default function AdminAgentesIA() {
                   {(a.modulosPermitidos || []).slice(0, 3).map((m: string) => (
                     <span
                       key={m}
-                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-700"
+                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-info/10 text-info-fg"
                     >
                       {m}
                     </span>

@@ -96,6 +96,14 @@ export function sistemaCofrePorTribunal(codigoTribunal: string): string | null {
     // E-SAJ — adapters não existem ainda (TJSP, TJSC, TJBA…); deixados aqui
     // como referência futura. Por ora retornam null abaixo pelo `?? null`.
     tjsp: "esaj_tjsp",
+    // Justiça Federal: o PJe dos TRFs entra pelo login nacional do PDPJ, o
+    // mesmo "pje_*". Sem estas linhas o import trataria processo federal como
+    // consulta pública e criaria monitoramento sem credencial — que depois
+    // falharia todo dia por não ter sessão.
+    trf1: "pje_*",
+    trf2: "pje_*",
+    trf3: "pje_*",
+    trf6: "pje_*",
     // TRF-5 e demais tribunais de consulta pública NÃO entram aqui — eles
     // têm motor próprio mas sem cofre (acesso aberto). Retornar null aqui
     // é o sinal pra UI/router não pedir credencial.

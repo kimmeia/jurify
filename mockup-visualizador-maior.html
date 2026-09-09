@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --corpo:#334155; --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --rosa:#e11d48;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); position:relative; }
+
+  /* ── app por trás (fica sob o overlay) ── */
+  .app { position:absolute; inset:0; display:flex; }
+  .side { width:200px; background:#12141c; color:#cbd5e1; padding:14px 0; display:flex; flex-direction:column; flex:0 0 auto; }
+  .logo { display:flex; align-items:center; gap:8px; padding:0 16px 14px; color:#fff; font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .logo .j { width:26px; height:26px; border-radius:8px; background:var(--acento); display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .sgrupo { font-size:8.5px; font-weight:800; letter-spacing:.08em; color:#64748b; padding:10px 16px 4px; }
+  .sitem { display:flex; align-items:center; gap:9px; padding:6.5px 16px; font-size:11.5px; font-weight:500; color:#94a3b8; }
+  .sitem.on { color:#fff; background:#ffffff10; border-left:3px solid var(--acento); padding-left:13px; font-weight:700; }
+  .sitem .bd { margin-left:auto; background:#dc2626; color:#fff; font-size:8.5px; font-weight:800; border-radius:8px; padding:1px 6px; }
+  .suser { margin-top:auto; padding:10px 16px 0; display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8; border-top:1px solid #ffffff14; }
+  .suser .av { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#7c3aed,#06b6d4); color:#fff; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+
+  .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .topbar { height:46px; background:var(--surface); border-bottom:1px solid var(--borda); display:flex; align-items:center; gap:16px; padding:0 22px; flex:0 0 auto; }
+  .tab { font-size:12px; font-weight:600; color:var(--mudo); display:flex; align-items:center; gap:6px; }
+  .tab.on { color:var(--acento-forte); border-bottom:2.5px solid var(--acento); padding:13px 0 11px; }
+  .conteudo { flex:1; padding:16px 22px; overflow:hidden; }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .docs-top { display:flex; align-items:center; gap:8px; padding:12px 16px; border-bottom:1px solid var(--hairline); }
+  .crumb { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .crumb .sep { color:var(--fantasma); }
+  .btn { height:31px; border:1px solid var(--borda); background:var(--surface); border-radius:8px;
+         padding:0 11px; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--corpo); }
+  .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .sec-label { font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); margin:14px 16px 8px; }
+  .tiles { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; padding:0 16px 16px; }
+  .tile { border:1.5px solid var(--hairline); border-radius:11px; padding:13px 10px 10px; text-align:center; background:var(--surface); }
+  .tile .ico { width:34px; height:40px; margin:0 auto; border:1.5px solid #fecdd3; border-radius:6px; background:#fff1f2; color:var(--rosa); font-size:9px; font-weight:800; display:flex; align-items:flex-end; justify-content:center; padding-bottom:4px; }
+  .tile .nm { font-size:10.5px; font-weight:600; color:var(--corpo); margin-top:8px; line-height:1.3;
+              display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .tile .mt { font-size:9px; color:var(--fraco); margin-top:3px; }
+
+  .overlay { position:absolute; inset:0; background:#0f172a99; }
+
+  /* ── o visualizador, agora GRANDE ── */
+  .dialog { position:absolute; left:32px; top:31px; width:1536px; height:987px;
+            background:var(--surface); border:1px solid #c4b5fd; border-radius:16px; overflow:hidden;
+            display:flex; flex-direction:column; box-shadow:0 40px 90px -30px #0f172acc; }
+  .v-top { display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid var(--hairline); flex:0 0 auto; }
+  .v-top .fname { font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .v-top .lapis { color:var(--acento-forte); font-size:11.5px; font-weight:600; }
+  .v-top .cont { margin-left:auto; font-size:11px; font-weight:700; color:var(--mudo); }
+  .icobtn { width:30px; height:30px; padding:0; justify-content:center; }
+
+  .v-corpo { flex:1 1 auto; position:relative; background:#32353b; overflow:hidden; }
+  .pdfbar { height:34px; background:#3c4043; display:flex; align-items:center; padding:0 16px; color:#cdd1d6; font-size:11px; gap:14px; }
+  .pdfbar .dir { margin-left:auto; display:flex; gap:14px; font-size:13px; }
+  .pagina { position:absolute; left:50%; transform:translateX(-50%); top:52px; width:1380px; bottom:-40px;
+            background:#fff; border-radius:3px 3px 0 0; box-shadow:0 4px 22px #00000066; padding:44px 84px; overflow:hidden; }
+  .pg-logo { width:64px; height:64px; border-radius:50%; border:2px solid var(--borda); margin:0 auto 14px; display:flex; align-items:center; justify-content:center; font-family:'Poppins'; font-weight:700; font-size:11px; color:var(--fraco); }
+  .pg-t { font-size:16px; font-weight:800; text-align:center; letter-spacing:.02em; }
+  .pg-sub { font-size:12px; font-weight:700; color:var(--corpo); margin-top:26px; }
+  .pg-l { height:9px; background:var(--hairline); border-radius:5px; margin-top:11px; }
+  .pg-l.c { width:58%; }
+  .scroll { position:absolute; right:4px; top:40px; bottom:6px; width:8px; }
+  .scroll .thumbo { width:8px; height:150px; border-radius:4px; background:#ffffff3d; }
+  .seta { position:absolute; left:18px; top:50%; transform:translateY(-50%); width:42px; height:42px; border-radius:50%;
+          background:var(--surface); border:1px solid var(--borda); display:flex; align-items:center; justify-content:center;
+          font-size:18px; font-weight:700; color:var(--corpo); box-shadow:0 3px 12px #00000055; }
+
+  .v-strip { display:flex; align-items:center; gap:9px; padding:9px 16px; border-top:1px solid var(--hairline); flex:0 0 auto; background:var(--surface); }
+  .thumb { width:58px; height:72px; border:1.5px solid var(--borda); border-radius:7px; background:var(--surface);
+           display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
+  .thumb .mini { width:22px; height:27px; border:1.5px solid #fecdd3; border-radius:4px; background:#fff1f2; color:var(--rosa); font-size:6.5px; font-weight:800; display:flex; align-items:flex-end; justify-content:center; padding-bottom:2px; }
+  .thumb small { font-size:7.5px; color:var(--fraco); max-width:50px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .thumb.on { border-color:var(--acento); background:var(--acento-bg); }
+  .v-strip .dica { margin-left:auto; font-size:10.5px; color:var(--fraco); }
+
+  /* ── anotações ── */
+  .linha-antes { position:absolute; top:0; bottom:0; width:0; border-left:2.5px dashed #f59e0b; pointer-events:none; }
+  .tag { position:absolute; top:120px; font-size:10.5px; font-weight:800; letter-spacing:.03em; border-radius:7px; padding:4px 10px; background:#f59e0b; color:#451a03; box-shadow:0 4px 14px #00000077; white-space:nowrap; }
+  .tag-novo { position:absolute; left:50%; transform:translateX(-50%); top:5px; background:var(--acento); color:#fff; font-size:10.5px; font-weight:800; border-radius:7px; padding:4px 12px; box-shadow:0 4px 14px #0f172a77; }
+  .rodape-nota { position:absolute; left:50%; transform:translateX(-50%); bottom:5px; font-size:10px; font-weight:700; letter-spacing:.04em; color:#e2e8f0; }
+</style>
+</head>
+<body>
+
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="j">J</span> JuridFlow</div>
+      <div class="sgrupo">DIA A DIA</div>
+      <div class="sitem">Dashboard</div>
+      <div class="sitem">Agenda <span class="bd">38</span></div>
+      <div class="sitem">Atendimento <span class="bd">5</span></div>
+      <div class="sgrupo">CARTEIRA</div>
+      <div class="sitem on">Clientes</div>
+      <div class="sitem">Processos <span class="bd">81</span></div>
+      <div class="sitem">Acordos</div>
+      <div class="sitem">Kanban</div>
+      <div class="sgrupo">FERRAMENTAS</div>
+      <div class="sitem">JurisIA</div>
+      <div class="sitem">Ponto</div>
+      <div class="sitem">Cálculos</div>
+      <div class="sitem">Modelos</div>
+      <div class="sitem">Automações</div>
+      <div class="sgrupo">GESTÃO</div>
+      <div class="sitem">Financeiro</div>
+      <div class="sitem">Relatórios</div>
+      <div class="suser"><span class="av">RD</span> Rafael…</div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="tab">Visão Geral</div>
+        <div class="tab">Processos</div>
+        <div class="tab">Kanban</div>
+        <div class="tab">Financeiro</div>
+        <div class="tab on">Documentos</div>
+      </div>
+      <div class="conteudo">
+        <div class="card" style="height:100%">
+          <div class="docs-top">
+            <div class="crumb">← Documentos <span class="sep">›</span> HELENA CASTRO ALMEIDA…</div>
+            <div style="margin-left:auto; display:flex; gap:7px">
+              <div class="btn">Nova pasta</div>
+              <div class="btn btn-p">⬆ Upload</div>
+              <div class="btn">URL</div>
+            </div>
+          </div>
+          <div class="sec-label">Arquivos</div>
+          <div class="tiles">
+            <div class="tile"><div class="ico">PDF</div><div class="nm">CPF_e_RG_-_Helena.pdf</div><div class="mt">256 KB · 18/08</div></div>
+            <div class="tile"><div class="ico">PDF</div><div class="nm">Procuração_-_Helena.pdf</div><div class="mt">122 KB · 18/08</div></div>
+            <div class="tile"><div class="ico">PDF</div><div class="nm">Hipossuficiência_-_Helena.pdf</div><div class="mt">88 KB · 18/08</div></div>
+            <div class="tile"><div class="ico">PDF</div><div class="nm">Declaração_de_Endereço.pdf</div><div class="mt">97 KB · 18/08</div></div>
+            <div class="tile"><div class="ico">PDF</div><div class="nm">Honorários_-_Helena.pdf</div><div class="mt">215 KB · 18/08</div></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="overlay"></div>
+
+  <div class="dialog">
+    <div class="v-top">
+      <div class="fname">Honorários_-_Helena.pdf <span class="lapis">✏</span></div>
+      <div class="cont">5 de 5</div>
+      <div class="btn" style="height:29px">⬇ Baixar</div>
+      <div class="btn icobtn">⧉</div>
+      <div class="btn icobtn">✕</div>
+    </div>
+
+    <div class="v-corpo">
+      <div class="pdfbar">Honorários_-_Helena.pdf <span style="color:#8b9095">· 1 / 3</span><div class="dir">⊖ ⊕ ⤓ 🖨 ⋮</div></div>
+      <div class="pagina">
+        <div class="pg-logo">LOGO</div>
+        <div class="pg-t">CONTRATO DE HONORÁRIOS ADVOCATÍCIOS</div>
+        <div class="pg-sub">CONTRATANTE</div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">CONTRATADO</div>
+        <div class="pg-l"></div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">PRIMEIRA — DO OBJETO</div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">SEGUNDA — DOS HONORÁRIOS</div>
+        <div class="pg-l"></div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">TERCEIRA — DA FORMA DE PAGAMENTO</div>
+        <div class="pg-l"></div>
+        <div class="pg-l"></div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">QUARTA — DAS OBRIGAÇÕES DAS PARTES</div>
+        <div class="pg-l"></div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+        <div class="pg-sub">QUINTA — DO FORO</div>
+        <div class="pg-l"></div>
+        <div class="pg-l c"></div>
+      </div>
+      <div class="scroll"><div class="thumbo"></div></div>
+      <div class="seta">‹</div>
+      <div class="linha-antes" style="left:256px"><span class="tag" style="left:12px">hoje a janela ia daqui…</span></div>
+      <div class="linha-antes" style="left:1280px"><span class="tag" style="right:12px">…até aqui</span></div>
+    </div>
+
+    <div class="v-strip">
+      <div class="thumb"><div class="mini">PDF</div><small>CPF_e_RG…</small></div>
+      <div class="thumb"><div class="mini">PDF</div><small>Procura…</small></div>
+      <div class="thumb"><div class="mini">PDF</div><small>Hipossuf…</small></div>
+      <div class="thumb"><div class="mini">PDF</div><small>Declara…</small></div>
+      <div class="thumb on"><div class="mini">PDF</div><small>Honorá…</small></div>
+      <div class="dica">← → do teclado navegam</div>
+    </div>
+  </div>
+
+  <div class="tag-novo">NOVO TAMANHO — a janela passa a ocupar quase a tela toda</div>
+  <div class="rodape-nota">mockup pra aprovação · nomes fictícios</div>
+
+</body>
+</html>

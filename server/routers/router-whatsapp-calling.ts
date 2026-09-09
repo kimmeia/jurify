@@ -261,6 +261,26 @@ export const whatsappCallingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await getEsc(ctx.user.id);
+      if (input.contatoId != null || input.conversaId != null) {
+        const dbRef = await getDb();
+        if (!dbRef) throw new Error("Database indisponível");
+        if (input.contatoId != null) {
+          const [c] = await dbRef
+            .select({ id: contatos.id })
+            .from(contatos)
+            .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, esc.escritorioId)))
+            .limit(1);
+          if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Contato não encontrado." });
+        }
+        if (input.conversaId != null) {
+          const [cv] = await dbRef
+            .select({ id: conversas.id })
+            .from(conversas)
+            .where(and(eq(conversas.id, input.conversaId), eq(conversas.escritorioId, esc.escritorioId)))
+            .limit(1);
+          if (!cv) throw new TRPCError({ code: "NOT_FOUND", message: "Conversa não encontrada." });
+        }
+      }
       await exigirCanalSemCoex(esc.escritorioId, input.canalId);
       const client = await clientDoCanal(esc.escritorioId, input.canalId);
       const telLimpo = input.telefone.replace(/\D/g, "");

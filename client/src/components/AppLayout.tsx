@@ -57,15 +57,18 @@ import {
   Sun,
   Moon,
   Check,
+  Search,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
+import { contratoLibera } from "@shared/modulos-contratacao";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
+import { PaletaComandos } from "@/components/PaletaComandos";
 import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -92,7 +95,7 @@ type ItemMenu = {
    * Roadmap não passa por permissão nenhuma. Uniformizar aqui esconderia
    * módulo de quem tem acesso.
    */
-  ver?: (canSee: (m: string) => boolean) => boolean;
+  ver?: (canSee: (m: string) => boolean, canSeeEstrito: (m: string) => boolean) => boolean;
   /** Chave usada em `moduloOcultoNoMenu`, quando existe. */
   ocultaPor?: string;
   /** Ativo por prefixo (páginas com sub-rotas, como /automacoes/fluxos). */
@@ -101,27 +104,66 @@ type ItemMenu = {
   /** Selo fixo de texto ("beta"). Some quando há contagem: número esperando é
    *  informação viva e ganha do rótulo, e os dois não cabem em 34px. */
   selo?: string;
+  /** Módulo(s) CONTRATADOS que liberam o item (basta um). Diferente de `ver`
+   *  (permissão do cargo) e de `ocultaPor` (config global): este vem do
+   *  PLANO do escritório. Sem o campo, o item nunca é escondido por plano. */
+  modulo?: string[];
+  /** O inverso: item só aparece quando NENHUM destes módulos está no
+   *  contrato. É o que faz "Clientes essencial" e "Prazos" existirem só no
+   *  pacote processual — quem contrata o módulo completo vê o item normal. */
+  soSemModulo?: string[];
 };
+
+/**
+ * Geometria do item quando o menu está recolhido.
+ *
+ * Precisa vencer o `group-data-[collapsible=icon]:size-8!` e o `p-2!` que o
+ * `SidebarMenuButton` do shadcn aplica. Os dois lados têm a MESMA
+ * especificidade e ambos sao `!important`, e o `twMerge` NAO desempata: ele
+ * nao reconhece o `!` posfixado do Tailwind v4 e mantem as duas classes.
+ * Quem desempata e a ordem de emissao, e ela esta a nosso favor por contrato
+ * do framework: shorthand sai antes de longhand. Por isso aqui e
+ * `h-auto`/`w-full` contra `size-8`, e `px`/`py` contra `p` — trocar por
+ * `size-*` ou `p-*` empataria de novo e o override voltaria a perder.
+ */
+const CLASSES_ITEM_RAIL =
+  "group-data-[collapsible=icon]:h-auto! group-data-[collapsible=icon]:w-full! " +
+  "group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:justify-center " +
+  "group-data-[collapsible=icon]:gap-0.5 group-data-[collapsible=icon]:px-0.5! " +
+  "group-data-[collapsible=icon]:py-1.5!";
+
+/** O rotulo desce pra baixo do icone. `truncate` proprio porque o do shadcn
+ *  mira `>span:last-child`, que e o CONTADOR quando o item tem badge. */
+const CLASSES_ROTULO_RAIL =
+  "group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:flex-none " +
+  "group-data-[collapsible=icon]:text-center group-data-[collapsible=icon]:text-[8.5px] " +
+  "group-data-[collapsible=icon]:font-semibold group-data-[collapsible=icon]:leading-[1.1] " +
+  "group-data-[collapsible=icon]:truncate";
 
 const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
   {
     titulo: "Dia a dia",
     itens: [
       { id: "dashboard", rotulo: "Dashboard", rota: "/dashboard", icone: LayoutDashboard, ver: (c) => c("dashboard") },
-      { id: "movimentacoes", rotulo: "Movimentações", rota: "/movimentacoes", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade" },
-      { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta" },
-      { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade" },
+      { id: "agenda", rotulo: "Agenda", rota: "/agenda", icone: CalendarDays, ver: (c) => c("agenda"), ocultaPor: "agenda", tomBadge: "alerta", modulo: ["agenda"] },
+      { id: "atendimento", rotulo: "Atendimento", rota: "/atendimento", icone: Headphones, ver: (c) => c("atendimento"), ocultaPor: "atendimento", tomBadge: "novidade", modulo: ["atendimento"] },
     ],
   },
   {
     titulo: "Carteira",
     itens: [
-      { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes") },
-      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos" },
+      { id: "clientes", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes"), modulo: ["clientes"] },
+      // Pacote processual (Fase 2): as versões enxutas só existem quando o
+      // módulo completo correspondente NÃO está no contrato.
+      { id: "clientes-essencial", rotulo: "Clientes", rota: "/clientes", icone: Users, ver: (c) => c("clientes"), modulo: ["processos"], soSemModulo: ["clientes"], selo: "essencial" },
+      // A Central de Movimentações virou aba daqui — o contador de não lidas
+      // veio junto, senão o número sumia do menu com a página.
+      { id: "processos", rotulo: "Processos", rota: "/processos", icone: FileSearch, ver: (c) => c("processos"), ocultaPor: "processos", tomBadge: "novidade", prefixo: true, modulo: ["processos"] },
+      { id: "prazos", rotulo: "Prazos", rota: "/prazos", icone: CalendarDays, ver: (c) => c("agenda"), modulo: ["processos"], soSemModulo: ["agenda"] },
       // Acordo é vinculado a cliente; o gate herda de "clientes" e o
       // verProprios filtra por responsável no backend.
-      { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes") },
-      { id: "kanban", rotulo: "Kanban", rota: "/kanban", icone: LayoutGrid, ver: (c) => c("kanban"), ocultaPor: "kanban" },
+      { id: "acordos", rotulo: "Acordos", rota: "/acordos", icone: Handshake, ver: (c) => c("clientes"), modulo: ["clientes"] },
+      { id: "kanban", rotulo: "Kanban", rota: "/kanban", icone: LayoutGrid, ver: (c) => c("kanban"), ocultaPor: "kanban", modulo: ["kanban"] },
     ],
   },
   {
@@ -132,19 +174,23 @@ const GRUPOS_MENU: Array<{ titulo: string; itens: ItemMenu[] }> = [
       // aparecia pra qualquer um com Processos e entregava "não está no seu
       // plano" depois do clique.
       { id: "jurisia", rotulo: "JurisIA", rota: "/jurisia", icone: Gavel, ver: (c) => c("processos"), ocultaPor: "jurisia", selo: "beta" },
-      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (c) => c("equipe") },
-      { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos" },
-      { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos") },
+      // Ponto tem módulo próprio na matriz de cargos, e por padrão só o Dono
+      // o tem. Enquanto pegava carona em "equipe" o item aparecia pra
+      // atendente, SDR e estagiário (todos têm verProprios lá) e, depois,
+      // pro Gestor — que ninguém escolheu, veio junto com gerenciar a equipe.
+      { id: "ponto", rotulo: "Ponto", rota: "/ponto", icone: Clock, ver: (_c, e) => e("ponto"), modulo: ["ponto"] },
+      { id: "calculos", rotulo: "Cálculos", rota: "/calculos", icone: Calculator, ver: (c) => c("calculos"), ocultaPor: "calculos", modulo: ["calculos"] },
+      { id: "modelos", rotulo: "Modelos", rota: "/modelos-contrato", icone: FileText, ver: (c) => c("modelos"), modulo: ["contratos"] },
       // Fusão de SmartFlow (Fluxos) + Agentes IA: aparece com qualquer um dos
       // dois; o gate por sub-aba fica dentro da página.
-      { id: "automacoes", rotulo: "Automações", rota: "/automacoes", icone: Zap, ver: (c) => c("smartflow") || c("agentesIa"), ocultaPor: "smartflow", prefixo: true },
+      { id: "automacoes", rotulo: "Automações", rota: "/automacoes", icone: Zap, ver: (c) => c("smartflow") || c("agentesIa"), ocultaPor: "smartflow", prefixo: true, modulo: ["smartflow", "agentes_ia"] },
     ],
   },
   {
     titulo: "Gestão",
     itens: [
-      { id: "financeiro", rotulo: "Financeiro", rota: "/financeiro", icone: DollarSign, ver: (c) => c("financeiro"), ocultaPor: "financeiro" },
-      { id: "relatorios", rotulo: "Relatórios", rota: "/relatorios", icone: BarChart3, ver: (c) => c("relatorios"), ocultaPor: "relatorios" },
+      { id: "financeiro", rotulo: "Financeiro", rota: "/financeiro", icone: DollarSign, ver: (c) => c("financeiro"), ocultaPor: "financeiro", modulo: ["financeiro"] },
+      { id: "relatorios", rotulo: "Relatórios", rota: "/relatorios", icone: BarChart3, ver: (c) => c("relatorios"), ocultaPor: "relatorios", modulo: ["relatorios"] },
       // Roadmap não está no sistema de permissões — todo logado vê e vota.
       { id: "roadmap", rotulo: "Roadmap", rota: "/roadmap", icone: Lightbulb, ocultaPor: "roadmap" },
     ],
@@ -204,6 +250,9 @@ export default function AppLayout({
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
+          // 4.5rem no lugar de 3rem: no modo estreito o rótulo desce pra
+          // baixo do ícone, e em 48px não caberia nome nenhum.
+          "--sidebar-width-icon": "4.5rem",
         } as CSSProperties
       }
     >
@@ -281,6 +330,33 @@ function AppSidebarContent({
       refetchInterval: 5 * 60_000,
     },
   ) || { data: null };
+  /**
+   * Igual ao `canSee`, com uma diferença: enquanto as permissões carregam,
+   * ESCONDE em vez de mostrar.
+   *
+   * O default do `canSee` é otimista pra evitar piscada em módulo que quase
+   * todo mundo tem. Num módulo de gestão a conta se inverte: mostrar o Ponto
+   * por meio segundo pra quem não tem acesso é pior que ele aparecer meio
+   * segundo depois pra quem tem.
+   */
+  // Módulos CONTRATADOS pelo plano do escritório — null = tudo liberado
+  // (cortesia/admin/carregando). Complementa canSee: cargo diz quem PODE,
+  // o plano diz o que o escritório TEM.
+  const { data: modulosData } = trpc.subscription.modulosContratados.useQuery(undefined, {
+    enabled: !!user && user.role === "user",
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const modulosContratados: string[] | null = modulosData?.modulos ?? null;
+
+  const canSeeEstrito = (modulo: string) => {
+    if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
+    if (!minhasPerms?.permissoes) return false;
+    const p = minhasPerms.permissoes[modulo];
+    return !!(p?.verTodos || p?.verProprios);
+  };
+
   const canSee = (modulo: string) => {
     // Dono e admin do sistema nunca são bloqueados
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
@@ -374,6 +450,8 @@ function AppSidebarContent({
   const { data: contAgenda } = trpc.agenda.contadores.useQuery(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    // Sem Agenda no contrato a chamada só devolveria FORBIDDEN a cada 2min.
+    enabled: contratoLibera(modulosContratados, ["agenda"]),
   });
   const { data: contConversas } = (trpc as any).crm?.contarConversas?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
@@ -381,10 +459,39 @@ function AppSidebarContent({
   }) ?? { data: null };
 
   const badges: Record<string, number> = {
-    movimentacoes: contMovs?.naoLidas ?? 0,
+    processos: contMovs?.naoLidas ?? 0,
     agenda: contAgenda?.atrasadosCount ?? 0,
     atendimento: contConversas?.aguardando ?? 0,
   };
+
+  /**
+   * Quem aparece no menu. Vive fora do JSX porque a paleta ⌘K navega para
+   * a MESMA lista — se as duas calculassem visibilidade por conta própria,
+   * a busca ofereceria tela que o cargo/plano não abre.
+   */
+  const itemVisivelNoMenu = (i: ItemMenu) =>
+    !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+    (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
+    (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
+    (i.ver ? i.ver(canSee, canSeeEstrito) : true);
+
+  const telasNavegaveis = GRUPOS_MENU.flatMap((g) => g.itens)
+    .filter(itemVisivelNoMenu)
+    .map((i) => ({ id: i.id, rotulo: i.rotulo, rota: i.rota, icone: i.icone }));
+
+  // Paleta de comandos (⌘K / Ctrl+K). É caminho ADICIONAL: o menu continua
+  // inteiro, e quem nunca apertar o atalho não perde nada.
+  const [paletaAberta, setPaletaAberta] = useState(false);
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletaAberta((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, []);
 
   // Modo "app de atendimento" no celular (opção A): quem tem o módulo
   // Atendimento abre o app focado nele, sem o menu dos outros módulos.
@@ -396,7 +503,9 @@ function AppSidebarContent({
   const [mobileCompleto, setMobileCompleto] = useState<boolean>(() => {
     try { return localStorage.getItem("jurify:mobileCompleto") === "1"; } catch { return false; }
   });
-  const modoFocadoMobile = isMobile && !mobileCompleto && canSee("atendimento");
+  const modoFocadoMobile =
+    isMobile && !mobileCompleto && canSee("atendimento") &&
+    contratoLibera(modulosContratados, ["atendimento"]);
   const abrirVersaoCompleta = () => {
     try { localStorage.setItem("jurify:mobileCompleto", "1"); } catch { /* modo privado */ }
     setMobileCompleto(true);
@@ -428,9 +537,15 @@ function AppSidebarContent({
   return (
     <>
       <div className="relative" ref={sidebarRef}>
+        {/* O `!` da borda vale SÓ no rail. Sem variante ele vence o
+            `group-data-[side=left]:border-r` do shadcn nos dois estados e o
+            menu aberto perde o fio que hoje o separa do conteúdo — no tema
+            escuro as duas superfícies diferem em 4 níveis de RGB e a borda é a
+            única divisa. O `border-r-0` cru fica: ele perde, como sempre
+            perdeu, e é isso que mantém o menu aberto igual ao que está no ar. */}
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className="border-r-0 group-data-[collapsible=icon]:border-r-0!"
           disableTransition={isResizing}
         >
           {/* `shrink-0` não é decorativo: a regra global `.flex{min-height:0}`
@@ -459,16 +574,27 @@ function AppSidebarContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 rolagem-menu">
+          {/* No rail a rolagem existe mas a barra não: `.rolagem-menu` é barra
+              CLÁSSICA (scrollbar-width: thin), que RESERVA largura. Medido em
+              Chromium com barra clássica, viewport de 768px: ela comia 10px dos
+              72px — botão de 56 pra 46, coluna de ícones 5px fora do centro do
+              logo e do rodapé, e 5 rótulos truncando. Ou seja, exatamente nas
+              telas baixas que motivaram a rolagem o rótulo se perdia. A roda e
+              o trackpad continuam rolando.
+
+              O `!` aqui não é gosto: `.rolagem-menu` mora no index.css FORA de
+              camada, e regra sem camada vence qualquer `@layer utilities`
+              independente de especificidade. Sem ele o `scrollbar-width`
+              continuava `thin` — conferido no navegador. */}
+          <SidebarContent className="gap-0 rolagem-menu group-data-[collapsible=icon]:overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none]! group-data-[collapsible=icon]:[&::-webkit-scrollbar]:w-0!">
             {GRUPOS_MENU.map((grupo) => {
-              const visiveis = grupo.itens.filter(
-                (i) => !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) && (i.ver ? i.ver(canSee) : true),
-              );
+              const visiveis = grupo.itens.filter(itemVisivelNoMenu);
               if (visiveis.length === 0) return null;
               return (
                 <div key={grupo.titulo} className="px-2 pb-0.5">
                   {/* O rótulo some no modo ícone — sobra o separador, que já
-                      diz onde um grupo termina. */}
+                      diz onde um grupo termina; abreviado ele viraria "DIA",
+                      "CART", "FERR", que não querem dizer nada. */}
                   <p className="px-2 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-sidebar-foreground/45 group-data-[collapsible=icon]:hidden">
                     {grupo.titulo}
                   </p>
@@ -486,18 +612,28 @@ function AppSidebarContent({
                               tem overflow-hidden, e dentro dele o marcador
                               seria cortado. */}
                           {ativo && (
-                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-sidebar-primary group-data-[collapsible=icon]:hidden" />
+                            <span className="absolute left-0 top-1.5 bottom-1.5 z-10 w-[3px] rounded-r bg-sidebar-primary" />
                           )}
                           <SidebarMenuButton
                             isActive={ativo}
                             onClick={() => navigateOrBlock(item.rota)}
                             tooltip={item.rotulo}
-                            className={`h-[34px] relative transition-all ${ativo ? "font-semibold" : "font-normal"} ${itemsLocked ? "opacity-50" : ""}`}
+                            className={`relative h-[34px] transition-all ${CLASSES_ITEM_RAIL} ${
+                              ativo ? "font-semibold" : "font-normal"
+                            } ${itemsLocked ? "opacity-50" : ""}`}
                           >
                             <Icone className={`h-4 w-4 ${ativo ? "text-sidebar-primary" : ""}`} />
-                            <span className="flex-1">{item.rotulo}</span>
+                            {/* Recolhido o rótulo desce pra baixo do ícone em vez de
+                                sumir: eram 16 ícones sem nome nenhum. O estilo
+                                vive no className e não em CSS porque a regra em
+                                CSS não casava com o DOM (ver CLASSES_ITEM_RAIL).
+                                `rotulo-item` não tem regra nenhuma: é âncora de
+                                leitura e de teste. */}
+                            <span className={`flex-1 rotulo-item ${CLASSES_ROTULO_RAIL}`}>
+                              {item.rotulo}
+                            </span>
                             {item.selo && contagem === 0 && (
-                              <span className="ml-auto rounded-full border border-amber-400/40 bg-amber-400/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-amber-300 group-data-[collapsible=icon]:hidden">
+                              <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
                                 {item.selo}
                               </span>
                             )}
@@ -506,7 +642,7 @@ function AppSidebarContent({
                                 <span
                                   className={`ml-auto rounded-full px-1.5 py-px text-[10px] font-extrabold tabular-nums group-data-[collapsible=icon]:hidden ${
                                     item.tomBadge === "alerta"
-                                      ? "bg-rose-500/20 text-rose-200"
+                                      ? "bg-danger/20 text-danger-fg"
                                       : "bg-sidebar-primary/20 text-sidebar-primary"
                                   }`}
                                 >
@@ -515,8 +651,8 @@ function AppSidebarContent({
                                 {/* Recolhido o número não cabe; o ponto ainda
                                     responde "tem algo esperando aqui?". */}
                                 <span
-                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block ${
-                                    item.tomBadge === "alerta" ? "bg-rose-400" : "bg-sidebar-primary"
+                                  className={`absolute right-1.5 top-1.5 hidden h-1.5 w-1.5 rounded-full group-data-[collapsible=icon]:block group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:right-auto group-data-[collapsible=icon]:ml-1 group-data-[collapsible=icon]:top-1 ${
+                                    item.tomBadge === "alerta" ? "bg-danger" : "bg-sidebar-primary"
                                   }`}
                                 />
                               </>
@@ -538,11 +674,17 @@ function AppSidebarContent({
                     <SidebarMenuButton
                       onClick={() => setLocation("/configuracoes?tab=meu-plano")}
                       tooltip="Assinar plano"
-                      className="h-9 transition-all font-normal"
+                      className={`relative h-9 transition-all font-normal ${CLASSES_ITEM_RAIL}`}
                     >
                       <CreditCard className="h-4 w-4" />
-                      <span>Assinar plano</span>
-                      <Badge variant="destructive" className="text-[9px] px-1.5 py-0 ml-auto">
+                      <span className={CLASSES_ROTULO_RAIL}>Assinar plano</span>
+                      {/* Recolhido o selo sai do fluxo: em coluna ele viraria
+                          uma terceira linha e este item ficaria mais alto que
+                          todos os outros do rail. */}
+                      <Badge
+                        variant="destructive"
+                        className="text-[9px] px-1.5 py-0 ml-auto group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:right-0.5 group-data-[collapsible=icon]:top-0.5 group-data-[collapsible=icon]:ml-0 group-data-[collapsible=icon]:px-1"
+                      >
                         !
                       </Badge>
                     </SidebarMenuButton>
@@ -553,6 +695,19 @@ function AppSidebarContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 shrink-0">
+            {/* O atalho precisa se anunciar: paleta de comandos que ninguém
+                descobre é paleta que ninguém usa. Some no modo ícone, onde
+                não há largura pro rótulo. */}
+            <button
+              onClick={() => setPaletaAberta(true)}
+              className="mb-2 flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+            >
+              <Search className="h-3.5 w-3.5 shrink-0" />
+              <span className="flex-1 text-left">Buscar</span>
+              <kbd className="rounded border border-sidebar-border bg-sidebar-accent px-1 py-px font-mono text-[10px] font-semibold text-sidebar-foreground/75">
+                ⌘K
+              </kbd>
+            </button>
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -639,7 +794,7 @@ function AppSidebarContent({
                 onClick={logout}
                 title="Sair"
                 aria-label="Sair"
-                className="h-8 w-8 shrink-0 rounded-lg border border-rose-400/40 bg-rose-500/10 flex items-center justify-center text-rose-300 hover:bg-rose-500/20 transition-colors"
+                className="h-8 w-8 shrink-0 rounded-lg border border-danger/30 bg-danger/10 flex items-center justify-center text-danger-fg hover:bg-danger/20 transition-colors"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -669,10 +824,10 @@ function AppSidebarContent({
             <div className="flex items-center gap-2">
               <span
                 className="inline-flex items-center justify-center font-display font-extrabold text-white shrink-0 select-none"
-                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg,#7c3aed,#4f46e5)" }}
+                style={{ width: 30, height: 30, borderRadius: 8, fontSize: 16, lineHeight: 1, background: "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)" }}
                 aria-hidden
               >
-                J<span style={{ color: "#c4b5fd" }}>.</span>
+                J<span style={{ color: "var(--sidebar-primary)" }}>.</span>
               </span>
               <span className="font-bold tracking-tight text-foreground">Atendimento</span>
             </div>
@@ -733,6 +888,12 @@ function AppSidebarContent({
         </main>
       </SidebarInset>
       <InstalarAppDialog open={instalarOpen} onOpenChange={setInstalarOpen} />
+      <PaletaComandos
+        aberta={paletaAberta}
+        onOpenChange={setPaletaAberta}
+        telas={telasNavegaveis}
+        onNavegar={navigateOrBlock}
+      />
     </>
   );
 }
@@ -752,28 +913,53 @@ function TrialBanner() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  // Plano sob consulta não tem checkout — "Adicionar pagamento" levaria a
+  // uma tela sem botão de pagar. O CTA vira a conversa comercial.
+  const { data: planos } = trpc.subscription.plans.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: contato } = trpc.subscription.contatoComercial.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   const dias = (subscription as any)?.diasRestantesTrial as number | null | undefined;
   if (subscription?.status !== "trialing" || dias == null) return null;
 
-  const cor =
-    dias >= 4 ? "bg-amber-50 border-amber-200 text-amber-900 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200" :
-    dias >= 2 ? "bg-orange-50 border-orange-200 text-orange-900 dark:bg-orange-950/30 dark:border-orange-800 dark:text-orange-200" :
-                "bg-red-50 border-red-200 text-red-900 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200";
+  const planoAtual = (planos ?? []).find((p: any) => p.slug === (subscription as any)?.planId);
+  const sobConsulta = Boolean((planoAtual as any)?.precoSobConsulta);
+  const abrirConversa = () => {
+    const texto = `Olá! Meu teste do plano ${(planoAtual as any)?.nome ?? "JuridFlow"} está acabando — quero fechar o valor.`;
+    const url = contato?.whatsapp
+      ? `https://wa.me/${contato.whatsapp}?text=${encodeURIComponent(texto)}`
+      : `mailto:contato@juridflow.com.br?subject=${encodeURIComponent("Quero fechar o valor do meu plano")}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
-  const texto =
+  const cor =
+    dias >= 4 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+    dias >= 2 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
+                "bg-danger-bg border-danger/30 text-danger-fg dark:border-danger/30";
+
+  const textoBase =
     dias === 0 ? "Seu trial termina hoje." :
     dias === 1 ? "Seu trial termina amanhã." :
                  `Trial: ${dias} dias restantes.`;
+  const texto = (subscription as any)?.pagamentoEmAndamento
+    ? `${textoBase} Pagamento em andamento: quando o Asaas confirmar, o plano entra no lugar do teste.`
+    : textoBase;
 
   return (
     <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>
       <span className="font-medium">{texto}</span>
       <button
-        onClick={() => setLocation("/configuracoes?tab=meu-plano")}
+        onClick={() => (sobConsulta ? abrirConversa() : setLocation("/configuracoes?tab=meu-plano"))}
         className="text-xs font-semibold underline underline-offset-2 hover:opacity-80"
       >
-        Adicionar pagamento →
+        {sobConsulta ? "💬 Fechar valor com a gente →" : "Adicionar pagamento →"}
       </button>
     </div>
   );

@@ -99,7 +99,7 @@ function PreviewBox({ titulo, texto }: { titulo: string; texto: string }) {
       <div className="text-[11px] whitespace-pre-wrap rounded bg-background border p-2 text-foreground/80 leading-relaxed">
         {partes.map((p, i) =>
           /^\{\{[^}]+\}\}$/.test(p) ? (
-            <span key={i} className="px-1 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 font-mono text-[10px]">{p}</span>
+            <span key={i} className="px-1 rounded bg-info-bg text-info-fg dark:text-info font-mono text-[10px]">{p}</span>
           ) : (
             <span key={i}>{p}</span>
           ),
@@ -139,7 +139,21 @@ function ManualCorpo({ cfg, onChange, variaveis }: { cfg: any; onChange: (patch:
   );
 }
 
-export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onChange: (patch: Record<string, unknown>) => void }) {
+export function ConfigWhatsappTemplateBuilder({
+  cfg,
+  onChange,
+  comOpcoes,
+}: {
+  cfg: any;
+  onChange: (patch: Record<string, unknown>) => void;
+  /**
+   * Modo do bloco "Enviar template" (espera resposta): ao escolher o template,
+   * grava também a categoria (gate anti-punição de Marketing) e o snapshot dos
+   * botões quick-reply em `opcoes` — cada um vira uma saída `cond_qr<index>`
+   * do nó, com payload estável enviado à Meta e devolvido no clique.
+   */
+  comOpcoes?: boolean;
+}) {
   const variaveis = useSmartFlowVariaveis();
   const { data, isLoading } = (trpc as any).smartflow.listarTemplatesWhatsapp.useQuery(undefined, {
     retry: false,
@@ -170,7 +184,7 @@ export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onC
     const botoes = e.buttons
       .filter((b) => b.dinamico && b.tipo !== "OUTRO")
       .map((b) => ({ index: b.index, tipo: b.tipo as "URL" | "QUICK_REPLY" | "COPY_CODE", valor: "" }));
-    onChange({
+    const patch: Record<string, unknown> = {
       templateNome: t.name,
       templateIdioma: t.language,
       templateHeader: header,
@@ -180,7 +194,17 @@ export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onC
       // mensagem REAL na timeline de Atendimentos (o corpo vive na Meta; sem
       // guardar, a timeline só teria o resumo "[Template: nome] valores").
       templateCorpoTexto: e.bodyText,
-    });
+    };
+    if (comOpcoes) {
+      patch.templateCategoria = String(t.category || "").toUpperCase();
+      patch.opcoes = e.buttons
+        .filter((b) => b.tipo === "QUICK_REPLY")
+        .map((b) => ({ id: `qr${b.index}`, titulo: b.text, index: b.index }));
+      // Trocou de template Marketing → Utility (ou outro template): a
+      // confirmação anterior não vale pro novo texto.
+      patch.confirmoMarketing = false;
+    }
+    onChange(patch);
   };
 
   const setCorpo = (i: number, v: string) => {
@@ -209,10 +233,10 @@ export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onC
       {isLoading && <p className="text-xs text-muted-foreground">Carregando templates da sua conta WhatsApp…</p>}
 
       {!isLoading && !disponivel && (
-        <div className="rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-2.5 text-[11px] text-amber-800 dark:text-amber-200 space-y-1">
+        <div className="rounded border border-warning/30 bg-warning-bg p-2.5 text-[11px] text-warning-fg space-y-1">
           <p className="font-semibold flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Não consegui listar seus templates</p>
           <p>{motivo || "Verifique o canal WhatsApp oficial."}</p>
-          <p className="text-amber-700/80 dark:text-amber-300/80">Dá pra informar o template manualmente abaixo mesmo assim.</p>
+          <p className="text-warning-fg/80">Dá pra informar o template manualmente abaixo mesmo assim.</p>
         </div>
       )}
 
@@ -314,6 +338,9 @@ export function ConfigWhatsappTemplateBuilder({ cfg, onChange }: { cfg: any; onC
                   <p className="text-[11px]">
                     <span className="font-medium">{b.text || "(sem texto)"}</span>
                     <span className="text-muted-foreground"> · {rotuloBotao(b)}</span>
+                    {comOpcoes && b.tipo === "QUICK_REPLY" && (
+                      <span className="text-success-fg"> → vira uma saída do bloco no canvas</span>
+                    )}
                   </p>
                   {b.dinamico && b.tipo === "URL" && (
                     <CampoVar

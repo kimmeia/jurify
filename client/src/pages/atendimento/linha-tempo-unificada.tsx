@@ -10,26 +10,26 @@ import { MessageCircle, Scale, DollarSign, Calendar, FileSignature, Loader2 } fr
 // `ligacoes_twilio` + emissão no router-atendimento-ia.linhaTempoUnificada),
 // devolva o filtro pra cá.
 const FILTROS = [
-  { v: "todos", l: "Todos", icon: null, cor: "text-violet-700" },
-  { v: "mensagem", l: "WhatsApp", icon: MessageCircle, cor: "text-emerald-700" },
-  { v: "ato", l: "Processos", icon: Scale, cor: "text-blue-700" },
-  { v: "pagamento", l: "Financeiro", icon: DollarSign, cor: "text-emerald-700" },
-  { v: "agenda", l: "Agenda", icon: Calendar, cor: "text-amber-700" },
-  { v: "documento", l: "Documentos", icon: FileSignature, cor: "text-fuchsia-700" },
+  { v: "todos", l: "Todos", icon: null, cor: "text-info-fg" },
+  { v: "mensagem", l: "WhatsApp", icon: MessageCircle, cor: "text-success-fg" },
+  { v: "ato", l: "Processos", icon: Scale, cor: "text-info-fg" },
+  { v: "pagamento", l: "Financeiro", icon: DollarSign, cor: "text-success-fg" },
+  { v: "agenda", l: "Agenda", icon: Calendar, cor: "text-warning-fg" },
+  { v: "documento", l: "Documentos", icon: FileSignature, cor: "text-danger-fg" },
 ] as const;
 
 function tipoCfg(tipo: string) {
   switch (tipo) {
     case "mensagem":
-      return { icon: MessageCircle, bg: "bg-emerald-50", border: "border-emerald-200", iconBg: "bg-emerald-100", text: "text-emerald-700" };
+      return { icon: MessageCircle, bg: "bg-success-bg", border: "border-success/30", iconBg: "bg-success-bg", text: "text-success-fg" };
     case "ato":
-      return { icon: Scale, bg: "bg-blue-50", border: "border-blue-200", iconBg: "bg-blue-100", text: "text-blue-700" };
+      return { icon: Scale, bg: "bg-info-bg", border: "border-info/30", iconBg: "bg-info-bg", text: "text-info-fg" };
     case "pagamento":
-      return { icon: DollarSign, bg: "bg-emerald-50", border: "border-emerald-300", iconBg: "bg-emerald-100", text: "text-emerald-700" };
+      return { icon: DollarSign, bg: "bg-success-bg", border: "border-success/30", iconBg: "bg-success-bg", text: "text-success-fg" };
     case "agenda":
-      return { icon: Calendar, bg: "bg-amber-50", border: "border-amber-200", iconBg: "bg-amber-100", text: "text-amber-700" };
+      return { icon: Calendar, bg: "bg-warning-bg", border: "border-warning/30", iconBg: "bg-warning-bg", text: "text-warning-fg" };
     case "documento":
-      return { icon: FileSignature, bg: "bg-fuchsia-50", border: "border-fuchsia-200", iconBg: "bg-fuchsia-100", text: "text-fuchsia-700" };
+      return { icon: FileSignature, bg: "bg-danger-bg", border: "border-danger/30", iconBg: "bg-danger-bg", text: "text-danger-fg" };
     default:
       return { icon: MessageCircle, bg: "bg-muted/30", border: "border-border", iconBg: "bg-muted", text: "text-foreground" };
   }
@@ -76,9 +76,9 @@ export function LinhaTempoUnificada({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-5 py-4 border-b bg-gradient-to-r from-indigo-50/60 to-violet-50/60">
+        <DialogHeader className="px-5 py-4 border-b bg-info-bg/60">
           <DialogTitle className="flex items-center gap-2 text-lg">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-info flex items-center justify-center">
               <Scale className="h-4 w-4 text-white" />
             </div>
             <span>Linha do Tempo · {contatoNome}</span>
@@ -112,8 +112,8 @@ export function LinhaTempoUnificada({
                   className={
                     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors shrink-0 " +
                     (ativo
-                      ? "bg-violet-600 text-white border-violet-600"
-                      : "bg-white text-foreground hover:bg-muted border-border")
+                      ? "bg-info text-info-on border-info/30"
+                      : "bg-card text-foreground hover:bg-muted border-border")
                   }
                 >
                   {Icon && <Icon className="h-3 w-3" />}
@@ -158,7 +158,7 @@ export function LinhaTempoUnificada({
                           </span>
                         </div>
                       )}
-                      <div className="absolute -left-[16px] top-3 w-2 h-2 rounded-full bg-violet-500 ring-4 ring-violet-100" />
+                      <div className="absolute -left-[16px] top-3 w-2 h-2 rounded-full bg-info ring-4 ring-info" />
                       <div className={"rounded-xl border " + cfg.border + " " + cfg.bg + " px-3 py-2.5 flex items-start gap-3"}>
                         <div className={"w-7 h-7 rounded-lg " + cfg.iconBg + " flex items-center justify-center flex-shrink-0"}>
                           <Icon className={"h-3.5 w-3.5 " + cfg.text} />

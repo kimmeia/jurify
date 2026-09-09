@@ -98,7 +98,12 @@ export async function sincronizarExtratoTodosEscritorios(): Promise<{
 
       if (r.novasDespesas > 0) {
         log.info(
-          { escritorioId, novas: r.novasDespesas, duplicadas: r.duplicadas },
+          {
+            escritorioId,
+            novas: r.novasDespesas,
+            duplicadas: r.duplicadas,
+            cobertasPeloWebhook: r.cobertasPeloWebhook,
+          },
           "Extrato sincronizado",
         );
       }

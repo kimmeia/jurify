@@ -81,19 +81,19 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
                 <br />
                 e no seu bolso.
               </h1>
-              <p className="mt-4 max-w-md text-lg leading-relaxed text-violet-100/70">
+              <p className="mt-4 max-w-md text-lg leading-relaxed text-info/70">
                 Atendimento, processos, contratos e honorários num só lugar — do
                 primeiro contato no WhatsApp ao recebimento.
               </p>
               <div className="mt-12 flex flex-col gap-6">
                 {FEATURES_LOGIN.map((f) => (
                   <div key={f.titulo} className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-violet-500/40 bg-violet-600/20">
-                      <f.icon className="h-6 w-6 text-violet-300" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-info/30 bg-info/20">
+                      <f.icon className="h-6 w-6 text-info" />
                     </div>
                     <div>
                       <p className="font-bold">{f.titulo}</p>
-                      <p className="mt-0.5 text-[15px] text-violet-100/60">{f.desc}</p>
+                      <p className="mt-0.5 text-[15px] text-info/60">{f.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -104,23 +104,23 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
               <h1 className="font-display mt-24 text-[42px] font-extrabold leading-[1.2] tracking-tight">
                 Comece hoje.
                 <br />
-                <span className="text-violet-300">14 dias grátis</span>,
+                <span className="text-info">14 dias grátis</span>,
                 <br />
                 sem cartão.
               </h1>
-              <p className="mt-4 max-w-md text-lg leading-relaxed text-violet-100/70">
+              <p className="mt-4 max-w-md text-lg leading-relaxed text-info/70">
                 Crie a conta, conecte seu WhatsApp e veja seu escritório inteiro
                 num painel só.
               </p>
               <div className="mt-12 flex flex-col gap-6">
                 {PASSOS_CADASTRO.map((p, i) => (
                   <div key={p.titulo} className="flex items-start gap-4">
-                    <div className="font-display flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-violet-500/40 bg-violet-600/20 text-lg font-bold text-violet-300">
+                    <div className="font-display flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-info/30 bg-info/20 text-lg font-bold text-info-fg">
                       {i + 1}
                     </div>
                     <div>
                       <p className="font-bold">{p.titulo}</p>
-                      <p className="mt-0.5 text-[15px] text-violet-100/60">{p.desc}</p>
+                      <p className="mt-0.5 text-[15px] text-info/60">{p.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -128,7 +128,7 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
             </>
           )}
 
-          <p className="mt-auto text-sm text-violet-100/40">app.juridflow.com.br</p>
+          <p className="mt-auto text-sm text-info/40">app.juridflow.com.br</p>
         </div>
       </aside>
 
@@ -148,13 +148,19 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
             ) : (
               <>
                 Teste completo por 14 dias —{" "}
-                <span className="font-semibold text-emerald-600">sem cartão de crédito</span>.
+                <span className="font-semibold text-success-fg">sem cartão de crédito</span>.
               </>
             )}
           </p>
 
           <div className="mt-8">
+            {/* key={modo}: /login e /cadastro montam este componente na MESMA
+                posição da árvore, então o React reaproveita a instância e o
+                estado interno `tab` fica preso no modo anterior — /cadastro
+                mostrava o formulário de LOGIN pra quem navegou do login (e
+                com hideTabs não havia como sair). A key força remontagem. */}
             <AuthForms
+              key={modo}
               hideTabs
               defaultTab={modo}
               onSuccess={async () => {
@@ -166,9 +172,9 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
 
           {!isLogin && (
             <div className="mt-5 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-medium text-muted-foreground">
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> 14 dias grátis</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> sem cartão</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" /> sem cobrança automática</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-success-fg" /> 14 dias grátis</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-success-fg" /> sem cartão</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4 text-success-fg" /> sem cobrança automática</span>
             </div>
           )}
 
@@ -176,14 +182,14 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
             {isLogin ? (
               <>
                 Não tem conta?{" "}
-                <Link href="/cadastro" className="font-bold text-violet-600 hover:underline">
+                <Link href="/cadastro" className="font-bold text-info-fg hover:underline">
                   Criar conta grátis
                 </Link>
               </>
             ) : (
               <>
                 Já tem conta?{" "}
-                <Link href="/login" className="font-bold text-violet-600 hover:underline">
+                <Link href="/login" className="font-bold text-info-fg hover:underline">
                   Entrar
                 </Link>
               </>
@@ -193,7 +199,7 @@ export default function AuthSplitPage({ modo }: AuthSplitPageProps) {
           {isLogin && (
             <p className="mt-4 text-center text-sm text-muted-foreground/70">
               Teste grátis de 14 dias —{" "}
-              <span className="font-semibold text-emerald-600">sem cartão de crédito</span>.
+              <span className="font-semibold text-success-fg">sem cartão de crédito</span>.
             </p>
           )}
         </div>

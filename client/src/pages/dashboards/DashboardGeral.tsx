@@ -223,12 +223,12 @@ export default function DashboardGeral() {
             valor={formatBRL(recebido)}
             badge={
               saldoLiquido >= 0 ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11.5px] font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-bg px-2.5 py-1 text-[11.5px] font-bold text-success-fg">
                   <TrendingUp className="h-3 w-3" />
                   Saldo positivo
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11.5px] font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-bg px-2.5 py-1 text-[11.5px] font-bold text-danger-fg">
                   <AlertTriangle className="h-3 w-3" />
                   Saldo negativo
                 </span>
@@ -340,7 +340,7 @@ export default function DashboardGeral() {
                 ruim={vencido > 0}
                 tag={
                   vencido > 0 ? (
-                    <span className="rounded border border-rose-200 bg-rose-50 px-1.5 text-[10px] font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                    <span className="rounded border border-danger/30 bg-danger-bg px-1.5 text-[10px] font-bold text-danger-fg">
                       {formatPercent(taxaInadimplencia, 0)}
                     </span>
                   ) : undefined
@@ -410,10 +410,10 @@ export default function DashboardGeral() {
           <div className="space-y-3 px-2 pb-2 pt-3">
             {isUnlimited ? (
               <div className="flex items-center gap-3">
-                <div className="h-2 w-full rounded-full bg-emerald-100 dark:bg-emerald-950/50">
-                  <div className="h-2 w-full rounded-full bg-emerald-500" />
+                <div className="h-2 w-full rounded-full bg-success-bg">
+                  <div className="h-2 w-full rounded-full bg-success" />
                 </div>
-                <span className="whitespace-nowrap text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                <span className="whitespace-nowrap text-xs font-semibold text-success-fg">
                   ∞ Ilimitado
                 </span>
               </div>
@@ -516,7 +516,7 @@ function CardAgenda({
             {totalTarefas} {totalTarefas === 1 ? "tarefa" : "tarefas"}
           </span>
           {atrasados > 0 && (
-            <span className="font-semibold text-rose-600 dark:text-rose-400">
+            <span className="font-semibold text-danger-fg">
               {atrasados} atrasados
             </span>
           )}
@@ -554,7 +554,7 @@ function CardAgenda({
           {foraDaLista > 0 && (
             <button
               onClick={() => nav("/agenda")}
-              className="mx-2 mt-1 rounded-md px-2 py-1.5 text-left text-[11.5px] font-semibold text-violet-600 hover:bg-accent dark:text-violet-400"
+              className="mx-2 mt-1 rounded-md px-2 py-1.5 text-left text-[11.5px] font-semibold text-info-fg hover:bg-accent dark:text-info"
             >
               + {foraDaLista} {foraDaLista === 1 ? "item" : "itens"} nesse dia
             </button>
@@ -661,13 +661,13 @@ function CardFunil() {
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-[11px] text-muted-foreground">Ganhos</p>
-              <p className="text-[22px] font-bold leading-none tabular-nums text-emerald-600 dark:text-emerald-400">
+              <p className="text-[22px] font-bold leading-none tabular-nums text-success-fg">
                 {ganhos}
               </p>
             </div>
             <div className="text-right">
               <p className="text-[11px] text-muted-foreground">Perdidos</p>
-              <p className="text-[22px] font-bold leading-none tabular-nums text-rose-600 dark:text-rose-400">
+              <p className="text-[22px] font-bold leading-none tabular-nums text-danger-fg">
                 {perdidos}
               </p>
             </div>
@@ -676,11 +676,11 @@ function CardFunil() {
               comprimentos que não partem do mesmo ponto. */}
           <span className="flex h-2 overflow-hidden rounded-full bg-muted">
             <span
-              className="block h-full bg-emerald-500"
+              className="block h-full bg-success"
               style={{ width: `${Math.round((ganhos / decididos) * 100)}%` }}
             />
             <span
-              className="block h-full bg-rose-500"
+              className="block h-full bg-danger"
               style={{ width: `${Math.round((perdidos / decididos) * 100)}%` }}
             />
           </span>

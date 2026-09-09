@@ -17,14 +17,11 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminClients from "./pages/admin/AdminClients";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminSettings from "./pages/admin/AdminSettings";
-import AdminAuditoria from "./pages/admin/AdminAuditoria";
-import AdminErros from "./pages/admin/AdminErros";
-import AdminRoboAuditor from "./pages/admin/AdminRoboAuditor";
+import AdminSaude from "./pages/admin/AdminSaude";
+import AdminIA from "./pages/admin/AdminIA";
 import AdminTribunais from "./pages/admin/AdminTribunais";
-import AdminJurisIa from "./pages/admin/AdminJurisIa";
-import AdminEmailLog from "./pages/admin/AdminEmailLog";
 import AdminFinanceiro from "./pages/admin/AdminFinanceiro";
-import AdminAgentesIA from "./pages/admin/AdminAgentesIA";
+import AdminPlanoEditor from "./pages/admin/AdminPlanoEditor";
 import AdminSmartflow from "./pages/admin/AdminSmartflow";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Bancario from "./pages/calculos/Bancario";
@@ -35,7 +32,6 @@ import Tributario from "./pages/calculos/Tributario";
 import Previdenciario from "./pages/calculos/Previdenciario";
 import CalculosDiversos from "./pages/calculos/CalculosDiversos";
 import Processos from "./pages/Processos";
-import Movimentacoes from "./pages/Movimentacoes";
 import JurisIa from "./pages/JurisIa";
 import Ponto from "./pages/Ponto";
 import FichaColaborador from "./pages/ponto/ficha";
@@ -47,7 +43,13 @@ import AgenteChat from "./pages/AgenteChat";
 import SmartFlowEditor from "./pages/SmartFlowEditor";
 import Automacoes from "./pages/Automacoes";
 import Kanban from "./pages/Kanban";
+import RestaurarCards from "@/pages/kanban/RestaurarCards";
 import Clientes from "./pages/Clientes";
+import ClientesEssencial from "./pages/ClientesEssencial";
+import Prazos from "./pages/Prazos";
+import { useModulosContratados } from "./components/ModuloGuard";
+import TermosGate from "./components/TermosGate";
+import { contratoLibera } from "@shared/modulos-contratacao";
 import Acordos from "./pages/Acordos";
 import Relatorios from "./pages/Relatorios";
 import Financeiro from "./pages/Financeiro";
@@ -62,6 +64,7 @@ import AuthSplitPage from "./pages/auth/AuthSplitPage";
 import AppLayout from "./components/AppLayout";
 import AdminLayout from "./components/AdminLayout";
 import SubscriptionGuard from "./components/SubscriptionGuard";
+import ModuloGuard from "./components/ModuloGuard";
 
 /**
  * Redireciona /plans (rota antiga) pra /configuracoes?tab=meu-plano,
@@ -77,13 +80,34 @@ function RedirectPlansParaConfiguracoes() {
 function ClientArea({ children }: { children: React.ReactNode }) {
   return (
     <AppLayout>
-      <SubscriptionGuard>{children}</SubscriptionGuard>
+      {/* Antes do guard de assinatura de propósito: o dono precisa aceitar
+          os termos vigentes mesmo se estiver caindo na tela de plano. */}
+      <TermosGate />
+      <SubscriptionGuard>
+        <ModuloGuard>{children}</ModuloGuard>
+      </SubscriptionGuard>
     </AppLayout>
   );
 }
 
 function ClientAreaNoGuard({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
+}
+
+/**
+ * Fase 2 da modularização: /clientes decide entre o CRM completo e o
+ * cadastro essencial olhando o CONTRATO (não o cargo). Quem não tem nenhum
+ * dos dois nem chega aqui — o ModuloGuard barra antes.
+ */
+function ClientesPorContrato() {
+  const contratados = useModulosContratados();
+  return contratoLibera(contratados, ["clientes"]) ? <Clientes /> : <ClientesEssencial />;
+}
+
+/** /prazos: com Agenda contratada o destino certo é o calendário completo. */
+function PrazosPorContrato() {
+  const contratados = useModulosContratados();
+  return contratoLibera(contratados, ["agenda"]) ? <Redirect to="/agenda" /> : <Prazos />;
 }
 
 function AdminArea({ children }: { children: React.ReactNode }) {
@@ -144,9 +168,14 @@ function Router() {
           <AdminFinanceiro />
         </AdminArea>
       </Route>
-      <Route path="/admin/agentes-ia">
+      {/* Editor de plano em tela cheia — sem sidebar de propósito (o gate
+          de admin é do próprio componente). */}
+      <Route path="/admin/planos/:slug">
+        {(params) => <AdminPlanoEditor slug={params.slug} />}
+      </Route>
+      <Route path="/admin/ia">
         <AdminArea>
-          <AdminAgentesIA />
+          <AdminIA />
         </AdminArea>
       </Route>
       <Route path="/admin/smartflow">
@@ -159,34 +188,37 @@ function Router() {
           <AdminReports />
         </AdminArea>
       </Route>
-      <Route path="/admin/auditoria">
+      <Route path="/admin/saude">
         <AdminArea>
-          <AdminAuditoria />
+          <AdminSaude />
         </AdminArea>
+      </Route>
+      {/* Erros, robôs, e-mails e auditoria viraram abas de Saúde do sistema;
+          Agentes IA e JurisIA viraram abas de IA. Links antigos redirecionam. */}
+      <Route path="/admin/agentes-ia">
+        <Redirect to="/admin/ia?aba=agentes" />
+      </Route>
+      <Route path="/admin/jurisia">
+        <Redirect to="/admin/ia?aba=jurisia" />
+      </Route>
+      <Route path="/admin/auditoria">
+        <Redirect to="/admin/saude?aba=auditoria" />
       </Route>
       <Route path="/admin/robo-auditor">
-        <AdminArea>
-          <AdminRoboAuditor />
-        </AdminArea>
+        <Redirect to="/admin/saude?aba=robo-auditor" />
+      </Route>
+      <Route path="/admin/robo-jornada">
+        <Redirect to="/admin/saude?aba=robo-jornada" />
       </Route>
       <Route path="/admin/erros">
-        <AdminArea>
-          <AdminErros />
-        </AdminArea>
+        <Redirect to="/admin/saude?aba=erros" />
+      </Route>
+      <Route path="/admin/email-log">
+        <Redirect to="/admin/saude?aba=emails" />
       </Route>
       <Route path="/admin/tribunais">
         <AdminArea>
           <AdminTribunais />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/jurisia">
-        <AdminArea>
-          <AdminJurisIa />
-        </AdminArea>
-      </Route>
-      <Route path="/admin/email-log">
-        <AdminArea>
-          <AdminEmailLog />
         </AdminArea>
       </Route>
       {/* Integrações e Backups foram absorvidos por Configurações (abas).
@@ -259,9 +291,11 @@ function Router() {
           <Processos />
         </ClientArea>
       </Route>
+      {/* A central virou a aba default de /processos; a rota antiga segue
+          válida pra bookmarks e notificações já enviadas. */}
       <Route path="/movimentacoes">
         <ClientArea>
-          <Movimentacoes />
+          <Processos />
         </ClientArea>
       </Route>
       <Route path="/ponto">
@@ -360,9 +394,19 @@ function Router() {
           <Kanban />
         </ClientArea>
       </Route>
+      <Route path="/kanban/restaurar">
+        <ClientArea>
+          <RestaurarCards />
+        </ClientArea>
+      </Route>
       <Route path="/clientes">
         <ClientArea>
-          <Clientes />
+          <ClientesPorContrato />
+        </ClientArea>
+      </Route>
+      <Route path="/prazos">
+        <ClientArea>
+          <PrazosPorContrato />
         </ClientArea>
       </Route>
       <Route path="/acordos">

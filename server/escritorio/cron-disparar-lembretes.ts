@@ -15,7 +15,7 @@
  * receber lembrete de algo que aconteceu há 1h).
  */
 
-import { eq, and, lte, isNotNull } from "drizzle-orm";
+import { eq, and, lte, isNotNull, inArray } from "drizzle-orm";
 import { getDb } from "../db";
 import { agendamentoLembretes, agendamentos, colaboradores, users } from "../../drizzle/schema";
 import { criarNotificacao } from "../processos/router-notificacoes";
@@ -92,10 +92,11 @@ export async function dispararLembretesAgenda(): Promise<{
     if (destinatariosColaboradorIds.length === 0) continue;
 
     // Resolve userId de cada colaborador (notificacoes usa userId, não colaboradorId)
-    let destinatariosResolvidos: Array<{ userId: number; nome: string | null; email: string | null }> = [];
+    let destinatariosResolvidos: Array<{ colaboradorId: number; userId: number; nome: string | null; email: string | null }> = [];
     try {
       destinatariosResolvidos = await db
         .select({
+          colaboradorId: colaboradores.id,
           userId: colaboradores.userId,
           nome: users.name,
           email: users.email,
@@ -105,17 +106,11 @@ export async function dispararLembretesAgenda(): Promise<{
         .where(
           and(
             eq(colaboradores.escritorioId, p.escritorioId),
-            // Limita aos colaboradores específicos
-            ...(destinatariosColaboradorIds.length === 1
-              ? [eq(colaboradores.id, destinatariosColaboradorIds[0])]
-              : []),
+            // destinatarioIds guarda colaboradores.id — comparar com users.id
+            // (ids de tabelas distintas) era o que deixava "todos" sem aviso.
+            inArray(colaboradores.id, destinatariosColaboradorIds),
           ),
         );
-      if (destinatariosColaboradorIds.length > 1) {
-        destinatariosResolvidos = destinatariosResolvidos.filter((d) =>
-          destinatariosColaboradorIds.includes(d.userId),
-        );
-      }
     } catch (err) {
       log.error({ lembreteId: p.lembreteId, err: err instanceof Error ? err.message : err }, "resolver destinatários falhou");
       erros++;

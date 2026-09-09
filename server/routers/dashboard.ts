@@ -8,7 +8,7 @@
 import { eq, and, desc, asc, gte, lte, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
-import { toIsoString } from "../_core/dates";
+import { horaEmTz, toIsoString } from "../_core/dates";
 import {
   getDb,
   getEstatisticasUso,
@@ -425,10 +425,7 @@ export const dashboardRouter = router({
           compromissosHoje: compromissosHoje.map((c) => ({
             id: c.id,
             titulo: c.titulo,
-            hora: (c.dataInicio as Date).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            hora: horaEmTz(c.dataInicio as Date, fusoEscritorio),
             tipo: c.tipo,
             cor: c.corHex,
           })),
@@ -546,10 +543,7 @@ export const dashboardRouter = router({
           compromissos: compromissos.slice(0, 8).map((c) => ({
             id: c.id,
             titulo: c.titulo,
-            hora: (c.dataInicio as Date).toLocaleTimeString("pt-BR", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            hora: horaEmTz(c.dataInicio as Date, fuso),
             tipo: c.tipo,
             cor: c.corHex,
           })),

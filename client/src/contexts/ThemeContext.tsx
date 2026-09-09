@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useLocation } from "wouter";
 
 /**
  * Tema da aplicação.
@@ -17,6 +18,20 @@ export type PreferenciaTema = "claro" | "escuro" | "sistema";
 export type TemaResolvido = "claro" | "escuro";
 
 const CHAVE = "jurify:tema";
+
+/**
+ * Rotas onde o tema escuro NUNCA se aplica, mesmo com preferência salva.
+ *
+ * Landing e login/cadastro são desenhadas com cores fixas (fundo claro,
+ * painel de marca escuro próprio) — mas os componentes shadcn dentro delas
+ * usam tokens (bg-background, dark:bg-input/30) que escurecem quando a
+ * classe .dark está no <html>. Sem esta lista, quem usa o app no escuro
+ * via a tela de login com inputs acinzentados e o chip "OU" preto.
+ *
+ * As demais rotas públicas (esqueci-senha, convite, assinatura, termos)
+ * têm par escuro completo por design e ficam de fora de propósito.
+ */
+const ROTAS_SEMPRE_CLARAS = ["/", "/login", "/cadastro"];
 
 interface ThemeContextType {
   /** O que está valendo na tela agora. */
@@ -75,7 +90,13 @@ export function ThemeProvider({
     return () => mq.removeEventListener("change", ouvir);
   }, []);
 
-  const tema: TemaResolvido = preferencia === "sistema" ? doSistema : preferencia;
+  const [caminho] = useLocation();
+  const forcarClaro = ROTAS_SEMPRE_CLARAS.includes(caminho);
+  const tema: TemaResolvido = forcarClaro
+    ? "claro"
+    : preferencia === "sistema"
+      ? doSistema
+      : preferencia;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", tema === "escuro");

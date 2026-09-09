@@ -54,9 +54,11 @@ import { agenteChatRouter } from "./integracoes/router-agente-chat";
 import { adminIntegracoesRouter } from "./integracoes/router-admin-integracoes";
 import { adminErrosRouter } from "./admin/router-admin-erros";
 import { adminBackupRouter } from "./admin/router-admin-backup";
+import { adminManutencaoRouter } from "./admin/router-admin-manutencao";
 import { adminEmailLogRouter } from "./admin/router-admin-email-log";
 import { adminTribunaisRouter } from "./admin/router-admin-tribunais";
 import { adminRoboAuditorRouter } from "./admin/router-admin-auditoria-robo";
+import { adminJornadaRouter } from "./admin/router-admin-jornada";
 import { roadmapRouter } from "./router-roadmap";
 import { asaasRouter } from "./integracoes/router-asaas";
 
@@ -73,6 +75,12 @@ import { whatsappCallingRouter } from "./routers/router-whatsapp-calling";
 import { customer360Router } from "./routers/customer360";
 import { processosRouter } from "./routers/processos";
 import { prazosSugeridosRouter } from "./routers/router-prazos-sugeridos";
+import { termosRouter } from "./routers/router-termos";
+import {
+  clientesEssencialRouter,
+  painelProcessualRouter,
+  prazosRouter,
+} from "./processos/router-pacote-processual";
 import { dashboardRouter } from "./routers/dashboard";
 import { adminRouter } from "./routers/admin";
 import { adminFinanceiroRouter } from "./routers/admin-financeiro";
@@ -80,12 +88,14 @@ import { adminAgentesIaRouter } from "./routers/admin-agentes-ia";
 import { adminSmartflowRouter } from "./routers/admin-smartflow";
 import { smartflowRouter } from "./smartflow/router-smartflow";
 import { kanbanRouter } from "./escritorio/router-kanban";
+import { kanbanRestaurarRouter } from "./escritorio/router-kanban-restaurar";
 import { juridicoRouter } from "./juridico/router-juridico";
 import { pushRouter } from "./routers/push";
 
 export const appRouter = router({
   // Autenticação própria — email/senha + Google Sign-In
   auth: authRouter,
+  termos: termosRouter,
 
   // Assinaturas SaaS (cobrança via Asaas)
   subscription: subscriptionRouter,
@@ -152,15 +162,22 @@ export const appRouter = router({
   adminIntegracoes: adminIntegracoesRouter,
   adminErros: adminErrosRouter,
   adminBackup: adminBackupRouter,
+  adminManutencao: adminManutencaoRouter,
   adminEmailLog: adminEmailLogRouter,
   adminTribunais: adminTribunaisRouter,
   adminRoboAuditor: adminRoboAuditorRouter,
+  adminJornada: adminJornadaRouter,
   roadmap: roadmapRouter,
   asaas: asaasRouter,
 
   // Motor próprio (substituiu Judit em 08/05/2026)
   processos: processosRouter,
   prazosSugeridos: prazosSugeridosRouter,
+  // Pacote Acompanhamento Processual (Fase 2): as versões enxutas de
+  // Clientes/Agenda + painel — vivem no módulo "processos" de propósito.
+  clientesEssencial: clientesEssencialRouter,
+  prazos: prazosRouter,
+  painelProcessual: painelProcessualRouter,
 
   // Dashboard do utilizador
   dashboard: dashboardRouter,
@@ -172,6 +189,7 @@ export const appRouter = router({
   adminSmartflow: adminSmartflowRouter,
   smartflow: smartflowRouter,
   kanban: kanbanRouter,
+  kanbanRestaurar: kanbanRestaurarRouter,
   juridico: juridicoRouter,
 });
 

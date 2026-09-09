@@ -6,12 +6,12 @@
 
 import { Link } from "wouter";
 
-const ATUALIZADO_EM = "20 de julho de 2026";
+const ATUALIZADO_EM = "24 de agosto de 2026";
 
 export default function Privacidade() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
-      <Link href="/" className="text-sm text-violet-600 hover:underline">&larr; Voltar</Link>
+      <Link href="/" className="text-sm text-info-fg hover:underline">&larr; Voltar</Link>
       <h1 className="text-3xl font-bold mt-4 mb-2">Política de Privacidade</h1>
       <p className="text-sm text-muted-foreground mb-8">Última atualização: {ATUALIZADO_EM}</p>
 
@@ -60,10 +60,24 @@ export default function Privacidade() {
           <li><strong>Sentry</strong> &mdash; monitoramento de erros (dados anonimizados).</li>
           <li><strong>Google</strong> &mdash; autenticação Google Sign-In (opcional).</li>
           <li><strong>Meta Platforms</strong> &mdash; WhatsApp Business Platform (Cloud API), quando você conecta um canal de atendimento (opcional).</li>
+          <li><strong>OpenAI</strong> e <strong>Anthropic</strong> &mdash; provedores de inteligência artificial usados pra gerar resumos e análises (ver seção 5-A).</li>
         </ul>
         <p>
           Não vendemos dados pessoais a terceiros. Não compartilhamos pra
           fins de marketing.
+        </p>
+
+        <h2 className="text-xl font-semibold pt-4">5-A. Inteligência artificial</h2>
+        <p>
+          Alguns recursos da Plataforma usam modelos de IA de terceiros
+          (<strong>OpenAI</strong> e <strong>Anthropic</strong>) pra gerar resumos e
+          análises &mdash; por exemplo, o resumo de uma movimentação processual (teor
+          de decisão) ou a classificação de conversas do atendimento. Nesses
+          casos, enviamos ao provedor <strong>apenas o conteúdo necessário</strong>{" "}
+          pra gerar o resultado solicitado pelo escritório. Os provedores atuam
+          como suboperadores sob contrato, <strong>não usam esses dados pra
+          treinar modelos</strong> e o resultado gerado exige revisão profissional
+          antes de qualquer uso (ver Termos de Uso, seção 11).
         </p>
 
         <h2 className="text-xl font-semibold pt-4">5. Dados do WhatsApp e da Meta</h2>
@@ -82,7 +96,7 @@ export default function Privacidade() {
           automações configuradas por você. Não os usamos pra publicidade,
           não os vendemos e não os compartilhamos com terceiros fora dos
           operadores listados acima. O tratamento segue os{" "}
-          <a href="https://developers.facebook.com/terms/" target="_blank" rel="noreferrer" className="text-violet-600 hover:underline">Termos da Plataforma Meta</a>.
+          <a href="https://developers.facebook.com/terms/" target="_blank" rel="noreferrer" className="text-info-fg hover:underline">Termos da Plataforma Meta</a>.
           Ao desconectar o canal, os tokens de acesso são revogados e
           excluídos; o histórico de conversas segue a política de retenção
           da sua conta (seção 8).
@@ -99,14 +113,14 @@ export default function Privacidade() {
           <li>Solicitar portabilidade pra outro fornecedor.</li>
         </ul>
         <p>
-          Pra exercer: envie email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
+          Pra exercer: envie email pra <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a>.
           Atendemos em até 15 dias úteis.
         </p>
 
         <h2 id="exclusao-de-dados" className="text-xl font-semibold pt-4">7. Exclusão de dados</h2>
         <p>Pra solicitar a exclusão dos seus dados (incluindo dados obtidos via WhatsApp/Meta):</p>
         <ol className="list-decimal pl-6">
-          <li>Envie um email pra <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a> com o assunto &ldquo;Exclusão de dados&rdquo;, a partir do email cadastrado na conta; ou</li>
+          <li>Envie um email pra <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a> com o assunto &ldquo;Exclusão de dados&rdquo;, a partir do email cadastrado na conta; ou</li>
           <li>Cancele sua conta em Configurações &gt; Meu Plano &mdash; após o período de exportação de 60 dias, todos os dados são excluídos automaticamente.</li>
         </ol>
         <p>
@@ -146,7 +160,7 @@ export default function Privacidade() {
         <h2 className="text-xl font-semibold pt-4">12. Encarregado de Dados (DPO)</h2>
         <p>
           Encarregado: <em>a definir</em>. Contato:{" "}
-          <a href="mailto:privacidade@juridflow.com.br" className="text-violet-600 hover:underline">privacidade@juridflow.com.br</a>.
+          <a href="mailto:privacidade@juridflow.com.br" className="text-info-fg hover:underline">privacidade@juridflow.com.br</a>.
         </p>
 
         <h2 className="text-xl font-semibold pt-4">13. ANPD</h2>

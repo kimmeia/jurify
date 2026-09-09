@@ -118,6 +118,8 @@ export const tarefasRouter = router({
       processoId: z.number().optional(),
       responsavelId: z.number().optional(),
       prioridade: z.enum(["baixa", "normal", "alta", "urgente"]).optional(),
+      /** Quando se começa. `dataVencimento` é a data FATAL. */
+      dataInicial: z.string().optional(),
       dataVencimento: z.string().optional(), // ISO date
     }))
     .mutation(async ({ ctx, input }) => {
@@ -125,6 +127,12 @@ export const tarefasRouter = router({
       if (!perm.allowed) throw new TRPCError({ code: "FORBIDDEN", message: "Sem permissão para criar tarefas." });
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      // `responsavelId` é um int livre vindo do cliente — mesma régua da
+      // Agenda: existe na equipe, está ativo, e só quem coordena despacha
+      // tarefa pra outra pessoa.
+      const { validarResponsavel } = await import("./atribuicao-responsavel");
+      await validarResponsavel(db, perm, input.responsavelId);
 
       const [r] = await db.insert(tarefas).values({
         escritorioId: perm.escritorioId,
@@ -135,6 +143,7 @@ export const tarefasRouter = router({
         processoId: input.processoId || null,
         responsavelId: input.responsavelId || perm.colaboradorId,
         prioridade: (input.prioridade || "normal") as any,
+        dataInicial: input.dataInicial ? new Date(input.dataInicial) : null,
         dataVencimento: input.dataVencimento ? new Date(input.dataVencimento) : null,
       });
 

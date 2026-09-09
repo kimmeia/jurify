@@ -180,6 +180,24 @@ export const adminEmailLogRouter = router({
       };
     }),
 
+  /**
+   * Consumo do limite diário do Resend — alimenta o card da Visão Geral.
+   * Tudo derivado do email_log; "estouro" = o Resend recusou de verdade.
+   */
+  limiteDiario: adminProcedure.query(async () => {
+    const { statusLimiteEmails } = await import("../_core/email-limite");
+    return (
+      (await statusLimiteEmails()) ?? {
+        usadosHoje: 0,
+        limite: 100,
+        nivel: "ok" as const,
+        falhasLimite24h: 0,
+        confirmacoesFalhas24h: 0,
+        avisadoHoje: false,
+      }
+    );
+  }),
+
   /** Contadores das últimas 24h pra dashboard. */
   resumo: adminProcedure.query(async () => {
     const db = await getDb();

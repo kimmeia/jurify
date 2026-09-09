@@ -21,7 +21,65 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal } from "lucide-react";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
+import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
+import { EstadosPicker } from "@/components/EstadosPicker";
+import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
+import { formatarDataCalendario } from "@shared/data-calendario";
+import { GAVETAS, type GavetaPolo } from "@shared/nova-acao-polo";
+
+/** Estados vigiados de um monitoramento (coluna nova; legado = `tribunal`). */
+function lerTribunaisDoMonitorCliente(m: { tribunais?: string | null; tribunal?: string }): string[] {
+  if (m.tribunais) {
+    try {
+      const lista = JSON.parse(m.tribunais);
+      if (Array.isArray(lista) && lista.length > 0) return lista.filter((t) => typeof t === "string");
+    } catch {
+      /* legado */
+    }
+  }
+  return m.tribunal ? [m.tribunal] : [TRIBUNAL_SEDE];
+}
+
+/**
+ * "O robô está mesmo olhando os outros estados?" — responde com o que a
+ * última varredura de fato fez (varreduraJson), não com a intenção. Falha
+ * por tribunal aparece aqui em vez de morrer no log.
+ */
+function CoberturaVarredura({ mons }: { mons: any[] }) {
+  let ultimaEm: string | null = null;
+  const estados = new Set<string>();
+  const falhas = new Set<string>();
+  for (const m of mons) {
+    for (const t of lerTribunaisDoMonitorCliente(m)) estados.add(t);
+    if (!m.varreduraJson) continue;
+    try {
+      const v = JSON.parse(m.varreduraJson);
+      if (v?.em && (!ultimaEm || v.em > ultimaEm)) ultimaEm = v.em;
+      for (const r of v?.resultados ?? []) {
+        if (r && r.ok === false && typeof r.tribunal === "string") falhas.add(siglaDoTribunal(r.tribunal));
+      }
+    } catch {
+      /* varredura antiga sem json */
+    }
+  }
+  if (estados.size === 0) return null;
+  return (
+    <p className="text-[10px] mt-0.5">
+      <span className="text-info-fg font-semibold">
+        Vigiando em {[...estados].map(siglaDoTribunal).join(" · ")}
+      </span>
+      {ultimaEm && (
+        <span className="text-muted-foreground">
+          {" "}· última varredura {new Date(ultimaEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+        </span>
+      )}
+      {falhas.size > 0 && (
+        <span className="text-danger-fg font-semibold"> · ⚠ falha em {[...falhas].join(", ")}</span>
+      )}
+    </p>
+  );
+}
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +89,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { marked } from "marked";
+import { useClientesVinculaveis } from "@/hooks/use-clientes-vinculaveis";
 import {
   SearchHistorySidebar,
   KeywordAlertsButton,
@@ -41,6 +100,11 @@ import {
 import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
+import LeitorQr from "@/components/LeitorQr";
+import GradeTribunais from "@/components/GradeTribunais";
+
+/** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
+const SISTEMA_NACIONAL = "pje_*";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 
@@ -55,15 +119,15 @@ function ehErroSessaoCofre(e: { message?: string } | null | undefined): boolean 
 /** Hash determinístico → paleta de gradient pra avatar do cliente. Mesmo
  *  nome sempre gera a mesma cor (consistência entre módulos). */
 const PALETA_GRADIENT = [
-  "from-indigo-500 to-violet-600",
-  "from-pink-500 to-rose-600",
-  "from-amber-500 to-orange-600",
-  "from-emerald-500 to-teal-600",
-  "from-cyan-500 to-blue-600",
-  "from-fuchsia-500 to-purple-600",
-  "from-rose-500 to-red-600",
-  "from-sky-500 to-indigo-600",
-  "from-lime-500 to-emerald-600",
+  "from-info to-info",
+  "from-danger to-danger",
+  "from-warning to-warning",
+  "from-success to-success",
+  "from-info to-info",
+  "from-danger to-info",
+  "from-danger to-danger",
+  "from-info to-info",
+  "from-success to-success",
 ];
 function gradientAvatar(seed: string): string {
   let h = 0;
@@ -92,13 +156,13 @@ const TIPO_LABELS: Record<string, string> = { lawsuit_cnj: "CNJ", cpf: "CPF", cn
 // "ativo" / "pausado" / "erro" são os 3 valores do enum atual em motor_monitoramentos.
 // Legado Judit (created/updating/updated/paused) mantido pra cards antigos.
 const STATUS_MON: Record<string, { label: string; cor: string }> = {
-  ativo: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
-  erro: { label: "Erro", cor: "bg-red-100 text-red-700" },
-  pausado: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
-  created: { label: "Ativo", cor: "bg-emerald-100 text-emerald-700" },
-  updating: { label: "Atualizando", cor: "bg-blue-100 text-blue-700" },
-  updated: { label: "Atualizado", cor: "bg-emerald-100 text-emerald-700" },
-  paused: { label: "Pausado", cor: "bg-amber-100 text-amber-700" },
+  ativo: { label: "Ativo", cor: "bg-success-bg text-success-fg" },
+  erro: { label: "Erro", cor: "bg-danger-bg text-danger-fg" },
+  pausado: { label: "Pausado", cor: "bg-warning-bg text-warning-fg" },
+  created: { label: "Ativo", cor: "bg-success-bg text-success-fg" },
+  updating: { label: "Atualizando", cor: "bg-info-bg text-info-fg" },
+  updated: { label: "Atualizado", cor: "bg-success-bg text-success-fg" },
+  paused: { label: "Pausado", cor: "bg-warning-bg text-warning-fg" },
 };
 /**
  * Indicador de saúde do monitoramento baseado na última atualização.
@@ -119,10 +183,10 @@ function MonitorHealthDot({
   createdAt?: string | null;
   ultimoErro?: string | null;
 }) {
-  if (statusJudit === "paused") {
+  if (statusJudit === "paused" || statusJudit === "pausado") {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title="Monitoramento pausado">
-        <span className="h-3 w-3 rounded-full bg-gray-400" />
+        <span className="h-3 w-3 rounded-full bg-muted-foreground/50" />
       </span>
     );
   }
@@ -134,8 +198,8 @@ function MonitorHealthDot({
         className="relative flex h-3 w-3 shrink-0"
         title={`ALERTA — última consulta falhou: ${ultimoErro}`}
       >
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-danger opacity-75" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-danger" />
       </span>
     );
   }
@@ -144,7 +208,7 @@ function MonitorHealthDot({
   if (!ref) {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title="Aguardando primeira atualização">
-        <span className="animate-pulse h-3 w-3 rounded-full bg-blue-400" />
+        <span className="animate-pulse h-3 w-3 rounded-full bg-info" />
       </span>
     );
   }
@@ -154,8 +218,8 @@ function MonitorHealthDot({
   if (horasDesdeUpdate <= 48) {
     return (
       <span className="relative flex h-3 w-3 shrink-0" title={`Monitoramento ativo — atualizado há ${Math.round(horasDesdeUpdate)}h`}>
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75" />
+        <span className="relative inline-flex rounded-full h-3 w-3 bg-success" />
       </span>
     );
   }
@@ -168,21 +232,50 @@ function MonitorHealthDot({
   if (horasDesdeUpdate <= 168) { // 7 dias
     return (
       <span className="relative flex h-3 w-3 shrink-0" title={`Atenção — sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias`}>
-        <span className="animate-pulse h-3 w-3 rounded-full bg-amber-500" />
+        <span className="animate-pulse h-3 w-3 rounded-full bg-warning" />
       </span>
     );
   }
 
   return (
     <span className="relative flex h-3 w-3 shrink-0" title={`Sem atualização há ${Math.round(horasDesdeUpdate / 24)} dias — cron pode ter pulado, mas sem erro registrado`}>
-      <span className="h-3 w-3 rounded-full bg-amber-500/70" />
+      <span className="h-3 w-3 rounded-full bg-warning/70" />
     </span>
   );
+}
+
+/**
+ * O polo de uma parte, seja qual for a origem do payload.
+ *
+ * `polo` é o campo novo e é o que carrega a verdade — inclusive "terceiro" e
+ * "desconhecido", que o `side` legado não sabe expressar. O fallback existe
+ * pra resposta que já estava em memória quando o deploy subiu; nele um
+ * terceiro chega como "Unknown" e continua fora dos dois polos, que é onde
+ * ele deve estar.
+ */
+function poloDaParte(p: any): string {
+  if (typeof p?.polo === "string" && p.polo) return p.polo;
+  if (p?.side === "Passive") return "passivo";
+  if (p?.side === "Active") return "ativo";
+  return "desconhecido";
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CARD DE PROCESSO (resultado expandivel)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * `criarMonitoramento` devolve o monitor que já existia em vez de criar outro
+ * — aí não há sucesso a comemorar nem crédito cobrado. Devolve true quando
+ * foi esse o caso, pra quem chamou não emitir o toast de sucesso por cima.
+ */
+function avisarSeJaMonitorado(d: any): boolean {
+  if (!d?.jaExistia) return false;
+  toast.info("Este processo já está monitorado — nada foi cobrado.", {
+    description: d.status === "pausado" ? "Ele está pausado; reative pelo menu do card." : undefined,
+  });
+  return true;
+}
 
 function ProcessoCard({
   processo,
@@ -190,6 +283,7 @@ function ProcessoCard({
   detalhe,
   onCarregarDetalhes,
   carregandoDetalhes,
+  monitorando,
 }: {
   processo: any;
   onMonitorar?: (cnj: string) => void;
@@ -198,14 +292,16 @@ function ProcessoCard({
   /** Handler que carrega detalhes pra esse CNJ (custa 1 cred). Quando definido, mostra botão se card vazio. */
   onCarregarDetalhes?: (cnj: string) => void;
   carregandoDetalhes?: boolean;
+  /** O "Monitorar" deste card está em voo — trava o botão pra o 2º clique não virar 2º monitor. */
+  monitorando?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const { items: alerts } = useKeywordAlerts();
   // `detalhe` (vindo de busca sob demanda) tem precedência sobre `response_data`
   // (vindo da listagem CPF/CNPJ que retorna só CNJs).
   const d = detalhe || processo.response_data || processo;
-  const ativos = (d.parties || []).filter((p: any) => p.side === "Active").slice(0, 5);
-  const passivos = (d.parties || []).filter((p: any) => p.side === "Passive").slice(0, 5);
+  const ativos = (d.parties || []).filter((p: any) => poloDaParte(p) === "ativo").slice(0, 5);
+  const passivos = (d.parties || []).filter((p: any) => poloDaParte(p) === "passivo").slice(0, 5);
   const movs = (d.steps || []).slice(0, 10);
   const advs: any[] = [];
   (d.parties || []).forEach((p: any) => { (p.lawyers || []).forEach((l: any) => { if (advs.length < 5) advs.push(l); }); });
@@ -226,7 +322,7 @@ function ProcessoCard({
     <Card>
       <CardContent className="pt-4 pb-3">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0"><Scale className="h-5 w-5 text-indigo-500" /></div>
+          <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center shrink-0"><Scale className="h-5 w-5 text-info" /></div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-bold font-mono">{d.code || "-"}</p>
@@ -237,12 +333,12 @@ function ProcessoCard({
             {d.courts?.[0] && <p className="text-[10px] text-muted-foreground">{d.courts[0].name}</p>}
             <div className="flex items-center gap-3 mt-0.5">
               {d.distribution_date && <span className="text-[10px] text-muted-foreground">Dist: {new Date(d.distribution_date).toLocaleDateString("pt-BR")}</span>}
-              {d.amount && <span className="text-xs font-medium text-emerald-600">{formatBRL(d.amount)}</span>}
+              {d.amount && <span className="text-xs font-medium text-success-fg">{formatBRL(d.amount)}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {movsComAlerta > 0 && (
-              <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/25 text-[9px] gap-1">
+              <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] gap-1">
                 <Bell className="h-2.5 w-2.5" />
                 {movsComAlerta}
               </Badge>
@@ -261,7 +357,20 @@ function ProcessoCard({
                 {carregandoDetalhes ? "Carregando…" : "Carregar detalhes"}
               </Button>
             )}
-            {onMonitorar && d.code && <Button variant="outline" size="sm" className="h-7 text-[10px]" onClick={() => onMonitorar(d.code)}><Radar className="h-3 w-3 mr-1" />Monitorar</Button>}
+            {onMonitorar && d.code && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-[10px]"
+                disabled={monitorando}
+                onClick={() => onMonitorar(d.code)}
+              >
+                {monitorando
+                  ? <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  : <Radar className="h-3 w-3 mr-1" />}
+                Monitorar
+              </Button>
+            )}
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setAberto(!aberto)}>{aberto ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
           </div>
         </div>
@@ -271,11 +380,11 @@ function ProcessoCard({
             {d.subjects?.length > 0 && (<div><p className="text-[10px] font-semibold text-muted-foreground mb-1">ASSUNTOS</p><div className="flex flex-wrap gap-1">{d.subjects.map((s: any, i: number) => (<Badge key={i} variant="outline" className="text-[9px]">{s.name}</Badge>))}</div></div>)}
 
             <div className="grid grid-cols-2 gap-4">
-              {ativos.length > 0 && (<div><p className="text-[10px] font-semibold text-blue-600 mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-blue-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
-              {passivos.length > 0 && (<div><p className="text-[10px] font-semibold text-red-600 mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-red-500 shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {ativos.length > 0 && (<div><p className="text-[10px] font-semibold text-info-fg mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-info shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {passivos.length > 0 && (<div><p className="text-[10px] font-semibold text-danger-fg mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-danger shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
             </div>
 
-            {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-violet-600 mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-violet-500 shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
+            {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-info-fg mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-info shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
 
             {movs.length > 0 && (
               <div>
@@ -284,7 +393,7 @@ function ProcessoCard({
                 </p>
                 {/* Timeline visual */}
                 <div className="relative space-y-2 max-h-64 overflow-y-auto pl-4">
-                  <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200" />
+                  <div className="absolute left-1 top-1 bottom-1 w-px bg-info-bg" />
                   {movs.map((m: any, i: number) => {
                     const matches = checkKeywords(m.content || "", alerts);
                     const hasAlert = matches.length > 0;
@@ -292,18 +401,18 @@ function ProcessoCard({
                       <div key={i} className="relative">
                         <div
                           className={`absolute -left-3 top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${
-                            hasAlert ? "bg-blue-500 animate-pulse" : "bg-indigo-400"
+                            hasAlert ? "bg-info animate-pulse" : "bg-info"
                           }`}
                         />
                         <div
-                          className={`text-xs pl-2 py-1 ${hasAlert ? "bg-blue-50 rounded pr-2" : ""}`}
+                          className={`text-xs pl-2 py-1 ${hasAlert ? "bg-info-bg rounded pr-2" : ""}`}
                         >
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-[9px] text-muted-foreground font-mono">
                               {m.step_date ? new Date(m.step_date).toLocaleDateString("pt-BR") : ""}
                             </span>
                             {hasAlert && (
-                              <Badge className="bg-blue-500/20 text-blue-700 border-0 text-[8px] px-1 py-0">
+                              <Badge className="bg-info/20 text-info-fg border-0 text-[8px] px-1 py-0">
                                 <Bell className="h-2 w-2 mr-0.5" />
                                 {matches[0]}
                               </Badge>
@@ -401,11 +510,13 @@ function ConsultarTab() {
   });
   const consultarDoc = trpc.processos.consultarDocumento.useMutation({ onSuccess: (d: any) => { setRequestId(d.requestId); setPolling(true); setTentativas(0); }, onError: (e: any) => { setBuscando(false); toast.error(e.message); } });
   // Buscar clientes do escritório para verificar se partes do processo são clientes
-  const { data: clientesData } = trpc.clientes.listar.useQuery({ limite: 100 });
-  const todosClientes = clientesData?.clientes || [];
+  const todosClientes = useClientesVinculaveis({});
 
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
-    onSuccess: (d: any) => toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`),
+    onSuccess: (d: any) => {
+      if (avisarSeJaMonitorado(d)) return;
+      toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`);
+    },
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
 
@@ -419,6 +530,9 @@ function ConsultarTab() {
 
   /** Ao clicar "Monitorar" num ProcessoCard: cria monitoramento E verifica se partes são clientes */
   const handleMonitorar = (cnj: string, processo?: any) => {
+    // O 2º clique antes da resposta virava 2º monitor do mesmo CNJ.
+    if (monitorarMut.isPending) return;
+
     // Resolve credencial: usa a selecionada no dropdown se houver,
     // senão pega a 1ª ativa do cofre. credencialId é obrigatório no
     // backend (Zod) — sem fallback, click em "Monitorar" depois de
@@ -515,14 +629,14 @@ function ConsultarTab() {
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
       <div className="space-y-4 min-w-0">
       {/* Barra de busca */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] space-y-3">
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] space-y-3">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-info flex items-center justify-center shrink-0">
             <Search className="h-4 w-4 text-white" />
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-tight">Consultar processo</p>
-            <p className="text-[11px] text-slate-500">CNJ direto, ou busca por CPF/CNPJ em +90 tribunais.</p>
+            <p className="text-[11px] text-muted-foreground">CNJ direto, ou busca por CPF/CNPJ em +90 tribunais.</p>
           </div>
         </div>
 
@@ -536,19 +650,19 @@ function ConsultarTab() {
             </SelectContent>
           </Select>
           <div className="relative flex-1 min-w-[180px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder={placeholders[tipo]}
               value={valor}
               onChange={(e) => setValor(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleBuscar(); }}
-              className="pl-9 h-10 rounded-lg border-slate-200 focus-visible:ring-indigo-400"
+              className="pl-9 h-10 rounded-lg border-border focus-visible:ring-info"
             />
           </div>
           <Button
             onClick={handleBuscar}
             disabled={buscando || !valor.trim()}
-            className="h-10 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-sm"
+            className="h-10 rounded-lg bg-info shadow-sm"
           >
             {buscando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
             Buscar
@@ -560,14 +674,14 @@ function ConsultarTab() {
         <div className="flex items-center gap-2">
           {credsDisponiveis.length > 0 ? (
             <div className="flex items-center gap-2 flex-1 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-50 border border-violet-200">
-                <Lock className="h-3 w-3 text-violet-600" />
-                <span className="text-[10px] font-medium text-violet-700">Cofre</span>
+              <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-info-bg border border-info/30">
+                <Lock className="h-3 w-3 text-info-fg" />
+                <span className="text-[10px] font-medium text-info-fg">Cofre</span>
               </div>
               <select
                 value={credencialId}
                 onChange={(e) => setCredencialId(e.target.value)}
-                className="flex h-8 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-indigo-400/30"
+                className="flex h-8 rounded-lg border border-border bg-card px-2.5 py-1 text-xs flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-info/30"
               >
                 <option value="">Sem credencial (processos públicos)</option>
                 {credsDisponiveis.map((c: any) => (
@@ -576,10 +690,10 @@ function ConsultarTab() {
                   </option>
                 ))}
               </select>
-              <span className="text-[10px] text-slate-400">Selecione pra ver segredo de justiça</span>
+              <span className="text-[10px] text-muted-foreground/70">Selecione pra ver segredo de justiça</span>
             </div>
           ) : (
-            <p className="text-[10px] text-slate-500 flex items-center gap-1.5">
+            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
               <Lock className="h-3 w-3" />
               Cadastre uma credencial OAB no Cofre para acessar processos em segredo de justiça.
             </p>
@@ -588,16 +702,16 @@ function ConsultarTab() {
 
         <div>
           {tipo === "lawsuit_cnj" ? (
-            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/70">
-              <Coins className="h-3 w-3 text-emerald-600" />
-              <p className="text-[11px] text-emerald-800">
+            <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-bg border border-success/30">
+              <Coins className="h-3 w-3 text-success-fg" />
+              <p className="text-[11px] text-success-fg">
                 Custo: <strong>1 crédito</strong> — consulta direta por número do processo.
               </p>
             </div>
           ) : (
-            <div className="rounded-lg bg-amber-50 border border-amber-200/70 p-2.5 text-[11px] text-amber-900">
+            <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 text-[11px] text-warning-fg">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-600" />
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning-fg" />
                 <div>
                   <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
                   <p className="mt-0.5 text-[10.5px] opacity-90">
@@ -614,16 +728,16 @@ function ConsultarTab() {
 
       {/* Status da busca */}
       {buscando && (
-        <div className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-indigo-50 via-blue-50 to-indigo-50 border border-indigo-200/60 shadow-sm">
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-info-bg border border-info/30 shadow-sm">
           <div className="relative flex h-9 w-9 shrink-0">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-30" />
-            <div className="relative h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-info opacity-30" />
+            <div className="relative h-9 w-9 rounded-full bg-info flex items-center justify-center">
               <Loader2 className="h-4 w-4 text-white animate-spin" />
             </div>
           </div>
           <div>
-            <p className="text-sm font-semibold text-indigo-900">Consultando tribunais…</p>
-            <p className="text-xs text-indigo-700/80">
+            <p className="text-sm font-semibold text-info-fg">Consultando tribunais…</p>
+            <p className="text-xs text-info-fg/80">
               {tipo !== "lawsuit_cnj"
                 ? `Buscando em todos os tribunais por ${TIPO_LABELS[tipo]}. Pode levar até 2 minutos.`
                 : "Resultado em até 9 segundos."}
@@ -647,15 +761,15 @@ function ConsultarTab() {
               const codigo = String(e.code || "outro");
               const isCredencial = /credencial|sess[aã]o|login/i.test(codigo) || /credencial|sess[aã]o|login/i.test(e.message || "");
               return (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
-                  <p className="text-sm font-semibold text-red-900">Falha na consulta</p>
-                  <p className="text-sm text-red-800">{e.message || "Erro desconhecido"}</p>
+                <div className="rounded-lg border border-danger/30 bg-danger-bg p-4 space-y-2">
+                  <p className="text-sm font-semibold text-danger-fg">Falha na consulta</p>
+                  <p className="text-sm text-danger-fg">{e.message || "Erro desconhecido"}</p>
                   {isCredencial && (
                     <Button size="sm" variant="outline" onClick={() => (window.location.href = "/processos?tab=cofre")}>
                       Abrir Cofre de Credenciais
                     </Button>
                   )}
-                  <p className="text-xs text-red-700/70">Código: {codigo}</p>
+                  <p className="text-xs text-danger-fg/70">Código: {codigo}</p>
                 </div>
               );
             }
@@ -689,6 +803,7 @@ function ConsultarTab() {
                       key={item.response_id || i}
                       processo={item}
                       onMonitorar={(c) => handleMonitorar(c, item)}
+                      monitorando={monitorarMut.isPending && monitorarMut.variables?.numeroCnj === cnj}
                       detalhe={cnj ? detalhesPorCnj[cnj] : undefined}
                       onCarregarDetalhes={cnj ? carregarDetalhes : undefined}
                       carregandoDetalhes={carregandoCnj === cnj}
@@ -700,17 +815,17 @@ function ConsultarTab() {
           })()}
         </div>
       ) : resultados && !buscando ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-12 text-center">
-          <Scale className="h-8 w-8 text-slate-300 mx-auto mb-2" />
-          <p className="text-sm text-slate-500">Nenhum processo encontrado.</p>
+        <div className="rounded-2xl border border-dashed border-border bg-muted/50 py-12 text-center">
+          <Scale className="h-8 w-8 text-muted-foreground/70 mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">Nenhum processo encontrado.</p>
         </div>
       ) : !buscando && !resultados ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 flex items-center justify-center mx-auto mb-1">
-            <Scale className="h-7 w-7 text-indigo-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-info-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-info/10 flex items-center justify-center mx-auto mb-1">
+            <Scale className="h-7 w-7 text-info/70" />
           </div>
-          <p className="font-semibold text-slate-700">Consulte processos judiciais</p>
-          <p className="text-sm text-slate-500">Busque por CNJ, CPF ou CNPJ em +90 tribunais do Brasil.</p>
+          <p className="font-semibold text-foreground">Consulte processos judiciais</p>
+          <p className="text-sm text-muted-foreground">Busque por CNJ, CPF ou CNPJ em +90 tribunais do Brasil.</p>
         </div>
       ) : null}
       </div>
@@ -733,7 +848,7 @@ function ConsultarTab() {
             <div className="space-y-2">
               {vincularDialog.clientes.map((c: any) => (
                 <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50">
-                  <div className="h-9 w-9 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700">
+                  <div className="h-9 w-9 rounded-full bg-info-bg flex items-center justify-center text-xs font-bold text-info-fg">
                     {(c.nome || "?")[0]}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -803,27 +918,27 @@ function ResumoIABloco({ texto }: { texto: string }) {
   };
 
   return (
-    <div className="rounded-lg bg-violet-50 dark:bg-violet-950/20 border border-violet-200/50 p-3 space-y-3">
-      <p className="text-[10px] font-semibold text-violet-600 flex items-center gap-1">
+    <div className="rounded-lg bg-info-bg border border-info/30 p-3 space-y-3">
+      <p className="text-[10px] font-semibold text-info-fg flex items-center gap-1">
         <FileText className="h-3 w-3" /> ANÁLISE ESTRATÉGICA IA
       </p>
       <div
-        className="prose prose-sm dark:prose-invert max-w-none text-xs text-violet-900 dark:text-violet-100
-          prose-headings:text-violet-700 dark:prose-headings:text-violet-200 prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1.5
+        className="prose prose-sm dark:prose-invert max-w-none text-xs text-info-fg
+          prose-headings:text-info-fg prose-headings:font-semibold prose-headings:mt-3 prose-headings:mb-1.5
           prose-h3:text-sm prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5
-          prose-strong:text-violet-900 dark:prose-strong:text-violet-100"
+          prose-strong:text-info-fg"
         dangerouslySetInnerHTML={{ __html: marked.parse(resto, { async: false }) as string }}
       />
       {mensagemCliente && (
-        <div className="rounded-md bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50 p-3 space-y-2">
+        <div className="rounded-md bg-success-bg border border-success/30 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+            <p className="text-[10px] font-semibold text-success-fg flex items-center gap-1">
               💬 MENSAGEM PRONTA PRO CLIENTE
             </p>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px] border-emerald-300"
+              className="h-6 text-[10px] border-success/30"
               onClick={copiarMensagem}
             >
               <Copy className="h-3 w-3 mr-1" />
@@ -831,7 +946,7 @@ function ResumoIABloco({ texto }: { texto: string }) {
             </Button>
           </div>
           <div
-            className="prose prose-sm dark:prose-invert max-w-none text-xs text-emerald-900 dark:text-emerald-100 prose-p:my-1"
+            className="prose prose-sm dark:prose-invert max-w-none text-xs text-success-fg prose-p:my-1"
             dangerouslySetInnerHTML={{ __html: marked.parse(mensagemCliente, { async: false }) as string }}
           />
         </div>
@@ -904,10 +1019,10 @@ function identificadorPrincipal(mon: any): string {
 
 // Selos de classificação da movimentação (resumo IA classificado).
 const DESFECHO_MOV: Record<string, { label: string; emoji: string; cls: string; dot: string }> = {
-  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-rose-50 text-rose-700 border-rose-200", dot: "bg-rose-500" },
-  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
-  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-slate-100 text-slate-600 border-slate-200", dot: "bg-slate-400" },
+  favoravel: { label: "Favorável", emoji: "🟢", cls: "bg-success-bg text-success-fg border-success/30", dot: "bg-success" },
+  desfavoravel: { label: "Desfavorável", emoji: "🔴", cls: "bg-danger-bg text-danger-fg border-danger/30", dot: "bg-danger" },
+  parcial: { label: "Parcial", emoji: "🟡", cls: "bg-warning-bg text-warning-fg border-warning/30", dot: "bg-warning" },
+  neutro: { label: "Sem mérito", emoji: "⚪", cls: "bg-muted text-muted-foreground border-border", dot: "bg-muted-foreground/50" },
 };
 
 function MonitoramentoCard({
@@ -915,11 +1030,15 @@ function MonitoramentoCard({
   onPausar,
   onReativar,
   onDeletar,
+  onAtualizar,
+  atualizando,
 }: {
   mon: any;
   onPausar: () => void;
   onReativar: () => void;
   onDeletar: () => void;
+  onAtualizar?: () => void;
+  atualizando?: boolean;
 }) {
   const [aberto, setAberto] = useState(false);
   const [resumoIA, setResumoIA] = useState<string | null>(null);
@@ -1078,8 +1197,8 @@ function MonitoramentoCard({
   }
   const steps: any[] = processoData?.steps || [];
   const partes: any[] = processoData?.parties || [];
-  const ativos = partes.filter((p: any) => p.side === "Active").slice(0, 5);
-  const passivos = partes.filter((p: any) => p.side === "Passive").slice(0, 5);
+  const ativos = partes.filter((p: any) => poloDaParte(p) === "ativo").slice(0, 5);
+  const passivos = partes.filter((p: any) => poloDaParte(p) === "passivo").slice(0, 5);
 
   // ─── Capa cacheada pelo cron (capa_json / partes_json) ──────────────────
   // Sem custo: o cron já populou esses fields a cada sync. Frontend mostra
@@ -1112,16 +1231,16 @@ function MonitoramentoCard({
   const pausado = status === "paused" || status === "pausado";
   const corLateral = temErro
     ? mon.diagnostico?.severidade === "aviso"
-      ? "border-l-amber-500"
-      : "border-l-rose-500"
+      ? "border-l-warning"
+      : "border-l-danger"
     : pausado
-      ? "border-l-slate-400"
-      : "border-l-emerald-500";
+      ? "border-l-muted-foreground/40"
+      : "border-l-success";
 
   // Estilo do avatar/ícone — pausado vira cinza, erro vira gradient rose
   // A borda lateral, o ponto de saúde e o texto do motivo já dizem que está
   // quebrado; pintar o avatar também deixava quatro vermelhos na mesma linha.
-  const avatarStyle = temErro || pausado ? "bg-muted" : "bg-gradient-to-br from-indigo-500 to-violet-600";
+  const avatarStyle = temErro || pausado ? "bg-muted" : "bg-info";
   const avatarIconColor = temErro || pausado ? "text-muted-foreground" : "text-white";
 
   // Tempo relativo "há X" pra última atualização
@@ -1144,7 +1263,7 @@ function MonitoramentoCard({
 
   return (
     <>
-    <div className={`rounded-xl ${cardBg} border border-slate-200 border-l-[3px] ${corLateral} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${pausado ? "opacity-75" : ""}`}>
+    <div className={`rounded-xl ${cardBg} border border-border border-l-[3px] ${corLateral} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all ${pausado ? "opacity-75" : ""}`}>
       <div className="px-4 py-3">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setAberto(!aberto)}>
           <div className={`h-11 w-11 rounded-xl ${avatarStyle} flex items-center justify-center shrink-0 shadow-sm`}>
@@ -1171,7 +1290,7 @@ function MonitoramentoCard({
               )}
               {mon.subiu2grau && (
                 <span
-                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-amber-50 text-amber-700"
+                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-warning-bg text-warning-fg"
                   title={mon.indicios2grau ? `Indícios de 2º grau: ${mon.indicios2grau}` : "As movimentações sugerem que o processo subiu pro 2º grau (recurso)."}
                 >
                   2º grau?
@@ -1192,8 +1311,8 @@ function MonitoramentoCard({
                 <span
                   className={`text-[12px] truncate ${
                     mon.diagnostico.severidade === "alerta"
-                      ? "text-rose-700 dark:text-rose-300"
-                      : "text-amber-700 dark:text-amber-300"
+                      ? "text-danger-fg"
+                      : "text-warning-fg"
                   }`}
                   title={mon.ultimoErro || undefined}
                 >
@@ -1216,16 +1335,28 @@ function MonitoramentoCard({
           </div>
 
           <div className="shrink-0 text-right mr-1">
-            <p className="text-[11.5px] font-semibold text-foreground/70">
-              {mon.diagnostico
-                ? tempoRelativo ?? "—"
-                : mon.ultimaMovimentacao
-                  ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
-                  : tempoRelativo ?? "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              {mon.diagnostico ? "parado" : "última mov."}
-            </p>
+            {atualizando ? (
+              <>
+                <p className="text-[11.5px] font-semibold text-info-fg flex items-center justify-end gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  consultando…
+                </p>
+                <p className="text-[10px] text-muted-foreground">tribunal agora</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[11.5px] font-semibold text-foreground/70">
+                  {mon.diagnostico
+                    ? tempoRelativo ?? "—"
+                    : mon.ultimaMovimentacao
+                      ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
+                      : tempoRelativo ?? "—"}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {mon.diagnostico ? "parado" : "última mov."}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Cinco controles coloridos por linha × centenas de linhas era o
@@ -1238,6 +1369,16 @@ function MonitoramentoCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                {onAtualizar && (
+                  <>
+                    <DropdownMenuItem disabled={atualizando} onClick={onAtualizar}>
+                      <RefreshCcw className="h-3.5 w-3.5 mr-2" />
+                      {atualizando ? "Atualizando…" : "Atualizar só este"}
+                      <span className="ml-auto text-[10px] text-muted-foreground">sem custo</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {searchType === "lawsuit_cnj" && (
                   <>
                     <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
@@ -1253,13 +1394,13 @@ function MonitoramentoCard({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {(status === "created" || status === "updated" || status === "updating") && (
+                {!pausado && (
                   <DropdownMenuItem onClick={onPausar}>
                     <Pause className="h-3.5 w-3.5 mr-2" />
                     Pausar monitoramento
                   </DropdownMenuItem>
                 )}
-                {status === "paused" && (
+                {pausado && (
                   <DropdownMenuItem onClick={onReativar}>
                     <Play className="h-3.5 w-3.5 mr-2" />
                     Reativar
@@ -1308,7 +1449,7 @@ function MonitoramentoCard({
                     <Badge variant="outline" className="text-[10px]">{processoData.instance}ª instância</Badge>
                   )}
                   {processoData.amount && (
-                    <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px]">
+                    <Badge className="bg-success/15 text-success-fg border-success/30 text-[10px]">
                       <CircleDollarSign className="h-2.5 w-2.5 mr-0.5" />
                       {formatBRL(processoData.amount)}
                     </Badge>
@@ -1324,7 +1465,7 @@ function MonitoramentoCard({
                   <div className="grid grid-cols-2 gap-3">
                     {ativos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-blue-600 mb-1">POLO ATIVO</p>
+                        <p className="text-[10px] font-semibold text-info-fg mb-1">POLO ATIVO</p>
                         {ativos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1332,7 +1473,7 @@ function MonitoramentoCard({
                     )}
                     {passivos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-red-600 mb-1">POLO PASSIVO</p>
+                        <p className="text-[10px] font-semibold text-danger-fg mb-1">POLO PASSIVO</p>
                         {passivos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1350,7 +1491,7 @@ function MonitoramentoCard({
                       </p>
                       {steps.some((s: any) => s.eventoId && !s.resumoIa) && (
                         <button
-                          className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 inline-flex items-center gap-1 disabled:opacity-60"
+                          className="text-[10px] font-semibold text-info-fg hover:text-info-fg inline-flex items-center gap-1 disabled:opacity-60"
                           disabled={reclassificarMut.isPending}
                           onClick={() => reclassificarMut.mutate({ monitoramentoId: mon.id })}
                           title="Gera resumo + selos (desfecho/relevância) das movimentações que ainda não têm."
@@ -1361,14 +1502,14 @@ function MonitoramentoCard({
                       )}
                     </div>
                     <div className="relative space-y-3 max-h-96 overflow-y-auto pl-4">
-                      <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200 dark:bg-indigo-900" />
+                      <div className="absolute left-1 top-1 bottom-1 w-px bg-info-bg" />
                       {steps.map((s: any, i: number) => {
                         const dm = s.desfecho ? DESFECHO_MOV[s.desfecho] : null;
                         const rotina = s.relevancia === "rotina";
                         const prazo = s.prazoSugerido;
                         return (
                         <div key={i} className="relative">
-                          <div className={`absolute -left-3 top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${dm ? dm.dot : rotina ? "bg-slate-300" : "bg-indigo-400"}`} />
+                          <div className={`absolute -left-3 top-1.5 h-2 w-2 rounded-full ring-2 ring-background ${dm ? dm.dot : rotina ? "bg-muted-foreground/50" : "bg-info"}`} />
                           <div className="text-xs">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {s.step_date && (
@@ -1379,19 +1520,19 @@ function MonitoramentoCard({
                               {dm && <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${dm.cls}`}>{dm.emoji} {dm.label}</span>}
                               {(s.relevancia === "rotina" || s.relevancia === "relevante") && (
                                 rotina
-                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-slate-100 text-slate-500 border-slate-200">📄 Rotina</span>
-                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-300">⭐ Relevante</span>
+                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-muted text-muted-foreground border-border">📄 Rotina</span>
+                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-info-bg text-info-fg border-info/30">⭐ Relevante</span>
                               )}
-                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-orange-100 text-orange-700 border-orange-300">⏰ Requer prazo</span>}
+                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-warning-bg text-warning-fg border-warning/30">⏰ Requer prazo</span>}
                             </div>
                             {s.resumoIa
                               ? <p className="text-[11.5px] leading-snug mt-1 font-medium text-foreground">{s.resumoIa}</p>
                               : <p className="text-[11px] leading-tight mt-0.5">{s.content}</p>}
                             {s.resumoIa && <p className="text-[10px] leading-tight mt-0.5 text-muted-foreground line-clamp-2">{s.content}</p>}
                             {prazo && (
-                              <div className="mt-1.5 rounded-md bg-orange-50 border border-orange-200 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap dark:bg-orange-950/20 dark:border-orange-900">
-                                <span className="text-[10px] text-orange-800 dark:text-orange-300">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${new Date(prazo.dataSugerida).toLocaleDateString("pt-BR")}` : ""}</span>
-                                <Button size="sm" className="h-6 text-[10px] rounded-md bg-orange-600 hover:bg-orange-700 text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
+                              <div className="mt-1.5 rounded-md bg-warning-bg border border-warning/30 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap dark:bg-warning/20">
+                                <span className="text-[10px] text-warning-fg">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${formatarDataCalendario(prazo.dataSugerida)}` : ""}</span>
+                                <Button size="sm" className="h-6 text-[10px] rounded-md bg-warning hover:bg-warning text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
                                   {criarPrazoMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "＋ Criar prazo"}
                                 </Button>
                               </div>
@@ -1523,8 +1664,8 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const criarMut = trpc.processos.criarMonitoramento.useMutation({
-    onSuccess: () => {
-      toast.success("Monitoramento de movimentações criado!");
+    onSuccess: (d: any) => {
+      if (!avisarSeJaMonitorado(d)) toast.success("Monitoramento de movimentações criado!");
       setNovoOpen(false);
       setNovoValor("");
       setNovoCredencialId("");
@@ -1532,8 +1673,14 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
     },
     onError: (e: any) => toast.error(e.message),
   });
-  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({ onSuccess: () => { toast.success("Pausado"); refetch(); } });
-  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({ onSuccess: () => { toast.success("Reativado"); refetch(); } });
+  const pausarMut = trpc.processos.pausarMonitoramento.useMutation({
+    onSuccess: () => { toast.success("Pausado"); refetch(); },
+    onError: (e: any) => toast.error("Não foi possível pausar", { description: e.message }),
+  });
+  const reativarMut = trpc.processos.reativarMonitoramento.useMutation({
+    onSuccess: () => { toast.success("Reativado"); refetch(); },
+    onError: (e: any) => toast.error("Não foi possível reativar", { description: e.message }),
+  });
   const deletarMut = trpc.processos.deletarMonitoramento.useMutation({
     onSuccess: () => {
       toast.success("Monitoramento removido");
@@ -1549,8 +1696,10 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const atualizarTodosMut = trpc.processos.atualizarTodosMonitoramentos.useMutation({
     onSuccess: (d: any) => {
       setAtualOperacaoId(d.operacaoId);
-      setAtualDrawerOpen(true);
-      toast.success(`Atualizando ${d.total} monitoramento(s)…`);
+      // Um processo só: o próprio card mostra "consultando…" — abrir o
+      // drawer de lote pra isso seria um modal na frente de um clique.
+      if (d.total > 1) setAtualDrawerOpen(true);
+      toast.success(d.total === 1 ? "Atualizando o processo…" : `Atualizando ${d.total} monitoramento(s)…`);
     },
     onError: (e: any) => {
       const msg = e?.message ?? "";
@@ -1647,6 +1796,20 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
     pausado: listaMons.filter((m: any) => (m.statusJudit || m.status) === "pausado" || (m.statusJudit || m.status) === "paused").length,
     erro: listaMons.filter((m: any) => (m.statusJudit || m.status) === "erro" || !!m.ultimoErro).length,
   };
+  // Mesmo predicado do chip "Parados" — o botão do aviso atualiza exatamente
+  // o que o chip conta, senão os números divergem e a confiança vai junto.
+  const idsParados = listaMons
+    .filter((m: any) => (m.statusJudit || m.status) === "erro" || !!m.ultimoErro)
+    .map((m: any) => m.id);
+  // Quais monitoramentos estão na operação em curso — pro card mostrar
+  // "consultando…" na hora, sem depender do drawer aberto.
+  const idsAtualizando = new Set<number>(
+    progresso?.status === "rodando"
+      ? (progresso.monitores as any[])
+          .filter((x) => x.status === "pendente" || x.status === "rodando")
+          .map((x) => x.monitoramentoId)
+      : [],
+  );
   // Normaliza string pra busca: trim, lowercase, remove acentos e
   // não-alfanuméricos. Faz CPF "123.456.789-00" bater com "12345678900".
   const normalizarBusca = (s: string) =>
@@ -1732,7 +1895,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
             <Button
               size="sm"
               variant="outline"
-              className="border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800"
+              className="border-warning/30 bg-warning-bg hover:bg-warning-bg text-warning-fg"
               disabled={seedTesteMut.isPending}
               onClick={() => seedTesteMut.mutate()}
               title="Cria um processo de teste com movimentações classificadas (só staging/dev)."
@@ -1778,12 +1941,12 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       />
 
       {principal && (
-        <div className="rounded-xl border bg-card border-l-[3px] border-l-rose-500 p-4 flex items-start gap-3.5 flex-wrap">
+        <div className="rounded-xl border bg-card border-l-[3px] border-l-danger p-4 flex items-start gap-3.5 flex-wrap">
           <div
             className={`h-9 w-9 rounded-[10px] flex items-center justify-center shrink-0 ${
               principal.causa.severidade === "alerta"
-                ? "bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400"
-                : "bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+                ? "bg-danger-bg text-danger-fg dark:text-danger"
+                : "bg-warning-bg text-warning-fg dark:text-warning"
             }`}
           >
             <KeyRound className="h-[18px] w-[18px]" />
@@ -1798,26 +1961,26 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {principal.causa.acao && principal.causa.destino === "cofre" && onIrAoCofre && (
-              <Button size="sm" className="bg-rose-600 hover:bg-rose-700" onClick={onIrAoCofre}>
+              <Button size="sm" className="bg-danger hover:bg-danger" onClick={onIrAoCofre}>
                 <KeyRound className="h-3.5 w-3.5 mr-1.5" />
                 {principal.causa.acao}
               </Button>
             )}
-            {/* Fecha o ciclo: revalidar a credencial religa os monitoramentos,
-                mas os dados só chegam na próxima varredura — daqui o dono
-                força a releitura na hora. */}
+            {/* O aviso fala dos parados — o botão atualiza SÓ eles. Antes
+                rodava a carteira inteira (425) pra reconsultar 11, e o dono
+                apontou: pra tudo, já existe o "Atualizar" da barra. */}
             <Button
               size="sm"
-              variant="outline"
-              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
-              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
+              disabled={atualizarTodosMut.isPending || progresso?.status === "rodando" || idsParados.length === 0}
+              onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsParados })}
+              title="Reconsulta apenas os processos parados. Sem custo de créditos."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
               ) : (
                 <RefreshCcw className="h-3.5 w-3.5 mr-1.5" />
               )}
-              Verificar agora
+              Atualizar só os {idsParados.length}
             </Button>
             <Button size="sm" variant="outline" onClick={() => setFiltroStatus("erro")}>
               Ver os {principal.total}
@@ -1827,8 +1990,8 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       )}
 
       {secundarios.length > 0 && (
-        <div className="rounded-xl border bg-card border-l-[3px] border-l-amber-500 px-4 py-2.5 flex items-center gap-3 flex-wrap">
-          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+        <div className="rounded-xl border bg-card border-l-[3px] border-l-warning px-4 py-2.5 flex items-center gap-3 flex-wrap">
+          <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0" />
           <p className="text-[12.5px] text-muted-foreground min-w-0">
             <b className="font-bold text-foreground">{totalSecundarios}</b>{" "}
             {totalSecundarios === 1 ? "processo para" : "processos param"} por{" "}
@@ -1877,26 +2040,26 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                   <div key={m.monitoramentoId} className="flex items-center gap-2 text-xs py-1.5 border-b border-dashed last:border-0">
                     <div className="w-6 shrink-0 text-center">
                       {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
-                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
-                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
-                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-info inline" />}
+                      {m.status === "ok" && <span className="text-success-fg">✓</span>}
+                      {m.status === "erro" && <span className="text-danger-fg">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
                     <Badge variant="outline" className="text-[9px] shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
                       <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
                       <span
-                        className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate"
+                        className="text-[9px] text-danger-fg shrink-0 max-w-[180px] truncate"
                         title={m.erro}
                       >
                         {m.erro}
@@ -1922,11 +2085,11 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       </Dialog>
 
       {semCredenciais && (
-        <div className="rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50/60 border border-blue-200/60 p-3.5 flex items-start gap-3 shadow-[0_1px_2px_0_rgb(0,0,0,0.03)]">
-          <div className="h-8 w-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-            <Lock className="h-4 w-4 text-blue-600" />
+        <div className="rounded-xl bg-gradient-to-r from-info-bg to-info-bg/60 border border-info/30 p-3.5 flex items-start gap-3 shadow-[0_1px_2px_0_rgb(0,0,0,0.03)]">
+          <div className="h-8 w-8 rounded-lg bg-info/15 flex items-center justify-center shrink-0">
+            <Lock className="h-4 w-4 text-info-fg" />
           </div>
-          <p className="text-xs text-blue-900/90 leading-relaxed">
+          <p className="text-xs text-info-fg/90 leading-relaxed">
             Processos públicos podem ser monitorados sem credencial.
             Para processos em <strong>segredo de justiça</strong>, cadastre uma credencial OAB no <strong>Cofre</strong>.
           </p>
@@ -1942,22 +2105,24 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
               onPausar={() => pausarMut.mutate({ id: m.id })}
               onReativar={() => reativarMut.mutate({ id: m.id })}
               onDeletar={() => setDeletarTarget({ id: m.id, nome: m.apelido || m.searchKey || "monitoramento" })}
+              onAtualizar={() => atualizarTodosMut.mutate({ monitoramentoIds: [m.id] })}
+              atualizando={idsAtualizando.has(m.id)}
             />
           ))}
         </div>
       ) : listaMons.length > 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 py-10 text-center space-y-2">
-          <Radar className="h-7 w-7 text-slate-300 mx-auto" />
-          <p className="text-sm font-medium text-slate-600">Nenhum monitoramento com este filtro</p>
-          <p className="text-xs text-slate-400">Tente outra aba de filtro acima.</p>
+        <div className="rounded-2xl border border-dashed border-border bg-muted/50 py-10 text-center space-y-2">
+          <Radar className="h-7 w-7 text-muted-foreground/70 mx-auto" />
+          <p className="text-sm font-medium text-muted-foreground">Nenhum monitoramento com este filtro</p>
+          <p className="text-xs text-muted-foreground/70">Tente outra aba de filtro acima.</p>
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-indigo-50/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 flex items-center justify-center mx-auto mb-1">
-            <Radar className="h-7 w-7 text-indigo-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-info-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-info/10 flex items-center justify-center mx-auto mb-1">
+            <Radar className="h-7 w-7 text-info/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhum monitoramento ativo</p>
-          <p className="text-sm text-slate-500 max-w-md mx-auto">
+          <p className="font-semibold text-foreground">Nenhum monitoramento ativo</p>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">
             {semCredenciais
               ? "Cadastre uma credencial OAB no Cofre para começar."
               : "Adicione um número de processo (CNJ) para acompanhar movimentações."}
@@ -2018,9 +2183,9 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
-              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-              <div className="text-blue-900 dark:text-blue-200 space-y-1">
+            <div className="rounded-lg bg-info-bg border border-info/30 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-info-fg shrink-0 mt-0.5" />
+              <div className="text-info-fg space-y-1">
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
                   O monitoramento de movimentações requer credencial OAB para garantir que apenas
@@ -2091,7 +2256,15 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
  * 418 deles estavam quebrados. O número que manda passou a ser pastilha, no
  * mesmo padrão da Agenda e da central de movimentações.
  */
-function CabecalhoProcessos({ saldo }: { saldo: number }) {
+function CabecalhoProcessos({
+  saldo,
+  onConsultar,
+  onResumo,
+}: {
+  saldo: number;
+  onConsultar: () => void;
+  onResumo: () => void;
+}) {
   const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
     { tipoMonitoramento: "movimentacoes" },
     { retry: false, refetchOnWindowFocus: false },
@@ -2126,10 +2299,20 @@ function CabecalhoProcessos({ saldo }: { saldo: number }) {
           )}
         </div>
       </div>
-      <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5 shrink-0">
-        <Coins className="h-4 w-4 text-amber-500" />
-        <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
-        <span className="text-[11.5px] text-muted-foreground">créditos</span>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
+          <Coins className="h-4 w-4 text-warning" />
+          <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
+          <span className="text-[11.5px] text-muted-foreground">créditos</span>
+        </div>
+        <Button size="sm" variant="outline" onClick={onConsultar}>
+          <Search className="h-4 w-4 mr-1.5" />
+          Consultar CNJ
+        </Button>
+        <Button size="sm" variant="outline" onClick={onResumo}>
+          <Mail className="h-4 w-4 mr-1.5" />
+          Resumo diário
+        </Button>
       </div>
     </div>
   );
@@ -2148,20 +2331,20 @@ function PastilhaProc({
     <div
       className={`rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 ${
         tom === "alerta"
-          ? "bg-rose-50 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900"
+          ? "bg-danger-bg border-danger/30 dark:border-danger/30"
           : "bg-card border-border"
       }`}
     >
       <b
         className={`text-[15px] font-bold tabular-nums ${
-          tom === "alerta" ? "text-rose-600 dark:text-rose-400" : ""
+          tom === "alerta" ? "text-danger-fg" : ""
         }`}
       >
         {valor}
       </b>
       <span
         className={`text-[11.5px] ${
-          tom === "alerta" ? "text-rose-700 dark:text-rose-300" : "text-muted-foreground"
+          tom === "alerta" ? "text-danger-fg" : "text-muted-foreground"
         }`}
       >
         {rotulo}
@@ -2173,21 +2356,26 @@ function PastilhaProc({
 export default function Processos() {
   // Lê ?tab= da URL pra suportar deep-links (ex: vínculo de processo do
   // cliente redireciona pra /processos?tab=movimentacoes&cnj=...&abrirMonitor=1).
+  // "central" é a Central de Movimentações (o dia a dia); o valor histórico
+  // "movimentacoes" continua sendo o Monitoramento — deep-links antigos
+  // (vínculo de cliente, abrirMonitor) dependem dele.
   const tabInicial = (() => {
-    if (typeof window === "undefined") return "consultar";
+    if (typeof window === "undefined") return "central";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre"
+    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre" || t === "central"
       ? t
-      : "consultar";
+      : "central";
   })();
   const [tab, setTab] = useState(tabInicial);
   const utils = trpc.useUtils();
+  const [consultarAberto, setConsultarAberto] = useState(false);
+  const [resumoAberto, setResumoAberto] = useState(false);
   // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
   // ir pra movimentacoes pra que o MonitorarTab abra o modal.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const sp = new URLSearchParams(window.location.search);
-    if (sp.get("abrirMonitor") === "1" && tab === "consultar") setTab("movimentacoes");
+    if (sp.get("abrirMonitor") === "1" && tab === "central") setTab("movimentacoes");
   }, [tab]);
   const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
   const saldo = saldoData?.saldo ?? 0;
@@ -2225,22 +2413,27 @@ export default function Processos() {
 
   return (
     <div className="space-y-5">
-      <CabecalhoProcessos saldo={saldo} />
+      <CabecalhoProcessos
+        saldo={saldo}
+        onConsultar={() => setConsultarAberto(true)}
+        onResumo={() => setResumoAberto(true)}
+      />
 
       {saldo < 5 && (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200/70 px-4 py-2.5">
-          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
-          <span className="text-sm text-amber-800">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
+        <div className="flex items-center gap-2 rounded-xl bg-warning-bg border border-warning/30 px-4 py-2.5">
+          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+          <span className="text-sm text-warning-fg">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
         </div>
       )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="!bg-muted !border-0 !rounded-[10px] !p-[3px] !h-auto !inline-flex !w-auto gap-1 flex-wrap">
           <TabsTrigger
-            value="consultar"
+            value="central"
             className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
           >
-            <Search className="h-3.5 w-3.5" />Consultar
+            <Gavel className="h-3.5 w-3.5" />Movimentações
+            <CentralBadge />
           </TabsTrigger>
           <TabsTrigger
             value="movimentacoes"
@@ -2273,7 +2466,7 @@ export default function Processos() {
           )}
         </TabsList>
 
-        <TabsContent value="consultar" className="mt-5"><ConsultarTab /></TabsContent>
+        <TabsContent value="central" className="mt-5"><MovimentacoesCentral /></TabsContent>
         <TabsContent value="movimentacoes" className="mt-5">
           <MonitorarTab onIrAoCofre={podeCofre ? () => setTab("cofre") : undefined} />
         </TabsContent>
@@ -2281,7 +2474,37 @@ export default function Processos() {
         <TabsContent value="alertas" className="mt-5"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-5"><CofreTab /></TabsContent>}
       </Tabs>
+
+      {/* A consulta avulsa saiu da barra de abas: é tarefa ocasional, não
+          lugar onde se fica. Vira modal aberto pelo botão do cabeçalho. */}
+      <Dialog open={consultarAberto} onOpenChange={(v) => !v && setConsultarAberto(false)}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Consultar processo</DialogTitle>
+            <DialogDescription>
+              Busca avulsa por CNJ, CPF ou CNPJ — sem colocar em monitoramento.
+            </DialogDescription>
+          </DialogHeader>
+          <ConsultarTab />
+        </DialogContent>
+      </Dialog>
+      <ConfigResumoDiario open={resumoAberto} onClose={() => setResumoAberto(false)} />
     </div>
+  );
+}
+
+/** Badge da aba Movimentações — mesma fonte do contador do menu lateral. */
+function CentralBadge() {
+  const { data } = trpc.movimentacoes.contador.useQuery(undefined, {
+    refetchInterval: 60000,
+    retry: false,
+  });
+  const n = data?.naoLidas ?? 0;
+  if (n <= 0) return null;
+  return (
+    <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-[9.5px] font-extrabold px-1.5 py-px tabular-nums">
+      {n > 99 ? "99+" : n}
+    </span>
   );
 }
 
@@ -2347,21 +2570,21 @@ function AlertasTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50/40 to-yellow-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-amber-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-warning/30 bg-gradient-to-br from-warning-bg via-warning-bg/40 to-warning-bg/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-warning-bg/40 blur-3xl" />
         <div className="relative flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
+          <div className="h-10 w-10 rounded-xl bg-warning flex items-center justify-center shrink-0 shadow-sm">
             <Bell className="h-5 w-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm tracking-tight">Alertas detectados nas movimentações</p>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning text-warning-on text-[9px] font-bold uppercase tracking-wider">
                 <Sparkles className="h-2.5 w-2.5" />
                 IA
               </span>
             </div>
-            <p className="text-[11px] text-amber-900/75 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-[11px] text-warning-fg/75 mt-1 max-w-2xl leading-relaxed">
               Sistema detecta automaticamente <strong>audiências, intimações, réplica, contestação e recursos</strong>.
               Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
             </p>
@@ -2372,12 +2595,12 @@ function AlertasTab() {
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : lista.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-amber-50/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mx-auto mb-1">
-            <Bell className="h-7 w-7 text-amber-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-warning-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto mb-1">
+            <Bell className="h-7 w-7 text-warning/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhum alerta pendente</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+          <p className="font-semibold text-foreground">Nenhum alerta pendente</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
             Quando o cron detectar prazos ou audiências em movimentações dos seus processos monitorados,
             vão aparecer aqui pra você aprovar ou descartar com 1 click.
           </p>
@@ -2390,24 +2613,24 @@ function AlertasTab() {
             // Pala lateral (borda esquerda) + cores baseadas no tipo
             const palette = isAudiencia
               ? {
-                  borda: "border-l-violet-500 border border-violet-200/60",
-                  iconBg: "bg-gradient-to-br from-violet-500 to-purple-500",
-                  badgeBg: "bg-violet-500/15 text-violet-700 border-violet-500/30",
+                  borda: "border-l-info border border-info/30",
+                  iconBg: "bg-info",
+                  badgeBg: "bg-info/15 text-info-fg border-info/30",
                   tipoLabel: "Audiência",
                   Icon: Gavel,
                 }
               : isUrgente
                 ? {
-                    borda: "border-l-rose-500 border border-rose-200/60",
-                    iconBg: "bg-gradient-to-br from-rose-500 to-red-500",
-                    badgeBg: "bg-rose-500/15 text-rose-700 border-rose-500/30",
+                    borda: "border-l-danger border border-danger/30",
+                    iconBg: "bg-danger",
+                    badgeBg: "bg-danger/15 text-danger-fg border-danger/30",
                     tipoLabel: "Prazo urgente",
                     Icon: AlertTriangle,
                   }
                 : {
-                    borda: "border-l-amber-500 border border-amber-200/60",
-                    iconBg: "bg-gradient-to-br from-amber-500 to-orange-500",
-                    badgeBg: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+                    borda: "border-l-warning border border-warning/30",
+                    iconBg: "bg-warning",
+                    badgeBg: "bg-warning/15 text-warning-fg border-warning/30",
                     tipoLabel: "Prazo",
                     Icon: Clock,
                   };
@@ -2415,7 +2638,7 @@ function AlertasTab() {
             return (
               <div
                 key={sug.id}
-                className={`rounded-xl bg-white p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
+                className={`rounded-xl bg-card p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
               >
                 <div className="flex items-start gap-3">
                   <div className={`h-9 w-9 rounded-lg ${palette.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
@@ -2427,37 +2650,37 @@ function AlertasTab() {
                       <Badge className={`${palette.badgeBg} text-[9px]`}>{palette.tipoLabel}</Badge>
                       {sug.tribunal && <Badge variant="outline" className="text-[9px]">{sug.tribunal}</Badge>}
                     </div>
-                    <p className="text-[10px] text-slate-500 mt-1">
-                      <span className="font-medium text-slate-700">{sug.apelidoProcesso}</span>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      <span className="font-medium text-foreground">{sug.apelidoProcesso}</span>
                       {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
                     </p>
                     <div className="flex items-center gap-3 mt-1.5 text-[11px] flex-wrap">
                       {sug.dataSugerida && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 font-medium tabular-nums">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg font-medium tabular-nums">
                           <Clock className="h-3 w-3" />
-                          {new Date(sug.dataSugerida).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                          {formatarDataCalendario(sug.dataSugerida)}
                         </span>
                       )}
                       {sug.prazoDias != null && (
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                           isUrgente
-                            ? "bg-rose-50 border-rose-200 text-rose-700"
-                            : "bg-slate-50 border-slate-200 text-slate-600"
+                            ? "bg-danger-bg border-danger/30 text-danger-fg"
+                            : "bg-muted border-border text-muted-foreground"
                         }`}>
                           {sug.prazoDias} {sug.prazoDias === 1 ? "dia" : "dias"}{sug.prazoUteis ? " úteis" : ""}
                         </span>
                       )}
                     </div>
                     {sug.motivo && (
-                      <p className="text-[10px] text-slate-500 mt-1.5 italic">"{sug.motivo}"</p>
+                      <p className="text-[10px] text-muted-foreground mt-1.5 italic">"{sug.motivo}"</p>
                     )}
                     {sug.trechoOrigem && (
                       <details className="mt-1.5 group">
-                        <summary className="text-[10px] text-slate-500 cursor-pointer hover:text-slate-700 inline-flex items-center gap-1 list-none">
+                        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1 list-none">
                           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                           Ver trecho original
                         </summary>
-                        <p className="text-[10px] text-slate-600 mt-1.5 bg-slate-50 border border-slate-200/70 rounded-lg p-2.5 leading-relaxed">
+                        <p className="text-[10px] text-muted-foreground mt-1.5 bg-muted border border-border/70 rounded-lg p-2.5 leading-relaxed">
                           {sug.trechoOrigem}
                         </p>
                       </details>
@@ -2466,7 +2689,7 @@ function AlertasTab() {
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <Button
                       size="sm"
-                      className="h-7 text-[10px] rounded-lg bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 shadow-sm"
+                      className="h-7 text-[10px] rounded-lg bg-success shadow-sm"
                       onClick={() => abrirAprovar(sug)}
                       disabled={aprovarMut.isPending || descartarMut.isPending}
                     >
@@ -2476,7 +2699,7 @@ function AlertasTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-[10px] rounded-lg border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                      className="h-7 text-[10px] rounded-lg border-border hover:border-border hover:bg-muted"
                       onClick={() => descartarMut.mutate({ id: sug.id })}
                       disabled={aprovarMut.isPending || descartarMut.isPending}
                     >
@@ -2552,8 +2775,8 @@ function MonitoramentosCount() {
     <span
       className={`ml-1 text-[10px] px-1.5 rounded-full tabular-nums font-semibold ${
         parados > 0
-          ? "bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300"
-          : "bg-indigo-100 text-indigo-700"
+          ? "bg-danger-bg text-danger-fg dark:text-danger"
+          : "bg-info-bg text-info-fg"
       }`}
       title={parados > 0 ? `${parados} de ${mons.length} pararam de atualizar` : undefined}
     >
@@ -2570,7 +2793,7 @@ function NovasAcoesBadge() {
   const count = data?.totalNaoLidas ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-rose-100 text-rose-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-[10px] bg-danger-bg text-danger-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2584,7 +2807,7 @@ function AlertasBadge() {
   const count = data?.pendentes ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-amber-100 text-amber-700 px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-[10px] bg-warning-bg text-warning-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2595,9 +2818,90 @@ function AlertasBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const RESOLUCAO_META: Record<string, { label: string; emoji: string; badge: string; borda: string; verbo: string }> = {
-  monitorando: { label: "Monitorando", emoji: "🟢", badge: "bg-emerald-100 text-emerald-700 border-emerald-200", borda: "border-l-emerald-500", verbo: "Resolvido" },
-  lida: { label: "Ciente", emoji: "✔", badge: "bg-slate-100 text-slate-600 border-slate-200", borda: "border-l-slate-300", verbo: "Marcada" },
-  falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-rose-50 text-rose-600 border-rose-200", borda: "border-l-rose-300", verbo: "Descartado" },
+  monitorando: { label: "Monitorando", emoji: "🟢", badge: "bg-success-bg text-success-fg border-success/30", borda: "border-l-success", verbo: "Resolvido" },
+  lida: { label: "Ciente", emoji: "✔", badge: "bg-muted text-muted-foreground border-border", borda: "border-l-muted-foreground/40", verbo: "Marcada" },
+  falso: { label: "Falso positivo", emoji: "⊘", badge: "bg-danger-bg text-danger-fg border-danger/30", borda: "border-l-danger", verbo: "Descartado" },
+};
+
+type ParteDoCard = { nome: string; polo: string; documento: string | null };
+type CapaDoCard = {
+  classe: string | null;
+  assuntos: string[];
+  orgao: string | null;
+  valor: number | null;
+  dist: string | null;
+  partes: ParteDoCard[];
+  poloDoCliente: string;
+  /** Veio junto com a detecção (grátis) ou de uma consulta paga sob demanda? */
+  daDeteccao: boolean;
+};
+
+/**
+ * Onde o cliente está, quando o servidor não soube dizer.
+ *
+ * O cron grava `poloDoCliente` na capa; o caminho da consulta sob demanda
+ * não passa por esse cálculo. Documento bate primeiro — nome é fallback,
+ * e só com pedaço grande o bastante pra não casar "Ana" com "Ana Paula".
+ */
+function deduzirPoloDoCliente(
+  partes: ParteDoCard[],
+  searchKey?: string | null,
+  apelido?: string | null,
+): string {
+  const digitos = (s?: string | null) => (s ?? "").replace(/\D/g, "");
+  const chave = digitos(searchKey);
+  if (chave.length >= 11) {
+    const porDoc = partes.find((p) => digitos(p.documento) === chave);
+    if (porDoc) return porDoc.polo;
+  }
+  const alvo = (apelido ?? "").trim().toLowerCase();
+  if (alvo.length >= 5) {
+    const porNome = partes.find((p) => {
+      const n = p.nome.toLowerCase();
+      return n === alvo || n.includes(alvo) || alvo.includes(n);
+    });
+    if (porNome) return porNome.polo;
+  }
+  return "desconhecido";
+}
+
+/** Capa da detecção quando existe; senão a consulta sob demanda; senão nada. */
+function capaDoCard(a: any, detalhes: any): CapaDoCard | null {
+  if (a?.capa) {
+    return {
+      classe: a.capa.classe ?? null,
+      assuntos: a.capa.assuntos ?? [],
+      orgao: a.capa.orgaoJulgador ?? null,
+      valor: a.capa.valorCausa ?? null,
+      dist: a.capa.dataDistribuicao ?? null,
+      partes: a.capa.partes ?? [],
+      poloDoCliente: a.capa.poloDoCliente ?? "desconhecido",
+      daDeteccao: true,
+    };
+  }
+  if (!detalhes) return null;
+  const partes: ParteDoCard[] = (detalhes.parties ?? []).map((p: any) => ({
+    nome: p.name ?? "",
+    polo: poloDaParte(p),
+    documento: p.main_document ?? null,
+  }));
+  return {
+    classe: detalhes.classifications?.[0]?.name ?? null,
+    assuntos: (detalhes.subjects ?? []).map((s: any) => s?.name).filter(Boolean),
+    orgao: detalhes.courts?.[0]?.name ?? null,
+    valor: detalhes.amount ?? null,
+    dist: detalhes.distribution_date ?? null,
+    partes,
+    poloDoCliente: "desconhecido",
+    daDeteccao: false,
+  };
+}
+
+const SELO_POLO: Record<string, { texto: string; classe: string }> = {
+  passivo: { texto: "Seu cliente é RÉU", classe: "bg-danger-bg text-danger-fg border-danger/30" },
+  ativo: { texto: "Seu cliente é AUTOR", classe: "bg-info-bg text-info-fg border-info/30" },
+  terceiro: { texto: "Seu cliente é TERCEIRO", classe: "bg-muted text-muted-foreground border-border" },
+  desconhecido: { texto: "Polo não identificado", classe: "bg-warning-bg text-warning-fg border-warning/30" },
 };
 
 function NovasAcoesTab() {
@@ -2607,9 +2911,27 @@ function NovasAcoesTab() {
   // Sem este default, processos antigos da baseline apareciam confundindo
   // o user como se fossem detecções recentes.
   const [filtro, setFiltro] = useState<"pendentes" | "resolvidas" | "todas">("pendentes");
+  // Gaveta pelo lado do cliente. Abre no polo passivo: é a ação movida CONTRA
+  // o cliente, a única que é alerta. Autor e "não identificado" têm as suas.
+  const [polo, setPolo] = useState<GavetaPolo>("passivo");
   const [novoOpen, setNovoOpen] = useState(false);
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  // Deep-link do guia processual (?tab=novas-acoes&novo=1): abre o dialog e,
+  // quando o escritório só tem 1 cliente com CPF/CNPJ (o do passo 2), já o
+  // pré-seleciona — primeira vez sem fricção.
+  const [preSelecionarDoGuia, setPreSelecionarDoGuia] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("novo") === "1",
+  );
+  useEffect(() => {
+    if (preSelecionarDoGuia) setNovoOpen(true);
+    // roda uma vez: abrir de novo depois de fechar seria sequestro de clique
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [novoTribunais, setNovoTribunais] = useState<string[]>([TRIBUNAL_SEDE]);
+  // Editar estados de um monitoramento existente (menu do card).
+  const [editarEstadosTarget, setEditarEstadosTarget] = useState<any>(null);
+  const [editarEstadosLista, setEditarEstadosLista] = useState<string[]>([TRIBUNAL_SEDE]);
   const [credencialId, setCredencialId] = useState<string>("");
   const [deletarMonTarget, setDeletarMonTarget] = useState<{ id: number; nome: string } | null>(null);
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
@@ -2622,23 +2944,23 @@ function NovasAcoesTab() {
   const utils = trpc.useUtils();
 
   const { data: credenciais } = trpc.cofreCredenciais.listarParaSelecao.useQuery(undefined, { retry: false }) ?? { data: undefined };
-  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa");
+  const credsAtivas = (credenciais || []).filter((c: any) => c.status === "ativa" || c.status === "validando");
 
   const LIMITE_PAGINA = 25;
   const [cursor, setCursor] = useState(0);
   const [acoesAcumuladas, setAcoesAcumuladas] = useState<any[]>([]);
 
   const { data, refetch, isLoading, isFetching } = trpc.processos.listarNovasAcoes.useQuery(
-    { filtro, limite: LIMITE_PAGINA, cursor },
+    { filtro, polo, limite: LIMITE_PAGINA, cursor },
     { retry: false },
   );
 
-  // Reseta paginação quando o filtro muda — caso contrário cursor antigo
-  // continuaria valendo num conjunto de dados diferente.
+  // Reseta paginação quando o filtro ou a gaveta muda — caso contrário cursor
+  // antigo continuaria valendo num conjunto de dados diferente.
   useEffect(() => {
     setCursor(0);
     setAcoesAcumuladas([]);
-  }, [filtro]);
+  }, [filtro, polo]);
 
   // Acumula páginas: cursor=0 substitui (página inicial / refetch),
   // cursor>0 anexa (carregar mais).
@@ -2658,11 +2980,18 @@ function NovasAcoesTab() {
   };
 
   // Busca clientes cadastrados para seleção
-  const { data: clientesData } = trpc.clientes.listar.useQuery(
-    { busca: buscaCliente || undefined, limite: 20 },
-    { enabled: novoOpen },
-  );
-  const clientes = (clientesData?.clientes || []).filter((c: any) => c.cpfCnpj);
+  const clientes = useClientesVinculaveis({ busca: buscaCliente, enabled: novoOpen })
+    .filter((c: any) => c.cpfCnpj);
+
+  useEffect(() => {
+    if (!preSelecionarDoGuia || !novoOpen || clienteSelecionado) return;
+    if (clientes.length === 1) {
+      setClienteSelecionado(clientes[0]);
+      setBuscaCliente(clientes[0].nome);
+    }
+    // Com 0 ou vários clientes o user escolhe — o guia só corta o passo óbvio.
+    if (clientes.length > 0) setPreSelecionarDoGuia(false);
+  }, [preSelecionarDoGuia, novoOpen, clienteSelecionado, clientes]);
 
   const criarMut = trpc.processos.criarMonitoramentoNovasAcoes.useMutation({
     onSuccess: () => {
@@ -2670,9 +2999,21 @@ function NovasAcoesTab() {
       setNovoOpen(false);
       setBuscaCliente("");
       setClienteSelecionado(null);
+      setNovoTribunais([TRIBUNAL_SEDE]);
       recarregarDoTopo();
     },
     onError: (e: any) => toast.error(e.message),
+  });
+
+  const atualizarTribunaisMut = (trpc.processos as any).atualizarTribunaisNovasAcoes.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`Agora vigiando em ${r.tribunais.length} ${r.tribunais.length === 1 ? "estado" : "estados"}`, {
+        description: "Estado novo faz a primeira varredura em silêncio — só o que aparecer depois dela vira alerta.",
+      });
+      setEditarEstadosTarget(null);
+      recarregarDoTopo();
+    },
+    onError: (e: any) => toast.error("Falha ao atualizar estados", { description: e.message }),
   });
 
   // Resolve um card (monitorando/lida/falso): sai da lista atual na hora
@@ -2699,8 +3040,32 @@ function NovasAcoesTab() {
     },
   });
 
+  // A pessoa diz de que lado o cliente está: o card sai desta gaveta na hora
+  // (optimistic) e o servidor grava. Vale só pra este processo.
+  const definirPoloMut = trpc.processos.definirPoloNovaAcao.useMutation({
+    onMutate: ({ id }: { id: number }) => {
+      setAcoesAcumuladas((prev) => prev.filter((a) => a.id !== id));
+    },
+    onSuccess: (r: any) => {
+      const destino = GAVETAS.find((g) => g.id === r?.gaveta)?.curto ?? "outra gaveta";
+      toast.success(`Card movido para ${destino}`, {
+        description: r?.polo === "ativo"
+          ? "Deixa de contar como alerta — o cliente é o autor."
+          : r?.polo === "terceiro"
+            ? "Terceiro interessado continua como alerta, junto do polo passivo."
+            : "Continua como alerta — o cliente é o réu.",
+      });
+      refetch();
+    },
+    onError: (e: any) => {
+      toast.error("Não foi possível definir o polo", { description: e.message });
+      recarregarDoTopo();
+    },
+  });
+
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
+      if (avisarSeJaMonitorado(d)) return;
       toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
         description: "As próximas movimentações vão aparecer na aba Movimentações.",
         duration: 6000,
@@ -2884,22 +3249,22 @@ function NovasAcoesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-rose-200/60 bg-gradient-to-br from-rose-50 via-orange-50/50 to-amber-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-rose-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-danger/30 bg-gradient-to-br from-danger-bg via-warning-bg/50 to-warning-bg/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-danger-bg/40 blur-3xl" />
         <div className="relative flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-danger to-warning flex items-center justify-center shrink-0 shadow-sm">
               <Siren className="h-5 w-5 text-white" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-sm tracking-tight">Alerta de novas ações contra clientes</p>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider">
-                  <span className="h-1 w-1 rounded-full bg-white animate-pulse" />
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-[9px] font-bold uppercase tracking-wider">
+                  <span className="h-1 w-1 rounded-full bg-card animate-pulse" />
                   Em tempo real
                 </span>
               </div>
-              <p className="text-[11px] text-rose-900/75 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-[11px] text-danger-fg/75 mt-1 max-w-2xl leading-relaxed">
                 Selecione clientes cadastrados e seja avisado <strong>imediatamente</strong> quando uma nova ação for distribuída contra eles —
                 antes mesmo da citação. Funciona pra busca e apreensão, reclamações trabalhistas, execuções, etc.
               </p>
@@ -2909,7 +3274,7 @@ function NovasAcoesTab() {
             <Button
               size="sm"
               variant="outline"
-              className="h-9 rounded-lg border-rose-200 bg-white hover:bg-rose-50 hover:border-rose-300 text-rose-700"
+              className="h-9 rounded-lg border-danger/30 bg-card hover:bg-danger-bg hover:border-danger/30 text-danger-fg"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
               title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
@@ -2923,7 +3288,7 @@ function NovasAcoesTab() {
             </Button>
             <Button
               size="sm"
-              className="h-9 rounded-lg bg-gradient-to-br from-rose-600 to-orange-600 hover:from-rose-700 hover:to-orange-700 shadow-sm"
+              className="h-9 rounded-lg bg-gradient-to-br from-danger to-warning hover:from-danger hover:to-warning shadow-sm"
               onClick={() => setNovoOpen(true)}
             >
               <Plus className="h-3.5 w-3.5 mr-1" />Novo monitoramento
@@ -2957,25 +3322,25 @@ function NovasAcoesTab() {
                   <div key={m.monitoramentoId} className="flex items-center gap-2 text-xs py-1.5 border-b border-dashed last:border-0">
                     <div className="w-6 shrink-0 text-center">
                       {m.status === "pendente" && <span className="text-muted-foreground">⏳</span>}
-                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-blue-500 inline" />}
-                      {m.status === "ok" && <span className="text-emerald-600">✓</span>}
-                      {m.status === "erro" && <span className="text-red-600">✗</span>}
+                      {m.status === "rodando" && <Loader2 className="h-3 w-3 animate-spin text-info inline" />}
+                      {m.status === "ok" && <span className="text-success-fg">✓</span>}
+                      {m.status === "erro" && <span className="text-danger-fg">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
                     <Badge variant="outline" className="text-[9px] shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
                       <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
-                      <span className="text-[9px] text-red-600 shrink-0 max-w-[180px] truncate" title={m.erro}>
+                      <span className="text-[9px] text-danger-fg shrink-0 max-w-[180px] truncate" title={m.erro}>
                         {m.erro}
                       </span>
                     )}
@@ -3000,24 +3365,25 @@ function NovasAcoesTab() {
 
       {/* Cards dos clientes sendo monitorados (contexto) */}
       {monitoramentosRaw.length > 0 && (
-        <div className="rounded-2xl bg-white border border-slate-200 p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="rounded-2xl bg-card border border-border p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <div className="h-7 w-7 rounded-lg bg-info flex items-center justify-center">
                 <Users className="h-3.5 w-3.5 text-white" />
               </div>
               <div>
-                <p className="text-xs font-bold tracking-tight text-slate-900">
+                <p className="text-xs font-bold tracking-tight text-foreground">
                   Monitorando {monitoramentosRaw.length} {monitoramentosRaw.length === 1 ? "cliente" : "clientes"}
                 </p>
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-muted-foreground">
                   {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!m.ultimoErro).length} com erro
                 </p>
+                <CoberturaVarredura mons={monitoramentosRaw} />
               </div>
             </div>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-muted-foreground/70">
               {monitoramentos.length !== monitoramentosRaw.length && (
-                <>Mostrando <b className="text-slate-700">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
+                <>Mostrando <b className="text-foreground">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
               )}
             </p>
           </div>
@@ -3025,7 +3391,7 @@ function NovasAcoesTab() {
           {/* Grid de cards — mais altos com info enriquecida */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {monitoramentos.length === 0 ? (
-              <p className="col-span-full text-center text-[11px] text-slate-400 italic py-4">
+              <p className="col-span-full text-center text-[11px] text-muted-foreground/70 italic py-4">
                 Nenhum cliente bate com a busca acima.
               </p>
             ) : (
@@ -3035,14 +3401,14 @@ function NovasAcoesTab() {
                 const pausado = status === "paused" || status === "pausado";
                 const nome = m.apelido || m.searchKey || "Cliente";
                 const corteBorda = temErro
-                  ? "border-l-rose-500"
+                  ? "border-l-danger"
                   : pausado
-                    ? "border-l-slate-400"
-                    : "border-l-emerald-500";
+                    ? "border-l-muted-foreground/40"
+                    : "border-l-success";
                 return (
                   <div
                     key={m.id}
-                    className={`group relative rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all overflow-hidden`}
+                    className={`group relative rounded-xl bg-card border border-border border-l-[3px] ${corteBorda} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all overflow-hidden`}
                   >
                     <div className="p-3">
                       <div className="flex items-start gap-2.5">
@@ -3064,29 +3430,45 @@ function NovasAcoesTab() {
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono font-semibold">
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-muted text-muted-foreground text-[9px] font-mono font-semibold">
                               {(m.searchType || "").toUpperCase()}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-mono truncate">{m.searchKey}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono truncate">{m.searchKey}</span>
                           </div>
+                          <p className="text-[9.5px] text-muted-foreground mt-1 truncate" title="Estados vigiados">
+                            <span className="font-semibold text-info-fg">{lerTribunaisDoMonitorCliente(m).map(siglaDoTribunal).join(" · ")}</span>
+                          </p>
                           {(m.totalNovasAcoes ?? 0) > 0 && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[9.5px] font-bold mt-1.5">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg text-[9.5px] font-bold mt-1.5">
                               <Siren className="h-2.5 w-2.5" />
                               {m.totalNovasAcoes} {m.totalNovasAcoes === 1 ? "ação nova" : "ações novas"}
                             </div>
                           )}
                           {temErro && (
-                            <p className="text-[9.5px] text-rose-600 mt-1 truncate" title={m.ultimoErro}>
+                            <p className="text-[9.5px] text-danger-fg mt-1 truncate" title={m.ultimoErro}>
                               ⚠ {m.ultimoErro}
                             </p>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-slate-100">
+                      <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-border">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-indigo-600 hover:bg-indigo-50 px-2"
+                          className="h-6 text-[10px] rounded-md text-muted-foreground hover:bg-info-bg hover:text-info-fg px-2"
+                          title="Escolher em quais estados vigiar este cliente"
+                          onClick={() => {
+                            setEditarEstadosTarget(m);
+                            setEditarEstadosLista(lerTribunaisDoMonitorCliente(m));
+                          }}
+                        >
+                          <MapPin className="h-3 w-3 mr-1" />
+                          Estados
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px] rounded-md text-info-fg hover:bg-info-bg px-2"
                           title="Atualizar agora — força consulta imediata (sem custo extra)"
                           onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
                           disabled={atualizarAgoraMut.isPending}
@@ -3099,7 +3481,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-rose-600 hover:bg-rose-50 px-2"
+                          className="h-6 text-[10px] rounded-md text-danger-fg hover:bg-danger-bg px-2"
                           title="Remover monitoramento"
                           onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
                           disabled={deletarMonMut.isPending}
@@ -3119,30 +3501,30 @@ function NovasAcoesTab() {
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/70" />
           <Input
             placeholder="Buscar por nome, CPF, CNPJ ou CNJ…"
             value={buscaTexto}
             onChange={(e) => setBuscaTexto(e.target.value)}
-            className="pl-8 h-8 rounded-lg border-slate-200 bg-white text-xs focus-visible:ring-rose-400"
+            className="pl-8 h-8 rounded-lg border-border bg-card text-xs focus-visible:ring-danger"
           />
           {buscaTexto && (
             <button
               type="button"
               onClick={() => setBuscaTexto("")}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/70 hover:text-muted-foreground text-xs"
               title="Limpar"
             >
               ✕
             </button>
           )}
         </div>
-        <p className="text-xs text-slate-500 shrink-0 hidden sm:block">
+        <p className="text-xs text-muted-foreground shrink-0 hidden sm:block">
           {acoes.length}
           {hasMore && !buscaNormalizada ? "+" : ""}{" "}
           {acoes.length === 1 ? "card" : "cards"}
         </p>
-        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs shrink-0">
+        <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs shrink-0">
           {([
             ["pendentes", "Pendentes"],
             ["resolvidas", "Resolvidas"],
@@ -3152,16 +3534,60 @@ function NovasAcoesTab() {
               key={val}
               type="button"
               onClick={() => setFiltro(val)}
-              className={`px-2.5 py-1.5 rounded-md font-medium transition-colors inline-flex items-center gap-1 ${filtro === val ? "bg-indigo-600 text-white" : "text-slate-500 hover:text-slate-700"}`}
+              className={`px-2.5 py-1.5 rounded-md font-medium transition-colors inline-flex items-center gap-1 ${filtro === val ? "bg-info text-info-on" : "text-muted-foreground hover:text-foreground"}`}
             >
               {label}
               {val === "pendentes" && (data?.totalNaoLidas ?? 0) > 0 && (
-                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-rose-100 text-rose-600"}`}>{data?.totalNaoLidas}</span>
+                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-danger-bg text-danger-fg"}`}>{data?.totalNaoLidas}</span>
               )}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Gavetas pelo lado do cliente. Uma lista só misturava a ação movida
+          contra o cliente com a que o próprio escritório ajuizou — e o alerta
+          tocava nas duas. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-0.5">Polo do cliente</span>
+        {GAVETAS.map((g) => {
+          const ativo = polo === g.id;
+          const n = data?.contagemPorPolo?.[g.id] ?? 0;
+          const cor = g.id === "passivo" ? "bg-danger" : g.id === "ativo" ? "bg-info" : "bg-warning";
+          return (
+            <button
+              key={g.id}
+              type="button"
+              onClick={() => setPolo(g.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${
+                ativo ? "bg-foreground text-background border-foreground" : "bg-card text-muted-foreground border-border hover:text-foreground"
+              }`}
+              title={g.explicacao}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${cor}`} />
+              <span className="hidden sm:inline">{g.rotulo}</span>
+              <span className="sm:hidden">{g.curto}</span>
+              <span className={`min-w-[17px] px-1 rounded-full text-[10px] tabular-nums text-center ${ativo ? "bg-white/25" : "bg-muted text-foreground"}`}>{n}</span>
+            </button>
+          );
+        })}
+        <p className="text-[10.5px] text-muted-foreground ml-auto text-right max-w-xs hidden md:block">
+          {GAVETAS.find((g) => g.id === polo)?.explicacao}
+        </p>
+      </div>
+      {polo === "ativo" && (
+        <div className="rounded-lg bg-info-bg border border-info/30 px-3 py-2 text-[11px] text-info-fg leading-relaxed">
+          Ações que o <b>seu cliente moveu</b>. Ficam aqui só pra consulta: não viram "Novo", não tocam o sino,
+          não mandam e-mail. Quando o advogado do escritório aparece na causa, o card diz.
+        </div>
+      )}
+      {polo === "desconhecido" && (
+        <div className="rounded-lg bg-warning-bg border border-warning/30 px-3 py-2 text-[11px] text-warning-fg leading-relaxed">
+          O robô leu as partes mas <b>não achou o cliente</b> — nome abreviado, CPF escondido ou tabela fora do
+          padrão. Enquanto não identificado, <b>conta como alerta</b> (melhor um aviso a mais do que um processo
+          escondido). Você resolve com um clique no card.
+        </div>
+      )}
 
       {/* Mostra skeleton tambem em isFetching+lista vazia pra cobrir o gap
           entre setCursor(0)/setAcoesAcumuladas([]) e o resultado da nova
@@ -3173,12 +3599,18 @@ function NovasAcoesTab() {
           <CardContent className="flex flex-col items-center py-12 text-center">
             <Siren className="h-10 w-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm font-medium">
-              {filtro === "pendentes" ? "Nada pendente — tudo resolvido! 🎉"
+              {polo === "desconhecido" && filtro === "pendentes" ? "Nada sem identificação 🎉"
+                : polo === "ativo" && filtro === "pendentes" ? "Nenhuma ação movida pelo cliente"
+                : filtro === "pendentes" ? "Nada pendente — tudo resolvido! 🎉"
                 : filtro === "resolvidas" ? "Nenhum card resolvido ainda"
                 : "Nenhuma nova ação detectada"}
             </p>
             <p className="text-xs text-muted-foreground mt-1 max-w-md">
-              {filtro === "pendentes"
+              {polo === "desconhecido" && filtro === "pendentes"
+                ? "Quando o robô não conseguir dizer de que lado o cliente está, o card cai aqui pra você decidir."
+                : polo === "ativo" && filtro === "pendentes"
+                ? "Processos em que o seu cliente é o autor aparecem aqui, sem alerta."
+                : filtro === "pendentes"
                 ? "Novas ações contra seus clientes monitorados aparecem aqui pra você dar um desfecho."
                 : filtro === "resolvidas"
                 ? "Cards que você monitorar, marcar como ciente ou descartar aparecem aqui."
@@ -3191,28 +3623,55 @@ function NovasAcoesTab() {
           {acoes.map((a: any) => {
             const detalhes = detalhesPorAcaoId[a.id];
             const carregando = carregandoAcaoId === a.id;
-            const ativos = (detalhes?.parties || []).filter((p: any) => p.side === "Active").slice(0, 3);
-            const passivos = (detalhes?.parties || []).filter((p: any) => p.side === "Passive").slice(0, 3);
+            const capa = capaDoCard(a, detalhes);
+            const ativos = (capa?.partes ?? []).filter((p) => p.polo === "ativo").slice(0, 3);
+            const passivos = (capa?.partes ?? []).filter((p) => p.polo === "passivo").slice(0, 3);
+            const outras = (capa?.partes ?? [])
+              .filter((p) => p.polo !== "ativo" && p.polo !== "passivo")
+              .slice(0, 3);
             const advogados = (detalhes?.parties || [])
               .flatMap((p: any) => (p.lawyers || []).map((l: any) => l.name))
               .slice(0, 3);
-            const assunto = detalhes?.classifications?.[0]?.name || detalhes?.subjects?.[0]?.name;
-            const valor = detalhes?.amount;
-            const corte = detalhes?.courts?.[0]?.name;
+            // Classe é a natureza da ação; assunto é a matéria. Os dois juntos
+            // são o que responde "processo de quê?" — mostrar só um não responde.
+            const natureza = [capa?.classe, capa?.assuntos?.[0]].filter(Boolean).join(" · ");
+            const valor = capa?.valor ?? null;
+            const corte = capa?.orgao ?? null;
+            // O servidor manda o polo gravado (pelo robô ou pela pessoa); a
+            // capa e a dedução por partes só entram quando ele não sabe.
+            const poloGravado: string = a.poloCliente ?? "desconhecido";
+            const poloCliente =
+              poloGravado !== "desconhecido"
+                ? poloGravado
+                : capa && capa.poloDoCliente !== "desconhecido"
+                  ? capa.poloDoCliente
+                  : deduzirPoloDoCliente(capa?.partes ?? [], a.clienteSearchKey, a.clienteApelido);
+            // Sem capa nenhuma não há o que afirmar: o selo só aparece quando
+            // alguém já leu o processo — ou quando alguém DISSE o polo à mão.
+            // `capaFalhou` é a leitura que foi tentada e não veio — essa
+            // merece o aviso âmbar.
+            const selo = capa || poloGravado !== "desconhecido" ? SELO_POLO[poloCliente] ?? SELO_POLO.desconhecido : null;
+            // Gaveta do autor: nunca é alerta — nada de "Novo", borda vermelha
+            // ou sino, mesmo com lido=false.
+            const gavetaAtivo = poloGravado === "ativo";
+            const ehAlerta = !a.lido && !gavetaAtivo;
             const clienteNome = a.clienteApelido || a.clienteSearchKey || "Cliente";
             const seed = clienteNome + (a.id || "");
             const iniciais = gerarIniciais(clienteNome);
             const resolvido = a.resolucao && a.resolucao !== "pendente";
             const rMeta = resolvido ? RESOLUCAO_META[a.resolucao as string] : null;
             const corteBorda = resolvido
-              ? (rMeta?.borda ?? "border-l-slate-300")
-              : (!a.lido ? "border-l-rose-500" : "border-l-transparent");
+              ? (rMeta?.borda ?? "border-l-muted-foreground/40")
+              : gavetaAtivo
+                ? "border-l-info/40"
+                : (!a.lido ? "border-l-danger" : "border-l-transparent");
             const tempoRel = tempoRelativoBR(a.dataDistribuicao || a.createdAt);
+            const pedePolo = !resolvido && poloGravado === "desconhecido";
 
             return (
               <div
                 key={a.id}
-                className={`rounded-xl bg-white border border-slate-200 border-l-[3px] ${corteBorda} ${!a.lido ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-rose-50/30 to-white" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending ? "pointer-events-none opacity-70" : ""}`}
+                className={`rounded-xl bg-card border border-border border-l-[3px] ${corteBorda} ${ehAlerta ? "shadow-[0_2px_8px_-2px_rgb(244,63,94,0.15)] bg-gradient-to-r from-danger-bg/30 to-white dark:to-muted" : "shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]"} hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.08)] transition-all ${resolverMut.isPending || definirPoloMut.isPending ? "pointer-events-none opacity-70" : ""}`}
               >
                 <div className="px-4 py-3.5">
                   <div className="flex items-start gap-3">
@@ -3227,8 +3686,8 @@ function NovasAcoesTab() {
                         <p className="text-sm font-bold tracking-tight truncate" title={clienteNome}>
                           {clienteNome}
                         </p>
-                        {!resolvido && !a.lido && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                        {!resolvido && ehAlerta && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-[9px] font-bold uppercase tracking-wider animate-pulse">
                             <Siren className="h-2.5 w-2.5" />
                             Novo
                           </span>
@@ -3238,135 +3697,220 @@ function NovasAcoesTab() {
                             {rMeta.emoji} {rMeta.label}
                           </span>
                         )}
+                        {selo && (
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${selo.classe}`}>
+                            {poloCliente === "desconhecido" ? <HelpCircle className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
+                            {selo.texto}
+                          </span>
+                        )}
+                        {a.capa?.advogadoDoEscritorio && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border bg-primary/10 text-primary border-primary/30"
+                            title="A OAB do escritório aparece entre as partes deste processo"
+                          >
+                            <Scale className="h-2.5 w-2.5" />
+                            Ajuizada pelo escritório
+                          </span>
+                        )}
                         {a.clienteSearchType && a.clienteSearchKey && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-mono">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-mono">
                             {a.clienteSearchType.toUpperCase()} {a.clienteSearchKey}
                           </span>
                         )}
                       </div>
                       {resolvido && (
-                        <p className="text-[10.5px] text-slate-500 mt-1">
-                          {rMeta?.verbo} por <b className="text-slate-700">{a.resolvidoPorNome || "—"}</b>
+                        <p className="text-[10.5px] text-muted-foreground mt-1">
+                          {rMeta?.verbo} por <b className="text-foreground">{a.resolvidoPorNome || "—"}</b>
                           {a.resolvidoEm && <> · {tempoRelativoBR(a.resolvidoEm)}</>}
-                          {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-slate-700">Movimentações</b></>}
+                          {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-foreground">Movimentações</b></>}
                         </p>
                       )}
 
                       {/* Detectado há X / em Y tribunal */}
-                      <div className="flex items-center gap-2 text-[10.5px] text-slate-500 mt-1 flex-wrap">
+                      <div className="flex items-center gap-2 text-[10.5px] text-muted-foreground mt-1 flex-wrap">
                         {tempoRel && (
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            Detectado <b className="font-semibold text-slate-700">{tempoRel}</b>
+                            Detectado <b className="font-semibold text-foreground">{tempoRel}</b>
                           </span>
                         )}
                         {a.tribunal && (
                           <>
-                            <span className="text-slate-300">·</span>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-semibold text-[9.5px]">
+                            <span className="text-muted-foreground/70">·</span>
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg font-semibold text-[9.5px]">
                               {a.tribunal.toUpperCase()}
                             </span>
                           </>
                         )}
                         {detalhes?.instance && (
-                          <span className="text-slate-500">{detalhes.instance}ª inst.</span>
+                          <span className="text-muted-foreground">{detalhes.instance}ª inst.</span>
                         )}
                       </div>
 
                       {/* Box do processo */}
-                      <div className="mt-3 rounded-lg bg-slate-50/70 border border-slate-200/70 p-3 space-y-1.5">
+                      <div className="mt-3 rounded-lg bg-muted/70 border border-border/70 p-3 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-bold font-mono text-slate-900">{a.cnj}</p>
+                          <p className="text-sm font-bold font-mono text-foreground">{a.cnj}</p>
+                          {(() => {
+                            const trib = tribunalDoCnj(a.cnj) ?? a.tribunal;
+                            return trib ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-info-bg text-info-fg border border-info/30 text-[9.5px] font-extrabold tracking-wide">
+                                {siglaDoTribunal(trib)}
+                              </span>
+                            ) : null;
+                          })()}
                           {valor != null && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9.5px] font-semibold tabular-nums">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg text-[9.5px] font-semibold tabular-nums">
                               <CircleDollarSign className="h-2.5 w-2.5" />
                               {formatBRL(valor)}
                             </span>
                           )}
-                          {detalhes?.distribution_date && (
-                            <span className="text-[10px] text-slate-500">
-                              Dist. {new Date(detalhes.distribution_date).toLocaleDateString("pt-BR")}
+                          {capa?.dist && (
+                            <span className="text-[10px] text-muted-foreground">
+                              Dist. {new Date(capa.dist).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </div>
-                        {assunto && (
-                          <p className="text-xs text-slate-700 leading-snug">{assunto}</p>
+                        {natureza && (
+                          <div className="pt-2 mt-1 border-t border-border/70">
+                            <p className="text-[9px] font-bold text-muted-foreground/70 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
+                            <p className="text-xs text-foreground leading-snug">{natureza}</p>
+                          </div>
                         )}
-                        {corte && (
-                          <p className="text-[10.5px] text-slate-500 flex items-center gap-1">
-                            <MapPin className="h-2.5 w-2.5" />
-                            {corte}
-                          </p>
-                        )}
-                        {detalhes && (ativos.length > 0 || passivos.length > 0) && (
-                          <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-slate-200/70">
+                        {(ativos.length > 0 || passivos.length > 0 || outras.length > 0) && (
+                          <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-border/70">
                             {ativos.length > 0 && (
-                              <div>
-                                <p className="text-[9px] font-bold text-blue-700 mb-1 tracking-wider">POLO ATIVO</p>
-                                {ativos.map((p: any, i: number) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                              <div className="min-w-0">
+                                <p className="text-[9px] font-bold text-info-fg mb-1 tracking-wider">POLO ATIVO</p>
+                                {ativos.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                             {passivos.length > 0 && (
-                              <div>
-                                <p className="text-[9px] font-bold text-rose-700 mb-1 tracking-wider">POLO PASSIVO</p>
-                                {passivos.map((p: any, i: number) => (
-                                  <p key={i} className="text-[11px] text-slate-700 truncate" title={p.name}>{p.name}</p>
+                              <div className="min-w-0">
+                                <p className="text-[9px] font-bold text-danger-fg mb-1 tracking-wider">POLO PASSIVO</p>
+                                {passivos.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
+                                ))}
+                              </div>
+                            )}
+                            {outras.length > 0 && (
+                              <div className="min-w-0">
+                                <p className="text-[9px] font-bold text-muted-foreground mb-1 tracking-wider">OUTRAS PARTES</p>
+                                {outras.map((p, i) => (
+                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                           </div>
                         )}
+                        {corte && (
+                          <p className="text-[10.5px] text-muted-foreground flex items-center gap-1 pt-2 mt-1 border-t border-border/70">
+                            <MapPin className="h-2.5 w-2.5" />
+                            {corte}
+                            {capa?.daDeteccao && (
+                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-[9px] font-semibold">
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                Capa lida na detecção — sem crédito extra
+                              </span>
+                            )}
+                          </p>
+                        )}
+                        {a.capaFalhou && !detalhes && (
+                          <div className="pt-2 mt-1 border-t border-border/70">
+                            <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 flex gap-2">
+                              <AlertTriangle className="h-3.5 w-3.5 text-warning-fg shrink-0 mt-px" />
+                              <p className="text-[11px] text-warning-fg leading-relaxed">
+                                <b>O tribunal não devolveu a capa deste processo.</b>{" "}
+                                Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
+                                e por isso o card veio pra cá em vez de ser silenciado.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         {advogados.length > 0 && (
-                          <div className="pt-1.5 mt-1 border-t border-slate-200/70">
-                            <p className="text-[9px] font-bold text-violet-700 mb-0.5 tracking-wider">ADVOGADOS</p>
-                            <p className="text-[10.5px] text-slate-600 truncate">{advogados.join(" · ")}</p>
+                          <div className="pt-1.5 mt-1 border-t border-border/70">
+                            <p className="text-[9px] font-bold text-info-fg mb-0.5 tracking-wider">ADVOGADOS</p>
+                            <p className="text-[10.5px] text-muted-foreground truncate">{advogados.join(" · ")}</p>
                           </div>
                         )}
                         {/* Timeline de movimentações (quando detalhes carregados) */}
                         {detalhes?.steps && detalhes.steps.length > 0 && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70">
-                            <p className="text-[9px] font-bold text-indigo-700 mb-1.5 tracking-wider">
+                          <div className="pt-2 mt-1 border-t border-border/70">
+                            <p className="text-[9px] font-bold text-info-fg mb-1.5 tracking-wider">
                               MOVIMENTAÇÕES ({detalhes.steps.length})
                             </p>
                             <div className="relative space-y-2 max-h-52 overflow-y-auto pl-3">
-                              <div className="absolute left-1 top-1 bottom-1 w-px bg-indigo-200" />
+                              <div className="absolute left-1 top-1 bottom-1 w-px bg-info-bg" />
                               {detalhes.steps.slice(0, 10).map((s: any, i: number) => (
                                 <div key={i} className="relative">
-                                  <div className="absolute -left-[9px] top-1 h-1.5 w-1.5 rounded-full bg-indigo-400 ring-2 ring-white" />
+                                  <div className="absolute -left-[9px] top-1 h-1.5 w-1.5 rounded-full bg-info ring-2 ring-white" />
                                   <div className="text-[10.5px] pl-2">
                                     {s.step_date && (
-                                      <span className="text-[9.5px] text-slate-400 font-mono">
+                                      <span className="text-[9.5px] text-muted-foreground/70 font-mono">
                                         {new Date(s.step_date).toLocaleDateString("pt-BR")}
                                       </span>
                                     )}
-                                    <p className="text-slate-700 leading-snug">{s.content}</p>
+                                    <p className="text-foreground leading-snug">{s.content}</p>
                                   </div>
                                 </div>
                               ))}
                               {detalhes.steps.length > 10 && (
-                                <p className="text-[9.5px] text-slate-400 italic pl-2 mt-1">
+                                <p className="text-[9.5px] text-muted-foreground/70 italic pl-2 mt-1">
                                   +{detalhes.steps.length - 10} movimentações mais antigas
                                 </p>
                               )}
                             </div>
                           </div>
                         )}
+                        {pedePolo && (
+                          <div className="pt-2 mt-1 border-t border-border/70">
+                            <div className="rounded-lg border border-dashed border-warning/50 bg-warning-bg px-3 py-2 flex items-center gap-2 flex-wrap">
+                              <span className="text-[11px] font-bold text-warning-fg">Este cliente é:</span>
+                              {([
+                                ["passivo", "Réu"],
+                                ["ativo", "Autor"],
+                                ["terceiro", "Terceiro"],
+                              ] as const).map(([valor, rotulo]) => (
+                                <Button
+                                  key={valor}
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 px-2.5 text-[10.5px] rounded-md bg-card border-warning/50 hover:bg-warning-bg"
+                                  disabled={definirPoloMut.isPending}
+                                  onClick={() => definirPoloMut.mutate({ id: a.id, polo: valor })}
+                                >
+                                  {rotulo}
+                                </Button>
+                              ))}
+                              <span className="text-[10px] text-warning-fg/80">· o card muda de gaveta na hora; vale só pra este processo</span>
+                            </div>
+                          </div>
+                        )}
                         {!detalhes && (
-                          <div className="pt-2 mt-1 border-t border-slate-200/70 flex items-center justify-between gap-2 flex-wrap">
-                            <p className="text-[10.5px] text-slate-500 italic">
-                              Partes, advogados, assunto, valor e movimentações não carregados ainda.
+                          <div className="pt-2 mt-1 border-t border-border/70 flex items-center justify-between gap-2 flex-wrap">
+                            <p className="text-[10.5px] text-muted-foreground italic">
+                              {capa?.daDeteccao
+                                ? "Movimentações e advogados não carregados ainda."
+                                : a.capaFalhou
+                                  ? "Uma nova consulta pode trazer a capa que faltou."
+                                  : "Partes, advogados, assunto, valor e movimentações não carregados ainda."}
                             </p>
                             <Button
                               size="sm"
                               variant="outline"
-                              className="h-7 text-[10.5px] rounded-lg border-indigo-200 bg-white hover:bg-indigo-50 hover:border-indigo-300 text-indigo-700"
+                              className={`h-7 text-[10.5px] rounded-lg bg-card ${a.capaFalhou && !capa ? "border-warning/30 hover:bg-warning-bg text-warning-fg" : "border-info/30 hover:bg-info-bg hover:border-info/30 text-info-fg"}`}
                               disabled={carregando || carregandoAcaoId !== null}
                               onClick={() => carregarDetalhes(a.id, a.cnj, credencialIdDoMonitor(a.monitoramentoId))}
                             >
                               {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
-                              Carregar detalhes <span className="ml-1 text-[9.5px] text-indigo-500">1 cred</span>
+                              {a.capaFalhou && !capa
+                                ? "Tentar de novo"
+                                : capa?.daDeteccao
+                                  ? "Ver movimentações"
+                                  : "Carregar detalhes"}
+                              <span className="ml-1 text-[9.5px] opacity-70">1 cred</span>
                             </Button>
                           </div>
                         )}
@@ -3379,7 +3923,7 @@ function NovasAcoesTab() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-[10.5px] rounded-lg text-slate-600"
+                          className="h-7 text-[10.5px] rounded-lg text-muted-foreground"
                           title="Reabrir — volta pras Pendentes"
                           disabled={reabrirMut.isPending}
                           onClick={() => reabrirMut.mutate({ id: a.id })}
@@ -3391,7 +3935,7 @@ function NovasAcoesTab() {
                         <>
                           <Button
                             size="sm"
-                            className="h-7 text-[10.5px] rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-sm"
+                            className="h-7 text-[10.5px] rounded-lg bg-info text-info-on shadow-sm"
                             title="Monitorar movimentações deste processo (2 cred/mês) — resolve o card"
                             disabled={monitorarMut.isPending || resolverMut.isPending}
                             onClick={() => handleMonitorarAcao(a)}
@@ -3404,7 +3948,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-slate-600 hover:bg-slate-100"
+                            className="h-7 text-[10.5px] rounded-lg text-muted-foreground hover:bg-muted"
                             title="Ciente — você viu, mas não precisa monitorar agora"
                             disabled={resolverMut.isPending}
                             onClick={() => resolverMut.mutate({ id: a.id, resolucao: "lida" })}
@@ -3415,7 +3959,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-rose-600 hover:bg-rose-50"
+                            className="h-7 text-[10.5px] rounded-lg text-danger-fg hover:bg-danger-bg"
                             title="Falso positivo (reversível — vai pras Resolvidas)"
                             disabled={resolverMut.isPending}
                             onClick={() => handleFalsoAcao(a.id)}
@@ -3476,7 +4020,7 @@ function NovasAcoesTab() {
                     onClick={() => { setClienteSelecionado(c); setBuscaCliente(c.nome); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 text-left transition-colors"
                   >
-                    <div className="h-8 w-8 rounded-full bg-violet-100 flex items-center justify-center text-xs font-bold text-violet-700 shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-info-bg flex items-center justify-center text-xs font-bold text-info-fg shrink-0">
                       {(c.nome || "?")[0]}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -3498,8 +4042,8 @@ function NovasAcoesTab() {
 
             {/* Cliente selecionado */}
             {clienteSelecionado && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200/50">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-success-bg border border-success/30">
+                <CheckCircle2 className="h-5 w-5 text-success-fg shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold">{clienteSelecionado.nome}</p>
                   <p className="text-xs text-muted-foreground font-mono">{clienteSelecionado.cpfCnpj}</p>
@@ -3527,21 +4071,26 @@ function NovasAcoesTab() {
                   ))}
                 </select>
                 {credsAtivas.length === 0 && (
-                  <p className="text-[10px] text-orange-600 mt-1">
+                  <p className="text-[10px] text-warning-fg mt-1">
                     Sem credenciais ativas. Cadastre uma na aba "Cofre de Credenciais" primeiro.
                   </p>
                 )}
               </div>
             )}
 
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200/50 p-3 text-xs flex items-start gap-2">
-              <ShieldAlert className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-              <div className="text-blue-900 dark:text-blue-200 space-y-1">
+            {clienteSelecionado && (
+              <EstadosPicker selecionados={novoTribunais} onChange={setNovoTribunais} />
+            )}
+
+            <div className="rounded-lg bg-info-bg border border-info/30 p-3 text-xs flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-info-fg shrink-0 mt-0.5" />
+              <div className="text-info-fg space-y-1">
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>.
+                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>,
+                  independente dos estados escolhidos.
                 </p>
               </div>
             </div>
@@ -3558,12 +4107,37 @@ function NovasAcoesTab() {
                   valor: clean,
                   apelido: clienteSelecionado.nome,
                   credencialId: Number(credencialId),
+                  tribunais: novoTribunais,
                 });
               }}
               disabled={!clienteSelecionado || !credencialId || criarMut.isPending}
             >
               {criarMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Criar monitoramento
+              Vigiar em {novoTribunais.length} {novoTribunais.length === 1 ? "estado" : "estados"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Editar estados vigiados de um monitoramento existente */}
+      <Dialog open={!!editarEstadosTarget} onOpenChange={(v) => !v && setEditarEstadosTarget(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Onde vigiar {editarEstadosTarget?.apelido || editarEstadosTarget?.searchKey}?</DialogTitle>
+            <DialogDescription>
+              Estado adicionado faz a primeira varredura em silêncio: registra o que já existe lá
+              sem alarmar — só processo novo a partir dela vira alerta.
+            </DialogDescription>
+          </DialogHeader>
+          <EstadosPicker selecionados={editarEstadosLista} onChange={setEditarEstadosLista} />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditarEstadosTarget(null)}>Cancelar</Button>
+            <Button
+              disabled={atualizarTribunaisMut.isPending}
+              onClick={() => atualizarTribunaisMut.mutate({ id: editarEstadosTarget.id, tribunais: editarEstadosLista })}
+            >
+              {atualizarTribunaisMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Vigiar em {editarEstadosLista.length} {editarEstadosLista.length === 1 ? "estado" : "estados"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3603,11 +4177,129 @@ function NovasAcoesTab() {
 // TAB: COFRE DE CREDENCIAIS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * A grade de estados de uma credencial nacional.
+ *
+ * Componente próprio porque cada credencial busca a sua — e porque testar um
+ * estado é um login real, que demora dezenas de segundos e não pode bloquear
+ * a lista inteira.
+ */
+function GradeDaCredencial({ credencialId }: { credencialId: number }) {
+  const q = (trpc.cofreCredenciais as any).tribunaisDaCredencial?.useQuery({ id: credencialId }) ?? {
+    data: undefined,
+  };
+  const [testando, setTestando] = useState<string | null>(null);
+
+  // A bateria roda no cliente, um login por vez, porque cada um leva dezenas de
+  // segundos: 24 combinações numa única chamada estouraria qualquer timeout, e
+  // paralelizar login da mesma conta é o caminho curto pro tribunal bloquear.
+  // `pararRef` existe porque o laço é assíncrono e não enxerga o estado novo.
+  const [lote, setLote] = useState<{ feitos: number; total: number; atual: string | null } | null>(null);
+  const pararRef = useRef(false);
+
+  const validarAsync = (trpc.cofreCredenciais as any).validarMinha?.useMutation() ?? null;
+
+  const avulso = (trpc.cofreCredenciais as any).validarMinha?.useMutation({
+    onSuccess: (r: any) => {
+      setTestando(null);
+      q.refetch?.();
+      const alvo = `${String(r?.tribunal ?? "").toUpperCase()} ${r?.grau ?? 1}º grau`;
+      if (r?.semCobertura) toast.warning(`${alvo}: ${r.mensagem}`);
+      else if (r?.ok) toast.success(`${alvo}: login funcionou`);
+      else toast.error(`${alvo}: ${r?.mensagem ?? "login falhou"}`);
+    },
+    onError: (e: any) => {
+      setTestando(null);
+      toast.error(e.message);
+    },
+  }) ?? { mutate: () => {} };
+
+  async function rodarLote() {
+    const alvos = ((q.data?.tribunais ?? []) as any[]).filter((t) => !t.semCobertura);
+    if (alvos.length === 0 || !validarAsync) return;
+    pararRef.current = false;
+    setLote({ feitos: 0, total: alvos.length, atual: null });
+
+    let falhas = 0;
+    for (let i = 0; i < alvos.length; i++) {
+      if (pararRef.current) break;
+      const a = alvos[i];
+      const rotulo = `${String(a.tribunal).toUpperCase()} ${a.grau}º grau`;
+      setLote({ feitos: i, total: alvos.length, atual: rotulo });
+      try {
+        const r = await validarAsync.mutateAsync({
+          id: credencialId,
+          tribunal: a.tribunal,
+          grau: a.grau,
+        });
+        if (!r?.ok) falhas++;
+      } catch {
+        // Um portal fora do ar não pode parar a bateria — o resultado dele já
+        // ficou gravado como erro, e o resto da fila é o que interessa.
+        falhas++;
+      }
+      setLote({ feitos: i + 1, total: alvos.length, atual: null });
+      q.refetch?.();
+    }
+
+    setLote(null);
+    if (pararRef.current) toast.info("Teste interrompido");
+    else if (falhas === 0) toast.success("Todos os portais responderam");
+    else toast.warning(`${falhas} ${falhas === 1 ? "portal falhou" : "portais falharam"}`, {
+      description: "O motivo de cada um está escrito no card do estado.",
+    });
+  }
+
+  if (!q.data) return null;
+  return (
+    <GradeTribunais
+      tribunais={q.data.tribunais}
+      testando={testando}
+      onTestar={(tribunal, grau) => {
+        setTestando(`${tribunal}:${grau}`);
+        avulso.mutate({ id: credencialId, tribunal, grau });
+      }}
+      lote={{
+        rodando: lote != null,
+        feitos: lote?.feitos ?? 0,
+        total: lote?.total ?? ((q.data.tribunais ?? []) as any[]).filter((t: any) => !t.semCobertura).length,
+        atual: lote?.atual ?? null,
+        onIniciar: () => { void rodarLote(); },
+        onParar: () => { pararRef.current = true; },
+      }}
+    />
+  );
+}
+
 function CofreTab() {
   const { data: credenciais, refetch, isLoading } = trpc.cofreCredenciais.listarMinhas.useQuery();
   const { data: sistemas } = trpc.cofreCredenciais.listarMinhasSistemasSuportados?.useQuery() ?? { data: undefined };
+  const estadosPje = ((sistemas ?? []) as any[]).filter((s) => !s.nacional);
+  const nacionalDisponivel = ((sistemas ?? []) as any[]).some((s) => s.nacional);
 
   const [novoOpen, setNovoOpen] = useState(false);
+  const [modo2fa, setModo2fa] = useState<"codigo" | "qr">("codigo");
+
+  // Deep-link do guia processual (?tab=cofre&novo=1): abre o cadastro direto.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("novo") === "1") setNovoOpen(true);
+  }, []);
+
+  // "Avisar quando chegar": tribunal fora da cobertura vira registro de
+  // interesse (fila de prioridade de adapters) em vez de cadastro perdido.
+  const [interesseOpen, setInteresseOpen] = useState(false);
+  const [interesseTribunal, setInteresseTribunal] = useState("");
+  const interesseMut = (trpc.cofreCredenciais as any).registrarInteresseTribunal?.useMutation({
+    onSuccess: () => {
+      toast.success("Anotado!", {
+        description: "Quando esse tribunal entrar na cobertura, a gente te avisa.",
+      });
+      setInteresseOpen(false);
+      setInteresseTribunal("");
+    },
+    onError: (e: any) => toast.error("Não deu pra registrar", { description: e.message }),
+  }) ?? { mutate: () => {}, isPending: false };
+  const [qrLido, setQrLido] = useState<{ secret: string; emissor: string | null; conta: string | null } | null>(null);
   const [form, setForm] = useState({
     apelido: "",
     sistema: "pje_tjce",
@@ -3618,27 +4310,111 @@ function CofreTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [show2fa, setShow2fa] = useState(false);
   const [removerTarget, setRemoverTarget] = useState<{ id: number; apelido: string } | null>(null);
+  // Secret que o robô teve que criar porque o tribunal exigiu 2FA na hora do
+  // login. Só existe nesta resposta — o cofre não devolve depois.
+  const [secretNovo, setSecretNovo] = useState<string | null>(null);
+
+  // Quantos processos monitorados dependem da credencial que está prestes a
+  // sair, e quem pode assumir. Sem isto a remoção era um clique cego.
+  // staleTime 0: o padrão do app é 60s, e servir um impacto de um minuto
+  // atrás faria o diálogo prometer um destino que já não existe.
+  const impacto = (trpc.cofreCredenciais as any).impactoRemocao?.useQuery(
+    { id: removerTarget?.id ?? 0 },
+    { enabled: !!removerTarget, staleTime: 0, refetchOnMount: "always" },
+  ) ?? { data: undefined };
+  const orfaos = (trpc.cofreCredenciais as any).vinculosOrfaos?.useQuery() ?? { data: undefined };
+  // Reapontar move centenas de processos de uma vez. Executar isso no
+  // `onChange` de um <select> seria a mesma classe de acidente que apaga uma
+  // coluna inteira num clique: a escolha e a execução têm que ser dois atos.
+  // Trocar o alcance sem passar por remover-e-cadastrar-de-novo, que é a
+  // sequência que já parou 420 processos.
+  const [alcanceAlvo, setAlcanceAlvo] = useState<{ id: number; apelido: string; sistema: string } | null>(null);
+
+  // Quando estreitar o alcance pausa processo, o servidor recusa e devolve
+  // QUANTOS. Essa mensagem vira o aviso na tela, e só o segundo clique
+  // confirma — mandar `true` de saída faria o primeiro clique consentir com
+  // um número que ninguém viu.
+  const [alcancePendente, setAlcancePendente] = useState<{ sistema: string; aviso: string } | null>(null);
+
+  const alterarAlcance = (trpc.cofreCredenciais as any).alterarAlcance?.useMutation({
+    onSuccess: (r: any) => {
+      setAlcanceAlvo(null);
+      setAlcancePendente(null);
+      toast.success("Alcance alterado", {
+        description: r?.pausados ? `${r.pausados} processo(s) foram pausados.` : undefined,
+      });
+      refetch();
+      orfaos.refetch?.();
+    },
+    onError: (e: any, vars: any) => {
+      if (e?.data?.code === "PRECONDITION_FAILED" && !vars?.confirmarPausarMonitoramentos) {
+        setAlcancePendente({ sistema: vars.sistema, aviso: e.message });
+        return;
+      }
+      toast.error(e.message);
+    },
+  }) ?? { mutate: () => {}, isPending: false };
+
+  const [repontarAlvo, setRepontarAlvo] = useState<
+    { de: number | null; para: number; total: number; destino: string } | null
+  >(null);
+
+  const repontarMut = (trpc.cofreCredenciais as any).repontarMonitoramentos?.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`${r.movidos} processo(s) agora usam "${r.destino}"`);
+      orfaos.refetch?.();
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  }) ?? { mutate: () => {}, isPending: false };
+
+  // O cadastro grava "validando" e não testa nada; o teste real é este login,
+  // disparado logo em seguida. Sem ele a credencial ficava "validando" pra
+  // sempre e sumia dos seletores de Novas Ações e Importação.
+  const validarAposCadastroMut = trpc.cofreCredenciais.validarMinha.useMutation({
+    onSuccess: (r: any) => {
+      if (r?.totpSecretNovo) setSecretNovo(r.totpSecretNovo);
+      if (r?.semCobertura) {
+        toast.warning("Cadastrada, mas sem cobertura", { description: r.mensagem });
+      } else if (r?.ok) {
+        toast.success("Credencial cadastrada e login confirmado", { description: r.mensagem });
+      } else {
+        toast.error("Cadastrada, mas o login falhou", { description: r?.mensagem, duration: 12000 });
+      }
+      refetch();
+    },
+    onError: (e: any) => toast.error("Cadastrada, mas não deu pra testar o login", { description: e.message }),
+  });
 
   const cadastrarMut = trpc.cofreCredenciais.cadastrarMinha.useMutation({
     onSuccess: (data: any) => {
-      if (data.status === "ativa") {
-        toast.success("Credencial válida!", { description: data.mensagem, duration: 8000 });
-      } else if (data.status === "erro") {
-        toast.error("Credencial inválida", { description: data.mensagem, duration: 12000 });
-      } else {
-        toast.warning("Validação pendente", { description: data.mensagem, duration: 10000 });
-      }
+      toast.info("Credencial cadastrada. Testando o login no tribunal…");
+      validarAposCadastroMut.mutate({ id: data.id });
       setNovoOpen(false);
       setForm({ apelido: "", sistema: "pje_tjce", username: "", password: "", totpSecret: "" });
+      // O QR lido some junto com o formulário: deixá-lo pendurado faria o
+      // próximo cadastro abrir já mostrando o código de outra credencial.
+      setQrLido(null);
+      setModo2fa("codigo");
       refetch();
     },
     onError: (e: any) => toast.error("Erro ao cadastrar", { description: e.message }),
   });
 
   const removerMut = trpc.cofreCredenciais.removerMinha.useMutation({
-    onSuccess: () => {
-      toast.success("Credencial removida");
+    onSuccess: (r: any) => {
+      // O que aconteceu com os processos é a parte que importa da remoção —
+      // dizer só "credencial removida" escondia exatamente o efeito colateral
+      // que deixou 420 processos parados sem explicação.
+      toast.success("Credencial removida", {
+        description: r?.repontados
+          ? `${r.repontados} processo(s) passaram para "${r.destino}".`
+          : r?.pausados
+            ? `${r.pausados} processo(s) foram pausados — cadastre outra credencial e reaponte.`
+            : undefined,
+      });
       setRemoverTarget(null);
+      orfaos.refetch?.();
       refetch();
     },
     onError: (e: any) => toast.error(e.message),
@@ -3649,6 +4425,10 @@ function CofreTab() {
   // login ainda funciona (senha pode ter mudado, conta pode ter caído).
   const validarMut = trpc.cofreCredenciais.validarMinha?.useMutation({
     onSuccess: (data: any) => {
+      // Antes de qualquer toast: se o tribunal obrigou a configurar 2FA, este
+      // é o único instante em que o segredo da conta do advogado existe fora
+      // do banco. Toast some sozinho; isto não pode sumir sozinho.
+      if (data?.totpSecretNovo) setSecretNovo(data.totpSecretNovo);
       if (data?.status === "ativa") {
         toast.success("Credencial válida!", { description: data.mensagem || "Login confirmado." });
       } else if (data?.status === "erro") {
@@ -3663,24 +4443,26 @@ function CofreTab() {
 
   const creds = credenciais || [];
 
+  const listaOrfaos: any[] = orfaos.data ?? [];
+
   return (
     <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-violet-200/60 bg-gradient-to-br from-violet-50 via-purple-50/50 to-fuchsia-50/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-violet-200/40 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-info/30 bg-gradient-to-br from-info-bg via-info-bg/50 to-danger-bg/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
+        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-info-bg/40 blur-3xl" />
         <div className="relative flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-start gap-3 min-w-0">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-600 to-purple-600 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="h-10 w-10 rounded-xl bg-info flex items-center justify-center shrink-0 shadow-sm">
               <KeyRound className="h-5 w-5 text-white" />
             </div>
             <div className="min-w-0 max-w-2xl">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-semibold text-sm tracking-tight">Cofre de Credenciais de Advogado</p>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-violet-600 text-white text-[9px] font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
                   <ShieldCheck className="h-2.5 w-2.5" />
                   AES-256
                 </span>
               </div>
-              <p className="text-[11px] text-violet-900/75 mt-1 leading-relaxed">
+              <p className="text-[11px] text-info-fg/75 mt-1 leading-relaxed">
                 Cadastre o login OAB de um advogado pra acessar processos em <strong>segredo de justiça</strong>.
                 As senhas ficam criptografadas e <strong>nunca</strong> são expostas após o cadastro — se precisar trocar, delete e cadastre nova.
               </p>
@@ -3688,7 +4470,7 @@ function CofreTab() {
           </div>
           <Button
             size="sm"
-            className="h-9 rounded-lg bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm shrink-0"
+            className="h-9 rounded-lg bg-info shadow-sm shrink-0"
             onClick={() => setNovoOpen(true)}
           >
             <Plus className="h-3.5 w-3.5 mr-1" />Nova credencial
@@ -3696,15 +4478,92 @@ function CofreTab() {
         </div>
       </div>
 
+      {/* Processo monitorado guarda o ID da credencial. Quando ela é removida
+          ou cai, o vínculo continua apontando pra ela e o robô para — e até
+          aqui nenhuma tela mostrava esse vínculo, então o motivo da parada
+          ficava invisível. */}
+      {listaOrfaos.length > 0 && (
+        <div className="rounded-2xl border border-warning/30 bg-warning-bg/60 p-4 space-y-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-warning-fg">
+                Processos apontando para credencial que não pode atender
+              </p>
+              <p className="text-[11px] text-warning-fg/80 leading-relaxed mt-0.5">
+                Eles continuam parados até serem reapontados para uma credencial ativa. Reapontar
+                não altera nada no processo — só troca qual login o robô usa.
+              </p>
+            </div>
+          </div>
+
+          {listaOrfaos.map((o: any) => (
+            <div
+              key={String(o.credencialId)}
+              className="flex items-center justify-between gap-3 flex-wrap rounded-xl bg-card border border-warning/30 p-3"
+            >
+              <div className="min-w-0 text-xs">
+                <p className="font-medium truncate">
+                  {o.total} processo(s) do {String(o.tribunal).toUpperCase()} →{" "}
+                  {o.apelido ? `"${o.apelido}"` : "sem credencial"}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {o.acao === "revalidar"
+                    ? `credencial ${o.status} — costuma voltar sozinha; tente "Validar" antes de mover`
+                    : o.status === "removida"
+                      ? "credencial removida do cofre"
+                      : "vínculo desfeito — escolha quem assume"}
+                </p>
+              </div>
+              {/* Duas pendências diferentes. Credencial caída volta sozinha no
+                  relogin, e oferecer "mover centenas de processos" ali empurra
+                  o dono pro conserto mais caro. Só quem perdeu o vínculo de
+                  verdade ganha o seletor. */}
+              {o.acao === "reapontar" && (
+                <div className="flex items-center gap-2">
+                  <select
+                    className="h-8 rounded-md border border-border bg-card px-2 text-xs"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const para = Number(e.target.value);
+                      const destino = (o.destinos ?? []).find((c: any) => c.id === para);
+                      e.currentTarget.value = "";
+                      if (!para || !destino) return;
+                      setRepontarAlvo({
+                        de: o.credencialId,
+                        para,
+                        total: o.total,
+                        destino: destino.apelido,
+                      });
+                    }}
+                    disabled={repontarMut.isPending || (o.destinos ?? []).length === 0}
+                  >
+                    <option value="" disabled>
+                      {(o.destinos ?? []).length === 0
+                        ? `nenhuma credencial ativa do ${String(o.tribunal).toUpperCase()}`
+                        : "reapontar para…"}
+                    </option>
+                    {(o.destinos ?? []).map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.apelido}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
       {isLoading ? (
         <Skeleton className="h-32 w-full" />
       ) : creds.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center mx-auto mb-1">
-            <Lock className="h-7 w-7 text-violet-500/70" />
+        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-info-bg/30 py-14 text-center space-y-2">
+          <div className="h-14 w-14 rounded-2xl bg-info/10 flex items-center justify-center mx-auto mb-1">
+            <Lock className="h-7 w-7 text-info/70" />
           </div>
-          <p className="font-semibold text-slate-700">Nenhuma credencial cadastrada</p>
-          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+          <p className="font-semibold text-foreground">Nenhuma credencial cadastrada</p>
+          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
             Sem credenciais, você só consegue monitorar processos públicos. Pra acessar
             processos em segredo de justiça, cadastre o login de um advogado.
           </p>
@@ -3713,28 +4572,28 @@ function CofreTab() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {creds.map((c: any) => {
             const statusInfo = c.status === "ativa"
-              ? { dot: "bg-emerald-500", ring: "ring-emerald-500/20", label: "Ativa", labelColor: "bg-emerald-50 text-emerald-700 border-emerald-200", animated: true }
+              ? { dot: "bg-success", ring: "ring-success/20", label: "Ativa", labelColor: "bg-success-bg text-success-fg border-success/30", animated: true }
               : c.status === "erro"
-                ? { dot: "bg-rose-500", ring: "ring-rose-500/20", label: "Erro", labelColor: "bg-rose-50 text-rose-700 border-rose-200", animated: false }
+                ? { dot: "bg-danger", ring: "ring-danger/20", label: "Erro", labelColor: "bg-danger-bg text-danger-fg border-danger/30", animated: false }
                 : c.status === "expirada"
-                  ? { dot: "bg-orange-500", ring: "ring-orange-500/20", label: "Expirada", labelColor: "bg-orange-50 text-orange-700 border-orange-200", animated: false }
+                  ? { dot: "bg-warning", ring: "ring-warning/20", label: "Expirada", labelColor: "bg-warning-bg text-warning-fg border-warning/30", animated: false }
                   : c.status === "validando"
-                    ? { dot: "bg-blue-500", ring: "ring-blue-500/20", label: "Validando", labelColor: "bg-blue-50 text-blue-700 border-blue-200", animated: true }
-                    : { dot: "bg-slate-400", ring: "ring-slate-400/20", label: c.status, labelColor: "bg-slate-100 text-slate-700 border-slate-200", animated: false };
+                    ? { dot: "bg-info", ring: "ring-info/20", label: "Validando", labelColor: "bg-info-bg text-info-fg border-info/30", animated: true }
+                    : { dot: "bg-muted-foreground/50", ring: "ring-ring/20", label: c.status, labelColor: "bg-muted text-foreground border-border", animated: false };
             return (
               <div
                 key={c.id}
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
+                className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
               >
                 <div className="flex items-start gap-2.5">
-                  <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 flex items-center justify-center shrink-0 shadow-sm">
+                  <div className="h-10 w-10 rounded-xl bg-info flex items-center justify-center shrink-0 shadow-sm">
                     <KeyRound className="h-4 w-4 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold tracking-tight truncate" title={c.apelido || c.usernameMascarado}>
                       {c.apelido || c.usernameMascarado}
                     </p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-wider font-medium truncate" title={(c.sistema || c.systemName || "").toUpperCase()}>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium truncate" title={(c.sistema || c.systemName || "").toUpperCase()}>
                       {(c.sistema || c.systemName || "").toUpperCase()}
                     </p>
                   </div>
@@ -3749,40 +4608,56 @@ function CofreTab() {
                   </div>
                 </div>
                 <div className="mt-3 space-y-1.5 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-600">
-                    <User className="h-3 w-3 text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <User className="h-3 w-3 text-muted-foreground/70" />
                     <span className="font-mono truncate" title={c.usernameMascarado}>{c.usernameMascarado}</span>
                   </div>
                   {(c.tem2fa || c.has2fa) && (
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200/70 text-violet-700 text-[10px] font-medium">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-[10px] font-medium">
                       <ShieldAlert className="h-3 w-3" />
                       2FA ativado
                     </div>
                   )}
+                  {/* Dois relógios, dois nomes. O card mostrava só o último
+                      SUCESSO sob o rótulo "última validação" — credencial que
+                      falhou hoje exibia a data do último acerto, semanas
+                      atrás, logo acima da mensagem de erro. Parecia que tinha
+                      validado bem naquele dia. */}
                   {c.ultimoLoginSucessoEm && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
-                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
-                      <span>Última validação: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <CheckCircle2 className="h-3 w-3 text-success" />
+                      <span>Último acesso com sucesso: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  )}
+                  {c.ultimoLoginTentativaEm && c.ultimoLoginTentativaEm !== c.ultimoLoginSucessoEm && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <RefreshCcw className="h-3 w-3 text-muted-foreground/70" />
+                      <span>Última tentativa: {new Date(c.ultimoLoginTentativaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  )}
+                  {c.sistema === SISTEMA_NACIONAL && (
+                    <div className="pt-2 mt-1 border-t">
+                      <GradeDaCredencial credencialId={c.id} />
                     </div>
                   )}
                   {(c.ultimoErro || c.mensagemErro) && (
                     <div className={`text-[10px] rounded-lg p-2 ${
                       c.status === "erro" || c.status === "expirada"
-                        ? "bg-rose-50 border border-rose-200/60 text-rose-700"
-                        : "bg-blue-50 border border-blue-200/60 text-blue-700"
+                        ? "bg-danger-bg border border-danger/30 text-danger-fg"
+                        : "bg-info-bg border border-info/30 text-info-fg"
                     }`}>
                       {c.ultimoErro || c.mensagemErro}
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 pt-3 mt-3 border-t border-slate-100">
+                <div className="flex items-center gap-1 pt-3 mt-3 border-t border-border">
                   <Button
                     size="sm"
                     variant={c.status === "ativa" ? "outline" : "default"}
                     className={`h-7 text-xs rounded-lg ${
                       c.status === "ativa"
-                        ? "border-slate-200 hover:border-slate-300"
-                        : "flex-1 bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-sm animate-pulse"
+                        ? "border-border hover:border-border"
+                        : "flex-1 bg-info shadow-sm animate-pulse"
                     }`}
                     onClick={() => validarMut.mutate({ id: c.id })}
                     disabled={validarMut.isPending}
@@ -3790,10 +4665,28 @@ function CofreTab() {
                     <RefreshCcw className={`h-3 w-3 mr-1 ${validarMut.isPending ? "animate-spin" : ""}`} />
                     {c.status === "ativa" ? "Validar" : "Validar agora"}
                   </Button>
+                  {/* Trocar o alcance sem remover: a remoção mexe em vínculo,
+                      sessão e monitoramento, e não há razão pra passar por ela
+                      só pra mudar um campo. */}
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 ml-auto rounded-lg"
+                    className="h-7 text-xs rounded-lg"
+                    onClick={() =>
+                      setAlcanceAlvo({
+                        id: c.id,
+                        apelido: c.apelido || c.usernameMascarado || "credencial",
+                        sistema: c.sistema,
+                      })
+                    }
+                  >
+                    <Globe className="h-3 w-3 mr-1" />
+                    {c.sistema === SISTEMA_NACIONAL ? "Todos os PJe" : "Um tribunal"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs text-danger-fg hover:text-danger-fg hover:bg-danger-bg ml-auto rounded-lg"
                     onClick={() => setRemoverTarget({ id: c.id, apelido: c.apelido || c.usernameMascarado || "credencial" })}
                   >
                     <Trash2 className="h-3 w-3 mr-1" />Remover
@@ -3806,7 +4699,19 @@ function CofreTab() {
       )}
 
       {/* Dialog de cadastro */}
-      <Dialog open={novoOpen} onOpenChange={setNovoOpen}>
+      {/* Fechar sem cadastrar também limpa o QR: o código lido é de uma conta
+          específica, e reaproveitá-lo no cadastro seguinte gravaria o 2FA de
+          um advogado no login de outro. */}
+      <Dialog
+        open={novoOpen}
+        onOpenChange={(v) => {
+          setNovoOpen(v);
+          if (!v) {
+            setQrLido(null);
+            setModo2fa("codigo");
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Cadastrar credencial</DialogTitle>
@@ -3824,18 +4729,79 @@ function CofreTab() {
                 onChange={(e) => setForm({ ...form, apelido: e.target.value })}
               />
             </div>
-            <div>
-              <Label>Tribunal/Sistema *</Label>
-              <Select value={form.sistema} onValueChange={(v) => setForm({ ...form, sistema: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-64">
-                  {(sistemas || []).map((s: any) => (
-                    <SelectItem key={s.id} value={s.id} disabled={s.disponivel === false}>
-                      {s.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* O login do PDPJ é nacional: o mesmo CPF/OAB entra em qualquer
+                PJe. Sem essa escolha, monitorar processo de outro estado
+                exigia cadastrar a mesma pessoa de novo — e a mesma senha
+                acabava guardada uma vez por tribunal. */}
+            <div className="rounded-xl border border-info/30 bg-info-bg/50 p-3 space-y-2 dark:border-info/30">
+              <Label>Onde essa credencial vale</Label>
+              {[
+                {
+                  id: "um",
+                  titulo: "Só um tribunal",
+                  desc: "Um cadastro por estado.",
+                },
+                {
+                  id: "todos",
+                  titulo: `Todos os PJe${nacionalDisponivel ? ` — ${estadosPje.length} estados` : ""}`,
+                  desc: "Mesmo login do PDPJ em qualquer tribunal com PJe. Um cadastro só.",
+                },
+              ].map((o) => {
+                const ativo = (o.id === "todos") === (form.sistema === SISTEMA_NACIONAL);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        sistema: o.id === "todos" ? SISTEMA_NACIONAL : (estadosPje[0]?.id ?? "pje_tjce"),
+                      })
+                    }
+                    className={`w-full text-left rounded-lg border p-2.5 transition ${
+                      ativo ? "border-info/30 bg-background shadow-sm" : "border-transparent"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className={`h-3.5 w-3.5 rounded-full border-2 mt-0.5 shrink-0 ${
+                          ativo ? "border-info/30 bg-info ring-2 ring-inset ring-background" : "border-border"
+                        }`}
+                      />
+                      <div className="min-w-0">
+                        <p className={`text-xs font-semibold ${ativo ? "text-info-fg" : ""}`}>
+                          {o.titulo}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {form.sistema !== SISTEMA_NACIONAL && (
+                <Select value={form.sistema} onValueChange={(v) => setForm({ ...form, sistema: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {estadosPje.map((s: any) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Cobertura transparente: melhor perder o cadastro aqui do que
+                  ganhar um churn no dia 3 — tribunal fora da lista vira
+                  registro de interesse, não beco sem saída. */}
+              <button
+                type="button"
+                className="text-[11px] text-info-fg underline underline-offset-2"
+                onClick={() => setInteresseOpen(true)}
+              >
+                Seu tribunal não está na lista? Avisar quando chegar →
+              </button>
             </div>
             <div>
               <Label>CPF ou OAB *</Label>
@@ -3864,26 +4830,63 @@ function CofreTab() {
               </div>
             </div>
             <div>
-              <Label>Secret do 2FA (opcional)</Label>
-              <div className="relative">
-                <Input
-                  type={show2fa ? "text" : "password"}
-                  placeholder="Se o tribunal exige autenticador"
-                  value={form.totpSecret}
-                  onChange={(e) => setForm({ ...form, totpSecret: e.target.value })}
-                  className="pr-8 font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow2fa(!show2fa)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                </button>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label>Verificação em duas etapas (2FA)</Label>
+                {/* Duas portas para o MESMO campo. O modo de digitar continua
+                    inteiro: o print do QR falha com frequência (recorte
+                    cortado, foto do monitor), e sem a saída manual a pessoa
+                    fica sem caminho. */}
+                <div className="inline-flex gap-0.5 bg-muted p-0.5 rounded-lg">
+                  {(["codigo", "qr"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModo2fa(m)}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
+                        modo2fa === m ? "bg-background shadow-sm text-info-fg" : "text-muted-foreground"
+                      }`}
+                    >
+                      {m === "codigo" ? "Colar o código" : "Ler do print do QR"}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
-              </p>
+
+              {modo2fa === "codigo" ? (
+                <>
+                  <div className="relative">
+                    <Input
+                      type={show2fa ? "text" : "password"}
+                      placeholder="Se o tribunal exige autenticador"
+                      value={form.totpSecret}
+                      onChange={(e) => setForm({ ...form, totpSecret: e.target.value })}
+                      className="pr-8 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShow2fa(!show2fa)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    >
+                      {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
+                  </p>
+                </>
+              ) : (
+                <LeitorQr
+                  onLido={(r) => {
+                    setForm((f) => ({ ...f, totpSecret: r.secret }));
+                    setQrLido(r);
+                  }}
+                  lido={qrLido}
+                  aoLimpar={() => {
+                    setQrLido(null);
+                    setForm((f) => ({ ...f, totpSecret: "" }));
+                  }}
+                />
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -3908,27 +4911,235 @@ function CofreTab() {
         </DialogContent>
       </Dialog>
 
+      {/* "Avisar quando chegar" — registra interesse em tribunal fora da cobertura */}
+      <Dialog open={interesseOpen} onOpenChange={setInteresseOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Avisar quando chegar</DialogTitle>
+            <DialogDescription>
+              Diga qual tribunal você precisa. O interesse entra na nossa fila de prioridade,
+              e te avisamos assim que a cobertura chegar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Tribunal</Label>
+            <Input
+              placeholder="Ex.: TJSP, TRT-7, TJBA…"
+              value={interesseTribunal}
+              onChange={(e) => setInteresseTribunal(e.target.value)}
+              maxLength={120}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInteresseOpen(false)}>Cancelar</Button>
+            <Button
+              disabled={interesseTribunal.trim().length < 2 || interesseMut.isPending}
+              onClick={() => interesseMut.mutate({ tribunal: interesseTribunal.trim() })}
+            >
+              {interesseMut.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Registrar interesse
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={!!removerTarget} onOpenChange={(open) => !open && setRemoverTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remover credencial "{removerTarget?.apelido}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Monitoramentos que dependem dela vão <strong>parar de funcionar</strong>.
-              Para voltar a operar você precisará cadastrar a credencial novamente.
+            <AlertDialogDescription className="leading-relaxed">
+              {impacto.data == null ? (
+                "Conferindo quais processos dependem dela…"
+              ) : impacto.data.monitoramentos === 0 ? (
+                "Nenhum processo monitorado depende desta credencial."
+              ) : impacto.data.destinoSugerido ? (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> usam esta
+                  credencial.{" "}
+                  {impacto.data.vaoMudar > 0 && (
+                    <>
+                      {impacto.data.vaoMudar} passam para{" "}
+                      <strong>{impacto.data.destinoSugerido.apelido}</strong> e continuam rodando.
+                    </>
+                  )}{" "}
+                  {impacto.data.vaoPausar > 0 && (
+                    <>
+                      Os outros <strong>{impacto.data.vaoPausar}</strong> vão ser pausados — são de
+                      outro tribunal, que essa credencial não atende.
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <strong>{impacto.data.monitoramentos} processo(s) monitorado(s)</strong> dependem
+                  dela, e não há outra credencial ativa de {impacto.data.sistema} para assumir.
+                  Todos vão ser <strong>pausados</strong> até você cadastrar outra e reapontá-los.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={removerMut.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
+              disabled={removerMut.isPending || impacto.isLoading}
               onClick={(e) => {
                 e.preventDefault();
-                if (removerTarget) removerMut.mutate({ id: removerTarget.id });
+                if (removerTarget) {
+                  removerMut.mutate({
+                    id: removerTarget.id,
+                    // Só confirma se o impacto REALMENTE apareceu na tela.
+                    // Mandar `true` fixo anulava a trava do servidor: o
+                    // clique viraria consentimento a um número que a pessoa
+                    // pode nunca ter visto (query ainda carregando, ou falha).
+                    confirmarPausarMonitoramentos: impacto.data != null,
+                  });
+                }
               }}
-              disabled={removerMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {removerMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
               Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* O tribunal exigiu configurar 2FA e o robô configurou pra conseguir
+          entrar. Daqui pra frente o PJe vai pedir ESTE código também quando o
+          advogado logar pelo navegador — e este é o único momento em que dá
+          pra ver o segredo. Fechar sem copiar deixa a conta dele acessível
+          só pelo robô. */}
+      <AlertDialog
+        open={!!alcanceAlvo}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAlcanceAlvo(null);
+            setAlcancePendente(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Onde “{alcanceAlvo?.apelido}” vale</AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              O login do PDPJ é nacional — o mesmo CPF/OAB entra em qualquer PJe. Trocar o alcance
+              não mexe na senha, no 2FA nem nos processos já vinculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-1.5">
+            {[
+              { id: SISTEMA_NACIONAL, titulo: `Todos os PJe (${estadosPje.length} estados)`, desc: "Processo de qualquer estado usa essa credencial." },
+              { id: estadosPje[0]?.id ?? "pje_tjce", titulo: "Só um tribunal", desc: "Volta a valer num estado só — processos dos outros são pausados." },
+            ].map((o) => {
+              const atual = (o.id === SISTEMA_NACIONAL) === (alcanceAlvo?.sistema === SISTEMA_NACIONAL);
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={atual || alterarAlcance.isPending}
+                  onClick={() =>
+                    alcanceAlvo &&
+                    alterarAlcance.mutate({
+                      id: alcanceAlvo.id,
+                      sistema: o.id,
+                      confirmarPausarMonitoramentos: alcancePendente?.sistema === o.id,
+                    })
+                  }
+                  className={`w-full text-left rounded-lg border p-2.5 transition ${
+                    atual ? "border-info/30 bg-info-bg/60" : "hover:border-info/30"
+                  } disabled:cursor-default`}
+                >
+                  <p className="text-xs font-semibold">
+                    {o.titulo} {atual && <span className="text-info-fg">· atual</span>}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+
+          {alcancePendente && (
+            <div className="rounded-lg border border-warning/30 bg-warning-bg p-2.5 dark:border-warning/30">
+              <p className="text-[11.5px] text-warning-fg leading-relaxed dark:text-warning">
+                {alcancePendente.aviso}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1.5">
+                Clique de novo na mesma opção para confirmar.
+              </p>
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={alterarAlcance.isPending}>Fechar</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!repontarAlvo} onOpenChange={(open) => !open && setRepontarAlvo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reapontar {repontarAlvo?.total} processo(s) para "{repontarAlvo?.destino}"?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Só muda qual login o robô usa para consultar esses processos. Nada é alterado no
+              processo em si, e nenhuma movimentação já registrada se perde. Os que estavam parados
+              por causa da credencial voltam a rodar na próxima varredura.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={repontarMut.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (!repontarAlvo) return;
+                repontarMut.mutate({ de: repontarAlvo.de, para: repontarAlvo.para });
+                setRepontarAlvo(null);
+              }}
+              disabled={repontarMut.isPending}
+            >
+              {repontarMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              Reapontar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!secretNovo} onOpenChange={(open) => !open && setSecretNovo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>O tribunal exigiu configurar a verificação em duas etapas</AlertDialogTitle>
+            <AlertDialogDescription className="leading-relaxed">
+              Pra conseguir entrar, o robô configurou o 2FA desta conta no PJe. A partir
+              de agora o portal vai pedir um código de 6 dígitos também quando você logar
+              pelo navegador — e só quem tem a chave abaixo consegue gerar esse código.
+              <strong> Cadastre ela no seu app autenticador antes de fechar:</strong> ela
+              não aparece de novo em lugar nenhum.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-3">
+            <p className="font-mono text-sm tracking-wider break-all select-all">{secretNovo}</p>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Google Authenticator, Authy ou 1Password → adicionar conta → inserir chave manualmente.
+          </p>
+
+          <AlertDialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (secretNovo) navigator.clipboard?.writeText(secretNovo);
+                toast.success("Chave copiada");
+              }}
+            >
+              <Copy className="h-4 w-4 mr-1" />
+              Copiar chave
+            </Button>
+            <AlertDialogAction onClick={() => setSecretNovo(null)}>
+              Já cadastrei no meu app
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

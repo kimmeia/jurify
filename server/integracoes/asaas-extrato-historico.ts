@@ -148,7 +148,8 @@ export async function processarSyncExtrato(): Promise<void> {
             // Conta o que entrou antes do corte (não se perde).
             extratoSyncDespesasImportadas:
               cfg.extratoSyncDespesasImportadas + r.novasDespesas,
-            extratoSyncDuplicadas: cfg.extratoSyncDuplicadas + r.duplicadas,
+            extratoSyncDuplicadas:
+              cfg.extratoSyncDuplicadas + r.duplicadas + r.cobertasPeloWebhook,
             extratoSyncErros: cfg.extratoSyncErros + r.erros,
             extratoSyncErroMensagem:
               "Limite de requisições do Asaas — retomada automática agendada.",
@@ -172,7 +173,8 @@ export async function processarSyncExtrato(): Promise<void> {
           extratoSyncDiasFeitos: cfg.extratoSyncDiasFeitos + janela.dias,
           extratoSyncDespesasImportadas:
             cfg.extratoSyncDespesasImportadas + r.novasDespesas,
-          extratoSyncDuplicadas: cfg.extratoSyncDuplicadas + r.duplicadas,
+          extratoSyncDuplicadas:
+            cfg.extratoSyncDuplicadas + r.duplicadas + r.cobertasPeloWebhook,
           extratoSyncErros: cfg.extratoSyncErros + r.erros,
           extratoSyncUltimaJanelaEm: new Date(),
           extratoSyncProximaTentativaEm: null,
@@ -187,6 +189,7 @@ export async function processarSyncExtrato(): Promise<void> {
           janela,
           novas: r.novasDespesas,
           duplicadas: r.duplicadas,
+          cobertasPeloWebhook: r.cobertasPeloWebhook,
           erros: r.erros,
           concluiu,
         },

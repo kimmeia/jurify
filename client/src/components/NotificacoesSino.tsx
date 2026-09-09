@@ -31,10 +31,10 @@ import { useLocation } from "wouter";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 const tipoIconMap: Record<string, React.ReactNode> = {
-  movimentacao: <FileSearch className="h-4 w-4 text-blue-500" />,
-  nova_acao: <Siren className="h-4 w-4 text-red-500" />,
-  sistema: <Info className="h-4 w-4 text-amber-500" />,
-  plano: <CreditCard className="h-4 w-4 text-emerald-500" />,
+  movimentacao: <FileSearch className="h-4 w-4 text-info" />,
+  nova_acao: <Siren className="h-4 w-4 text-danger" />,
+  sistema: <Info className="h-4 w-4 text-warning" />,
+  plano: <CreditCard className="h-4 w-4 text-success" />,
 };
 
 const tipoLabelMap: Record<string, string> = {
@@ -159,7 +159,7 @@ export default function NotificacoesSino() {
           <Bell className="h-4.5 w-4.5" />
           {count > 0 && (
             <Badge
-              className="absolute -top-0.5 -right-0.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold bg-rose-500 text-white border-2 border-sidebar"
+              className="absolute -top-0.5 -right-0.5 h-4.5 min-w-[18px] px-1 text-[10px] font-bold bg-danger text-danger-on border-2 border-sidebar"
             >
               {count > 99 ? "99+" : count}
             </Badge>
@@ -190,7 +190,7 @@ export default function NotificacoesSino() {
           <div className="px-4 pb-2">
             {push.estado === "ativo" ? (
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <span className="text-[11px] text-success-fg flex items-center gap-1">
                   <BellRing className="h-3 w-3" /> Ativadas neste aparelho
                 </span>
                 <div className="flex items-center gap-1">

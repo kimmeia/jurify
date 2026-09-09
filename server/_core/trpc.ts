@@ -139,7 +139,19 @@ const requireUser = t.middleware(async opts => {
   );
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+// Porteiro de módulos contratados: cada namespace tRPC declara seu módulo em
+// shared/modulos-contratacao.ts; plano que não inclui o módulo recebe
+// FORBIDDEN com cause.motivo="modulo_nao_liberado". Fail-open em qualquer
+// indeterminação (sem plano, cortesia, erro) — detalhes em gate-modulos.ts.
+const requireModuloContratado = t.middleware(async ({ ctx, path, next }) => {
+  if (ctx.user && !ctx.user.impersonatedBy) {
+    const { conferirModuloDoPath } = await import("./gate-modulos");
+    await conferirModuloDoPath({ path, userId: ctx.user.id, role: ctx.user.role });
+  }
+  return next();
+});
+
+export const protectedProcedure = t.procedure.use(requireUser).use(requireModuloContratado);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

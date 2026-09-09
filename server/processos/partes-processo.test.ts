@@ -37,8 +37,21 @@ describe("parsearPartes", () => {
     expect(r[0].nome).toBe("Ok");
   });
 
-  it("polo desconhecido cai em ativo", () => {
-    expect(parsearPartes(JSON.stringify([{ nome: "X", polo: "sei lá" }]))[0].polo).toBe("ativo");
+  it("polo que não dá pra ler NÃO vira ativo", () => {
+    // Era o comportamento antigo, e custava caro: "ativo" significa "o cliente
+    // é o autor", que é o rótulo com que o cron de novas ações silencia o
+    // alerta. Uma falha de leitura escolhia o lado que esconde o caso.
+    for (const bruto of ["sei lá", "", null, undefined, 7]) {
+      expect(parsearPartes(JSON.stringify([{ nome: "X", polo: bruto }]))[0].polo).toBe("desconhecido");
+    }
+  });
+
+  it("as grafias que o tribunal usa continuam sendo lidas", () => {
+    const ler = (polo: string) => parsearPartes(JSON.stringify([{ nome: "X", polo }]))[0].polo;
+    expect(ler("ativo")).toBe("ativo");
+    expect(ler("ATIVA")).toBe("ativo");
+    expect(ler(" passivo ")).toBe("passivo");
+    expect(ler("terceiro")).toBe("terceiro");
   });
 });
 

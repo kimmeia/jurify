@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --corpo:#334155; --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --rosa:#e11d48; --rosa-bg:#fff1f2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); min-height:100vh; }
+
+  /* barra de cenários — o "navegador" do mockup */
+  .cenarios { position:sticky; top:0; z-index:50; background:#12141c; color:#cbd5e1; padding:10px 20px;
+              display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .cenarios .rot { font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#64748b; margin-right:4px; }
+  .cen { border:1px solid #ffffff22; border-radius:9px; padding:7px 13px; font-size:12px; font-weight:600;
+         color:#cbd5e1; cursor:pointer; background:transparent; font-family:inherit; }
+  .cen.on { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .cenarios .dica { margin-left:auto; font-size:10.5px; color:#64748b; }
+
+  .view { display:none; }
+  .view.on { display:block; }
+
+  .app { display:flex; min-height:calc(100vh - 54px); }
+  .side { width:210px; background:#12141c; color:#cbd5e1; padding:14px 0; display:flex; flex-direction:column; flex:0 0 auto; }
+  .logo { display:flex; align-items:center; gap:8px; padding:0 16px 14px; color:#fff; font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .logo .j { width:26px; height:26px; border-radius:8px; background:var(--acento); display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .sgrupo { font-size:8.5px; font-weight:800; letter-spacing:.08em; color:#64748b; padding:10px 16px 4px; }
+  .sitem { display:flex; align-items:center; gap:9px; padding:7px 16px; font-size:11.5px; font-weight:500; color:#94a3b8; cursor:default; }
+  .sitem.on { color:#fff; background:#ffffff10; border-left:3px solid var(--acento); padding-left:13px; font-weight:700; }
+  .sitem .bd { margin-left:auto; background:#dc2626; color:#fff; font-size:8.5px; font-weight:800; border-radius:8px; padding:1px 6px; }
+  .sitem .selo { margin-left:auto; font-size:7.5px; font-weight:800; letter-spacing:.04em; color:#a78bfa; border:1px solid #7c3aed66; border-radius:5px; padding:1px 5px; }
+  .srodape { margin-top:auto; padding:12px 16px 0; border-top:1px solid #ffffff14; display:flex; align-items:center; gap:8px; font-size:11px; color:#94a3b8; }
+  .srodape .av { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#7c3aed,#06b6d4); color:#fff; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+
+  .main { flex:1; padding:24px 30px; position:relative; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:23px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:12.5px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:14px; }
+  .micro { font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .chip-nota { display:inline-block; font-size:10.5px; font-weight:800; background:#f59e0b; color:#451a03;
+               border-radius:7px; padding:4px 10px; box-shadow:0 3px 10px #0f172a22; }
+
+  /* admin: planos e módulos */
+  .planos-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  .plano { padding:16px; }
+  .plano .nome { font-family:'Poppins'; font-weight:700; font-size:15px; display:flex; align-items:center; gap:8px; }
+  .plano .preco { font-size:11.5px; color:var(--mudo); margin-top:2px; }
+  .mods { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:5px 14px; }
+  .mod { display:flex; align-items:center; gap:8px; font-size:12px; padding:4px 2px; }
+  .cb { width:16px; height:16px; border-radius:5px; border:1.6px solid var(--fantasma); flex:0 0 auto;
+        display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:900; }
+  .cb.on { background:var(--acento); border-color:var(--acento); }
+  .cb.trava { background:#e2e8f0; border-color:#e2e8f0; color:#94a3b8; }
+  .mod .obs { font-size:9.5px; color:var(--fraco); margin-left:2px; }
+  .mod.off { color:var(--fraco); }
+
+  .catrow { display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 8px; border-radius:8px; }
+  .catrow:hover { background:var(--hairline); }
+  .catrow .valmod { margin-left:auto; display:flex; align-items:center; gap:5px; }
+  .vbox { border:1px solid var(--borda); border-radius:7px; padding:3px 8px; font-size:11.5px; font-weight:700; color:var(--tinta); background:var(--surface); white-space:nowrap; }
+  .vbox small { font-weight:500; color:var(--fraco); }
+  .vbox.edit { border-color:var(--acento); box-shadow:0 0 0 3px #7c3aed22; }
+  .salvar-mini { background:var(--acento); color:#fff; font-size:10px; font-weight:800; border-radius:6px; padding:4px 9px; }
+  .lapis { color:var(--fantasma); font-size:11px; }
+  .catrow:hover .lapis { color:var(--acento-forte); }
+  .esc-linha { display:flex; align-items:center; gap:12px; padding:13px 16px; border-top:1px solid var(--hairline); }
+  .esc-linha:first-child { border-top:none; }
+  .esc-linha .n { font-size:12.5px; font-weight:700; flex:0 0 240px; }
+  .esc-linha .n small { display:block; font-weight:500; color:var(--fraco); font-size:10px; margin-top:1px; }
+  .tagmod { font-size:10px; font-weight:700; border-radius:6px; padding:3px 8px; background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .tagmod.cinza { background:var(--hairline); color:var(--mudo); border-color:var(--borda); }
+  .sw { margin-left:auto; display:flex; align-items:center; gap:7px; font-size:11px; color:var(--mudo); }
+  .toggle { width:34px; height:19px; border-radius:10px; background:#e2e8f0; position:relative; }
+  .toggle::after { content:""; position:absolute; top:2px; left:2px; width:15px; height:15px; border-radius:50%; background:#fff; box-shadow:0 1px 3px #0f172a33; }
+  .toggle.on { background:var(--acento); }
+  .toggle.on::after { left:auto; right:2px; }
+
+  /* dashboard processual */
+  .kpis { margin-top:14px; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .kpi { padding:13px 15px; }
+  .kpi .v { font-size:24px; font-weight:800; letter-spacing:-.01em; margin-top:5px; display:flex; align-items:baseline; gap:7px; }
+  .kpi .v small { font-size:11px; font-weight:600; color:var(--rosa); }
+  .kpi .d { font-size:10.5px; color:var(--fraco); margin-top:3px; }
+  .lista { margin-top:12px; }
+  .lista .li { display:flex; align-items:center; gap:10px; padding:9px 16px; border-top:1px solid var(--hairline); font-size:12px; }
+  .lista .li:first-of-type { border-top:none; }
+  .pill-tipo { font-size:9px; font-weight:800; letter-spacing:.04em; border-radius:5px; padding:2px 7px; }
+  .pt-acao { background:var(--rosa-bg); color:var(--rosa); }
+  .pt-rel { background:var(--ambar-bg); color:var(--ambar); }
+  .pt-rot { background:var(--hairline); color:var(--mudo); }
+  .li .quando { margin-left:auto; font-size:10.5px; color:var(--fraco); white-space:nowrap; }
+
+  /* bloqueio */
+  .lock { max-width:530px; margin:60px auto 0; text-align:center; padding:38px 34px; }
+  .lock .cadeado { width:64px; height:64px; margin:0 auto 14px; border-radius:18px; background:var(--acento-bg); border:1px solid #ddd6fe;
+                   display:flex; align-items:center; justify-content:center; font-size:28px; }
+  .lock h2 { font-family:'Poppins'; font-weight:700; font-size:18px; }
+  .lock p { margin-top:8px; font-size:12.5px; color:var(--mudo); line-height:1.6; }
+  .lock .acoes { margin-top:18px; display:flex; gap:10px; justify-content:center; }
+  .btn { height:36px; border:1px solid var(--borda); background:var(--surface); border-radius:9px; padding:0 16px;
+         display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:600; color:var(--corpo); cursor:pointer; font-family:inherit; }
+  .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; }
+
+  .nota { margin-top:16px; display:flex; align-items:flex-start; gap:10px; padding:12px 15px; }
+  .nota .d { font-size:11.5px; color:var(--mudo); line-height:1.6; }
+  .nota b { color:var(--corpo); font-weight:600; }
+
+  .linklike { color:var(--acento-forte); font-weight:700; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+
+  <div class="cenarios">
+    <span class="rot">Mockup navegável — clique pra trocar de cena</span>
+    <button class="cen on" data-view="v-admin">1 · Painel de planos e módulos</button>
+    <button class="cen" data-view="v-so-processos">2 · Escritório só-Acompanhamento</button>
+    <button class="cen" data-view="v-completo">3 · Escritório com tudo (hoje)</button>
+    <button class="cen" data-view="v-bloqueado">4 · Módulo não contratado</button>
+    <span class="dica">nomes fictícios · preços ilustrativos · mockup pra aprovação</span>
+  </div>
+
+  <!-- ══════════ CENA 1: ADMIN ══════════ -->
+  <div id="v-admin" class="view on">
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="j">J</span> Admin</div>
+        <div class="sgrupo">PLATAFORMA</div>
+        <div class="sitem">Visão geral</div>
+        <div class="sitem">Clientes</div>
+        <div class="sitem on">Planos &amp; Módulos</div>
+        <div class="sitem">Financeiro</div>
+        <div class="sitem">Relatórios</div>
+        <div class="sgrupo">OPERAÇÃO</div>
+        <div class="sitem">Robô de jornada</div>
+        <div class="sitem">Erros</div>
+        <div class="sitem">Tribunais</div>
+      </aside>
+      <main class="main">
+        <div class="h1">Planos &amp; Módulos</div>
+        <div class="sub">Cada plano é uma cesta de módulos. O que não está na cesta não aparece no menu do escritório e é recusado pelo servidor.</div>
+        <div style="margin-top:10px"><span class="chip-nota">① cada módulo tem SEU valor — você edita aqui, a qualquer momento, sem depender de deploy</span></div>
+
+        <div class="card" style="margin-top:14px; padding:14px 16px">
+          <div style="display:flex; align-items:baseline; gap:10px">
+            <span class="h2">Catálogo de módulos — valores mensais</span>
+            <span class="micro">clicou no valor, editou, salvou · vale pra venda avulsa e pra montar pacotes</span>
+          </div>
+          <div style="margin-top:10px; display:grid; grid-template-columns:repeat(3,1fr); gap:2px 22px">
+            <div class="catrow"><span class="cb on">✓</span> Processos (motor completo) <span class="valmod"><span class="vbox">R$ 180<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Atendimento (WhatsApp) <span class="valmod"><span class="vbox edit">R$ 150<small>/mês</small></span><span class="salvar-mini">Salvar</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Financeiro <span class="valmod"><span class="vbox">R$ 90<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Clientes (CRM) <span class="valmod"><span class="vbox">R$ 70<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Agenda <span class="valmod"><span class="vbox">R$ 50<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Kanban <span class="valmod"><span class="vbox">R$ 50<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Automações <span class="valmod"><span class="vbox">R$ 120<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Cálculos <span class="valmod"><span class="vbox">R$ 60<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Modelos &amp; assinatura <span class="valmod"><span class="vbox">R$ 60<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Relatórios <span class="valmod"><span class="vbox">R$ 40<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb on">✓</span> Ponto <span class="valmod"><span class="vbox">R$ 30<small>/mês</small></span><span class="lapis">✏</span></span></div>
+            <div class="catrow"><span class="cb trava">＋</span> JurisIA (add-on) <span class="valmod"><span class="vbox">R$ 100<small>/mês</small></span><span class="lapis">✏</span></span></div>
+          </div>
+        </div>
+
+        <div class="planos-grid">
+          <div class="card plano" style="border-color:#c4b5fd">
+            <div class="nome">Acompanhamento Processual <span class="tagmod">NOVO PLANO</span></div>
+            <div class="preco">soma dos módulos da cesta: <b>R$ 300</b> · preço do pacote que VOCÊ define: <b>R$ 249/mês</b> (desconto de combo)</div>
+            <div class="preco" style="margin-top:4px">👥 inclui <span class="vbox">3 atendentes</span> <span class="lapis">✏</span> · atendente adicional <span class="vbox">R$ 25<small>/mês</small></span> <span class="lapis">✏</span></div>
+            <div class="mods">
+              <div class="mod"><span class="cb on">✓</span> Processos (motor completo)</div>
+              <div class="mod"><span class="cb on">✓</span> Clientes <span class="obs">essencial*</span></div>
+              <div class="mod"><span class="cb on">✓</span> Prazos <span class="obs">agenda enxuta*</span></div>
+              <div class="mod"><span class="cb on">✓</span> Dashboard processual</div>
+              <div class="mod off"><span class="cb"></span> Atendimento (WhatsApp)</div>
+              <div class="mod off"><span class="cb"></span> Kanban</div>
+              <div class="mod off"><span class="cb"></span> Financeiro</div>
+              <div class="mod off"><span class="cb"></span> Automações</div>
+              <div class="mod off"><span class="cb"></span> Cálculos</div>
+              <div class="mod off"><span class="cb"></span> Modelos &amp; assinatura</div>
+              <div class="mod off"><span class="cb"></span> Relatórios</div>
+              <div class="mod off"><span class="cb"></span> Ponto</div>
+              <div class="mod"><span class="cb trava">＋</span> JurisIA <span class="obs">add-on à parte (como já é hoje)</span></div>
+            </div>
+          </div>
+          <div class="card plano">
+            <div class="nome">JuridFlow Completo</div>
+            <div class="preco">soma dos módulos: <b>R$ 900</b> · preço do pacote: <b>R$ 497/mês</b> · planos atuais seguem com TUDO marcado — nada muda pra quem já usa</div>
+            <div class="preco" style="margin-top:4px">👥 inclui <span class="vbox">10 atendentes</span> <span class="lapis">✏</span> · atendente adicional <span class="vbox">R$ 35<small>/mês</small></span> <span class="lapis">✏</span></div>
+            <div class="mods">
+              <div class="mod"><span class="cb on">✓</span> Processos</div>
+              <div class="mod"><span class="cb on">✓</span> Clientes (completo)</div>
+              <div class="mod"><span class="cb on">✓</span> Agenda (completa)</div>
+              <div class="mod"><span class="cb on">✓</span> Dashboard</div>
+              <div class="mod"><span class="cb on">✓</span> Atendimento (WhatsApp)</div>
+              <div class="mod"><span class="cb on">✓</span> Kanban</div>
+              <div class="mod"><span class="cb on">✓</span> Financeiro</div>
+              <div class="mod"><span class="cb on">✓</span> Automações</div>
+              <div class="mod"><span class="cb on">✓</span> Cálculos</div>
+              <div class="mod"><span class="cb on">✓</span> Modelos &amp; assinatura</div>
+              <div class="mod"><span class="cb on">✓</span> Relatórios</div>
+              <div class="mod"><span class="cb on">✓</span> Ponto</div>
+              <div class="mod"><span class="cb trava">＋</span> JurisIA <span class="obs">add-on</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div style="padding:13px 16px 0"><span class="h2">Por escritório — exceções e add-ons</span></div>
+          <div class="esc-linha">
+            <div class="n">Escritório Boyadjian Adv <small>plano: JuridFlow Completo</small></div>
+            <span class="tagmod">todos os módulos</span>
+            <span class="tagmod cinza">👥 8 de 10 atendentes</span>
+            <span class="tagmod cinza">+ aplicar desconto</span>
+            <div class="sw">JurisIA (add-on) <span class="toggle on"></span></div>
+          </div>
+          <div class="esc-linha">
+            <div class="n">Silva &amp; Andrade Advocacia <small>plano: Acompanhamento Processual</small></div>
+            <span class="tagmod">processos</span><span class="tagmod">clientes essencial</span><span class="tagmod">prazos</span>
+            <span class="tagmod" style="background:var(--ok-bg); color:var(--ok); border-color:var(--ok-borda)">+ Kanban avulso · R$ 50/mês</span>
+            <span class="tagmod cinza">👥 4 de 3 · 1 adicional R$ 25/mês</span>
+            <span class="tagmod" style="background:var(--ambar-bg); color:var(--ambar); border-color:var(--ambar-borda)">desconto 20% até dez/2026 ✏</span>
+            <span class="tagmod cinza">+ liberar outro módulo</span>
+            <div class="sw">JurisIA (add-on) <span class="toggle"></span></div>
+          </div>
+          <div style="padding:9px 16px 13px; border-top:1px dashed var(--hairline); font-size:11px; color:var(--mudo)">
+            Fatura do Silva &amp; Andrade: pacote R$ 249 + Kanban avulso R$ 50 + 1 atendente adicional R$ 25 = R$ 324 · <b style="color:var(--ambar)">− 20% de desconto</b> = <b style="color:var(--corpo)">R$ 259,20/mês</b>
+          </div>
+        </div>
+
+        <div class="card nota">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:2px"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+          <div class="d"><b>Atendentes e desconto:</b> cada plano inclui um nº de atendentes (colaboradores ativos contam; convite além do limite avisa e cobra o adicional). O desconto é por escritório — percentual ou valor fixo, com validade opcional — e desconta a fatura inteira (pacote + avulsos + adicionais). Tudo editável aqui, sem deploy. <b>*Por que "Clientes essencial" e "Prazos" vêm junto:</b> o estudo do sistema mostrou que o Acompanhamento Processual não fica de pé sozinho — monitorar CPF/CNPJ exige um cadastro de cliente (nome + CPF + responsável), e aprovar um prazo detectado precisa de um lugar pra ele morar. Em vez de rasgar o banco, o plano leva versões enxutas dessas duas peças (incluídas no pacote, sem valor à parte). <b>Valores:</b> módulo avulso cobra o preço do catálogo acima; pacote tem preço próprio que você define — os números desta tela são ilustrativos. Veja a cena 2 pra como fica na prática. <span class="linklike" data-goto="v-so-processos">Ir pra cena 2 →</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ══════════ CENA 2: SÓ-PROCESSOS ══════════ -->
+  <div id="v-so-processos" class="view">
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="j">J</span> JuridFlow</div>
+        <div class="sgrupo">DIA A DIA</div>
+        <div class="sitem on">Dashboard</div>
+        <div class="sgrupo">CARTEIRA</div>
+        <div class="sitem">Processos <span class="bd">12</span></div>
+        <div class="sitem">Clientes <span class="selo">ESSENCIAL</span></div>
+        <div class="sitem">Prazos <span class="bd">5</span></div>
+        <div class="srodape"><span class="av">SA</span> Silva &amp; And…</div>
+      </aside>
+      <main class="main">
+        <div style="display:flex; align-items:flex-start; gap:12px">
+          <div>
+            <div class="h1">Bom dia, Ricardo</div>
+            <div class="sub">Silva &amp; Andrade Advocacia · plano Acompanhamento Processual</div>
+          </div>
+          <span class="chip-nota" style="margin-left:auto">② o menu só mostra o que foi contratado — o resto nem aparece</span>
+        </div>
+
+        <div class="kpis">
+          <div class="card kpi"><div class="micro">Movimentações a resolver</div><div class="v">12</div><div class="d">4 exigem ação</div></div>
+          <div class="card kpi"><div class="micro">Monitoramentos ativos</div><div class="v">238 <small>3 parados</small></div><div class="d">CNJ + CPF/CNPJ</div></div>
+          <div class="card kpi"><div class="micro">Novas ações pendentes</div><div class="v">2</div><div class="d">1 fora do CE</div></div>
+          <div class="card kpi"><div class="micro">Prazos desta semana</div><div class="v">5</div><div class="d">2 de audiência</div></div>
+        </div>
+
+        <div class="card lista">
+          <div style="display:flex; align-items:center; gap:8px; padding:13px 16px 4px">
+            <span class="h2">Últimas movimentações</span>
+            <span style="margin-left:auto" class="chip-nota">③ dashboard ganha a variante processual — sem widgets de módulos que não existem aqui</span>
+          </div>
+          <div class="li"><span class="pill-tipo pt-acao">EXIGE AÇÃO</span> Helena Castro Almeida · 0801234-55.2026 — Intimação: audiência designada 04/09 <span class="quando">há 22min</span></div>
+          <div class="li"><span class="pill-tipo pt-acao">EXIGE AÇÃO</span> João Marcos Bezerra · 0455678-21.2026 — Sentença publicada, prazo recursal em curso <span class="quando">há 1h</span></div>
+          <div class="li"><span class="pill-tipo pt-rel">RELEVANTE</span> Renata Sousa Braga · NOVA AÇÃO em TJPE — Execução de título extrajudicial <span class="quando">há 3h</span></div>
+          <div class="li"><span class="pill-tipo pt-rot">ROTINA</span> Otávio Ramos · 0311099-88.2025 — Conclusos para despacho <span class="quando">ontem</span></div>
+        </div>
+
+        <div class="card nota">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:2px"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+          <div class="d"><b>O que este escritório tem:</b> Processos completo (movimentações, monitoramento CNJ e CPF/CNPJ, alertas, cofre, consulta avulsa, resumo diário por e-mail), <b>Clientes essencial</b> (nome, CPF/CNPJ, responsável — o suficiente pra vigiar e atribuir), e <b>Prazos</b> (a lista onde os alertas aprovados viram compromisso, versão enxuta da Agenda). Configurações mostra só as abas que fazem sentido no plano. E se ele digitar /financeiro na barra do navegador? <span class="linklike" data-goto="v-bloqueado">Ver cena 4 →</span></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ══════════ CENA 3: COMPLETO ══════════ -->
+  <div id="v-completo" class="view">
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="j">J</span> JuridFlow</div>
+        <div class="sgrupo">DIA A DIA</div>
+        <div class="sitem on">Dashboard</div>
+        <div class="sitem">Agenda <span class="bd">36</span></div>
+        <div class="sitem">Atendimento <span class="bd">5</span></div>
+        <div class="sgrupo">CARTEIRA</div>
+        <div class="sitem">Clientes</div>
+        <div class="sitem">Processos <span class="bd">81</span></div>
+        <div class="sitem">Acordos</div>
+        <div class="sitem">Kanban</div>
+        <div class="sgrupo">FERRAMENTAS</div>
+        <div class="sitem">JurisIA <span class="selo">BETA</span></div>
+        <div class="sitem">Ponto</div>
+        <div class="sitem">Cálculos</div>
+        <div class="sitem">Modelos</div>
+        <div class="sitem">Automações</div>
+        <div class="sgrupo">GESTÃO</div>
+        <div class="sitem">Financeiro</div>
+        <div class="sitem">Relatórios</div>
+        <div class="sitem">Roadmap</div>
+        <div class="srodape"><span class="av">BB</span> Boyadjian…</div>
+      </aside>
+      <main class="main">
+        <div style="display:flex; align-items:flex-start; gap:12px">
+          <div>
+            <div class="h1">Boa tarde, Bruno</div>
+            <div class="sub">Boyadjian Advogados · plano JuridFlow Completo</div>
+          </div>
+          <span class="chip-nota" style="margin-left:auto">④ pra quem tem tudo, NADA muda — mesma tela de hoje</span>
+        </div>
+
+        <div class="card" style="margin-top:14px; padding:16px">
+          <span class="h2">Módulos ativos neste plano</span>
+          <div class="mods" style="grid-template-columns:repeat(3,1fr); margin-top:10px">
+            <div class="mod"><span class="cb on">✓</span> Processos</div>
+            <div class="mod"><span class="cb on">✓</span> Clientes</div>
+            <div class="mod"><span class="cb on">✓</span> Agenda</div>
+            <div class="mod"><span class="cb on">✓</span> Atendimento</div>
+            <div class="mod"><span class="cb on">✓</span> Kanban</div>
+            <div class="mod"><span class="cb on">✓</span> Financeiro</div>
+            <div class="mod"><span class="cb on">✓</span> Automações</div>
+            <div class="mod"><span class="cb on">✓</span> Cálculos</div>
+            <div class="mod"><span class="cb on">✓</span> Modelos</div>
+            <div class="mod"><span class="cb on">✓</span> Relatórios</div>
+            <div class="mod"><span class="cb on">✓</span> Ponto</div>
+            <div class="mod"><span class="cb on">✓</span> JurisIA (add-on ativo)</div>
+          </div>
+        </div>
+
+        <div class="card nota">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:2px"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+          <div class="d"><b>Garantia da migração:</b> todos os planos existentes nascem com todos os módulos marcados. A modularização entra por baixo, invisível — no dia seguinte ninguém do Boyadjian percebe diferença nenhuma. Só o plano novo (cena 1) nasce com a cesta menor.</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ══════════ CENA 4: BLOQUEADO ══════════ -->
+  <div id="v-bloqueado" class="view">
+    <div class="app">
+      <aside class="side">
+        <div class="logo"><span class="j">J</span> JuridFlow</div>
+        <div class="sgrupo">DIA A DIA</div>
+        <div class="sitem">Dashboard</div>
+        <div class="sgrupo">CARTEIRA</div>
+        <div class="sitem">Processos <span class="bd">12</span></div>
+        <div class="sitem">Clientes <span class="selo">ESSENCIAL</span></div>
+        <div class="sitem">Prazos <span class="bd">5</span></div>
+        <div class="srodape"><span class="av">SA</span> Silva &amp; And…</div>
+      </aside>
+      <main class="main">
+        <div style="display:flex; justify-content:flex-end"><span class="chip-nota">⑤ digitou /financeiro na URL sem ter o módulo — trava na tela E no servidor</span></div>
+        <div class="card lock">
+          <div class="cadeado">🔒</div>
+          <h2>Financeiro não faz parte do seu plano</h2>
+          <p>O módulo Financeiro (cobranças, conciliação e despesas) não está incluído no plano <b>Acompanhamento Processual</b>. Nenhum dado deste módulo é carregado — o bloqueio vale também no servidor, não é só a tela escondida.</p>
+          <div class="acoes">
+            <button class="btn btn-p">Conhecer o módulo Financeiro</button>
+            <button class="btn">Falar com a gente</button>
+          </div>
+          <p style="margin-top:14px"><span class="linklike" data-goto="v-so-processos">← voltar pro app</span></p>
+        </div>
+        <div class="card nota" style="max-width:530px; margin:16px auto 0">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto; margin-top:2px"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+          <div class="d"><b>Por que isso importa:</b> hoje, esconder um item do menu não desliga nada — a rota continua acessível por URL e o servidor responde. O estudo achou esse aviso escrito no próprio código. A modularização fecha as DUAS portas: o menu não mostra, e o servidor recusa com esta tela amigável no lugar de um erro.</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+<script>
+  function irPara(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === id));
+    document.querySelectorAll('.cen').forEach(b => b.classList.toggle('on', b.dataset.view === id));
+    window.scrollTo(0, 0);
+  }
+  document.querySelectorAll('.cen').forEach(b => b.addEventListener('click', () => irPara(b.dataset.view)));
+  document.addEventListener('click', (e) => {
+    const alvo = e.target.closest('[data-goto]');
+    if (alvo) irPara(alvo.dataset.goto);
+  });
+</script>
+</body>
+</html>

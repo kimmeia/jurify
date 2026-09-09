@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --alerta:#dc2626; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+    --azul:#1d4ed8; --azul-bg:#eff6ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:20px 28px 14px; height:100%; display:flex; flex-direction:column; gap:11px; }
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:22px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:12.5px; color:var(--mudo); }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:13.5px; }
+  .selo-novo { font-size:8.5px; font-weight:800; letter-spacing:.05em; border-radius:5px; padding:2px 6px; background:var(--acento); color:#fff; }
+
+  /* ── 1. tabela de clientes ── */
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { text-align:left; font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); padding:8px 14px; border-bottom:1px solid var(--borda); white-space:nowrap; }
+  td { padding:8px 14px; border-bottom:1px solid var(--hairline); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  .cli { display:flex; align-items:center; gap:9px; }
+  .av { width:30px; height:30px; border-radius:50%; color:#fff; font-size:10px; font-weight:800; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .cli .n { font-size:12.5px; font-weight:700; }
+  .cli .t { font-size:10px; color:var(--fraco); margin-top:1px; }
+  .atend { display:inline-flex; align-items:center; gap:7px; }
+  .av-sm { width:22px; height:22px; border-radius:50%; color:#fff; font-size:8.5px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .atend span { font-size:11.5px; font-weight:600; color:var(--corpo); }
+  .sem-atend { font-size:11px; color:var(--fraco); font-style:italic; }
+  .fin { font-size:11.5px; font-weight:700; color:var(--ambar); text-align:right; }
+  .fin small { display:block; font-weight:500; color:var(--fraco); font-size:9.5px; }
+  .origem { font-size:9.5px; font-weight:700; border:1px solid var(--borda); border-radius:6px; padding:2px 8px; color:var(--mudo); }
+
+  /* ── 2. documentos (explorador) ── */
+  .painel { display:grid; grid-template-columns:1fr 1.08fr; gap:12px; flex:1 1 auto; overflow:hidden; }
+  .docs { display:flex; flex-direction:column; overflow:hidden; }
+  .docs-top { display:flex; align-items:center; gap:8px; padding:11px 14px; border-bottom:1px solid var(--hairline); }
+  .crumb { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--corpo); }
+  .crumb .sep { color:var(--fantasma); }
+  .crumb .atual { color:var(--tinta); }
+  .btn { height:31px; border:1px solid var(--borda); background:var(--surface); border-radius:8px;
+         padding:0 11px; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--corpo); }
+  .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .docs-corpo { padding:12px 14px; overflow:hidden; }
+  .sec-label { font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); margin:2px 0 8px; }
+  .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+  .tile { border:1.5px solid var(--hairline); border-radius:11px; padding:11px 9px 9px; text-align:center; position:relative; background:var(--surface); }
+  .tile:hover { background:var(--hairline); }
+  .tile .ico { font-size:26px; line-height:1; }
+  .tile .nm { font-size:10.5px; font-weight:600; color:var(--tinta-2); margin-top:7px; line-height:1.3;
+              display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; min-height:27px; }
+  .tile .mt { font-size:9px; color:var(--fraco); margin-top:3px; }
+  .tile.sel { border-color:var(--acento); background:var(--acento-bg); }
+  .pasta-tile .ico { color:var(--ambar); }
+
+  /* menu de contexto aberto */
+  .ctx { position:absolute; left:58%; top:64%; z-index:6; width:190px; background:var(--surface); border:1px solid var(--borda);
+         border-radius:11px; padding:5px; box-shadow:0 24px 50px -18px #0f172a44; text-align:left; }
+  .ctx .item { display:flex; align-items:center; gap:8px; padding:7px 9px; border-radius:7px; font-size:11.5px; font-weight:500; color:var(--corpo); }
+  .ctx .item.hl { background:var(--acento-bg); color:var(--acento-forte); font-weight:700; }
+  .ctx .item.del { color:var(--alerta); }
+  .ctx .sep { height:1px; background:var(--hairline); margin:4px 6px; }
+
+  /* ── 3. visualizador ── */
+  .viewer { display:flex; flex-direction:column; overflow:hidden; border-color:#c4b5fd; box-shadow:0 24px 60px -20px #0f172a55; }
+  .v-top { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--hairline); }
+  .v-top .fname { font-size:12.5px; font-weight:700; display:flex; align-items:center; gap:7px; }
+  .v-top .fname .lapis { color:var(--acento-forte); font-size:11px; }
+  .v-top .cont { margin-left:auto; font-size:10.5px; font-weight:700; color:var(--mudo); }
+  .v-corpo { flex:1 1 auto; display:flex; align-items:center; gap:10px; padding:10px 14px; background:#f1f3f7; overflow:hidden; }
+  .seta { width:34px; height:34px; border-radius:50%; background:var(--surface); border:1px solid var(--borda);
+          display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; color:var(--corpo); flex:0 0 auto;
+          box-shadow:0 2px 8px #0f172a1a; }
+  .pagina { flex:1 1 auto; height:100%; background:#fff; border:1px solid var(--borda); border-radius:8px; padding:22px 26px; overflow:hidden; }
+  .pg-t { font-size:12px; font-weight:800; text-align:center; letter-spacing:.02em; }
+  .pg-l { height:7px; background:var(--hairline); border-radius:4px; margin-top:9px; }
+  .pg-l.c { width:62%; }
+  .v-strip { display:flex; align-items:center; gap:8px; padding:9px 14px; border-top:1px solid var(--hairline); }
+  .thumb { width:52px; height:64px; border:1.5px solid var(--borda); border-radius:6px; background:var(--surface);
+           display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:14px; }
+  .thumb small { font-size:7.5px; color:var(--fraco); max-width:46px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .thumb.on { border-color:var(--acento); background:var(--acento-bg); }
+  .v-strip .dica { margin-left:auto; font-size:10px; color:var(--fraco); }
+
+  .nota { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:9px 14px; }
+  .nota .d { font-size:11px; color:var(--mudo); line-height:1.5; }
+  .nota b { color:var(--corpo); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Clientes com atendente à vista + Documentos estilo explorador</div>
+        <div class="sub">Os três pedidos num quadro: coluna do atendente na lista, pastas/arquivos com cara de Windows 11 (com renomear), e o visualizador que navega entre os documentos sem fechar.</div>
+      </div>
+      <div class="micro" style="text-align:right">mockup pra aprovação<br>nomes fictícios</div>
+    </div>
+
+    <div class="card" style="flex:0 0 auto">
+      <div style="display:flex; align-items:center; gap:8px; padding:11px 14px 0">
+        <div class="h2">1 · Lista de Clientes — coluna Atendente</div>
+        <span class="selo-novo">NOVA COLUNA</span>
+      </div>
+      <table style="margin-top:4px">
+        <thead><tr>
+          <th style="width:34%">Nome</th>
+          <th style="width:20%">Atendente</th>
+          <th style="width:14%; text-align:right">Financeiro</th>
+          <th style="width:16%">Última interação</th>
+          <th>Origem</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><div class="cli"><span class="av" style="background:linear-gradient(135deg,#10b981,#059669)">HC</span><div><div class="n">Helena Castro Almeida</div><div class="t">(85) 99911-2233</div></div></div></td>
+            <td><span class="atend"><span class="av-sm" style="background:#7c3aed">DR</span><span>Dayane Rios</span></span></td>
+            <td class="fin">R$ 2,1k<small>pendente</small></td>
+            <td style="font-size:11px; color:var(--mudo)">1d <span style="color:var(--fraco)">· cadastro</span></td>
+            <td><span class="origem">manual</span></td>
+          </tr>
+          <tr>
+            <td><div class="cli"><span class="av" style="background:linear-gradient(135deg,#f43f5e,#d946ef)">JM</span><div><div class="n">João Marcos Bezerra</div><div class="t">(85) 98877-6655</div></div></div></td>
+            <td><span class="atend"><span class="av-sm" style="background:#06b6d4">JB</span><span>Jéssica Andrade</span></span></td>
+            <td class="fin" style="color:var(--fraco)">—<small>sem cobrança</small></td>
+            <td style="font-size:11px; color:var(--mudo)">2d <span style="color:var(--fraco)">· mensagem</span></td>
+            <td><span class="origem">asaas</span></td>
+          </tr>
+          <tr>
+            <td><div class="cli"><span class="av" style="background:linear-gradient(135deg,#3b82f6,#6366f1)">RS</span><div><div class="n">Renata Sousa Braga</div><div class="t">(88) 98123-4567</div></div></div></td>
+            <td><span class="sem-atend">sem atendente — atribuir</span></td>
+            <td class="fin" style="color:var(--fraco)">—<small>sem cobrança</small></td>
+            <td style="font-size:11px; color:var(--mudo)">3d <span style="color:var(--fraco)">· cadastro</span></td>
+            <td><span class="origem">manual</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="painel">
+
+      <div class="card docs">
+        <div style="display:flex; align-items:center; gap:8px; padding:11px 14px 0">
+          <div class="h2">2 · Documentos do cliente — explorador</div>
+        </div>
+        <div class="docs-top">
+          <div class="crumb">📁 Documentos <span class="sep">›</span> <span class="atual">Helena Castro Almeida</span></div>
+          <div style="margin-left:auto; display:flex; gap:7px">
+            <div class="btn">Nova pasta</div>
+            <div class="btn btn-p">⬆ Upload</div>
+          </div>
+        </div>
+        <div class="docs-corpo">
+          <div class="sec-label">Pastas</div>
+          <div class="tiles" style="grid-template-columns:repeat(4,1fr); margin-bottom:12px">
+            <div class="tile pasta-tile"><div class="ico">📁</div><div class="nm">Pessoais</div><div class="mt">4 arquivos</div></div>
+            <div class="tile pasta-tile"><div class="ico">📁</div><div class="nm">Contratos</div><div class="mt">2 arquivos</div></div>
+            <div class="tile pasta-tile"><div class="ico">📁</div><div class="nm">Processo 0801…</div><div class="mt">6 arquivos</div></div>
+          </div>
+          <div class="sec-label">Arquivos</div>
+          <div class="tiles" style="position:relative">
+            <div class="tile"><div class="ico">🪪</div><div class="nm">RG — frente.jpg</div><div class="mt">1,2 MB · 12/08</div></div>
+            <div class="tile sel">
+              <div class="ico">📄</div><div class="nm">Contrato de honorários.pdf</div><div class="mt">340 KB · 14/08</div>
+              <div class="ctx">
+                <div class="item">Abrir</div>
+                <div class="item hl">Renomear <span class="selo-novo" style="margin-left:auto">NOVO</span></div>
+                <div class="item">Baixar</div>
+                <div class="item">Mover pra pasta…</div>
+                <div class="sep"></div>
+                <div class="item del">Excluir</div>
+              </div>
+            </div>
+            <div class="tile"><div class="ico">📄</div><div class="nm">Procuração assinada.pdf</div><div class="mt">180 KB · 14/08</div></div>
+            <div class="tile"><div class="ico">🖼️</div><div class="nm">Comprovante de residência.jpg</div><div class="mt">890 KB · 15/08</div></div>
+            <div class="tile"><div class="ico">📄</div><div class="nm">CNH digital.pdf</div><div class="mt">210 KB · 15/08</div></div>
+            <div class="tile"><div class="ico">📄</div><div class="nm">Comprovante de renda.pdf</div><div class="mt">150 KB · 16/08</div></div>
+            <div class="tile"><div class="ico">📄</div><div class="nm">Certidão de nascimento.pdf</div><div class="mt">95 KB · 16/08</div></div>
+            <div class="tile"><div class="ico">🖼️</div><div class="nm">Contracheque julho.jpg</div><div class="mt">640 KB · 18/08</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card viewer">
+        <div style="display:flex; align-items:center; gap:8px; padding:11px 14px 0">
+          <div class="h2">3 · Visualizador com navegação</div>
+          <span class="selo-novo">SEM ABRIR UM POR UM</span>
+        </div>
+        <div class="v-top">
+          <div class="fname">Contrato de honorários.pdf <span class="lapis">✏ renomear</span></div>
+          <div class="cont">2 de 8</div>
+          <div class="btn" style="height:28px">Baixar</div>
+          <div class="btn" style="height:28px">✕</div>
+        </div>
+        <div class="v-corpo">
+          <div class="seta">‹</div>
+          <div class="pagina">
+            <div class="pg-t">CONTRATO DE PRESTAÇÃO DE SERVIÇOS ADVOCATÍCIOS</div>
+            <div class="pg-l" style="margin-top:16px"></div>
+            <div class="pg-l"></div>
+            <div class="pg-l c"></div>
+            <div class="pg-l" style="margin-top:14px"></div>
+            <div class="pg-l"></div>
+            <div class="pg-l"></div>
+            <div class="pg-l c"></div>
+            <div class="pg-l" style="margin-top:14px"></div>
+            <div class="pg-l"></div>
+            <div class="pg-l c"></div>
+          </div>
+          <div class="seta">›</div>
+        </div>
+        <div class="v-strip">
+          <div class="thumb">🪪<small>RG fren…</small></div>
+          <div class="thumb on">📄<small>Contrato</small></div>
+          <div class="thumb">📄<small>Procura…</small></div>
+          <div class="thumb">🖼️<small>Compro…</small></div>
+          <div class="thumb">📄<small>CNH dig…</small></div>
+          <div class="thumb">📄<small>Renda</small></div>
+          <div class="thumb">📄<small>Certidão</small></div>
+          <div class="thumb">🖼️<small>Contrac…</small></div>
+          <div class="dica">← → do teclado também navegam</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="card nota">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="d"><b>Como funciona:</b> a coluna Atendente mostra quem é o responsável (mesmo dado do Atendimento); sem responsável vira o link "atribuir". Nos Documentos, pasta e arquivo viram blocos com ícone por tipo; o clique-direito (ou ⋮) abre o menu com <b>Renomear</b>. Clicar num arquivo abre o visualizador: setas na tela ou no teclado passam pro próximo documento da pasta, com a fita de miniaturas embaixo — dá pra conferir os 8 arquivos de um cliente sem fechar janela nenhuma.</div>
+    </div>
+
+  </div>
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .pop { background:var(--surface); border:1px solid var(--borda); border-radius:13px; padding:6px;
+         box-shadow:0 24px 50px -18px #0f172a44; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  .main { flex:1; min-height:0; display:flex; gap:14px; margin-top:18px; }
+
+  /* ── inbox ── */
+  .inbox { width:400px; flex:0 0 400px; display:flex; flex-direction:column; overflow:hidden; }
+  .inbox-top { padding:12px 12px 10px; border-bottom:1px solid var(--hairline); }
+  .busca { position:relative; }
+  .busca input { width:100%; height:36px; border:1px solid var(--borda); border-radius:9px;
+                 padding:0 12px 0 34px; font-family:'Inter'; font-size:13px; color:var(--tinta); outline:none; background:var(--surface); }
+  .busca input::placeholder { color:var(--fraco); }
+  .busca svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); }
+  .tabs { display:grid; grid-template-columns:repeat(4,1fr); gap:3px; background:var(--hairline); padding:3px; border-radius:9px; margin-top:10px; }
+  .tab { text-align:center; padding:5px 2px 4px; border-radius:7px; }
+  .tab .l { display:block; font-size:10px; font-weight:600; color:var(--mudo); }
+  .tab .n { display:block; font-size:12.5px; font-weight:800; color:var(--fraco); font-variant-numeric:tabular-nums; }
+  .tab.on { background:var(--surface); box-shadow:0 1px 3px #0f172a1a; }
+  .tab.on .l, .tab.on .n { color:var(--acento); }
+
+  .lista { flex:1; min-height:0; overflow:hidden; position:relative; }
+  .conv { display:flex; gap:10px; padding:11px 12px; border-bottom:1px solid var(--hairline); position:relative; }
+  .conv.nao-lida { background:rgba(15,23,42,.07); }
+  .conv.nao-lida::before { content:""; position:absolute; left:0; top:12px; bottom:12px; width:3px; background:#475569; border-radius:0 3px 3px 0; }
+  .conv.sel { background:var(--acento-bg-2); }
+  .conv.sel::before { content:""; position:absolute; left:0; top:12px; bottom:12px; width:4px; background:var(--acento); border-radius:0 3px 3px 0; }
+  .conv.hover { background:var(--hairline-2); }
+
+  .avatar { width:40px; height:40px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+            color:#fff; font-size:12px; font-weight:700; position:relative; box-shadow:0 1px 3px #0f172a22; }
+  .g-violeta { background:linear-gradient(135deg,#8b5cf6,#6366f1); }
+  .g-ciano   { background:linear-gradient(135deg,#06b6d4,#0ea5e9); }
+  .g-ambar   { background:linear-gradient(135deg,#f59e0b,#f97316); }
+  .g-esmer   { background:linear-gradient(135deg,#10b981,#059669); }
+  .g-rosa    { background:linear-gradient(135deg,#ec4899,#8b5cf6); }
+  .wa { position:absolute; bottom:-2px; right:-2px; width:16px; height:16px; border-radius:50%;
+        background:#25d366; border:2px solid #fff; display:flex; align-items:center; justify-content:center; }
+
+  .conv .info { flex:1; min-width:0; }
+  .conv .l1 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+  .conv .nome { font-size:13.5px; font-weight:500; color:var(--tinta-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv .hora { font-size:10px; color:var(--fraco); flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .conv .l2 { display:flex; justify-content:space-between; gap:8px; align-items:center; margin-top:2px; }
+  .conv .prev { font-size:11.5px; color:var(--fraco); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .conv.nao-lida .nome { font-weight:700; color:var(--tinta); }
+  .conv.nao-lida .hora { color:var(--acento); font-weight:700; }
+  .conv.nao-lida .prev { color:var(--corpo); font-weight:500; }
+  .cnt { min-width:19px; height:19px; border-radius:999px; background:#10b981; color:#fff; font-size:10.5px; font-weight:800;
+         display:inline-flex; align-items:center; justify-content:center; padding:0 5px; flex-shrink:0; font-variant-numeric:tabular-nums; }
+  .dot-manual { width:11px; height:11px; border-radius:50%; background:#10b981; flex-shrink:0; }
+  .pill { font-size:9px; font-weight:600; border-radius:5px; padding:1px 6px; border:1px solid; display:inline-flex; align-items:center; gap:4px; margin-top:6px; }
+  .pill .pd { width:5px; height:5px; border-radius:50%; }
+  .p-atend  { background:#eff6ff; border-color:#bfdbfe; color:#1d4ed8; }  .p-atend .pd { background:#3b82f6; }
+  .p-aguard { background:#fffbeb; border-color:#fde68a; color:#b45309; }  .p-aguard .pd { background:#f59e0b; }
+  .p-resolv { background:#ecfdf5; border-color:#a7f3d0; color:#047857; }  .p-resolv .pd { background:#10b981; }
+  .resp { font-size:9px; color:var(--fraco); margin-left:2px; }
+
+  .kebab { width:26px; height:26px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+           align-self:center; }
+  .kebab.on { background:var(--hairline); box-shadow:inset 0 0 0 1px var(--borda); }
+
+  /* menu rápido da lista */
+  .quick { position:absolute; right:10px; top:214px; width:206px; z-index:30; }
+  .quick .item { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:8px; font-size:12.5px; font-weight:500; color:var(--corpo); }
+  .quick .item.destaque { background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+  .novo { font-size:8.5px; font-weight:800; letter-spacing:.05em; background:var(--acento); color:#fff; border-radius:5px; padding:2px 5px; margin-left:auto; }
+
+  /* ── conversa ── */
+  .chat { flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden; position:relative; }
+  .chat-head { padding:12px 16px 10px; border-bottom:1px solid var(--hairline); }
+  .ch-l1 { display:flex; align-items:center; gap:11px; }
+  .ch-nome { font-size:14.5px; font-weight:600; color:var(--tinta); }
+  .badge { font-size:9px; font-weight:600; border-radius:999px; padding:2px 8px; border:1px solid; display:inline-flex; align-items:center; gap:4px; }
+  .ch-sub { margin-top:2px; font-size:10.5px; color:var(--mudo); display:flex; align-items:center; gap:7px; }
+  .ch-sub .sep { color:var(--fantasma); }
+  .ch-acoes { display:flex; align-items:center; gap:6px; margin-top:9px; justify-content:flex-end; }
+  .ba { height:28px; padding:0 11px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;
+        font-size:11px; font-weight:500; color:var(--mudo); }
+  .ba.verde { background:#ecfdf5; color:#047857; font-weight:600; }
+  .ba.icon { width:28px; padding:0; justify-content:center; }
+  .ba.icon.on { background:var(--hairline); box-shadow:inset 0 0 0 1px var(--borda); }
+
+  .menu { position:absolute; right:14px; top:88px; width:224px; z-index:30; }
+  .menu .item { display:flex; align-items:center; gap:9px; padding:8px 9px; border-radius:8px; font-size:12.5px; font-weight:500; color:var(--corpo); }
+  .menu .item.destaque { background:var(--acento-bg); color:var(--acento-forte); font-weight:600; }
+  .menu .item.perigo { color:var(--alerta); }
+  .menu .div { height:1px; background:var(--hairline); margin:5px 4px; }
+
+  .chat-body { flex:1; min-height:0; background:var(--hairline-2); padding:18px 22px; display:flex; flex-direction:column; gap:10px; overflow:hidden; }
+  .dia { align-self:center; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco);
+         background:var(--surface); border:1px solid var(--borda); border-radius:999px; padding:3px 12px; }
+  .msg { max-width:58%; background:var(--surface); border:1px solid var(--borda); border-radius:12px; border-top-left-radius:4px;
+         padding:9px 13px; font-size:13px; color:var(--corpo); box-shadow:0 1px 2px #0f172a0d; }
+  .msg .h { display:block; font-size:9.5px; color:var(--fraco); margin-top:4px; text-align:right; font-variant-numeric:tabular-nums; }
+  .msg.out { align-self:flex-end; background:var(--acento); border-color:var(--acento); color:#fff;
+             border-top-left-radius:12px; border-top-right-radius:4px; }
+  .msg.out .h { color:#ffffffb3; }
+
+  .composer { flex:0 0 auto; border-top:1px solid var(--hairline); padding:11px 16px; display:flex; align-items:center; gap:10px; }
+  .composer .campo { flex:1; height:38px; border:1px solid var(--borda); border-radius:10px; display:flex; align-items:center;
+                     padding:0 13px; font-size:13px; color:var(--fraco); background:var(--surface); }
+  .composer .enviar { width:38px; height:38px; border-radius:10px; background:var(--acento); display:flex; align-items:center;
+                      justify-content:center; box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  /* callouts numerados */
+  .callout { position:absolute; width:20px; height:20px; border-radius:50%; background:var(--acento); color:#fff;
+             font-size:11px; font-weight:800; display:flex; align-items:center; justify-content:center;
+             box-shadow:0 0 0 2.5px #fff, 0 0 0 5px #7c3aed2e; z-index:40; }
+
+  /* ── rodapé de comportamento ── */
+  .rodape { flex:0 0 auto; margin-top:14px; display:flex; gap:14px; padding:14px 18px; align-items:flex-start; }
+  .rodape .colu { flex:1; min-width:0; display:flex; gap:10px; }
+  .rodape .num { width:20px; height:20px; border-radius:50%; background:var(--acento); color:#fff; font-size:11px;
+                 font-weight:800; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+  .rodape .tt { font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--tinta); }
+  .rodape p { margin-top:3px; font-size:11.5px; color:var(--mudo); line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topo">
+    <div>
+      <div class="h1">Atendimento</div>
+      <div class="sub">Proposta pra aprovação — marcar conversa como <strong style="color:var(--corpo)">não lida</strong> · nada foi implementado ainda</div>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- ═══════ inbox ═══════ -->
+    <div class="card inbox">
+      <div class="inbox-top">
+        <div class="busca">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+          <input placeholder="Buscar conversa…">
+        </div>
+        <div class="tabs">
+          <div class="tab on"><span class="l">Todas</span><span class="n">8</span></div>
+          <div class="tab"><span class="l">Em atend.</span><span class="n">4</span></div>
+          <div class="tab"><span class="l">Aguardando</span><span class="n">2</span></div>
+          <div class="tab"><span class="l">Resolvidas</span><span class="n">2</span></div>
+        </div>
+      </div>
+
+      <div class="lista">
+
+        <!-- não lida de verdade: contador -->
+        <div class="conv nao-lida">
+          <div class="avatar g-rosa">MF
+            <span class="wa"><svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.4.54 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .54 3.4 1 1 0 0 1-.24 1z" fill="#fff"/></svg></span>
+          </div>
+          <div class="info">
+            <div class="l1"><span class="nome">Marciana Ferreira</span><span class="hora">2 min</span></div>
+            <div class="l2"><span class="prev">A dívida da senhora é com a Stone?</span><span class="cnt">3</span></div>
+            <span class="pill p-atend"><span class="pd"></span>Em atendimento</span><span class="resp">· Isaac</span>
+          </div>
+        </div>
+
+        <!-- selecionada (aberta à direita) -->
+        <div class="conv sel">
+          <div class="avatar g-violeta">KB
+            <span class="wa"><svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.4.54 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .54 3.4 1 1 0 0 1-.24 1z" fill="#fff"/></svg></span>
+          </div>
+          <div class="info">
+            <div class="l1"><span class="nome" style="font-weight:600">Kilviane Barros</span><span class="hora">09:57</span></div>
+            <div class="l2"><span class="prev">Entendi, Kilviane. O financiamento vai ser…</span></div>
+            <span class="pill p-aguard"><span class="pd"></span>Aguardando</span><span class="resp">· Isaac</span>
+          </div>
+        </div>
+
+        <!-- hover: kebab visível + menu rápido aberto -->
+        <div class="conv hover">
+          <div class="avatar g-ciano">FS
+            <span class="wa"><svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.4.54 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .54 3.4 1 1 0 0 1-.24 1z" fill="#fff"/></svg></span>
+          </div>
+          <div class="info">
+            <div class="l1"><span class="nome">Francisco Sousa</span><span class="hora" style="display:none">1 h</span></div>
+            <div class="l2"><span class="prev">Essa conciliação foi somente os réus…</span></div>
+            <span class="pill p-atend"><span class="pd"></span>Em atendimento</span><span class="resp">· Renata</span>
+          </div>
+          <div class="kebab on">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.8" fill="#475569"/><circle cx="12" cy="12" r="1.8" fill="#475569"/><circle cx="12" cy="19" r="1.8" fill="#475569"/></svg>
+          </div>
+        </div>
+
+        <div class="conv">
+          <div class="avatar g-ambar">EC</div>
+          <div class="info">
+            <div class="l1"><span class="nome">Esmeralda Copelli</span><span class="hora">3 h</span></div>
+            <div class="l2"><span class="prev">Vendo o andamento do meu processo…</span></div>
+            <span class="pill p-atend"><span class="pd"></span>Em atendimento</span><span class="resp">· Renata</span>
+          </div>
+        </div>
+
+        <div class="conv">
+          <div class="avatar g-esmer">JP</div>
+          <div class="info">
+            <div class="l1"><span class="nome">João Pedro Amaral</span><span class="hora">ontem</span></div>
+            <div class="l2"><span class="prev">Consegui o comprovante do protocolo!</span></div>
+            <span class="pill p-aguard"><span class="pd"></span>Aguardando</span><span class="resp">· Isaac</span>
+          </div>
+        </div>
+
+        <!-- marcada manualmente: mesmo destaque, bolinha sem número -->
+        <div class="conv nao-lida">
+          <div class="avatar g-violeta">RL
+            <span class="wa"><svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8a13 13 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11 11 0 0 0 3.4.54 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .54 3.4 1 1 0 0 1-.24 1z" fill="#fff"/></svg></span>
+          </div>
+          <div class="info">
+            <div class="l1"><span class="nome">Raimunda Nonata Lima</span><span class="hora">ontem</span></div>
+            <div class="l2"><span class="prev">Doutora, a audiência foi remarcada?</span><span class="dot-manual"></span></div>
+            <span class="pill p-atend"><span class="pd"></span>Em atendimento</span><span class="resp">· Renata</span>
+          </div>
+        </div>
+
+        <div class="conv">
+          <div class="avatar g-rosa">SA</div>
+          <div class="info">
+            <div class="l1"><span class="nome">Sebastião Alves</span><span class="hora">seg</span></div>
+            <div class="l2"><span class="prev">Muito obrigado pelo retorno, doutora!</span></div>
+            <span class="pill p-resolv"><span class="pd"></span>Resolvida</span>
+          </div>
+        </div>
+
+        <div class="conv">
+          <div class="avatar g-ciano">AB</div>
+          <div class="info">
+            <div class="l1"><span class="nome">Antônia Braga</span><span class="hora">seg</span></div>
+            <div class="l2"><span class="prev">Recebi o acordo assinado, tudo certo.</span></div>
+            <span class="pill p-resolv"><span class="pd"></span>Resolvida</span>
+          </div>
+        </div>
+
+        <!-- menu rápido (ancorado no ⋮ do Francisco) -->
+        <div class="pop quick">
+          <div class="item destaque">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#5b21b6" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="#5b21b6"/></svg>
+            Marcar como não lida
+            <span class="novo">NOVO</span>
+          </div>
+          <div class="item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="4.5" rx="1" stroke="#64748b" stroke-width="2"/><path d="M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5" stroke="#64748b" stroke-width="2"/><path d="M10 12.5h4" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+            Arquivar conversa
+          </div>
+        </div>
+        <div class="callout" style="right:228px; top:226px;">1</div>
+        <div class="callout" style="right:40px; top:420px;">3</div>
+
+      </div>
+    </div>
+
+    <!-- ═══════ conversa aberta ═══════ -->
+    <div class="card chat">
+      <div class="chat-head">
+        <div class="ch-l1">
+          <div class="avatar g-violeta" style="width:36px;height:36px;font-size:11px;">KB</div>
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="ch-nome">Kilviane Barros</span>
+              <span class="badge p-aguard"><span class="pd" style="width:5px;height:5px;border-radius:50%;background:#f59e0b;"></span>Aguardando</span>
+            </div>
+            <div class="ch-sub">
+              <span>Isaac Menezes</span><span class="sep">·</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#25d366"/><path d="M8.2 9.4a8 8 0 0 0 6.4 6.4l1.4-1.4a.8.8 0 0 1 .8-.2 7 7 0 0 0 1.6.3.8.8 0 0 1 .8.8v1.9a.8.8 0 0 1-.8.8A11.7 11.7 0 0 1 6.7 6.3a.8.8 0 0 1 .8-.8h1.9a.8.8 0 0 1 .8.8 7 7 0 0 0 .3 1.6.8.8 0 0 1-.2.8z" fill="#fff"/></svg>
+                WhatsApp · (85) 99654-2210
+              </span><span class="sep">·</span>
+              <span>+55 85 98696-4559</span>
+            </div>
+          </div>
+        </div>
+        <div class="ch-acoes">
+          <div class="ba">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M8 3 4 7l4 4M4 7h13M16 21l4-4-4-4M20 17H7" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Transferir
+          </div>
+          <div class="ba verde">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#047857" stroke-width="2"/><path d="m8.5 12 2.4 2.4L15.5 9.8" stroke="#047857" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Resolver
+          </div>
+          <div class="ba">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#64748b" stroke-width="2"/><path d="m9 9 6 6M15 9l-6 6" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+            Fechar
+          </div>
+          <div class="ba icon on">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.8" fill="#334155"/><circle cx="12" cy="12" r="1.8" fill="#334155"/><circle cx="12" cy="19" r="1.8" fill="#334155"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- menu "Mais ações" aberto -->
+      <div class="pop menu">
+        <div class="item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M8 3h11a2 2 0 0 1 2 2v12M8 3a2 2 0 0 0-2 2v14a2 2 0 0 1-2 2h13a2 2 0 0 0 2-2v-2" stroke="#64748b" stroke-width="1.8"/><path d="M10 8h7M10 12h7" stroke="#64748b" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Linha do Tempo
+        </div>
+        <div class="item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m3 17 6-6 4 4 8-8" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h6v6" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Pipeline
+        </div>
+        <div class="item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#64748b" stroke-width="2"/><path d="M3 10h18M8 3v4M16 3v4" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+          Agendar
+        </div>
+        <div class="item">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+          Vincular
+        </div>
+        <div class="item destaque">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="#5b21b6" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="#5b21b6"/></svg>
+          Marcar como não lida
+        </div>
+        <div class="div"></div>
+        <div class="item perigo">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 0 0 1 .9h8a1 1 0 0 0 1-.9l1-13M9 7V4.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V7" stroke="#dc2626" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Excluir
+        </div>
+      </div>
+      <div class="callout" style="right:248px; top:230px;">2</div>
+
+      <div class="chat-body">
+        <span class="dia">Hoje</span>
+        <div class="msg">Olá, gostaria de saber sobre a revisão do meu financiamento<span class="h">09:41</span></div>
+        <div class="msg out">Olá, Kilviane! Me chamo Isaac, vou dar prosseguimento ao seu atendimento.<span class="h">09:44</span></div>
+        <div class="msg">O banco continua descontando as parcelas antigas, mesmo depois da liminar<span class="h">09:52</span></div>
+        <div class="msg out">Entendi, Kilviane. O financiamento vai ser revisado — te retorno ainda hoje com o cálculo atualizado.<span class="h">09:57</span></div>
+      </div>
+
+      <div class="composer">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="m21 11.5-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8L13.2 3.7a3.7 3.7 0 0 1 5.2 5.2l-8.5 8.5a1.85 1.85 0 0 1-2.6-2.6L15 7.1" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div class="campo">Digite sua mensagem…</div>
+        <div class="enviar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="m3 11 18-8-8 18-2.5-7.5z" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══════ comportamento ═══════ -->
+  <div class="card rodape" style="position:relative;">
+    <div class="colu">
+      <div class="num">1</div>
+      <div>
+        <div class="tt">Na lista, sem abrir</div>
+        <p>O <strong style="color:var(--corpo)">⋮</strong> aparece ao passar o mouse na conversa. Marca como não lida na hora — pra quando abriu sem querer e a conversa saiu do radar. Arquivar pega carona no mesmo menu.</p>
+      </div>
+    </div>
+    <div class="colu">
+      <div class="num">2</div>
+      <div>
+        <div class="tt">Na conversa aberta</div>
+        <p>Mesma opção no menu "Mais ações". Ao marcar, a conversa fecha e volta pra lista — se continuasse aberta, o "abrir = ler" de hoje desfaria a marcação em seguida.</p>
+      </div>
+    </div>
+    <div class="colu" style="position:relative;">
+      <div class="num">3</div>
+      <div>
+        <div class="tt">Como fica marcada</div>
+        <p>Mesmo destaque de mensagem nova, mas com <strong style="color:#047857">bolinha sem número</strong> (marcação manual, ver Raimunda na lista). Some ao abrir de novo; se chegar mensagem real, o contador assume.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

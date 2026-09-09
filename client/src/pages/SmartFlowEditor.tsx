@@ -132,6 +132,7 @@ const TIPO_ICON: Record<TipoPasso, LucideIcon> = {
   whatsapp_enviar: MessageCircle,
   whatsapp_aguardar_resposta: Pause,
   whatsapp_pergunta_opcoes: MessageCircleQuestion,
+  whatsapp_enviar_template: FileText,
   transferir: PhoneCall,
   encerrar_conversa: CheckCircle2,
   distribuir_atendimento: Users,
@@ -233,37 +234,38 @@ const GATILHO_NODE_ID = "__gatilho__";
  * Agrupa tipos relacionados na mesma cor pra bater o olho e identificar.
  */
 const FAMILIA_COR_NO: Record<TipoPasso, { grad: string; border: string }> = {
-  ia_classificar: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
-  ia_responder: { grad: "from-violet-500 to-indigo-500", border: "border-violet-300 dark:border-violet-800" },
-  ia_consultar: { grad: "from-sky-500 to-cyan-500", border: "border-sky-300 dark:border-sky-800" },
-  ia_atendente: { grad: "from-sky-500 to-blue-600", border: "border-sky-300 dark:border-sky-800" },
-  ia_extrair_campos: { grad: "from-fuchsia-500 to-purple-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
-  crm_buscar_contato: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
-  crm_listar_acoes_cliente: { grad: "from-violet-500 to-pink-500", border: "border-violet-300 dark:border-violet-800" },
-  processo_buscar_movimentacoes: { grad: "from-indigo-500 to-blue-500", border: "border-indigo-300 dark:border-indigo-800" },
-  agenda_criar: { grad: "from-orange-500 to-amber-500", border: "border-orange-300 dark:border-orange-800" },
-  whatsapp_enviar: { grad: "from-teal-500 to-cyan-600", border: "border-teal-300 dark:border-teal-800" },
-  whatsapp_aguardar_resposta: { grad: "from-cyan-500 to-blue-500", border: "border-cyan-300 dark:border-cyan-800" },
-  whatsapp_pergunta_opcoes: { grad: "from-cyan-500 to-teal-500", border: "border-cyan-300 dark:border-cyan-800" },
-  transferir: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
-  encerrar_conversa: { grad: "from-slate-500 to-slate-700", border: "border-slate-300 dark:border-slate-700" },
-  distribuir_atendimento: { grad: "from-teal-500 to-emerald-600", border: "border-teal-300 dark:border-teal-800" },
-  condicional: { grad: "from-amber-500 to-orange-500", border: "border-amber-300 dark:border-amber-800" },
-  randomizar: { grad: "from-fuchsia-500 to-pink-500", border: "border-fuchsia-300 dark:border-fuchsia-800" },
-  para_cada_item: { grad: "from-amber-500 to-yellow-500", border: "border-amber-300 dark:border-amber-800" },
-  esperar: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
-  webhook: { grad: "from-pink-500 to-rose-500", border: "border-pink-300 dark:border-pink-800" },
-  kanban_criar_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
-  kanban_mover_card: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
-  kanban_atribuir_responsavel: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
-  kanban_tags: { grad: "from-indigo-500 to-violet-500", border: "border-indigo-300 dark:border-indigo-800" },
-  contato_tags: { grad: "from-slate-500 to-gray-500", border: "border-slate-300 dark:border-slate-700" },
-  asaas_gerar_cobranca: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
-  asaas_cancelar_cobranca: { grad: "from-rose-500 to-pink-500", border: "border-rose-300 dark:border-rose-800" },
-  asaas_consultar_valor_aberto: { grad: "from-emerald-500 to-teal-600", border: "border-emerald-300 dark:border-emerald-800" },
-  asaas_marcar_recebida: { grad: "from-emerald-500 to-green-600", border: "border-emerald-300 dark:border-emerald-800" },
-  definir_variavel: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
-  definir_campo_personalizado: { grad: "from-slate-500 to-slate-600", border: "border-slate-300 dark:border-slate-700" },
+  ia_classificar: { grad: "from-info to-info", border: "border-info/30" },
+  ia_responder: { grad: "from-info to-info", border: "border-info/30" },
+  ia_consultar: { grad: "from-info to-info", border: "border-info/30" },
+  ia_atendente: { grad: "from-info to-info", border: "border-info/30" },
+  ia_extrair_campos: { grad: "from-danger to-info", border: "border-danger/30" },
+  crm_buscar_contato: { grad: "from-info to-danger", border: "border-info/30" },
+  crm_listar_acoes_cliente: { grad: "from-info to-danger", border: "border-info/30" },
+  processo_buscar_movimentacoes: { grad: "from-info to-info", border: "border-info/30" },
+  agenda_criar: { grad: "from-warning to-warning", border: "border-warning/30" },
+  whatsapp_enviar: { grad: "from-success to-info", border: "border-success/30" },
+  whatsapp_aguardar_resposta: { grad: "from-info to-info", border: "border-info/30" },
+  whatsapp_pergunta_opcoes: { grad: "from-info to-success", border: "border-info/30" },
+  whatsapp_enviar_template: { grad: "from-success to-info", border: "border-success/30" },
+  transferir: { grad: "from-warning to-warning", border: "border-warning/30" },
+  encerrar_conversa: { grad: "from-muted to-muted", border: "border-border" },
+  distribuir_atendimento: { grad: "from-success to-success", border: "border-success/30" },
+  condicional: { grad: "from-warning to-warning", border: "border-warning/30" },
+  randomizar: { grad: "from-danger to-danger", border: "border-danger/30" },
+  para_cada_item: { grad: "from-warning to-warning", border: "border-warning/30" },
+  esperar: { grad: "from-muted to-muted", border: "border-border" },
+  webhook: { grad: "from-danger to-danger", border: "border-danger/30" },
+  kanban_criar_card: { grad: "from-info to-info", border: "border-info/30" },
+  kanban_mover_card: { grad: "from-info to-info", border: "border-info/30" },
+  kanban_atribuir_responsavel: { grad: "from-info to-info", border: "border-info/30" },
+  kanban_tags: { grad: "from-info to-info", border: "border-info/30" },
+  contato_tags: { grad: "from-muted to-muted", border: "border-border" },
+  asaas_gerar_cobranca: { grad: "from-success to-success", border: "border-success/30" },
+  asaas_cancelar_cobranca: { grad: "from-danger to-danger", border: "border-danger/30" },
+  asaas_consultar_valor_aberto: { grad: "from-success to-success", border: "border-success/30" },
+  asaas_marcar_recebida: { grad: "from-success to-success", border: "border-success/30" },
+  definir_variavel: { grad: "from-muted to-muted", border: "border-border" },
+  definir_campo_personalizado: { grad: "from-muted to-muted", border: "border-border" },
 };
 
 const FERRAMENTA_ATENDENTE_LABEL: Record<string, string> = {
@@ -286,14 +288,14 @@ function BarraAcoesNo({ nodeId }: { nodeId: string }) {
       <button
         onClick={(e) => { e.stopPropagation(); acoes.duplicar(nodeId); }}
         title="Duplicar bloco (Ctrl+D)"
-        className="flex h-6 w-6 items-center justify-center rounded text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40"
+        className="flex h-6 w-6 items-center justify-center rounded text-info-fg hover:bg-info-bg"
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
       <button
         onClick={(e) => { e.stopPropagation(); acoes.excluir(nodeId); }}
         title="Excluir bloco (Del)"
-        className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-red-50 dark:hover:bg-red-950/40"
+        className="flex h-6 w-6 items-center justify-center rounded text-destructive hover:bg-danger-bg"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -305,7 +307,7 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
   const meta = getTipoPassoMeta(data.tipo);
   const Icon = TIPO_ICON[data.tipo] ?? Zap;
   const resumo = resumirConfig(data.tipo, data.config);
-  const cor = FAMILIA_COR_NO[data.tipo] ?? { grad: "from-slate-500 to-slate-600", border: "border-border" };
+  const cor = FAMILIA_COR_NO[data.tipo] ?? { grad: "from-muted to-muted", border: "border-border" };
 
   // Gatilho atual (pra validar). Lido direto do ReactFlow a cada render —
   // sem memo, senão o valor congela no mount e não acompanha troca de gatilho.
@@ -316,7 +318,7 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
   const validacoes = validarPasso(data.tipo, gatilho, data.config);
   const temErro = validacoes.some((v) => v.severidade === "erro");
   const temAviso = !temErro && validacoes.some((v) => v.severidade === "aviso");
-  const statusCor = temErro ? "bg-red-400" : temAviso ? "bg-amber-400" : "bg-emerald-400";
+  const statusCor = temErro ? "bg-danger" : temAviso ? "bg-warning" : "bg-success";
   const primeiroProblema = validacoes.find((v) => v.severidade === "erro")
     ?? validacoes.find((v) => v.severidade === "aviso");
 
@@ -342,7 +344,7 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
   return (
     <div
       className={`group relative rounded-xl border-2 shadow-sm bg-card min-w-[230px] max-w-[290px] overflow-visible transition-shadow ${
-        selected ? "ring-2 ring-violet-400 ring-offset-1 border-violet-400" : cor.border
+        selected ? "ring-2 ring-info ring-offset-1 border-info/30" : cor.border
       }`}
     >
       <BarraAcoesNo nodeId={id} />
@@ -371,8 +373,8 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
         <div
           className={`px-2.5 py-1 text-[9.5px] flex items-start gap-1 border-t leading-snug ${
             temErro
-              ? "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-              : "bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300"
+              ? "bg-danger-bg text-danger-fg"
+              : "bg-warning-bg text-warning-fg"
           }`}
         >
           <AlertTriangle className="h-2.5 w-2.5 shrink-0 mt-0.5" />
@@ -387,7 +389,7 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
           {publicadas.slice(0, 2).map((v) => (
             <span
               key={v.path}
-              className="text-[8.5px] font-mono font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 truncate max-w-[110px]"
+              className="text-[8.5px] font-mono font-semibold px-1.5 py-0.5 rounded bg-info-bg text-info-fg dark:text-info truncate max-w-[110px]"
               title={v.label}
             >
               {`{{${v.path}}}`}
@@ -446,6 +448,28 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
             );
           })()}
         </div>
+      ) : data.tipo === "whatsapp_enviar_template" ? (
+        // Enviar template: 1 saída por botão quick-reply do template
+        // (cond_<id>) + 2 universais. Template sem botão = envio simples
+        // com a saída "default".
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {(() => {
+            const cfg = (data.config || {}) as { opcoes?: Array<{ id: string; titulo: string }> };
+            const itens = Array.isArray(cfg.opcoes) ? cfg.opcoes : [];
+            if (itens.length === 0) {
+              return <HandleRow handleId="default" label="enviado →" cor="#22c55e" />;
+            }
+            return (
+              <>
+                {itens.map((o) => (
+                  <HandleRow key={o.id} handleId={`cond_${o.id}`} label={o.titulo || o.id} cor="#0d9488" />
+                ))}
+                <HandleRow handleId="outra_resposta" label="texto livre (sem match)" italic cor="#a16207" />
+                <HandleRow handleId="sem_resposta" label="não respondeu (tempo)" italic cor="#f59e0b" />
+              </>
+            );
+          })()}
+        </div>
       ) : data.tipo === "randomizar" ? (
         // Randomizador: 1 saída por opção (cond_<id>). Mostra peso quando
         // configurado pra dar feedback visual da probabilidade.
@@ -464,22 +488,26 @@ function PassoNodeView({ id, data, selected }: NodeProps<PassoNode>) {
               // Bloco antigo salvo sem opção nenhuma: sem opção não há handle,
               // e sem handle não há de onde puxar a seta. Dizer isso evita a
               // conclusão de que arrastar está quebrado.
-              <p className="text-[10px] italic text-amber-700 dark:text-amber-400 px-3 py-2">
+              <p className="text-[10px] italic text-warning-fg px-3 py-2">
                 Sem saídas ainda — adicione as opções no painel pra poder ligar os próximos blocos.
               </p>
             );
           })()}
         </div>
       ) : data.tipo === "ia_atendente" ? (
-        // Atendente IA: uma saída por ferramenta habilitada. O agente decide
-        // quando disparar cada uma; sem ferramenta, ele só conversa (sem saída).
-        ferramentasAtendente.length > 0 ? (
-          <div className="border-t bg-muted/20 pt-1 pb-3">
-            {ferramentasAtendente.map((f) => (
-              <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
-            ))}
-          </div>
-        ) : null
+        // Atendente IA: uma saída por ferramenta habilitada + a saída
+        // "não respondeu" (timeout, sempre presente — sem seta ligada o
+        // fluxo apenas termina, comportamento padrão escolhido pelo dono).
+        <div className="border-t bg-muted/20 pt-1 pb-3">
+          {ferramentasAtendente.map((f) => (
+            <HandleRow key={f} handleId={f} label={FERRAMENTA_ATENDENTE_LABEL[f] || f} cor="#0ea5e9" />
+          ))}
+          {(() => {
+            const min = Math.max(1, Math.min(1440, Math.floor(Number((data.config as any)?.timeoutMinutos) || 1440)));
+            const rotulo = min % 60 === 0 ? `${min / 60}h` : `${min}min`;
+            return <HandleRow handleId="nao_respondeu" label={`não respondeu (${rotulo})`} italic cor="#f59e0b" />;
+          })()}
+        </div>
       ) : data.tipo === "distribuir_atendimento" ? (
         // Distribuir: "atribuído" (achou atendente) e "sem atendente" (ninguém elegível).
         <div className="border-t bg-muted/20 pt-1 pb-3">
@@ -617,11 +645,11 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
   return (
     <div
       className={`rounded-xl border-2 shadow-md bg-card min-w-[220px] max-w-[280px] ring-2 ring-offset-2 ring-offset-background transition-all ${
-        selected ? "ring-amber-500 border-amber-500" : "ring-amber-500/40 border-amber-500/60"
+        selected ? "ring-warning border-warning/30" : "ring-warning/40 border-warning/30"
       }`}
     >
       {/* Linha 1: categoria — tipo "pasta". */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-t-[10px] bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-900 dark:text-amber-200">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-t-[10px] bg-gradient-to-r from-warning-bg to-warning-bg dark:to-warning/40 text-warning-fg">
         <Zap className="h-3 w-3 shrink-0" />
         <GrupoIconComp className="h-3 w-3 shrink-0" />
         <span className="text-[10px] font-bold uppercase tracking-wider truncate">
@@ -631,7 +659,7 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
 
       {/* Linha 2: operação específica selecionada. */}
       <div className="flex items-center gap-1.5 px-3 py-1.5 border-t bg-card">
-        <OpIcon className="h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400" />
+        <OpIcon className="h-3.5 w-3.5 shrink-0 text-warning-fg" />
         <span className="text-xs font-semibold truncate">{meta.label}</span>
       </div>
 
@@ -640,7 +668,7 @@ function GatilhoNodeView({ data, selected }: NodeProps<GatilhoNode>) {
           {resumo}
         </div>
       )}
-      <Handle type="source" position={Position.Right} className="!bg-amber-500" />
+      <Handle type="source" position={Position.Right} className="!bg-warning" />
     </div>
   );
 }
@@ -662,7 +690,7 @@ function corDaEdge(sourceHandle?: string | null): string {
   if (sourceHandle.startsWith("cond_")) return "#22c55e";
   if (sourceHandle === "default") return "#22c55e";
   if (sourceHandle === "depois") return "#3b82f6";
-  if (sourceHandle === "fallback" || sourceHandle === "timeout" || sourceHandle === "corpo") return "#f59e0b";
+  if (sourceHandle === "fallback" || sourceHandle === "timeout" || sourceHandle === "corpo" || sourceHandle === "nao_respondeu") return "#f59e0b";
   return "#0ea5e9";
 }
 
@@ -818,7 +846,7 @@ function MenuDoNo({
           <>
             <Item
               onClick={onDuplicar}
-              icone={<Copy className="h-3.5 w-3.5 text-violet-600" />}
+              icone={<Copy className="h-3.5 w-3.5 text-info-fg" />}
               texto="Duplicar bloco"
               atalho="Ctrl D"
             />
@@ -905,7 +933,7 @@ function MenuConectarPasso({
               if (e.key === "Enter" && primeiro) onEscolher(primeiro.id);
             }}
             placeholder="Buscar passo…"
-            className="w-full h-8 px-2 text-xs rounded border bg-background focus:outline-none focus:ring-1 focus:ring-violet-400"
+            className="w-full h-8 px-2 text-xs rounded border bg-background focus:outline-none focus:ring-1 focus:ring-info"
           />
         </div>
         <div className="overflow-y-auto p-2">
@@ -1070,6 +1098,12 @@ function resumirConfig(tipo: TipoPasso, config: Record<string, unknown>): string
         return nome ? `📋 template: ${truncar(nome, 32)}` : "📋 template (escolha um)";
       }
       return typeof config.template === "string" ? truncar(config.template, 50) : "";
+    case "whatsapp_enviar_template": {
+      const nome = String(config.templateNome || "").trim();
+      const cat = String(config.templateCategoria || "").trim();
+      if (!nome) return "escolha um template aprovado";
+      return cat ? `${truncar(nome, 26)} · ${cat.toLowerCase()}` : truncar(nome, 32);
+    }
     case "condicional": {
       const cs = Array.isArray(config.condicoes) ? (config.condicoes as any[]) : [];
       if (cs.length > 0) {
@@ -1859,7 +1893,8 @@ function SmartFlowEditorInner() {
     const atendente = criarNode("ia_atendente", 0, {
       ferramentas: ["agendar", "transferir"],
       roteiro:
-        "Seja acolhedor e humano. Pergunte o nome do cliente e sobre qual assunto ele precisa de ajuda. " +
+        "Seja acolhedor, em tom natural. Apresente-se como o assistente virtual do escritório. " +
+        "Pergunte o nome do cliente e sobre qual assunto ele precisa de ajuda. " +
         "Explique brevemente que a primeira conversa é sem compromisso. Tire as dúvidas dele com calma. " +
         'Quando ele confirmar que quer marcar um atendimento, use a ação "agendar". ' +
         'Se ele pedir para falar com uma pessoa, use a ação "transferir".',
@@ -2168,7 +2203,7 @@ function SmartFlowEditorInner() {
           className="flex-1 relative"
           style={{
             background:
-              "linear-gradient(135deg, rgba(241, 245, 249, 0.4) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(237, 233, 254, 0.2) 100%)",
+              "color-mix(in oklab, var(--muted) 55%, transparent)",
           }}
         >
           <ReactFlow
@@ -2221,7 +2256,7 @@ function SmartFlowEditorInner() {
             <div className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
               <button
                 onClick={inserirConversaPronta}
-                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 text-white px-4 py-2 text-xs font-bold shadow-lg hover:from-violet-700 hover:to-indigo-700 transition-colors"
+                className="pointer-events-auto inline-flex items-center gap-2 rounded-full bg-info text-info-on px-4 py-2 text-xs font-bold shadow-lg hover:from-info hover:to-info transition-colors"
               >
                 <Sparkles className="h-3.5 w-3.5" />
                 Inserir conversa pronta
@@ -2401,7 +2436,7 @@ function PainelConfig({ node, onChange, onRemove, onChangeGatilho }: PainelConfi
     return (
       <div className="p-4 space-y-4">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 text-amber-700 dark:text-amber-300">
+          <div className="p-1.5 rounded bg-gradient-to-br from-warning-bg to-warning-bg dark:to-warning/40 text-warning-fg">
             <Icon className="h-4 w-4" />
           </div>
           <div className="flex-1 min-w-0">
@@ -2536,7 +2571,7 @@ function JanelaDisparoFields({
             onChange={(e) => onChange({ disparosPorDia: Math.min(3, Math.max(1, Number(e.target.value) || 1)) })}
           />
           {Number(cfg.disparosPorDia ?? 1) > 1 && (
-            <p className="text-[10px] text-amber-600 mt-1">
+            <p className="text-[10px] text-warning-fg mt-1">
               Mais de 1×/dia pro mesmo cliente pode ser marcado como <b>spam</b> pela Meta (risco de bloqueio). Recomendado: 1.
             </p>
           )}
@@ -2606,7 +2641,7 @@ function ConfigGatilhoFields({
             type="button"
             onClick={() => { setEscolhendoCanal(false); onChange({ canaisIds: [], canais: [] }); }}
             className={`rounded border px-2 py-1.5 text-[11px] font-medium ${
-              porNumero ? "border-border hover:bg-muted/40" : "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+              porNumero ? "border-border hover:bg-muted/40" : "border-warning/30 bg-warning-bg"
             }`}
           >
             Todos os canais
@@ -2615,7 +2650,7 @@ function ConfigGatilhoFields({
             type="button"
             onClick={() => setEscolhendoCanal(true)}
             className={`rounded border px-2 py-1.5 text-[11px] font-medium ${
-              porNumero ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-border hover:bg-muted/40"
+              porNumero ? "border-warning/30 bg-warning-bg" : "border-border hover:bg-muted/40"
             }`}
           >
             Escolher números
@@ -2635,7 +2670,7 @@ function ConfigGatilhoFields({
                 <label
                   key={c.id}
                   className={`flex items-center gap-2 rounded border px-2 py-1.5 text-xs cursor-pointer ${
-                    checked ? "border-amber-500 bg-amber-50 dark:bg-amber-900/20" : "border-border hover:bg-muted/40"
+                    checked ? "border-warning/30 bg-warning-bg" : "border-border hover:bg-muted/40"
                   }`}
                 >
                   <Checkbox checked={checked} onCheckedChange={(v) => toggleCanal(c.id, v === true)} />
@@ -2650,7 +2685,7 @@ function ConfigGatilhoFields({
               );
             })}
             {orfaos.length > 0 && (
-              <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+              <p className="rounded border border-warning/30 bg-warning-bg px-2 py-1.5 text-[10px] text-warning-fg">
                 {orfaos.length === 1 ? "Um canal escolhido não existe mais" : `${orfaos.length} canais escolhidos não existem mais`} —
                 enquanto ficar assim, esse fluxo não dispara por ele.{" "}
                 <button
@@ -2891,8 +2926,8 @@ function ConfigIaAtendenteFields({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2">
-        <p className="text-[11px] text-sky-800 dark:text-sky-300">
+      <div className="rounded-md bg-info-bg border border-info/30 p-2">
+        <p className="text-[11px] text-info-fg">
           O agente <strong>conduz a conversa inteira</strong> (pelo roteiro abaixo), junta mensagens picadas e <strong>captura campos</strong> do cadastro. Quando decide, dispara uma das <strong>ações</strong> marcadas — cada uma vira uma saída do bloco.
         </p>
       </div>
@@ -3005,7 +3040,7 @@ function ConfigIaAtendenteFields({
         </label>
         <p className="text-[10px] text-muted-foreground mt-1">São <strong>fontes de dados do sistema</strong> — o agente busca e responde na hora (não viram saída). Precisam do cliente identificado no cadastro.</p>
         {consultas.includes("ver_horarios") && (
-          <div className="mt-2 space-y-2 rounded border border-cyan-200 dark:border-cyan-900 bg-cyan-50/50 dark:bg-cyan-950/20 p-2">
+          <div className="mt-2 space-y-2 rounded border border-info/30 bg-info-bg/50 p-2">
             <div>
               <Label className="text-[11px]">De quem é a agenda</Label>
               <Select
@@ -3060,6 +3095,36 @@ function ConfigIaAtendenteFields({
         <p className="text-[10px] text-muted-foreground mt-1">A consulta <strong>não vira saída</strong> — o agente busca os horários, oferece ao cliente e, quando ele escolher, usa a ação "Agendar".</p>
       </div>
 
+      <div className="rounded-md border border-info/30 bg-info-bg/60 p-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider font-bold text-info-fg">
+          Se o cliente sumir no meio da conversa
+        </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-foreground">Esperar por</span>
+          <Input
+            type="number"
+            min={1}
+            max={1440}
+            className="h-8 w-24"
+            value={Math.max(1, Math.min(1440, Math.floor(Number(cfg.timeoutMinutos) || 1440)))}
+            onChange={(e) => {
+              const minutos = Math.max(1, Math.min(1440, Math.floor(Number(e.target.value) || 1440)));
+              onChange({ timeoutMinutos: minutos });
+            }}
+          />
+          <span className="text-xs text-foreground">minutos</span>
+          <span className="text-[10px] text-muted-foreground">→ saída "não respondeu"</span>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Estourando o prazo, o fluxo segue pela saída <strong>"não respondeu"</strong> do bloco no canvas —
+          ligue nela um Encerrar, um Transferir ou o follow-up. <strong>Sem seta ligada, o fluxo apenas
+          termina</strong> (comportamento de sempre; 1440 = 24h é o padrão). Máximo de 1440 minutos (24h)
+          pra ficar dentro da janela do WhatsApp. O prazo conta a partir da última resposta do agente e
+          <strong> salve o fluxo</strong> pra valer nas próximas conversas — conversa que já estava
+          esperando mantém o prazo antigo.
+        </p>
+      </div>
+
       <div>
         <Label className="text-xs">Agrupar mensagens picadas (segundos)</Label>
         <Input
@@ -3098,8 +3163,8 @@ function ConfigIaConsultarFields({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-900 p-2">
-        <p className="text-[11px] text-sky-800 dark:text-sky-300">
+      <div className="rounded-md bg-info-bg border border-info/30 p-2">
+        <p className="text-[11px] text-info-fg">
           Faz uma <strong>pergunta à IA e salva a resposta num campo</strong>. <strong>Não envia nada ao cliente</strong> — use a resposta nos próximos passos (numa mensagem, decisão, etc.).
         </p>
       </div>
@@ -3261,7 +3326,7 @@ function ConfigIaExtrairCamposFields({
 
         <div className="space-y-2">
           {campos.map((c, i) => (
-            <div key={i} className="border border-slate-200 dark:border-slate-800 rounded-md p-2 bg-muted/20 space-y-1.5">
+            <div key={i} className="border border-border rounded-md p-2 bg-muted/20 space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <Input
                   value={c.chave}
@@ -3361,7 +3426,7 @@ function ConfigIaExtrairCamposFields({
                           })
                         }
                         disabled={jaAdded}
-                        className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-900/50 ${
+                        className={`w-full text-left text-[11px] px-2 py-1 rounded hover:bg-muted ${
                           jaAdded ? "opacity-40 cursor-not-allowed" : ""
                         }`}
                       >
@@ -3377,7 +3442,7 @@ function ConfigIaExtrairCamposFields({
         </div>
       </div>
 
-      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+      <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-2.5 text-[10px] text-info-fg leading-snug">
         <strong>Como funciona:</strong> a IA recebe a mensagem e devolve um objeto
         com os campos que conseguiu extrair (campos não mencionados ficam fora —
         sem invenção). Os valores ficam em <code>{`{{extracao.<chave>}}`}</code>.
@@ -3452,7 +3517,7 @@ function ConfigCrmBuscarContatoFields({
         </p>
       </div>
 
-      <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-900 p-2.5 text-[10px] text-blue-900 dark:text-blue-200 leading-snug">
+      <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-2.5 text-[10px] text-info-fg leading-snug">
         <strong>Resultado:</strong> se achar, popula <code>contatoId</code>,{" "}
         <code>nomeCliente</code>, <code>telefoneCliente</code>,{" "}
         <code>cliente.campos.*</code>. Use <code>contatoEncontrado</code> num
@@ -3726,7 +3791,7 @@ function ConfigRandomizarFields({
   if (opcoes.length === 0) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-900 p-3 text-xs text-fuchsia-900 dark:text-fuchsia-200">
+        <div className="rounded-md bg-danger-bg border border-danger/30 p-3 text-xs text-danger-fg">
           <p className="font-medium mb-1">🎲 Randomizador</p>
           <p>Cada lead que passa por aqui é sorteado pra uma das saídas. Útil pra A/B testing ou balancear leads entre fluxos paralelos.</p>
         </div>
@@ -3745,7 +3810,7 @@ function ConfigRandomizarFields({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-fuchsia-50 dark:bg-fuchsia-950/30 border border-fuchsia-200 dark:border-fuchsia-900 p-2.5 text-[11px] text-fuchsia-900 dark:text-fuchsia-200 leading-snug">
+      <div className="rounded-md bg-danger-bg border border-danger/30 p-2.5 text-[11px] text-danger-fg leading-snug">
         Cada opção vira uma saída <code>cond_&lt;id&gt;</code> do bloco. Peso opcional (default 1) define a probabilidade — pesos relativos <code>[1, 1, 2]</code> = 25/25/50%.
       </div>
 
@@ -3754,7 +3819,7 @@ function ConfigRandomizarFields({
           const peso = Math.max(0, Number(o.peso ?? 1));
           const pct = totalPeso > 0 ? Math.round((peso / totalPeso) * 100) : 0;
           return (
-            <div key={i} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30 space-y-1.5">
+            <div key={i} className="rounded-md border border-border p-2 bg-muted/50 space-y-1.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}</span>
                 <Input
@@ -3930,7 +3995,7 @@ function ConfigCondicionalFields({
                               key={op}
                               type="button"
                               onClick={() => atualizar(idx, { logica: op })}
-                              className={`px-2 py-0.5 text-[10px] font-bold ${logica === op ? "bg-violet-600 text-white" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                              className={`px-2 py-0.5 text-[10px] font-bold ${logica === op ? "bg-info text-info-on" : "bg-card text-muted-foreground hover:bg-accent"}`}
                             >
                               {op === "E" ? "E (todos)" : "OU (qualquer)"}
                             </button>
@@ -3940,7 +4005,7 @@ function ConfigCondicionalFields({
                     )}
                     {reqs.map((r, ri) => (
                       <div key={ri} className="space-y-1.5">
-                        {ri > 0 && <div className="text-[9px] font-bold text-violet-500 text-center">{logica}</div>}
+                        {ri > 0 && <div className="text-[9px] font-bold text-info text-center">{logica}</div>}
                         <div className="flex items-start gap-1">
                           <div className="flex-1 space-y-1.5">
                             {r.operador !== "janela_horario" && r.operador !== "horario_entre" && r.operador !== "dia_semana" && (
@@ -4023,7 +4088,7 @@ function ConfigCondicionalFields({
                                             if (sel) set.delete(id); else set.add(id);
                                             atualizarReq(ri, { valor2: [...set].join(",") });
                                           }}
-                                          className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-violet-600 text-white border-violet-600" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                                          className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-info text-info-on border-info/30" : "bg-card text-muted-foreground hover:bg-accent"}`}
                                         >
                                           {lbl}
                                         </button>
@@ -4039,7 +4104,7 @@ function ConfigCondicionalFields({
                                   {/* O fuso decide o resultado da condição, então aparece
                                       explícito: implícito, ninguém descobre que o horário
                                       foi avaliado noutro fuso até distribuir pro time errado. */}
-                                  <p className="text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                                  <p className="text-[10px] font-medium text-info-fg">
                                     Avaliado no fuso {fusoEscritorio}
                                     {fusoEscritorio === FUSO_HORARIO_PADRAO ? " (padrão)" : ""} · trocar em
                                     Configurações → Escritório.
@@ -4090,7 +4155,7 @@ function ConfigCondicionalFields({
                                         if (sel) set.delete(id); else set.add(id);
                                         atualizarReq(ri, { valor: [...set].join(",") });
                                       }}
-                                      className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-violet-600 text-white border-violet-600" : "bg-card text-muted-foreground hover:bg-accent"}`}
+                                      className={`px-2 py-0.5 rounded text-[10px] border ${sel ? "bg-info text-info-on border-info/30" : "bg-card text-muted-foreground hover:bg-accent"}`}
                                     >
                                       {lbl}
                                     </button>
@@ -4303,6 +4368,88 @@ function ConfigWhatsappEnviarFields({
 }
 
 /**
+ * Campos do bloco "Enviar template" — template aprovado (HSM) que ALCANÇA o
+ * cliente fora da janela de 24h e ESPERA a resposta: cada botão quick-reply
+ * vira uma saída do nó. Reusa o ConfigWhatsappTemplateBuilder (modo
+ * comOpcoes) e adiciona timeout, fallback de texto e o gate de Marketing.
+ */
+function ConfigWhatsappEnviarTemplateFields({
+  cfg,
+  onChange,
+}: {
+  cfg: Record<string, unknown>;
+  onChange: (patch: Record<string, unknown>) => void;
+}) {
+  const categoria = String(cfg.templateCategoria || "").toUpperCase();
+  const opcoes = Array.isArray(cfg.opcoes) ? (cfg.opcoes as Array<{ id: string; titulo: string }>) : [];
+  return (
+    <div className="space-y-3">
+      <ConfigWhatsappTemplateBuilder cfg={cfg} onChange={onChange} comOpcoes />
+
+      {opcoes.length > 0 && (
+        <p className="text-[10px] text-muted-foreground">
+          Ligue no canvas a seta de cada botão ({opcoes.map((o) => `"${o.titulo}"`).join(", ")}) e das saídas
+          "texto livre"/"não respondeu" — botão sem seta encerra o fluxo sem resposta (a validação avisa).
+        </p>
+      )}
+
+      {categoria === "MARKETING" && (
+        <div className="rounded border border-warning/30 bg-warning-bg p-2.5 space-y-1.5">
+          <p className="text-[11px] font-semibold text-warning-fg flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" /> Template de MARKETING
+          </p>
+          <p className="text-[10.5px] text-warning-fg/90 leading-relaxed">
+            A Meta limita marketing por contato/dia e denúncias derrubam a qualidade do número. Pra follow-up de
+            atendimento, prefira um template <b>Utility</b>. Sem a confirmação abaixo, o passo NÃO envia.
+          </p>
+          <label className="flex items-start gap-2 text-[11px] text-warning-fg cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={cfg.confirmoMarketing === true}
+              onChange={(e) => onChange({ confirmoMarketing: e.target.checked })}
+            />
+            <span>Entendo os riscos e confirmo o envio deste template de marketing.</span>
+          </label>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <Label className="text-xs">Esperar resposta por (min)</Label>
+          <Input
+            type="number"
+            min={1}
+            max={7 * 24 * 60}
+            value={Number(cfg.timeoutMinutos || 1440)}
+            onChange={(e) => onChange({ timeoutMinutos: Number(e.target.value) || 1440 })}
+          />
+          <p className="text-[10px] text-muted-foreground mt-1">Vencendo o prazo, segue pela saída "não respondeu". Padrão 1440 (24h).</p>
+        </div>
+        <div>
+          <Label className="text-xs">Se digitar texto livre</Label>
+          <Select
+            value={String(cfg.fallbackTexto || "fuzzy")}
+            onValueChange={(v) => onChange({ fallbackTexto: v })}
+          >
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="fuzzy">Tentar casar com um botão</SelectItem>
+              <SelectItem value="ignorar">Ir direto pra "texto livre"</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground">
+        Follow-up sem punição: 1 por contato (use "Roda por contato" no fluxo), categoria Utility, e sempre pra quem
+        já conversou com o escritório. O envio respeita opt-out automaticamente.
+      </p>
+    </div>
+  );
+}
+
+/**
  * Config do passo `transferir`. Pausa o bot (marca a conversa como
  * "em_atendimento") e, opcionalmente, envia uma mensagem de despedida antes
  * de pausar. Campo vazio = pausa em silêncio.
@@ -4331,8 +4478,8 @@ function ConfigDistribuirAtendimentoFields({
         : "online_primeiro";
   return (
     <div className="space-y-3">
-      <div className="rounded-md bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-900 p-2">
-        <p className="text-[11px] text-teal-800 dark:text-teal-300">
+      <div className="rounded-md bg-success-bg border border-success/30 p-2">
+        <p className="text-[11px] text-success-fg">
           Atribui um atendente à conversa. <strong>O bot continua o fluxo</strong> — só para quando o atendente responder no inbox. Ligue as saídas <strong>atribuído</strong> e <strong>sem atendente</strong>.
         </p>
       </div>
@@ -4436,8 +4583,8 @@ function ConfigEncerrarConversaFields({
   };
   return (
     <div className="space-y-2">
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
-        <p className="text-[11px] text-slate-700 dark:text-slate-300">
+      <div className="rounded-md border border-border bg-muted p-2 dark:border-border">
+        <p className="text-[11px] text-foreground">
           Fecha o atendimento: manda a despedida e marca a conversa como{" "}
           <strong>{status === "fechado" ? "fechada" : "resolvida"}</strong>.
           Diferente de <strong>Transferir</strong> — aqui ninguém assume.
@@ -4536,8 +4683,8 @@ function ConfigTransferirFields({
   };
   return (
     <div className="space-y-2">
-      <div className="rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 p-2">
-        <p className="text-[11px] text-amber-800 dark:text-amber-300">
+      <div className="rounded-md bg-warning-bg border border-warning/30 p-2">
+        <p className="text-[11px] text-warning-fg">
           Ao chegar aqui, o fluxo <strong>encerra</strong> e o bot <strong>para de responder</strong> essa
           conversa (fica "em atendimento"). Um atendente assume pela tela de Atendimento.
         </p>
@@ -4694,7 +4841,7 @@ function ConfigWhatsappAguardarRespostaFields({
         </p>
       </div>
 
-      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+      <div className="rounded-md border border-warning/30 bg-warning-bg dark:border-warning/30 p-2.5 text-[10px] text-warning-fg leading-snug">
         <strong>Limitação:</strong> só 1 execução por (cenário + contato) pode
         aguardar ao mesmo tempo. Mensagens novas do cliente retomam essa
         execução pendente — pra começar fluxo do zero, espere o timeout
@@ -4788,7 +4935,7 @@ function ConfigWhatsappPerguntaOpcoesFields({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-md border border-cyan-200 bg-cyan-50 dark:bg-cyan-950/30 dark:border-cyan-900 p-2.5 text-[10px] text-cyan-900 dark:text-cyan-200 leading-snug">
+      <div className="rounded-md border border-info/30 bg-info-bg dark:border-info/30 p-2.5 text-[10px] text-info-fg leading-snug">
         ℹ️ Cada opção vira uma <strong>saída</strong> do bloco (<code>cond_&lt;id&gt;</code>) — ligue uma seta pra cada caminho. Saídas extras: <code>outra_resposta</code> (texto livre sem match) e <code>sem_resposta</code> (timeout). <strong>Só funciona em canal WhatsApp Cloud API</strong>.
       </div>
 
@@ -4798,14 +4945,14 @@ function ConfigWhatsappPerguntaOpcoesFields({
           <button
             type="button"
             onClick={() => trocarModo("botoes")}
-            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "botoes" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "botoes" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
           >
             📌 Botões <span className="text-[10px] opacity-70">(até 3)</span>
           </button>
           <button
             type="button"
             onClick={() => trocarModo("lista")}
-            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "lista" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+            className={`flex-1 px-3 py-2 text-xs rounded-md border ${modo === "lista" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
           >
             📋 Lista <span className="text-[10px] opacity-70">(até 10)</span>
           </button>
@@ -4866,7 +5013,7 @@ function ConfigWhatsappPerguntaOpcoesFields({
           </div>
           <div className="space-y-1.5">
             {opcoes.map((o, i) => (
-              <div key={i} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30">
+              <div key={i} className="rounded-md border border-border p-2 bg-muted/50">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[10px] font-bold text-muted-foreground w-4">{i + 1}</span>
                   <Input
@@ -4918,7 +5065,7 @@ function ConfigWhatsappPerguntaOpcoesFields({
           </div>
           <div className="space-y-2">
             {secoes.map((s, si) => (
-              <div key={si} className="rounded-md border border-slate-200 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/30">
+              <div key={si} className="rounded-md border border-border p-2 bg-muted/50">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Input
                     value={s.titulo}
@@ -4931,7 +5078,7 @@ function ConfigWhatsappPerguntaOpcoesFields({
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
-                <div className="space-y-1 pl-2 border-l-2 border-slate-200 dark:border-slate-800">
+                <div className="space-y-1 pl-2 border-l-2 border-border">
                   {s.itens.map((it, ii) => (
                     <div key={ii} className="space-y-1">
                       <div className="flex items-center gap-1.5">
@@ -4995,14 +5142,14 @@ function ConfigWhatsappPerguntaOpcoesFields({
           <button
             type="button"
             onClick={() => onChange({ fallbackTexto: "fuzzy" })}
-            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${(cfg.fallbackTexto ?? "fuzzy") === "fuzzy" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${(cfg.fallbackTexto ?? "fuzzy") === "fuzzy" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
           >
             Tentar match por título
           </button>
           <button
             type="button"
             onClick={() => onChange({ fallbackTexto: "ignorar" })}
-            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${cfg.fallbackTexto === "ignorar" ? "border-cyan-400 bg-cyan-50 dark:bg-cyan-950/40 font-medium" : "border-slate-200 dark:border-slate-800"}`}
+            className={`flex-1 px-2 py-1.5 text-[11px] rounded-md border ${cfg.fallbackTexto === "ignorar" ? "border-info/30 bg-info-bg font-medium" : "border-border"}`}
           >
             Ir pra "outra_resposta"
           </button>
@@ -5076,7 +5223,7 @@ function ConfigParaCadaItemFields({
         </p>
       </div>
 
-      <div className="rounded-md border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-2.5 text-[10px] text-amber-900 dark:text-amber-200 leading-snug">
+      <div className="rounded-md border border-warning/30 bg-warning-bg dark:border-warning/30 p-2.5 text-[10px] text-warning-fg leading-snug">
         <strong>Como conectar no canvas:</strong> arraste a saída <strong>"corpo"</strong>{" "}
         pro primeiro passo da iteração. O último passo do corpo deve conectar
         de volta neste loop (ou simplesmente terminar). A saída{" "}
@@ -5165,9 +5312,9 @@ function ConfigKanbanCriarCardFields({
       </div>
 
       {/* Aviso sobre o vínculo automático com ação (multi-ação) */}
-      <div className="rounded-md border border-blue-200 bg-blue-50 p-2 text-[11px] text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-200">
+      <div className="rounded-md border border-info/30 bg-info-bg p-2 text-[11px] text-info-fg">
         <b>📎 Vínculo automático com ação</b>: quando o gatilho é{" "}
-        <code className="rounded bg-blue-100 px-1 dark:bg-blue-900/50">pagamento_recebido</code>{" "}
+        <code className="rounded bg-info-bg px-1 dark:bg-info/50">pagamento_recebido</code>{" "}
         e a cobrança está vinculada a 1+ ações, o passo dispara uma vez por
         ação e cria <b>1 card por (cliente, ação)</b>. Próximas parcelas
         pagas não duplicam — a idempotência detecta o card existente.
@@ -5622,8 +5769,8 @@ function ConfigAgendaCriarFields({
 
       {acao === "agendar" && (
         <>
-          <div className="rounded-md bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900 p-2">
-            <p className="text-[11px] text-orange-800 dark:text-orange-300">
+          <div className="rounded-md bg-warning-bg border border-warning/30 p-2">
+            <p className="text-[11px] text-warning-fg">
               Cria o compromisso na <strong>Agenda do escritório</strong>, vinculado ao cliente. Nasce <strong>"pendente"</strong> pra equipe confirmar.
             </p>
           </div>
@@ -5660,8 +5807,8 @@ function ConfigAgendaCriarFields({
 
       {acao === "verificar_horario" && (
         <>
-          <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 p-2">
-            <p className="text-[11px] text-blue-800 dark:text-blue-300">
+          <div className="rounded-md bg-info-bg border border-info/30 p-2">
+            <p className="text-[11px] text-info-fg">
               Só <strong>verifica</strong> se o responsável tem o horário livre — não cria nada. Saída: <code>agendaDisponivel</code> (use numa Decisão).
             </p>
           </div>
@@ -5672,8 +5819,8 @@ function ConfigAgendaCriarFields({
 
       {acao === "consultar" && (
         <>
-          <div className="rounded-md bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-900 p-2">
-            <p className="text-[11px] text-violet-800 dark:text-violet-300">
+          <div className="rounded-md bg-info-bg border border-info/30 p-2">
+            <p className="text-[11px] text-info-fg">
               Calcula os <strong>horários LIVRES</strong> do responsável (datas em <strong>ISO 8601</strong>, fuso de Brasília) e salva num campo. Use esse campo no prompt de um passo <strong>"Responder com IA"</strong> pra ela oferecer os horários ao cliente.
             </p>
           </div>
@@ -5848,7 +5995,7 @@ function ConfigContatoTagsFields({
 
   return (
     <div className="space-y-2">
-      <div className="rounded-md bg-slate-50 dark:bg-slate-900/40 border p-2">
+      <div className="rounded-md bg-muted border p-2">
         <p className="text-[11px] text-muted-foreground">
           Mexe nas <strong>tags do contato</strong> no CRM (não em card). Depois dá pra ramificar com uma Decisão <strong>"tem a tag X"</strong>.
         </p>
@@ -6301,6 +6448,8 @@ function ConfigFields({ node, onChange }: { node: PassoNode; onChange: (patch: R
       return <ConfigAgendaCriarFields cfg={cfg} onChange={onChange} />;
     case "whatsapp_enviar":
       return <ConfigWhatsappEnviarFields cfg={cfg} onChange={onChange} />;
+    case "whatsapp_enviar_template":
+      return <ConfigWhatsappEnviarTemplateFields cfg={cfg} onChange={onChange} />;
     case "transferir":
       return <ConfigTransferirFields cfg={cfg} onChange={onChange} />;
     case "encerrar_conversa":

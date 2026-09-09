@@ -30,6 +30,13 @@ import {
 } from "../../drizzle/schema";
 import { diasUteisAte } from "./prazo-processual";
 import { localizarTrecho } from "./teor-documento";
+import type { TentativaDeDocumento } from "./adapters/pje-tjce";
+import { createLogger } from "../_core/logger";
+import {
+  documentoIdDoEvento,
+  documentoTipoDoEvento,
+  teorStatusDoEvento,
+} from "./documento-do-evento";
 import { parsearPartes, resumirPartes } from "./partes-processo";
 import { pontoUtil, type AnaliseMovimentacao } from "./resumir-movimentacao";
 
@@ -123,6 +130,19 @@ export function classificarGrupo(params: {
   return "relevante";
 }
 
+const log = createLogger("movimentacoes");
+
+/** Só o fim da URL: a mensagem cabe em 255 caracteres e o host se repete. */
+function caminhoCurto(url: string): string {
+  try {
+    const u = new URL(url);
+    const partes = u.pathname.split("/").filter(Boolean);
+    return `/${partes.slice(-2).join("/")}`;
+  } catch {
+    return url.slice(-40);
+  }
+}
+
 export const movimentacoesRouter = router({
   /**
    * Feed da central. Devolve as movimentações já agrupadas e com tudo que o
@@ -187,6 +207,9 @@ export const movimentacoesRouter = router({
           teor: eventosProcesso.teor,
           teorStatus: eventosProcesso.teorStatus,
           teorErro: eventosProcesso.teorErro,
+          teorUrl: eventosProcesso.teorUrl,
+          documentoIdTribunal: eventosProcesso.documentoIdTribunal,
+          documentoTipo: eventosProcesso.documentoTipo,
           cnjAfetado: eventosProcesso.cnjAfetado,
           lido: eventosProcesso.lido,
           monitoramentoId: eventosProcesso.monitoramentoId,
@@ -251,7 +274,9 @@ export const movimentacoesRouter = router({
           relevancia: r.relevancia,
           citacao: analise?.providencia.citacao ?? null,
           consequencia: analise?.providencia.consequencia ?? null,
-          teorStatus: r.teorStatus,
+          // Mesma derivação do detalhe: lista e drawer discordarem sobre
+          // "tem documento?" seria pior que os dois estarem errados juntos.
+          teorStatus: teorStatusDoEvento(r),
           teorErro: r.teorErro,
           temTeor: !!r.teor,
           prazo:
@@ -359,10 +384,16 @@ export const movimentacoesRouter = router({
         relevancia: row.ev.relevancia,
         providencia: analise?.providencia ?? null,
         teor: row.ev.teor,
-        teorStatus: row.ev.teorStatus,
+        // Derivados, não os valores congelados na coleta: movimentação
+        // anterior ao extrator de rótulo ficou marcada "sem documento" com o
+        // id escrito no próprio rótulo.
+        teorStatus: teorStatusDoEvento(row.ev),
         teorErro: row.ev.teorErro,
         teorUrl: row.ev.teorUrl,
         teorNome: row.ev.teorNome,
+        /** Peça identificada no rótulo do movimento, mesmo sem link seguível. */
+        documentoId: documentoIdDoEvento(row.ev),
+        documentoTipo: documentoTipoDoEvento(row.ev),
         /** Trecho literal a grifar dentro do teor, quando bate de fato. */
         trechoGrifado: citacao && row.ev.teor ? localizarTrecho(row.ev.teor, citacao) : null,
         cnj: row.ev.cnjAfetado,
@@ -492,6 +523,7 @@ export const movimentacoesRouter = router({
           ev: eventosProcesso,
           apelido: motorMonitoramentos.apelido,
           credencialId: motorMonitoramentos.credencialId,
+          tribunal: motorMonitoramentos.tribunal,
         })
         .from(eventosProcesso)
         .leftJoin(motorMonitoramentos, eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId))
@@ -501,7 +533,8 @@ export const movimentacoesRouter = router({
       if (!row || row.ev.escritorioId !== perm.escritorioId) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Movimentação não encontrada" });
       }
-      if (!row.ev.teorUrl) {
+      const documentoId = documentoIdDoEvento(row.ev);
+      if (!row.ev.teorUrl && !documentoId) {
         return { ok: false as const, motivo: "Esta movimentação não tem documento anexo no tribunal." };
       }
       if (!row.credencialId) {
@@ -512,14 +545,71 @@ export const movimentacoesRouter = router({
       }
 
       const { recuperarSessao } = await import("../escritorio/cofre-helpers");
-      const sessao = await recuperarSessao(row.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(row.credencialId, row.tribunal ?? "", { tentarRelogin: true });
       if (!sessao) {
         return { ok: false as const, motivo: "Sessão do tribunal expirada — revalide a credencial no cofre." };
       }
 
-      const { baixarDocumentoAvulso } = await import("./adapters/pje-tjce");
+      const { baixarDocumentoAvulso, abrirDocumentoNoNavegador } = await import(
+        "./adapters/pje-tjce"
+      );
       const { classificarFalhaTeor } = await import("./teor-documento");
-      const r = await baixarDocumentoAvulso(row.ev.teorUrl, sessao);
+
+      // Com URL, é o caminho direto. Sem ela — que é o caso comum, porque o
+      // link da timeline do PJe é `javascript:void(0)` — resta o id que veio
+      // no rótulo, e aí tentamos as rotas conhecidas do tribunal.
+      let r: { ok: true; texto: string } | { ok: false; erro: string };
+      let urlUsada = row.ev.teorUrl;
+      if (row.ev.teorUrl) {
+        r = await baixarDocumentoAvulso(row.ev.teorUrl, sessao);
+      } else {
+        const { getConfigTribunal } = await import("./tribunais-pdpj");
+        const cfg = getConfigTribunal(row.tribunal ?? "");
+        if (!cfg) {
+          return { ok: false as const, motivo: `Consulta de documento ainda não disponível para ${row.tribunal ?? "este tribunal"}.` };
+        }
+        // Navegador, não requisição. O PJe serve a peça dentro de um
+        // visualizador JSF: pedir a URL por HTTP volta a casca da tela, e foi
+        // assim que o menu do tribunal virou "teor" e a IA resumiu o menu.
+        const { baixarDocumentoPorId } = await import("./documento-por-id");
+        const vistas: TentativaDeDocumento[] = [];
+        const porId = await baixarDocumentoPorId(cfg.urlBusca, documentoId!, async (url) => {
+          const res = await abrirDocumentoNoNavegador(url, sessao);
+          if (res.ok) return { ok: true, texto: res.texto };
+          vistas.push(...res.vistas);
+          return { ok: false, erro: res.erro };
+        });
+        r = porId.ok ? { ok: true, texto: porId.texto } : { ok: false, erro: porId.erro };
+        if (porId.ok) urlUsada = porId.urlQueFuncionou;
+
+        // Quando nenhuma rota serve, o que o navegador viu é o dado que falta
+        // pra acertar a próxima — sem pedir pra ninguém abrir o DevTools.
+        //
+        // Vai pro log E pra mensagem que a tela mostra. Só no log ninguém lê:
+        // quem opera o sistema não abre terminal, e foi exatamente assim que
+        // este problema ficou invisível por tanto tempo.
+        if (!porId.ok && vistas.length) {
+          // O que não é página vem primeiro: numa tela JSF sobra html e script,
+          // e são justamente os que não interessam. O espaço da mensagem é
+          // curto e precisa carregar o que pode ser o documento.
+          const interessantes = vistas.filter((v) => v.status < 400 && v.tipo);
+          interessantes.sort(
+            (a, b) => Number(a.tipo.startsWith("text/")) - Number(b.tipo.startsWith("text/")),
+          );
+          const resumo = interessantes.map((v) => `${v.tipo} ${caminhoCurto(v.url)}`);
+          log.warn(
+            { eventoId: row.ev.id, documentoId, vistas: vistas.slice(0, 40) },
+            "[teor] visualizador abriu mas nenhuma resposta trouxe o documento",
+          );
+          const unicos = [...new Set(resumo)].slice(0, 8);
+          if (unicos.length) {
+            r = {
+              ok: false,
+              erro: `${(r as { erro: string }).erro} · o navegador viu: ${unicos.join(", ")}`,
+            };
+          }
+        }
+      }
 
       if (!r.ok) {
         const { status, motivo } = classificarFalhaTeor(new Error(r.erro));
@@ -542,6 +632,9 @@ export const movimentacoesRouter = router({
           teorErro: null,
           teorObtidoEm: new Date(),
           teorTentativas: row.ev.teorTentativas + 1,
+          // Guardar a rota que funcionou faz a próxima leitura ir direto, sem
+          // repetir a fila de candidatas.
+          teorUrl: urlUsada,
         })
         .where(eq(eventosProcesso.id, row.ev.id));
 
@@ -575,11 +668,18 @@ export const movimentacoesRouter = router({
    */
   contador: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "processos", "ver");
-    if (!perm.allowed) return { naoLidas: 0 };
+    if (!perm.allowed) return { naoLidas: 0, naoLidasSemana: 0 };
 
     // Contagem compartilhada com o card do Painel Geral — os dois respondem
     // "quantas movimentações novas eu tenho?" e discordavam.
-    return { naoLidas: await contarMovimentacoesNaoLidas(perm.escritorioId) };
+    // `naoLidasSemana` alimenta o seletor de período da central: o badge do
+    // menu conta 30 dias e a tela abria em 7 — cada um "certo" no seu
+    // período, e o usuário via 99 no menu com a tela jurando vazio.
+    const [naoLidas, naoLidasSemana] = await Promise.all([
+      contarMovimentacoesNaoLidas(perm.escritorioId),
+      contarMovimentacoesNaoLidas(perm.escritorioId, 7),
+    ]);
+    return { naoLidas, naoLidasSemana };
   }),
 
   /** Marca uma ou várias como lidas — é o "ok, li" da central. */

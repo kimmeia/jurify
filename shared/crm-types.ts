@@ -81,6 +81,8 @@ export interface ConversaInfo {
   ultimaMensagemAt?: string;
   ultimaMensagemPreview?: string;
   naoLidas: number;
+  /** Marcada manualmente como não lida — mesmo destaque na lista, bolinha sem número no lugar do contador. */
+  marcadaNaoLida?: boolean;
   /** Contato pediu pra não receber avisos automáticos no WhatsApp (SAIR ou toggle manual). */
   optOutWhatsapp?: boolean;
   optOutWhatsappEm?: string;

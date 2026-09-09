@@ -25,7 +25,10 @@ import DashboardGeral from "./dashboards/DashboardGeral";
 import DashboardComercial from "./dashboards/DashboardComercial";
 import DashboardFinanceiro from "./dashboards/DashboardFinanceiro";
 import DashboardOperacional from "./dashboards/DashboardOperacional";
+import DashboardProcessual from "./dashboards/DashboardProcessual";
 import { AvisoBanner } from "./dashboards/common";
+import { useModulosContratados } from "@/components/ModuloGuard";
+import { pacoteProcessualPuro } from "@shared/modulos-contratacao";
 
 type SetorTipo = "comercial" | "operacional" | "suporte" | "financeiro" | "outro";
 type Aba = "geral" | "comercial" | "operacional" | "financeiro";
@@ -61,6 +64,11 @@ export default function Dashboard() {
   const isDono = meuEsc?.colaborador?.cargo === "dono";
   const podeMultiPainel = isAdminSistema || isDono;
 
+  // Contrato só-Processos (pacote Acompanhamento Processual) troca o painel
+  // inteiro: os widgets de Financeiro/CRM/Agenda/Atendimento não existem lá.
+  const modulosContratados = useModulosContratados();
+  const processualPuro = pacoteProcessualPuro(modulosContratados);
+
   // Setor do colaborador (ou null pra dono/admin sem setor)
   const setorTipo: SetorTipo | null = meuEsc?.colaborador?.setorTipo ?? null;
   const setorNome: string | null = meuEsc?.colaborador?.setorNome ?? null;
@@ -78,6 +86,11 @@ export default function Dashboard() {
   // Cai direto pro geral, que tem tratamento robusto pra esses casos.
   if (!meuEsc) {
     return <DashboardGeral />;
+  }
+
+  // ─── Variante processual (antes do multi-painel: vale até pro dono) ─────
+  if (processualPuro) {
+    return <DashboardProcessual />;
   }
 
   // ─── Modo multi-painel: tabs no topo ────────────────────────────────────
@@ -150,7 +163,7 @@ function DashboardComTabs({
   return (
     <div className="space-y-4">
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)} className="w-full">
-        {/* Cores por token, não por `slate-*`/`bg-white` fixos: no tema escuro
+        {/* Cores por token, não por `slate-*`/`bg-card` fixos: no tema escuro
             a aba ativa ficava branca com texto branco por cima — sumia — e as
             inativas viravam cinza sobre cinza. */}
         <div className="inline-flex rounded-md border bg-muted p-1.5">

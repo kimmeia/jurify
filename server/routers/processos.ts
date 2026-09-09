@@ -35,12 +35,16 @@ import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
+import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
+import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
+import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
-import { tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { normalizarTribunais } from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -63,19 +67,8 @@ const PACOTES_CREDITOS = [
   { id: "pack_1000", nome: "1000 creditos", creditos: 1000, preco: 499.9, popular: false },
 ] as const;
 
-export const CUSTOS = {
-  consulta_cnj: 1,
-  monitorar_processo_mes: 2,    // ANTES: Judit cobrava 5
-  monitorar_pessoa_mes: 15,     // ANTES: Judit cobrava 35
-  /**
-   * Busca por CPF/CNPJ sob demanda — retorna lista de CNJs encontrados
-   * sem detalhes (capa/movs). Cobra flat 3 cred independente do número
-   * de resultados (motor próprio TJCE custa só servidor, sem cobrança
-   * externa por resultado como na Judit). User pode clicar nos CNJs
-   * pra detalhar (1 cred cada via `consultarCNJ`).
-   */
-  consulta_documento: 3,
-} as const;
+export { CUSTOS } from "../processos/custos-creditos";
+import { CUSTOS } from "../processos/custos-creditos";
 
 function safeParse(json: string): unknown {
   try {
@@ -145,7 +138,8 @@ function adaptarParaJuditShape(r: any, cnj: string) {
     instance: capa.grauTribunal ?? capa.instancia ?? 1,
     parties: partes.map((p) => ({
       name: p.nome ?? "",
-      side: (p.polo ?? "").toLowerCase().startsWith("ativ") ? "Active" : "Passive",
+      side: paraLadoJudit(p.polo),
+      polo: lerPolo(p.polo),
       main_document: p.documento ?? null,
       lawyers: p.advogados ?? [],
     })),
@@ -168,6 +162,73 @@ async function consumirCreditos(
   // valida saldo, debita, registra transação. Lança TRPCError se sem saldo.
   const { consumirCreditosEscritorio } = await import("../billing/escritorio-creditos");
   await consumirCreditosEscritorio(escritorioId, userId, custo, operacao, detalhes);
+}
+
+
+/**
+ * A credencial que serve pra trabalhar, dado o escritório e os sistemas aceitos.
+ *
+ * Existia copiada em cinco lugares deste arquivo, duas delas rotuladas "mesma
+ * lógica de X" — e foi assim que o conserto de um caminho deixou os outros
+ * recusando.
+ *
+ * O critério é `≠ removida`, o mesmo do `recuperarSessao`, que é quem de fato
+ * usa a credencial. `status` indica saúde, não existência: falha passageira no
+ * tribunal marca "erro"/"expirada" e a revalidação cura depois. Exigir "ativa"
+ * recusava justamente quem já tinha tudo configurado e cujo monitoramento
+ * estava rodando naquele instante.
+ *
+ * A ordem de `sistemas` é a preferência do chamador; empate se resolve pela
+ * saúde, porque começar por uma que precisa de relogin é só mais lento —
+ * recusá-la seria impedir o trabalho.
+ */
+const SAUDE_CREDENCIAL: Record<string, number> = {
+  ativa: 0,
+  validando: 1,
+  expirada: 2,
+  erro: 3,
+};
+
+async function escolherCredencial(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  escritorioId: number,
+  opcoes: { sistemas: string[]; credencialId?: number | null },
+): Promise<{
+  cred?: typeof cofreCredenciais.$inferSelect;
+  /** Sistemas presentes no cofre — pra mensagem distinguir "nenhuma" de "outra". */
+  sistemasNoCofre: string[];
+}> {
+  const utilizavel = ne(cofreCredenciais.status, "removida");
+
+  if (opcoes.credencialId) {
+    const [cred] = await db
+      .select()
+      .from(cofreCredenciais)
+      .where(
+        and(
+          eq(cofreCredenciais.id, opcoes.credencialId),
+          eq(cofreCredenciais.escritorioId, escritorioId),
+          inArray(cofreCredenciais.sistema, opcoes.sistemas),
+          utilizavel,
+        ),
+      )
+      .limit(1);
+    return { cred, sistemasNoCofre: [] };
+  }
+
+  const todas = await db
+    .select()
+    .from(cofreCredenciais)
+    .where(and(eq(cofreCredenciais.escritorioId, escritorioId), utilizavel));
+
+  const aceitas = todas.filter((c) => opcoes.sistemas.includes(c.sistema));
+  const peso = (c: (typeof aceitas)[number]) =>
+    opcoes.sistemas.indexOf(c.sistema) * 10 + (SAUDE_CREDENCIAL[c.status] ?? 4);
+
+  return {
+    cred: [...aceitas].sort((x, y) => peso(x) - peso(y))[0],
+    sistemasNoCofre: [...new Set(todas.map((c) => c.sistema))],
+  };
 }
 
 export const processosRouter = router({
@@ -254,21 +315,14 @@ export const processosRouter = router({
       // Se `credencialId` foi informado, exige que ela seja do escritório,
       // compatível com o tribunal e ativa — caso contrário pega a primeira
       // ativa do sistema correto.
-      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
+      // Pra TRF o `sistemaCofre` já É a nacional: montar a lista a partir dele
+      // deixava a credencial cadastrada como pje_trf1 fora da escolha.
+      const escolha = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
+        credencialId: input.credencialId,
+      });
+      let credencial: typeof cofreCredenciais.$inferSelect[] = escolha.cred ? [escolha.cred] : [];
       if (input.credencialId) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-
         if (credencial.length === 0) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -279,18 +333,6 @@ export const processosRouter = router({
           });
         }
       } else {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-
         if (credencial.length === 0) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
@@ -304,7 +346,9 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
+      const storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
+        tentarRelogin: true,
+      });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -686,37 +730,15 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Resolve credencial: selecionada ou primeira ativa do escritório
-      // (preferindo pje_tjce, fallback esaj_tjce). Mesma lógica de
-      // `criarMonitoramentoNovasAcoes`.
-      let cred: typeof cofreCredenciais.$inferSelect | undefined;
-      if (input.credencialId) {
-        [cred] = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      } else {
-        const todas = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          );
-        const suportadas = todas.filter(
-          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
-        );
-        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
-      }
+      // A credencial nacional ("pje_*") entra em qualquer PJe — o login do
+      // PDPJ é o mesmo em todos os estados. Sem ela aqui, quem cadastrou a
+      // credencial como nacional (o caminho recomendado pelo Cofre) era
+      // recusado com "nenhuma de TJCE" nos fluxos por CPF, enquanto os
+      // fluxos por CNJ aceitavam a mesma credencial numa boa.
+      const { cred } = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
+        credencialId: input.credencialId,
+      });
 
       if (!cred) {
         throw new TRPCError({
@@ -728,9 +750,12 @@ export const processosRouter = router({
         });
       }
 
-      // Mapeia sistema → tribunal (hoje só TJCE)
+      // Mapeia sistema → tribunal (a varredura por CPF hoje é só TJCE; a
+      // credencial nacional atende, porque TJCE roda PJe)
       const codigoTribunal =
-        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" ? "tjce" : null;
+        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
+          ? "tjce"
+          : null;
       if (!codigoTribunal) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
@@ -738,7 +763,7 @@ export const processosRouter = router({
         });
       }
 
-      const storageState = await recuperarSessao(cred.id, { tentarRelogin: true });
+      const storageState = await recuperarSessao(cred.id, codigoTribunal, { tentarRelogin: true });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -821,34 +846,22 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Mesma lógica de resolução de credencial de `consultarCNJ`.
-      let credencial: typeof cofreCredenciais.$inferSelect[] = [];
-      if (input.credencialId) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      }
-      if (credencial.length === 0) {
-        credencial = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.sistema, sistemaCofre),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
+      // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
+      // cópia com a nota dizendo que é igual.
+      const escolhido = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
+        credencialId: input.credencialId,
+      });
+      let credencial: typeof cofreCredenciais.$inferSelect[] = escolhido.cred
+        ? [escolhido.cred]
+        : [];
+      // Id informado que não serve não impede: cai pra escolha automática, que
+      // é o que o usuário espera de um campo opcional.
+      if (credencial.length === 0 && input.credencialId) {
+        const auto = await escolherCredencial(db, esc.escritorio.id, {
+          sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
+        });
+        if (auto.cred) credencial = [auto.cred];
       }
       if (credencial.length === 0) {
         throw new TRPCError({
@@ -858,7 +871,9 @@ export const processosRouter = router({
       }
 
       const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId, { tentarRelogin: true });
+      const storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
+        tentarRelogin: true,
+      });
       if (!storageState) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -941,9 +956,8 @@ export const processosRouter = router({
               : [],
             parties: capa.partes.map((p) => ({
               name: p.nome,
-              side: (p.polo === "passivo" ? "Passive" : "Active") as
-                | "Active"
-                | "Passive",
+              side: paraLadoJudit(p.polo),
+              polo: lerPolo(p.polo),
               person_type:
                 p.tipo === "juridica"
                   ? "Legal Entity"
@@ -1269,17 +1283,46 @@ export const processosRouter = router({
             and(
               eq(cofreCredenciais.id, input.credencialId),
               eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
+              ne(cofreCredenciais.status, "removida"),
             ),
           )
           .limit(1);
         if (!cred) {
           throw new TRPCError({
             code: "PRECONDITION_FAILED",
-            message: "Credencial não encontrada ou inativa. Cadastre/valide em /processos?tab=cofre.",
+            message: "Credencial não encontrada. Cadastre em /processos?tab=cofre.",
           });
         }
         credencialIdParaSalvar = input.credencialId;
+      }
+
+      const cnjMascarado = mascararCnj(input.numeroCnj);
+
+      // "Monitorar" duas vezes (ou monitorar o que já está na lista) criava
+      // duas linhas e cobrava duas vezes — a tabela não tem UNIQUE por CNJ.
+      // O existente responde sem cobrar e sem passar pelo limite, que ele
+      // já ocupa.
+      const [existente] = await db
+        .select({ id: motorMonitoramentos.id, status: motorMonitoramentos.status })
+        .from(motorMonitoramentos)
+        .where(
+          and(
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
+            eq(motorMonitoramentos.searchKey, cnjMascarado),
+          ),
+        )
+        .limit(1);
+      if (existente) {
+        return { id: existente.id, custoCred: 0, jaExistia: true as const, status: existente.status };
+      }
+
+      // Limite do plano ANTES de cobrar crédito — recusar depois de cobrar
+      // seria cobrança sem entrega.
+      const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
+      const limitePlano = await verificarLimiteMonitoramentos(esc.escritorio.id, "movimentacoes");
+      if (!limitePlano.permitido) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitePlano.mensagem ?? "Limite do plano atingido." });
       }
 
       // Cobra primeira mensalidade
@@ -1291,7 +1334,6 @@ export const processosRouter = router({
         `Monitor CNJ ${input.numeroCnj} (${tribunal.siglaTribunal})`,
       );
 
-      const cnjMascarado = mascararCnj(input.numeroCnj);
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
         criadoPor: ctx.user.id,
@@ -1314,7 +1356,7 @@ export const processosRouter = router({
         "[motor-proprio] monitoramento de processo criado",
       );
 
-      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes };
+      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes, jaExistia: false as const };
     }),
 
   pausarMonitoramento: protectedProcedure
@@ -1776,7 +1818,7 @@ export const processosRouter = router({
         return { encontrado: false, mensagem: "Monitoramento sem credencial vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
       if (!sessao) {
         return {
           encontrado: false,
@@ -1944,6 +1986,8 @@ export const processosRouter = router({
         // ativa do usuário (TJCE). Frontend pode chamar sem credencial.
         credencialId: z.number().int().positive().optional(),
         recurrenceHoras: z.number().int().min(1).max(168).default(6),
+        /** Tribunais PJe a vigiar; sede (TJCE) entra sempre. Omitido = só sede. */
+        tribunais: z.array(z.string().max(16)).max(24).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1964,51 +2008,44 @@ export const processosRouter = router({
       // Confirma posse da credencial. Cofre é compartilhado pelo escritório:
       // qualquer membro (dono ou colaborador) usa as credenciais cadastradas
       // pelo escritório.
-      let cred: typeof cofreCredenciais.$inferSelect | undefined;
-      if (input.credencialId) {
-        [cred] = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.id, input.credencialId),
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          )
-          .limit(1);
-      } else {
-        // Auto-seleção: prefere pje_tjce, fallback esaj_tjce. Qualquer
-        // credencial ativa do escritório com sistema suportado.
-        const todas = await db
-          .select()
-          .from(cofreCredenciais)
-          .where(
-            and(
-              eq(cofreCredenciais.escritorioId, esc.escritorio.id),
-              eq(cofreCredenciais.status, "ativa"),
-            ),
-          );
-        const suportadas = todas.filter(
-          (c) => c.sistema === "pje_tjce" || c.sistema === "esaj_tjce",
-        );
-        cred = suportadas.find((c) => c.sistema === "pje_tjce") ?? suportadas[0];
-      }
+      // Mesma regra do consultarDocumento: a credencial nacional ("pje_*")
+      // atende TJCE — recusá-la aqui barrava o "Monitorar" do cliente pra
+      // quem seguiu o caminho recomendado do Cofre.
+      const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
+        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
+        credencialId: input.credencialId,
+      });
+
       if (!cred) {
+        // Diferencia "não tem nenhuma" de "tem, mas de outro tribunal" — são
+        // problemas diferentes, e a mensagem antiga mandava cadastrar de novo
+        // nos dois casos, inclusive pra quem já tinha cadastrado.
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message:
-            "Nenhuma credencial ativa de TJCE encontrada. Cadastre uma em Processos → Cofre antes de criar monitoramento.",
+          message: sistemasNoCofre.length
+            ? `O cofre tem credencial cadastrada, mas nenhuma de TJCE (encontrei: ${sistemasNoCofre.join(", ")}). Cadastre uma do TJCE em Processos → Cofre.`
+            : "Nenhuma credencial no cofre. Cadastre uma do TJCE em Processos → Cofre antes de criar monitoramento.",
         });
       }
 
-      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau.
-      const tribunalDaCred = cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" ? "tjce" : null;
+      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau; a credencial
+      // nacional atende (TJCE roda PJe).
+      const tribunalDaCred =
+        cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
+          ? "tjce"
+          : null;
       if (!tribunalDaCred) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
           message: `Monitoramento de novas ações ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
         });
+      }
+
+      // Limite do plano (CPF/CNPJ é serviço à parte) ANTES de cobrar crédito.
+      const { verificarLimiteMonitoramentos } = await import("../processos/limites-monitoramento");
+      const limitePlano = await verificarLimiteMonitoramentos(esc.escritorio.id, "novas_acoes");
+      if (!limitePlano.permitido) {
+        throw new TRPCError({ code: "FORBIDDEN", message: limitePlano.mensagem ?? "Limite do plano atingido." });
       }
 
       // Cobra primeira mensalidade (15 cred)
@@ -2038,6 +2075,8 @@ export const processosRouter = router({
         .limit(1);
       const dataReferenciaCadastro = cnjQuery[0]?.createdAt ?? null;
 
+      const tribunaisVigiados = normalizarTribunais(input.tribunais);
+
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
         criadoPor: ctx.user.id,
@@ -2046,6 +2085,7 @@ export const processosRouter = router({
         searchKey: docLimpo,
         apelido: input.apelido ?? `${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
         tribunal: tribunalDaCred,
+        tribunais: JSON.stringify(tribunaisVigiados),
         credencialId: cred.id,
         status: "ativo",
         recurrenceHoras: input.recurrenceHoras,
@@ -2058,11 +2098,54 @@ export const processosRouter = router({
         (result as unknown as { insertId: number }).insertId;
 
       log.info(
-        { user: ctx.user.id, monId: insertId, tipo: input.tipo, tribunal: tribunalDaCred },
+        { user: ctx.user.id, monId: insertId, tipo: input.tipo, tribunais: tribunaisVigiados },
         "[motor-proprio] monitoramento de novas ações criado",
       );
 
       return { id: insertId, custoCred: CUSTOS.monitorar_pessoa_mes };
+    }),
+
+  /**
+   * Amplia/reduz os estados vigiados de um monitoramento existente — sem
+   * recriar nada. Estado novo faz a 1ª varredura em silêncio (baseline por
+   * tribunal); reduzir não apaga histórico.
+   */
+  atualizarTribunaisNovasAcoes: protectedProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        tribunais: z.array(z.string().max(16)).max(24),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      const tribunaisVigiados = normalizarTribunais(input.tribunais);
+      const r = await db
+        .update(motorMonitoramentos)
+        .set({ tribunais: JSON.stringify(tribunaisVigiados) })
+        .where(
+          and(
+            eq(motorMonitoramentos.id, input.id),
+            eq(motorMonitoramentos.escritorioId, esc.escritorio.id),
+            eq(motorMonitoramentos.tipoMonitoramento, "novas_acoes"),
+          ),
+        );
+      const afetadas =
+        (r as unknown as { rowsAffected?: number }[])[0]?.rowsAffected ??
+        (r as unknown as [{ affectedRows?: number }])[0]?.affectedRows ??
+        1;
+      if (!afetadas) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Monitoramento não encontrado" });
+      }
+      log.info(
+        { user: ctx.user.id, monId: input.id, tribunais: tribunaisVigiados },
+        "[motor-proprio] estados do monitoramento atualizados",
+      );
+      return { tribunais: tribunaisVigiados };
     }),
 
   listarNovasAcoes: protectedProcedure
@@ -2070,6 +2153,11 @@ export const processosRouter = router({
       z.object({
         /** Caixa de entrada: pendentes (default) | resolvidas | todas. */
         filtro: z.enum(["pendentes", "resolvidas", "todas"]).optional(),
+        /**
+         * Gaveta pelo lado do cliente: passivo (réu + terceiro — o alerta),
+         * ativo (autor — só consulta) ou desconhecido. Omitido = todas.
+         */
+        polo: z.enum(["passivo", "ativo", "desconhecido"]).optional(),
         /** Legado — equivale a filtro="pendentes" quando true. */
         apenasNaoLidas: z.boolean().optional(),
         limite: z.number().int().min(1).max(100).default(20),
@@ -2077,7 +2165,8 @@ export const processosRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const empty = { acoes: [], monitoramentos: [], totalNaoLidas: 0, hasMore: false, nextCursor: 0 };
+      const contagemVazia: Record<GavetaPolo, number> = { passivo: 0, ativo: 0, desconhecido: 0 };
+      const empty = { acoes: [], monitoramentos: [], totalNaoLidas: 0, hasMore: false, nextCursor: 0, contagemPorPolo: contagemVazia };
       const db = await getDb();
       if (!db) return empty;
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -2109,15 +2198,21 @@ export const processosRouter = router({
       // os silenciados pelo cron (baseline/polo-ativo/pré-cadastro gravam
       // lido=true sem resolver). Resolvidas = estados terminais. Todas = tudo.
       const filtro = input.filtro ?? (input.apenasNaoLidas === false ? "todas" : "pendentes");
-      const condicoes = [
+      // Condições da caixa (pendentes/resolvidas/todas), SEM a gaveta: a
+      // contagem por polo precisa delas e não do polo.
+      const condicoesCaixa = [
         eq(eventosProcesso.escritorioId, esc.escritorio.id),
         eq(eventosProcesso.tipo, "nova_acao"),
       ];
       if (filtro === "pendentes") {
-        condicoes.push(eq(eventosProcesso.resolucao, "pendente"));
-        condicoes.push(eq(eventosProcesso.lido, false));
+        condicoesCaixa.push(eq(eventosProcesso.resolucao, "pendente"));
+        condicoesCaixa.push(eq(eventosProcesso.lido, false));
       } else if (filtro === "resolvidas") {
-        condicoes.push(ne(eventosProcesso.resolucao, "pendente"));
+        condicoesCaixa.push(ne(eventosProcesso.resolucao, "pendente"));
+      }
+      const condicoes = [...condicoesCaixa];
+      if (input.polo) {
+        condicoes.push(inArray(eventosProcesso.poloCliente, POLOS_DA_GAVETA[input.polo]));
       }
 
       const acoesRaw = await db
@@ -2127,7 +2222,9 @@ export const processosRouter = router({
           tribunal: motorMonitoramentos.tribunal,
           dataDistribuicao: eventosProcesso.dataEvento,
           conteudo: eventosProcesso.conteudo,
+          conteudoJson: eventosProcesso.conteudoJson,
           lido: eventosProcesso.lido,
+          poloCliente: eventosProcesso.poloCliente,
           resolucao: eventosProcesso.resolucao,
           resolvidoEm: eventosProcesso.resolvidoEm,
           resolvidoPorNome: users.name,
@@ -2179,6 +2276,8 @@ export const processosRouter = router({
       // o badge no cabeçalho da aba mostra esse número e a UI faz query
       // separada com limite=1 só pra ele. COUNT separado é mais barato que
       // varrer todas as páginas e é preciso.
+      // O autor confirmado (gaveta "polo ativo") não é alerta: fica fora do
+      // badge mesmo estando pendente.
       const [contagem] = await db
         .select({ total: sql<number>`count(*)` })
         .from(eventosProcesso)
@@ -2188,16 +2287,89 @@ export const processosRouter = router({
             eq(eventosProcesso.tipo, "nova_acao"),
             eq(eventosProcesso.resolucao, "pendente"),
             eq(eventosProcesso.lido, false),
+            ne(eventosProcesso.poloCliente, "ativo"),
           ),
         );
       const naoLidas = Number(contagem?.total ?? 0);
+
+      // Quantos cards cada gaveta tem NESTA caixa — é o número do chip.
+      const porPolo = await db
+        .select({ polo: eventosProcesso.poloCliente, total: sql<number>`count(*)` })
+        .from(eventosProcesso)
+        .where(and(...condicoesCaixa))
+        .groupBy(eventosProcesso.poloCliente);
+      const contagemPorPolo: Record<GavetaPolo, number> = { ...contagemVazia };
+      for (const linha of porPolo) {
+        contagemPorPolo[gavetaDoPolo(lerPolo(linha.polo))] += Number(linha.total ?? 0);
+      }
+      // A capa vem do mesmo scrape que o cron já fez pra decidir se alerta.
+      // Card detectado antes desta mudança devolve `capa: null` e continua
+      // oferecendo o botão de carregar detalhes.
+      const acoesComCapa = acoesValidas.map(({ conteudoJson, ...a }) => ({
+        ...a,
+        capa: lerCapaNovaAcao(conteudoJson),
+        capaFalhou: lerFalhaDeCapa(conteudoJson),
+      }));
       return {
-        acoes: acoesValidas,
+        acoes: acoesComCapa,
         monitoramentos,
         totalNaoLidas: naoLidas,
         hasMore,
         nextCursor: hasMore ? input.cursor + input.limite : input.cursor + acoesValidas.length,
+        contagemPorPolo,
       };
+    }),
+
+  /**
+   * A pessoa diz de que lado o cliente está quando o robô não achou (ou
+   * errou). Move o card de gaveta na hora e vale só pra este processo — o
+   * robô não aprende com isso. Fica registrado quem e quando, no JSON do
+   * evento, ao lado da capa.
+   */
+  definirPoloNovaAcao: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      polo: z.enum(["passivo", "ativo", "terceiro"]),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const [evento] = await db
+        .select({ id: eventosProcesso.id, conteudoJson: eventosProcesso.conteudoJson })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ))
+        .limit(1);
+      if (!evento) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      let bruto: Record<string, unknown> = {};
+      try {
+        const lido = evento.conteudoJson ? JSON.parse(evento.conteudoJson) : {};
+        if (lido && typeof lido === "object" && !Array.isArray(lido)) bruto = lido as Record<string, unknown>;
+      } catch {
+        /* JSON quebrado: regrava só o que este clique sabe */
+      }
+      bruto.poloDoCliente = input.polo;
+      if (bruto.capa && typeof bruto.capa === "object") {
+        (bruto.capa as Record<string, unknown>).poloDoCliente = input.polo;
+      }
+      bruto.poloManual = { userId: ctx.user.id, em: new Date().toISOString() };
+
+      await db
+        .update(eventosProcesso)
+        .set({ poloCliente: input.polo, conteudoJson: JSON.stringify(bruto) })
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ));
+      return { ok: true, polo: input.polo, gaveta: gavetaDoPolo(input.polo) };
     }),
 
   /**

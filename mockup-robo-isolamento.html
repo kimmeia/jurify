@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --duvida:#b45309; --duvida-bg:#fffbeb; --duvida-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+
+  /* ── diagrama ── */
+  .diagrama { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1fr 92px 1fr; gap:0; align-items:stretch; }
+  .lado { padding:15px 18px 16px; }
+  .lado.reais { border:1.5px solid #cbd5e1; border-radius:14px; background:#fff; }
+  .lado.robo { border:1.5px solid var(--acento); border-radius:14px; background:var(--acento-bg); }
+  .lado-cab { display:flex; align-items:center; gap:8px; }
+  .lado-cab b { font-family:'Poppins'; font-weight:700; font-size:14.5px; }
+  .lado-cab .tag { margin-left:auto; font-size:9px; font-weight:700; letter-spacing:.05em;
+                   border-radius:999px; padding:2px 8px; }
+  .tag.trancado { background:#f1f5f9; color:var(--corpo-2); border:1px solid var(--borda); }
+  .tag.livre { background:var(--acento); color:#fff; }
+  .lado p.leg { font-size:11px; color:var(--mudo); margin-top:4px; }
+  .lado.robo p.leg { color:#6d28d9; }
+
+  .itens { margin-top:11px; display:flex; flex-direction:column; gap:6px; flex:1 1 auto;
+           justify-content:space-between; }
+  .lado { display:flex; flex-direction:column; }
+  .item { display:flex; align-items:center; gap:8px; font-size:12px; padding:6px 10px;
+          border-radius:9px; background:#fbfcfd; border:1px solid var(--hairline); }
+  .lado.robo .item { background:#fff; border-color:#ddd6fe; }
+  .item .qt { margin-left:auto; font-size:10.5px; color:var(--fraco); font-variant-numeric:tabular-nums; }
+  .item code { font-size:11px; color:var(--corpo-2); }
+
+  /* muro */
+  .muro { position:relative; display:flex; align-items:center; justify-content:center; }
+  .muro .barra { position:absolute; top:8px; bottom:8px; width:6px; border-radius:999px;
+                 background:repeating-linear-gradient(180deg,#0f172a 0 9px,transparent 9px 17px); opacity:.32; }
+  .muro .selo { position:relative; background:#fff; border:1.5px solid var(--tinta); border-radius:999px;
+                width:60px; height:60px; display:flex; align-items:center; justify-content:center;
+                box-shadow:0 8px 20px -10px #0f172a55; }
+  .muro .cap { position:absolute; bottom:-2px; width:110px; text-align:center; font-size:9.5px;
+               font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--mudo); }
+
+  /* ── garantias ── */
+  .grid { flex:0 0 auto; display:grid; grid-template-columns:repeat(3,1fr);
+          grid-template-rows:auto auto; gap:12px; }
+  .g { padding:12px 14px; display:flex; flex-direction:column; }
+  .g-cab { display:flex; align-items:center; gap:8px; }
+  .g-cab b { font-size:12.5px; font-weight:700; letter-spacing:-.01em; }
+  .g-num { width:19px; height:19px; border-radius:6px; background:var(--tinta); color:#fff;
+           font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .g p { font-size:11.5px; color:var(--corpo); line-height:1.5; margin-top:7px; }
+  .g p b { font-weight:700; color:var(--tinta); }
+  .g .mec { margin-top:9px; padding-top:8px; border-top:1px solid var(--hairline); font-size:10px; color:var(--fraco); line-height:1.45; }
+  .g .mec code { color:var(--corpo-2); font-weight:600; }
+
+  .nota { flex:0 0 auto; display:flex; align-items:flex-start; gap:10px; padding:11px 14px;
+          background:var(--duvida-bg); border:1px solid var(--duvida-borda); border-radius:12px; }
+  .nota .txt { font-size:11.5px; color:#78350f; line-height:1.5; }
+  .nota .txt b { font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div class="h1">Onde o robô pode pisar</div>
+      <div class="sub">O cerco em volta dos dados dos seus clientes — e por qual mecanismo cada parede se sustenta</div>
+    </div>
+
+    <!-- ══ diagrama ══ -->
+    <div class="diagrama">
+      <div class="lado reais">
+        <div class="lado-cab">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10.5" rx="2.2" stroke="#0f172a" stroke-width="2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="#0f172a" stroke-width="2"/></svg>
+          <b>Seus escritórios, com seus clientes</b>
+          <span class="tag trancado">FORA DE ALCANCE</span>
+        </div>
+        <p class="leg">O robô nunca autentica aqui, nem lê uma linha daqui.</p>
+        <div class="itens">
+          <div class="item">👤 Clientes reais, com CPF e telefone <span class="qt">intocados</span></div>
+          <div class="item">⚖️ Processos, prazos e movimentações <span class="qt">intocados</span></div>
+          <div class="item">💰 Cobranças do Asaas e comissões <span class="qt">intocados</span></div>
+          <div class="item">🔑 Credenciais do cofre <span class="qt">intocadas</span></div>
+          <div class="item">💬 Conversas do WhatsApp e atendimentos <span class="qt">intocadas</span></div>
+          <div class="item">📋 Cards do Kanban e colunas <span class="qt">intocados</span></div>
+          <div class="item">⏱️ Ponto, avaliações e ocorrências <span class="qt">intocados</span></div>
+        </div>
+      </div>
+
+      <div class="muro">
+        <div class="barra"></div>
+        <div class="selo">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10.5" rx="2.2" stroke="#0f172a" stroke-width="2"/><path d="M8 10.5V7.5a4 4 0 1 1 8 0v3" stroke="#0f172a" stroke-width="2"/><circle cx="12" cy="15.5" r="1.6" fill="#0f172a"/></svg>
+        </div>
+        <div class="cap">escritorioId</div>
+      </div>
+
+      <div class="lado robo">
+        <div class="lado-cab">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="4" y="7" width="16" height="12" rx="3" stroke="#7c3aed" stroke-width="2"/><circle cx="9" cy="13" r="1.4" fill="#7c3aed"/><circle cx="15" cy="13" r="1.4" fill="#7c3aed"/><path d="M12 7V4" stroke="#7c3aed" stroke-width="2" stroke-linecap="round"/></svg>
+          <b>Escritório do robô</b>
+          <span class="tag livre">ONDE ELE BRINCA</span>
+        </div>
+        <p class="leg">Criado no início da execução, apagado no fim. Nasce vazio.</p>
+        <div class="itens">
+          <div class="item">🏢 <code>test-runner-1787063-a9f2</code> <span class="qt">1 escritório</span></div>
+          <div class="item">👥 <code>dono@jurify.test</code> e mais 4 cargos <span class="qt">5 usuários</span></div>
+          <div class="item">🧪 “[E2E] Cliente de Teste 1…5” <span class="qt">5 contatos falsos</span></div>
+          <div class="item">🚫 Nenhuma integração conectada <span class="qt">0 canais</span></div>
+          <div class="item">📄 Processos e prazos que ele mesmo cria <span class="qt">descartáveis</span></div>
+          <div class="item">💳 Assinatura de teste, créditos próprios <span class="qt">não é a sua</span></div>
+          <div class="item">🗑️ Tudo apagado ao terminar <span class="qt">0 restos</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ garantias ══ -->
+    <div class="grid">
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">1</span><b>A parede é a do produto, não uma nova</b></div>
+        <p>
+          O robô é um <b>usuário comum</b> de um escritório que só tem ele dentro. Toda consulta do
+          sistema já filtra por <b>escritorioId</b>. Ele não ganha permissão especial nenhuma —
+          se conseguisse ver dado de outro escritório, isso seria o vazamento multi-tenant que
+          já existe regra pra vigiar.
+        </p>
+        <div class="mec">Regra <code>TEN-01</code> do robô auditor vigia esse vazamento no banco</div>
+      </div>
+
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">2</span><b>Ele não entra como admin do sistema</b></div>
+        <p>
+          Os cargos que ele usa são <b>dono, gestor, atendente, estagiário e SDR</b> — todos de
+          escritório. O painel admin, que é o único lugar com visão global, fica fora do alcance
+          porque ele não tem conta que abra a porta.
+        </p>
+        <div class="mec">A lista de cargos é fechada em <code>TEST_CARGOS</code></div>
+      </div>
+
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">3</span><b>Não tem com que mandar nada pra fora</b></div>
+        <p>
+          WhatsApp, Asaas e cofre do tribunal são <b>por escritório</b>, e o do robô nasce sem
+          nenhum. Não há canal conectado, chave de cobrança nem credencial — então nenhuma
+          mensagem, cobrança ou consulta paga sai, por ausência de meio.
+        </p>
+        <div class="mec">E-mail é global: bloqueado por flag durante a execução</div>
+      </div>
+
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">4</span><b>Não clica no que não dá pra desfazer</b></div>
+        <p>
+          Mesmo dentro do escritório dele, o robô tem <b>lista negra</b>: nada de excluir, cancelar
+          assinatura, remover coluna do Kanban ou gerar cobrança. Ele cria, edita, navega e
+          confere. O que destrói fica de fora por escrito, não por bom senso.
+        </p>
+        <div class="mec">A lista vive no código do robô e tem teste que a trava</div>
+      </div>
+
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">5</span><b>Apaga tudo no fim — e há varredor</b></div>
+        <p>
+          Ao terminar, apaga o escritório inteiro pelo identificador da execução. Se a execução
+          for interrompida no meio, um <b>varredor de zumbis</b> limpa o que sobrou na próxima vez.
+        </p>
+        <div class="mec">Nome sempre prefixado <code>test-runner-</code>, contatos com <code>[E2E]</code></div>
+      </div>
+
+      <div class="card g">
+        <div class="g-cab"><span class="g-num">6</span><b>Se sobrar sujeira, você fica sabendo</b></div>
+        <p>
+          Uma regra nova do auditor procura escritório de teste com mais de 24 h de vida. Sobra
+          aparecer no painel é <b>o alarme</b> — a limpeza não depende de ninguém lembrar de
+          conferir.
+        </p>
+        <div class="mec">Regra <code>ROB-01</code>, a criar junto com o robô</div>
+      </div>
+    </div>
+
+    <div class="nota">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b45309" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="txt">
+        <b>O risco que sobra, dito com todas as letras:</b> rodando contra produção, o robô ESCREVE
+        no banco de produção — as linhas do escritório dele. Elas nascem isoladas e morrem no fim,
+        mas existem enquanto ele roda. Se isso não te agrada, a alternativa é rodar só contra
+        staging: some o risco e some também a capacidade de flagrar problema que só acontece com
+        os seus dados. A decisão é sua, e dá pra mudar depois sem refazer nada.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

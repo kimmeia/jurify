@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,15 +14,16 @@ import {
   Settings, Heart, Server, CreditCard, Shield, Globe, Clock,
   CheckCircle2, XCircle, AlertTriangle, Cpu, HardDrive,
   MessageSquare, Users, Building2, Radio, Bot, UserCheck,
-  Radar, KeyRound, Coins, Activity, Plug, Database, HeartPulse,
+  Radar, KeyRound, Coins, Activity, Plug, Database, HeartPulse, Wrench,
 } from "lucide-react";
 import AdminIntegrations from "./AdminIntegrations";
 import AdminBackups from "./AdminBackups";
+import AdminManutencao from "./AdminManutencao";
 
 function HealthIcon({ status }: { status: string }) {
-  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-emerald-500" />;
+  if (status === "ok") return <CheckCircle2 className="h-4 w-4 text-success" />;
   if (status === "erro") return <XCircle className="h-4 w-4 text-destructive" />;
-  return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+  return <AlertTriangle className="h-4 w-4 text-warning" />;
 }
 
 function formatUptime(seconds: number) {
@@ -32,34 +37,71 @@ function formatUptime(seconds: number) {
 
 function CanalStatusBadge({ status }: { status: string }) {
   const map: Record<string, { cls: string; label: string }> = {
-    conectado: { cls: "bg-emerald-500/15 text-emerald-700 border-emerald-500/25", label: "Conectado" },
-    desconectado: { cls: "bg-gray-500/15 text-gray-600 border-gray-500/25", label: "Desconectado" },
-    pendente: { cls: "bg-amber-500/15 text-amber-700 border-amber-500/25", label: "Pendente" },
-    erro: { cls: "bg-red-500/15 text-red-700 border-red-500/25", label: "Erro" },
-    banido: { cls: "bg-red-500/15 text-red-700 border-red-500/25", label: "Banido" },
+    conectado: { cls: "bg-success/15 text-success-fg border-success/30", label: "Conectado" },
+    desconectado: { cls: "bg-muted-foreground/15 text-muted-foreground border-border/25", label: "Desconectado" },
+    pendente: { cls: "bg-warning/15 text-warning-fg border-warning/30", label: "Pendente" },
+    erro: { cls: "bg-danger/15 text-danger-fg border-danger/30", label: "Erro" },
+    banido: { cls: "bg-danger/15 text-danger-fg border-danger/30", label: "Banido" },
   };
   const cfg = map[status] || { cls: "", label: status };
   return <Badge className={`${cfg.cls} hover:${cfg.cls} text-[10px] font-normal`}>{cfg.label}</Badge>;
 }
 
+/** WhatsApp dos botões "Falar com a gente" da LP — editável sem deploy. */
+function CardWhatsappComercial() {
+  const { data } = trpc.admin.obterWhatsappComercial.useQuery(undefined, { retry: false });
+  const [numero, setNumero] = useState("");
+  useEffect(() => {
+    if (data) setNumero(data.whatsapp);
+  }, [data]);
+  const salvarMut = trpc.admin.salvarWhatsappComercial.useMutation({
+    onSuccess: () => toast.success("WhatsApp comercial salvo — os botões da LP já usam o número novo"),
+    onError: (e) => toast.error("Erro ao salvar", { description: e.message }),
+  });
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">WhatsApp comercial</CardTitle>
+        <CardDescription className="text-xs">
+          Destino dos botões "Falar com a gente" e "Agendar demonstração" da landing page.
+          Vazio = os botões caem no e-mail de contato.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex items-center gap-2">
+        <Input
+          className="max-w-xs"
+          value={numero}
+          onChange={(e) => setNumero(e.target.value)}
+          placeholder="5585999999999 (DDI+DDD+número)"
+          inputMode="numeric"
+          maxLength={32}
+        />
+        <Button size="sm" disabled={salvarMut.isPending} onClick={() => salvarMut.mutate({ whatsapp: numero })}>
+          Salvar
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminSettings() {
   const { data: health, isLoading: loadHealth } = trpc.admin.systemHealth.useQuery(undefined, { retry: false });
-  const { data: planos, isLoading: loadPlanos } = trpc.admin.planosAtuais.useQuery(undefined, { retry: false });
   const { data: ops, isLoading: loadOps } = trpc.admin.operacional.useQuery(undefined, { retry: false });
 
-  const formatCurrency = (cents: number) =>
-    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
-
   const statusGeral = health?.checks?.some((c) => c.status === "erro")
-    ? { dot: "bg-rose-400", label: "Atenção" }
+    ? { dot: "bg-danger", label: "Atenção" }
     : health?.checks?.some((c) => c.status !== "ok")
-      ? { dot: "bg-amber-400", label: "Degradado" }
-      : { dot: "bg-emerald-400", label: "Operacional" };
+      ? { dot: "bg-warning", label: "Degradado" }
+      : { dot: "bg-success", label: "Operacional" };
 
   return (
     <div className="space-y-5">
       {/* HERO de status do sistema */}
-      <div className="rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-indigo-700 p-6 text-white relative overflow-hidden shadow-lg">
+      {/* `from-muted via-muted to-info` pintava de quase-branco até o navy e a
+          tinta era branca fixa: no tema claro a metade de cima ficava branco
+          sobre branco (1,13:1 medido). A faixa de destaque é escura nos dois
+          temas — é a mesma do cabeçalho da ficha do cliente. */}
+      <div className="faixa-hero fundo-hero rounded-2xl p-6 text-hero-fg relative overflow-hidden shadow-lg">
         <Server className="absolute -right-8 -bottom-10 w-48 h-48 opacity-10" strokeWidth={1.2} />
         <div className="relative flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -88,24 +130,25 @@ export default function AdminSettings() {
       </div>
 
       <Tabs defaultValue="sistema" className="w-full">
-        <div className="bg-slate-50/80 backdrop-blur-sm border border-slate-200 rounded-xl p-1.5 inline-flex dark:bg-slate-900/40 dark:border-slate-800">
+        <div className="bg-muted/80 backdrop-blur-sm border border-border rounded-xl p-1.5 inline-flex dark:bg-foreground/40">
           <TabsList className="bg-transparent gap-1 p-0 h-auto flex-wrap">
-            <TabsTrigger value="sistema" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="sistema" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <HeartPulse className="h-3.5 w-3.5" /> Sistema
             </TabsTrigger>
-            <TabsTrigger value="integracoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="integracoes" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <Plug className="h-3.5 w-3.5" /> Integrações
             </TabsTrigger>
-            <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
+            <TabsTrigger value="backups" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
               <Database className="h-3.5 w-3.5" /> Backups
             </TabsTrigger>
-            <TabsTrigger value="planos" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-slate-800">
-              <CreditCard className="h-3.5 w-3.5" /> Planos
+            <TabsTrigger value="manutencao" className="text-xs gap-1.5 px-3 py-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm rounded-lg dark:data-[state=active]:bg-foreground/80">
+              <Wrench className="h-3.5 w-3.5" /> Manutenção
             </TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="sistema" className="mt-4 space-y-6">
+          <CardWhatsappComercial />
       {/* Saúde do Sistema */}
       <Card>
         <CardHeader className="pb-3">
@@ -186,42 +229,42 @@ export default function AdminSettings() {
                 {/* Counters */}
                 <div className="grid grid-cols-3 gap-3">
                   <div className="flex items-center gap-2 text-sm">
-                    <Building2 className="h-4 w-4 text-blue-500" />
+                    <Building2 className="h-4 w-4 text-info" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Escritórios</p>
                       <p className="font-bold">{ops.escritorios}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <UserCheck className="h-4 w-4 text-emerald-500" />
+                    <UserCheck className="h-4 w-4 text-success" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Colaboradores</p>
                       <p className="font-bold">{ops.colaboradores}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Users className="h-4 w-4 text-violet-500" />
+                    <Users className="h-4 w-4 text-info" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Contatos</p>
                       <p className="font-bold">{ops.contatos}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <MessageSquare className="h-4 w-4 text-amber-500" />
+                    <MessageSquare className="h-4 w-4 text-warning" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Conversas</p>
                       <p className="font-bold">{ops.conversas.total}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Globe className="h-4 w-4 text-pink-500" />
+                    <Globe className="h-4 w-4 text-danger" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Leads</p>
                       <p className="font-bold">{ops.leads.total}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
-                    <Bot className="h-4 w-4 text-teal-500" />
+                    <Bot className="h-4 w-4 text-success" />
                     <div>
                       <p className="text-[10px] text-muted-foreground">Agentes IA</p>
                       <p className="font-bold">{ops.agentesIa}</p>
@@ -276,47 +319,14 @@ export default function AdminSettings() {
           <AdminIntegrations />
         </TabsContent>
 
+        <TabsContent value="manutencao" className="mt-4">
+          <AdminManutencao />
+        </TabsContent>
+
         <TabsContent value="backups" className="mt-4">
           <AdminBackups />
         </TabsContent>
 
-        <TabsContent value="planos" className="mt-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-                Planos ativos
-              </CardTitle>
-              <CardDescription>
-                Planos configurados no sistema. A edição completa fica em Financeiro → Planos.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadPlanos ? (
-                <Skeleton className="h-32 w-full" />
-              ) : planos && planos.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {planos.map((p) => (
-                    <div key={p.id} className="border rounded-lg p-4 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-sm">{p.name}</span>
-                        <Badge variant="outline" className="text-[10px]">{p.id}</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">{p.description}</p>
-                      <div className="flex flex-col gap-0.5 text-xs pt-1">
-                        <span>Mensal: <span className="font-medium">{formatCurrency(p.priceMonthly)}</span></span>
-                        <span>Anual: <span className="font-medium">{formatCurrency(p.priceYearly)}</span></span>
-                        <span>Créditos: <span className="font-medium">{p.creditsPerMonth >= 999999 ? "Ilimitado" : p.creditsPerMonth}</span></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nenhum plano configurado.</p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
     </div>
   );

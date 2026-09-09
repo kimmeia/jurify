@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --autor:#1d4ed8; --autor-bg:#eff6ff; --autor-borda:#bfdbfe;
+    --reu:#be123c; --reu-bg:#fff1f2; --reu-borda:#fecdd3;
+    --duvida:#b45309; --duvida-bg:#fffbeb; --duvida-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; gap:14px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .micro { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+
+  .views { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .views span { padding:7px 14px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:7px; display:flex; align-items:center; gap:6px; }
+  .views span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .views b { background:var(--alerta); color:#fff; border-radius:999px; font-size:10px; padding:1px 6px; font-weight:700; }
+
+  .lista { display:flex; flex-direction:column; gap:11px; flex:1 1 auto; min-height:0; }
+
+  /* ── card de ação ── */
+  .acao { display:flex; gap:14px; padding:14px 16px; align-items:flex-start; border-left:3px solid transparent; }
+  .acao.nova { border-left-color:var(--alerta); background:linear-gradient(90deg,#fef2f2b3 0%,#fff 42%); }
+  .avg { width:44px; height:44px; border-radius:12px; flex:0 0 auto; display:flex; align-items:center;
+         justify-content:center; color:#fff; font-size:14px; font-weight:700; letter-spacing:-.01em; }
+  .g1 { background:linear-gradient(135deg,#8b5cf6,#6366f1); }
+  .g2 { background:linear-gradient(135deg,#06b6d4,#0ea5e9); }
+  .g3 { background:linear-gradient(135deg,#f59e0b,#f97316); }
+  .corpo { flex:1 1 auto; min-width:0; }
+
+  .l1 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .nome { font-size:14.5px; font-weight:700; letter-spacing:-.01em; }
+  .novo { background:var(--alerta); color:#fff; border-radius:999px; font-size:9.5px; font-weight:700;
+          letter-spacing:.06em; padding:3px 8px; }
+  .doc { background:var(--hairline); color:var(--corpo-2); border-radius:999px; font-size:10.5px;
+         font-weight:600; padding:3px 9px; font-variant-numeric:tabular-nums; }
+
+  /* selo de polo — a resposta que o dono quer no primeiro olhar */
+  .polo-selo { border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:.03em;
+               padding:3px 10px; display:inline-flex; align-items:center; gap:5px; }
+  .polo-selo.reu { background:var(--reu-bg); color:var(--reu); border:1px solid var(--reu-borda); }
+  .polo-selo.autor { background:var(--autor-bg); color:var(--autor); border:1px solid var(--autor-borda); }
+  .polo-selo.duvida { background:var(--duvida-bg); color:var(--duvida); border:1px solid var(--duvida-borda); }
+
+  .meta { display:flex; align-items:center; gap:7px; margin-top:5px; font-size:11px; color:var(--mudo); flex-wrap:wrap; }
+  .meta b { color:var(--corpo); font-weight:600; }
+  .pt { color:var(--fantasma); }
+  .trib { background:var(--acento-bg); color:var(--acento-forte); border-radius:999px; font-size:10px;
+          font-weight:700; padding:2px 8px; letter-spacing:.03em; }
+
+  .proc { margin-top:10px; background:#fbfcfd; border:1px solid var(--hairline); border-radius:11px; padding:11px 13px; }
+  .proc-topo { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .cnj { font-family:'Inter'; font-size:13.5px; font-weight:700; letter-spacing:.01em; font-variant-numeric:tabular-nums; }
+  .valor { background:#ecfdf5; color:#047857; border:1px solid #a7f3d0; border-radius:999px;
+           font-size:10.5px; font-weight:700; padding:2px 8px; font-variant-numeric:tabular-nums; }
+  .dist { font-size:10.5px; color:var(--mudo); }
+
+  .nat { margin-top:9px; padding-top:9px; border-top:1px solid var(--hairline); }
+  .nat p { margin-top:3px; font-size:12.5px; color:var(--corpo); line-height:1.35; }
+  .nat p b { color:var(--tinta); font-weight:600; }
+
+  .polos { margin-top:9px; padding-top:9px; border-top:1px solid var(--hairline);
+           display:grid; grid-template-columns:1fr 1fr; align-items:start; gap:0 26px; }
+  .polos .polo-col + .polo-col { border-left:1px solid var(--hairline); padding-left:26px; }
+  .polo-col { min-width:0; }
+  .polo-col .micro.a { color:var(--autor); }
+  .polo-col .micro.p { color:var(--reu); }
+  .polo-col .parte { margin-top:4px; font-size:12.5px; color:var(--tinta-2); font-weight:600;
+                     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .polo-col .sub2 { margin-top:2px; font-size:10.5px; color:var(--mudo); }
+  .vs { align-self:center; text-align:center; font-size:13px; font-weight:700; color:var(--fantasma); }
+  .tag-cli { display:inline-block; margin-left:6px; background:var(--reu-bg); color:var(--reu);
+             border:1px solid var(--reu-borda); border-radius:999px; font-size:9px; font-weight:700;
+             letter-spacing:.05em; padding:1px 6px; vertical-align:1px; }
+
+  .rod { margin-top:9px; padding-top:8px; border-top:1px solid var(--hairline);
+         display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--mudo); flex-wrap:wrap; }
+  .selo-free { display:inline-flex; align-items:center; gap:5px; background:#ecfdf5; color:#047857;
+               border:1px solid #a7f3d0; border-radius:999px; padding:2px 9px; font-size:10px; font-weight:700; }
+
+  .aviso { margin-top:9px; background:var(--duvida-bg); border:1px solid var(--duvida-borda);
+           border-radius:10px; padding:9px 11px; display:flex; gap:9px; align-items:flex-start; }
+  .aviso .txt { font-size:11.5px; color:#78350f; line-height:1.4; }
+  .aviso .txt b { font-weight:700; }
+
+  .acoes { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; width:132px; }
+  .b { height:31px; border-radius:9px; font-size:11.5px; font-weight:600; display:flex;
+       align-items:center; justify-content:center; gap:6px; border:1px solid transparent; }
+  .b.pri { background:var(--acento); color:#fff; box-shadow:0 8px 16px -9px #7c3aed99; }
+  .b.gh { color:var(--corpo); }
+  .b.dg { color:var(--alerta); }
+  .b.out { border-color:var(--duvida-borda); background:#fff; color:var(--duvida); }
+
+  .nota { flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:11px 15px;
+          background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:12px; }
+  .nota .txt { font-size:12px; color:#4c1d95; line-height:1.4; }
+  .nota .txt b { font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Novas ações</div>
+        <div class="sub">Processos novos em que um cliente monitorado apareceu como parte</div>
+      </div>
+      <div class="views">
+        <span class="on">Pendentes <b>3</b></span>
+        <span>Resolvidas</span>
+        <span>Todas</span>
+      </div>
+    </div>
+
+    <div class="lista">
+
+      <!-- ── card 1: réu identificado ── -->
+      <div class="card acao nova">
+        <div class="avg g1">MR</div>
+        <div class="corpo">
+          <div class="l1">
+            <span class="nome">Marcos Aurélio Ribeiro Lima</span>
+            <span class="novo">NOVO</span>
+            <span class="polo-selo reu">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#be123c" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Seu cliente é RÉU
+            </span>
+            <span class="doc">CPF 048.512.377-15</span>
+          </div>
+          <div class="meta">
+            <span>Detectado <b>há 10h</b></span><span class="pt">·</span>
+            <span class="trib">TJCE</span><span class="pt">·</span>
+            <span>1ª instância</span>
+          </div>
+
+          <div class="proc">
+            <div class="proc-topo">
+              <span class="cnj">3001874-52.2026.8.06.0086</span>
+              <span class="valor">R$ 18.400,00</span>
+              <span class="dist">Distribuído em 12/08/2026</span>
+            </div>
+
+            <div class="nat">
+              <div class="micro">Natureza da ação</div>
+              <p>Procedimento do Juizado Especial Cível · <b>Indenização por Dano Moral — Inscrição Indevida em Cadastro de Inadimplentes</b></p>
+            </div>
+
+            <div class="polos">
+              <div class="polo-col">
+                <div class="micro a">Polo ativo</div>
+                <div class="parte">Aurora Telecom Nordeste S.A.</div>
+                <div class="sub2">CNPJ 21.884.309/0001-46</div>
+              </div>
+              <div class="polo-col">
+                <div class="micro p">Polo passivo</div>
+                <div class="parte">Marcos Aurélio R. Lima<span class="tag-cli">SEU CLIENTE</span></div>
+                <div class="sub2">CPF 048.512.377-15 — bateu por documento</div>
+              </div>
+            </div>
+
+            <div class="rod">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" stroke="#94a3b8" stroke-width="2"/><circle cx="12" cy="10" r="2.6" stroke="#94a3b8" stroke-width="2"/></svg>
+              3ª Vara do Juizado Especial Cível — Fortaleza
+              <span class="pt">·</span>
+              <span class="selo-free">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#047857" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Capa coletada na detecção — sem crédito extra
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="acoes">
+          <div class="b pri">Monitorar</div>
+          <div class="b gh">Ciente</div>
+          <div class="b dg">Falso</div>
+        </div>
+      </div>
+
+      <!-- ── card 2: executada ── -->
+      <div class="card acao">
+        <div class="avg g2">JF</div>
+        <div class="corpo">
+          <div class="l1">
+            <span class="nome">Josiane Fontenele Marques</span>
+            <span class="polo-selo reu">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#be123c" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Seu cliente é EXECUTADA
+            </span>
+            <span class="doc">CPF 715.204.983-40</span>
+          </div>
+          <div class="meta">
+            <span>Detectado <b>há 18h</b></span><span class="pt">·</span>
+            <span class="trib">TJCE</span><span class="pt">·</span>
+            <span>1ª instância</span>
+          </div>
+
+          <div class="proc">
+            <div class="proc-topo">
+              <span class="cnj">3036918-24.2026.8.06.6001</span>
+              <span class="valor">R$ 42.780,55</span>
+              <span class="dist">Distribuído em 11/08/2026</span>
+            </div>
+
+            <div class="nat">
+              <div class="micro">Natureza da ação</div>
+              <p>Execução de Título Extrajudicial · <b>Cédula de Crédito Bancário — Contratos Bancários</b></p>
+            </div>
+
+            <div class="polos">
+              <div class="polo-col">
+                <div class="micro a">Polo ativo</div>
+                <div class="parte">Banco Vale Norte S.A.</div>
+                <div class="sub2">CNPJ 07.415.662/0001-08</div>
+              </div>
+              <div class="polo-col">
+                <div class="micro p">Polo passivo</div>
+                <div class="parte">Josiane F. Marques<span class="tag-cli">SEU CLIENTE</span></div>
+                <div class="sub2">CPF 715.204.983-40 — bateu por documento</div>
+              </div>
+            </div>
+
+            <div class="rod">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" stroke="#94a3b8" stroke-width="2"/><circle cx="12" cy="10" r="2.6" stroke="#94a3b8" stroke-width="2"/></svg>
+              12ª Vara Cível — Comarca de Fortaleza
+              <span class="pt">·</span>
+              <span class="selo-free">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="m5 13 4 4L19 7" stroke="#047857" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Capa coletada na detecção — sem crédito extra
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="acoes">
+          <div class="b pri">Monitorar</div>
+          <div class="b gh">Ciente</div>
+          <div class="b dg">Falso</div>
+        </div>
+      </div>
+
+      <!-- ── card 3: o estado honesto ── -->
+      <div class="card acao">
+        <div class="avg g3">RA</div>
+        <div class="corpo">
+          <div class="l1">
+            <span class="nome">Renato Aguiar Bastos</span>
+            <span class="polo-selo duvida">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M9.1 9a3 3 0 1 1 4 2.8c-.7.3-1.1 1-1.1 1.7v.5m0 3.5h.01" stroke="#b45309" stroke-width="2.1" stroke-linecap="round"/><circle cx="12" cy="12" r="9.2" stroke="#b45309" stroke-width="2.1"/></svg>
+              Polo não identificado
+            </span>
+            <span class="doc">CPF 302.667.148-99</span>
+          </div>
+          <div class="meta">
+            <span>Detectado <b>há 1 dia</b></span><span class="pt">·</span>
+            <span class="trib">TJCE</span><span class="pt">·</span>
+            <span>1ª instância</span>
+          </div>
+
+          <div class="proc">
+            <div class="proc-topo">
+              <span class="cnj">0812204-73.2026.8.06.0001</span>
+              <span class="dist">Distribuição não informada pelo tribunal</span>
+            </div>
+
+            <div class="nat">
+              <div class="micro">Natureza da ação</div>
+              <p>Ação Civil Pública Cível · <b>assunto não informado na capa</b></p>
+            </div>
+
+            <div class="aviso">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b45309" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="txt">
+                <b>O tribunal não devolveu a lista de partes deste processo.</b> Não dá pra dizer se
+                Renato é autor ou réu, e por isso o card veio pra cá em vez de ser silenciado.
+                Antes, um caso assim era rotulado <b>“polo ativo”</b> por padrão — que é o rótulo
+                que faz o robô calar a boca.
+              </div>
+            </div>
+
+            <div class="rod">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z" stroke="#94a3b8" stroke-width="2"/><circle cx="12" cy="10" r="2.6" stroke="#94a3b8" stroke-width="2"/></svg>
+              Órgão julgador não informado
+            </div>
+          </div>
+        </div>
+        <div class="acoes">
+          <div class="b out">Tentar de novo</div>
+          <div class="b pri">Monitorar</div>
+          <div class="b gh">Ciente</div>
+          <div class="b dg">Falso</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="nota">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto"><circle cx="12" cy="12" r="9.2" stroke="#7c3aed" stroke-width="2.1"/><path d="M12 11v5.2M12 7.6h.01" stroke="#7c3aed" stroke-width="2.1" stroke-linecap="round"/></svg>
+      <div class="txt">
+        <b>Nada aqui custa crédito novo.</b> Para decidir se avisa ou cala, o robô já abre a capa
+        de cada processo novo — classe, assunto, partes, vara e valor passam pelas mãos dele e são
+        descartados hoje. A mudança é guardar o que já foi lido. O botão “Carregar detalhes — 1
+        cred” fica só para cards antigos, detectados antes desta mudança.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

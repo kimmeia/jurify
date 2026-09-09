@@ -1,30 +1,12 @@
 /**
- * Tipos compartilhados pelos helpers de teste E2E.
- *
- * `TestRole` espelha o enum `colaboradores.cargo` do schema. Mantém em
- * sincronia se algum cargo novo for adicionado lá.
+ * Reexporta os tipos do escritório descartável — a fonte é
+ * `server/admin/jornada/tipos-escritorio.ts`. Ver `seed-escritorio.ts` pro
+ * porquê da mudança de casa.
  */
 
-export type TestRole = "dono" | "gestor" | "atendente" | "estagiario" | "sdr";
-
-export const TEST_CARGOS: readonly TestRole[] = [
-  "dono",
-  "gestor",
-  "atendente",
-  "estagiario",
-  "sdr",
-] as const;
-
-export interface TestUser {
-  id: number;
-  email: string;
-  name: string;
-  cargo: TestRole;
-}
-
-export interface TestEscritorio {
-  id: number;
-  nome: string;
-  runId: string;
-  users: Record<TestRole, TestUser>;
-}
+export {
+  TEST_CARGOS,
+  type TestRole,
+  type TestUser,
+  type TestEscritorio,
+} from "../../../server/admin/jornada/tipos-escritorio";

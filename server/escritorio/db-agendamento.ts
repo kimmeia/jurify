@@ -54,13 +54,19 @@ export async function criarAgendamento(dados: {
 
   const agendamentoId = (result as { insertId: number }).insertId;
 
-  // Criar lembretes
+  // Criar lembretes — mesma regra de agenda.salvarLembretes: o cron só lê
+  // linha com dispararEm, então sem ele o lembrete nunca sai.
   if (dados.lembretes && dados.lembretes.length > 0) {
+    const inicio = new Date(dados.dataInicio).getTime();
     for (const lem of dados.lembretes) {
       await db.insert(agendamentoLembretes).values({
         agendamentoId,
         tipo: lem.tipo as any,
         minutosAntes: lem.minutosAntes,
+        destinatarioIds: [dados.responsavelId],
+        canais: [lem.tipo],
+        dispararEm: new Date(inicio - lem.minutosAntes * 60_000),
+        enviado: false,
       });
     }
   }

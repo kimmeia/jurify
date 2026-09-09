@@ -137,12 +137,12 @@ export default function DashboardOperacional() {
             }
             badge={
               tarefas.atrasadas > 0 ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11.5px] font-bold text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/30 bg-danger-bg px-2.5 py-1 text-[11.5px] font-bold text-danger-fg">
                   <AlertTriangle className="h-3 w-3" />
                   {tarefas.atrasadas} em atraso agora
                 </span>
               ) : taxa != null && taxa >= PISO_NO_PRAZO ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11.5px] font-bold text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success-bg px-2.5 py-1 text-[11.5px] font-bold text-success-fg">
                   Nada em atraso
                 </span>
               ) : undefined
@@ -194,7 +194,7 @@ export default function DashboardOperacional() {
                 <>
                   <span>Compromissos no prazo: {data.meu?.agenda?.noPrazo ?? 0}</span>
                   {(data.meu?.agenda?.atrasadas ?? 0) > 0 && (
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-danger-fg">
                       {data.meu.agenda.atrasadas} atrasados
                     </span>
                   )}
@@ -237,7 +237,7 @@ export default function DashboardOperacional() {
                     {entregues} entregas no período
                   </span>
                   {tarefas.atrasadas > 0 && (
-                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                    <span className="font-semibold text-danger-fg">
                       {tarefas.atrasadas} atrasadas
                     </span>
                   )}

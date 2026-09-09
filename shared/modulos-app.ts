@@ -34,6 +34,7 @@ export const MODULOS_APP: readonly ModuloApp[] = [
   { id: "contratos",     nome: "Modelos de Contrato",          descricao: "Geração e assinatura digital",                  obrigatorio: false },
   { id: "relatorios",    nome: "Relatórios",                   descricao: "Exportações e BI",                              obrigatorio: false },
   { id: "backups",       nome: "Backup do escritório",         descricao: "Exportação completa de dados",                  obrigatorio: false },
+  { id: "ponto",         nome: "Ponto (controle de jornada)",  descricao: "Registro de ponto e ficha por colaborador",     obrigatorio: false },
 ] as const;
 
 export type ModuloAppId = (typeof MODULOS_APP)[number]["id"];

@@ -130,3 +130,6 @@ docs/lp-mockups/out-*.png
 
 # Sondagem de fontes públicas (respostas brutas dos tribunais)
 scripts/.sondagem/
+
+# Planilha do resgate de cards: leva nome de cliente, não versiona
+cards-sumidos-kanban.xlsx

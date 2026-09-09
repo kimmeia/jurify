@@ -21,7 +21,12 @@
 export type MotivoExclusao =
   | "override_manual"
   | "categoria_nao_comissionavel"
-  | "abaixo_minimo";
+  | "abaixo_minimo"
+  // Os dois abaixo são decididos ANTES de `classificarCobranca` (dependem de
+  // banco: data de fechamento do cliente e fechamentos anteriores). Vivem no
+  // mesmo tipo porque desembocam na mesma lista de "ficou de fora" na tela.
+  | "fechou_antes_do_corte"
+  | "ja_comissionada";
 
 export interface CobrancaParaComissao {
   id: number;

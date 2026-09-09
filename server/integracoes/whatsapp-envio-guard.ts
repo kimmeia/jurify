@@ -394,16 +394,20 @@ export async function podeEnviar(opts: {
     } catch { /* best-effort: sem contato resolvido, as demais travas seguem valendo */ }
   }
 
-  // Opt-out: pedido de descadastro vale pra TODO envio proativo — a política
-  // da Meta exige honrar ("respect all requests... to opt out"). Não afeta
-  // resposta quando o contato inicia conversa (proativo=false).
+  // Opt-out: pedido de descadastro vale pro envio proativo — a política da
+  // Meta exige honrar ("respect all requests... to opt out"). EXCEÇÃO
+  // (decisão do dono, 27/08): se o contato voltou a ESCREVER depois do SAIR
+  // e a última mensagem dele tem menos de 24h, ele mesmo reabriu a conversa
+  // (é a mensagem dele que abre a janela de atendimento da Meta) — o fluxo
+  // pode continuar. Disparo frio fora da janela segue bloqueado até VOLTAR.
   if (opts.proativo && contatoId) {
-    const { contatoEstaOptOut } = await import("./whatsapp-optout");
-    if (await contatoEstaOptOut(opts.db, contatoId)) {
+    const { contatoOptOutVigenteParaEnvio } = await import("./whatsapp-optout");
+    if (await contatoOptOutVigenteParaEnvio(opts.db, contatoId, opts.canalId, agoraMs)) {
       return {
         ok: false,
         tipo: "optout",
-        erro: "Contato optou por não receber avisos automáticos (SAIR). Envio bloqueado — ele pode reativar respondendo VOLTAR.",
+        erro:
+          "Contato optou por não receber avisos automáticos (SAIR) e não reabriu a conversa. Envio bloqueado — ele reativa respondendo VOLTAR, ou o fluxo continua quando ele mesmo iniciar uma conversa (janela de 24h).",
       };
     }
   }

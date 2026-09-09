@@ -19,7 +19,7 @@
 
 import { and, eq, gte, lte, or, sql } from "drizzle-orm";
 import { getDb } from "../db";
-import { agendamentos, conversas, leads } from "../../drizzle/schema";
+import { agendamentos, atendimentos, conversas, leads } from "../../drizzle/schema";
 import {
   agregarDesempenho,
   DESEMPENHO_VAZIO,
@@ -69,15 +69,20 @@ export async function desempenhoDoPeriodo(
       ))
       .groupBy(leads.responsavelId, leads.etapaFunil),
 
+    // Episódios abertos no período, por quem ABRIU — a mesma contagem do
+    // relatório de Atendimentos. Com `conversas.atendenteId` a ficha e o
+    // relatório davam números diferentes da mesma pessoa no mesmo mês: um
+    // contava a conversa na data em que ela nasceu, o outro no dono que ela
+    // tem hoje.
     db
-      .select({ colabId: conversas.atendenteId, total: sql<number>`COUNT(*)` })
-      .from(conversas)
+      .select({ colabId: atendimentos.atendenteAbriu, total: sql<number>`COUNT(*)` })
+      .from(atendimentos)
       .where(and(
-        eq(conversas.escritorioId, escritorioId),
-        gte(conversas.createdAt, de),
-        lte(conversas.createdAt, ate),
+        eq(atendimentos.escritorioId, escritorioId),
+        gte(atendimentos.abertoEm, de),
+        lte(atendimentos.abertoEm, ate),
       ))
-      .groupBy(conversas.atendenteId),
+      .groupBy(atendimentos.atendenteAbriu),
 
     db
       .select({

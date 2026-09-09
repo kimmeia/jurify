@@ -38,19 +38,19 @@ export function ChamadaFilaWidget({ chamada }: { chamada: UseWhatsappCall }) {
   const extras = filaAoVivo.length - 1;
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-[264px] rounded-2xl bg-slate-900 text-white shadow-2xl ring-2 ring-emerald-400/60 animate-pulse p-3">
+    <div className="fixed bottom-4 right-4 z-50 w-[264px] rounded-2xl bg-foreground/80 text-background shadow-2xl ring-2 ring-success/60 animate-pulse p-3">
       <div className="flex items-center gap-2.5">
         <div className="relative shrink-0">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center font-bold text-sm">
+          <div className="h-10 w-10 rounded-full bg-success flex items-center justify-center font-bold text-sm">
             {iniciais(nome)}
           </div>
-          <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-red-500 text-[10px] font-bold flex items-center justify-center">
+          <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-danger text-[10px] font-bold flex items-center justify-center">
             {filaAoVivo.length}
           </span>
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{nome}</p>
-          <p className="text-[11px] text-slate-300">
+          <p className="text-[11px] text-muted-foreground/70">
             chamada recebida{extras > 0 ? ` · +${extras} na fila` : ""}
           </p>
         </div>
@@ -58,14 +58,14 @@ export function ChamadaFilaWidget({ chamada }: { chamada: UseWhatsappCall }) {
       <div className="flex gap-2 mt-2.5">
         <button
           onClick={() => void assumir(principal.callId)}
-          className="flex-1 h-9 rounded-lg bg-green-600 hover:bg-green-700 text-sm font-semibold flex items-center justify-center gap-1.5"
+          className="flex-1 h-9 rounded-lg bg-success hover:bg-success text-sm font-semibold flex items-center justify-center gap-1.5"
         >
           <Phone className="h-4 w-4" /> Atender
         </button>
         <button
           onClick={abrirFila}
           title="Ver fila de chamadas"
-          className="h-9 px-3 rounded-lg bg-slate-700 hover:bg-slate-600 text-xs font-semibold flex items-center gap-1.5"
+          className="h-9 px-3 rounded-lg bg-foreground/80 hover:bg-foreground/80 text-xs font-semibold flex items-center gap-1.5"
         >
           <Users className="h-3.5 w-3.5" /> Fila
         </button>

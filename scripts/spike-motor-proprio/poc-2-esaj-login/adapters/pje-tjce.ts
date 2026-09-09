@@ -184,6 +184,169 @@ const MAX_BYTES_TEOR = 12 * 1024 * 1024;
  * Abre um contexto próprio e fecha no fim — é uma requisição isolada, não
  * vale reaproveitar estado entre chamadas de usuários diferentes.
  */
+/**
+ * Vale a pena buscar os bytes desta resposta?
+ *
+ * `application/pdf` seria o filtro óbvio, e foi o primeiro — mas o PJe entrega
+ * documento como `octet-stream`, às vezes sem tipo nenhum e só com
+ * `content-disposition: attachment`. Filtrar pelo tipo exato descartava
+ * justamente o arquivo certo, e o relatório dizia "nenhuma resposta trouxe o
+ * documento" com o documento tendo passado na frente.
+ *
+ * Então a pergunta vira a inversa: isto é claramente OUTRA coisa? Página,
+ * estilo, script, imagem e JSON do próprio JSF ficam de fora; o resto é
+ * candidato, e quem decide de fato é o `%PDF-` na hora de ler.
+ */
+function podeSerDocumento(tipo: string, headers: Record<string, string>): boolean {
+  if ((headers["content-disposition"] ?? "").toLowerCase().includes("attachment")) return true;
+  if (!tipo) return true;
+  return ![
+    "text/html",
+    "text/css",
+    "text/plain",
+    "application/javascript",
+    "text/javascript",
+    "application/json",
+    "image/",
+    "video/",
+    "audio/",
+    // Fonte tem meia dúzia de tipos e o tribunal usa vários. Foi uma delas
+    // que virou "teor" — e a IA, sem texto pra ler, inventou um prazo.
+    "font/",
+    "font-woff",
+    "x-font",
+    "application/vnd.ms-fontobject",
+  ].some((t) => tipo.startsWith(t) || tipo.includes(t));
+}
+
+/**
+ * Abre o documento num navegador de verdade, como quem clica.
+ *
+ * `baixarDocumentoAvulso` faz `context.request.get`: pedido HTTP com os
+ * cookies da sessão, sem página. No PJe isso volta 200 com a casca do
+ * visualizador — o JSF nunca roda e a peça, que chega depois por AJAX, nunca
+ * chega. Foi assim que o menu do tribunal virou "teor" e a IA resumiu.
+ *
+ * Aqui abre-se uma página, deixa-se o JSF executar, e o documento é
+ * reconhecido pelo que ele é: uma resposta PDF. Não importa em qual das rotas
+ * do PJe ele apareça, nem se veio por iframe, embed ou download — o filtro é
+ * o content-type, não o endereço.
+ *
+ * Quando nada serve, devolve o que a aba Network mostraria. É o dado que
+ * faltava pra acertar a rota sem pedir pra alguém abrir o DevTools.
+ */
+export interface TentativaDeDocumento {
+  url: string;
+  status: number;
+  tipo: string;
+}
+
+export async function abrirDocumentoNoNavegador(
+  url: string,
+  storageStateJson: string,
+): Promise<
+  | { ok: true; texto: string; urlQueFuncionou: string }
+  | { ok: false; erro: string; vistas: TentativaDeDocumento[] }
+> {
+  let context: BrowserContext | null = null;
+  const vistas: TentativaDeDocumento[] = [];
+  try {
+    const browser = await getBrowserPje();
+    context = await browser.newContext({
+      userAgent: USER_AGENT,
+      locale: "pt-BR",
+      timezoneId: "America/Fortaleza",
+      storageState: JSON.parse(storageStateJson),
+      acceptDownloads: true,
+    });
+    const page = await context.newPage();
+
+    // A "aba Network": toda resposta da navegação, com tipo e tamanho. O
+    // documento é a que vier como PDF — em qualquer URL.
+    // Só o ENDEREÇO é anotado aqui, nunca o corpo.
+    //
+    // Pedir `response.body()` de um PDF aberto em iframe devolve lixo: o
+    // visualizador embutido do Chromium intercepta a resposta e entrega o HTML
+    // dele no lugar dos bytes. Medido na bancada — servidor mandou 1294 bytes
+    // de PDF, `body()` devolveu 345 bytes começando em "<!doctyp".
+    //
+    // Daí a divisão de trabalho: o navegador serve pra DESCOBRIR onde o
+    // documento mora, que é justamente o que não se sabia, e a busca dos bytes
+    // vai por requisição direta, com os mesmos cookies e sem visualizador no
+    // caminho.
+    const enderecos: string[] = [];
+    page.on("response", (r) => {
+      const h = r.headers();
+      const tipo = (h["content-type"] ?? "").toLowerCase();
+      vistas.push({ url: r.url(), status: r.status(), tipo: tipo.split(";")[0] });
+      if (r.ok() && !enderecos.includes(r.url()) && podeSerDocumento(tipo, h)) {
+        enderecos.push(r.url());
+      }
+    });
+
+    // O visualizador às vezes dispara download em vez de renderizar.
+    const baixado = page
+      .waitForEvent("download", { timeout: TIMEOUT_NAV_MS })
+      .catch(() => null);
+
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: TIMEOUT_NAV_MS });
+    // `networkidle` é o que espera o AJAX do JSF terminar. Falhar aqui não é
+    // erro: pode ter carregado e ficado com polling aberto.
+    await page.waitForLoadState("networkidle", { timeout: TIMEOUT_NAV_MS }).catch(() => {});
+
+    const { textoDoDocumento } = await import("../../../../server/processos/teor-documento");
+
+    for (const endereco of enderecos) {
+      const resp = await context.request
+        .get(endereco, { timeout: TIMEOUT_NAV_MS, maxRedirects: 5 })
+        .catch(() => null);
+      if (!resp || !resp.ok()) continue;
+      const corpo = await resp.body().catch(() => Buffer.alloc(0));
+      if (corpo.length === 0 || corpo.length > MAX_BYTES_TEOR) continue;
+      try {
+        const texto = await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null);
+        return { ok: true, texto, urlQueFuncionou: endereco };
+      } catch {
+        /* ilegível — segue pro próximo endereço */
+      }
+    }
+
+    const dl = await baixado;
+    if (dl) {
+      const caminho = await dl.path().catch(() => null);
+      if (caminho) {
+        const { readFile } = await import("fs/promises");
+        const corpo = await readFile(caminho);
+        if (corpo.length > 0 && corpo.length <= MAX_BYTES_TEOR) {
+          const texto = await textoDoDocumento(corpo, null);
+          return { ok: true, texto, urlQueFuncionou: dl.url() };
+        }
+      }
+    }
+
+    // Última chance: o documento pode ter sido renderizado como HTML dentro do
+    // visualizador. `textoDoDocumento` recusa a casca, então o que passar aqui
+    // é peça de verdade.
+    const html = await page.content();
+    try {
+      const texto = await textoDoDocumento(Buffer.from(html, "utf-8"), "text/html");
+      return { ok: true, texto, urlQueFuncionou: page.url() };
+    } catch {
+      /* era a casca mesmo */
+    }
+
+    return {
+      ok: false,
+      erro: "o visualizador abriu, mas nenhuma resposta trouxe o documento",
+      vistas,
+    };
+  } catch (err) {
+    return { ok: false, erro: err instanceof Error ? err.message : String(err), vistas };
+  } finally {
+    await context?.close().catch(() => {});
+  }
+}
+
 export async function baixarDocumentoAvulso(
   url: string,
   storageStateJson: string,
@@ -513,7 +676,7 @@ export class PjeTjceScraper {
 
       const capa = await this.extrairCapa(page, cnjMascarado);
       const movimentacoes = await this.extrairMovimentacoes(page);
-      await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0);
+      await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0, page);
 
       // Validação básica: se não pegou nada, é provável que extração
       // falhou (selectors errados ou página não é a de detalhe)
@@ -1137,15 +1300,31 @@ export class PjeTjceScraper {
           documento: string | null;
         }> = [];
 
+        const poloDaTabela = (t: Element): "ativo" | "passivo" | "terceiro" | null => {
+          const txt = trim(t.textContent).slice(0, 200).toLowerCase();
+          if (txt.startsWith("polo ativo")) return "ativo";
+          if (txt.startsWith("polo passivo")) return "passivo";
+          if (txt.startsWith("outros") || txt.startsWith("terceiros")) return "terceiro";
+          return null;
+        };
+
+        // Chave de deduplicação: a mesma parte não pode entrar duas vezes.
+        const vistos = new Set<string>();
+
         const tabelas = Array.from(document.querySelectorAll("table"));
         for (const table of tabelas) {
-          const txtTabela = trim(table.textContent).slice(0, 200).toLowerCase();
-          let polo: "ativo" | "passivo" | "terceiro" | null = null;
-          if (txtTabela.startsWith("polo ativo")) polo = "ativo";
-          else if (txtTabela.startsWith("polo passivo")) polo = "passivo";
-          else if (txtTabela.startsWith("outros") || txtTabela.startsWith("terceiros"))
-            polo = "terceiro";
+          const polo = poloDaTabela(table);
           if (!polo) continue;
+
+          // Tabela que ENVOLVE outra tabela de polo é o container, não a
+          // lista. Ela começa com "polo ativo" porque esse é o primeiro
+          // texto lá dentro — e varrer os <tr> dela carimbaria "ativo" em
+          // todo mundo, inclusive em quem está no polo passivo. Era assim
+          // que o cliente processado aparecia como autor.
+          const aninhadaDePolo = Array.from(table.querySelectorAll("table")).some(
+            (t) => poloDaTabela(t) !== null,
+          );
+          if (aninhadaDePolo) continue;
 
           // Extrai partes: cada <tr> a partir da segunda (primeira é header
           // "Polo ativo/passivo")
@@ -1184,6 +1363,9 @@ export class PjeTjceScraper {
                 }
 
                 // Linha normal → nova parte
+                const chave = `${polo}|${linha.toLowerCase()}`;
+                if (vistos.has(chave)) continue;
+                vistos.add(chave);
                 out.push({
                   nome: linha,
                   polo,
@@ -1223,25 +1405,124 @@ export class PjeTjceScraper {
    * consulta em si (movimentações + capa) tem valor mesmo sem o documento, e
    * quebrar tudo por causa de um PDF sigiloso seria uma péssima troca.
    */
+  /**
+   * Abre o documento clicando nele na timeline, como o advogado faz.
+   *
+   * Adivinhar a URL não funciona. Foram quatro rotas conhecidas do PJe
+   * tentadas contra o tribunal de verdade: todas carregaram alguma página, e
+   * em nenhuma o documento chegou a ser pedido — o diagnóstico mostrou só os
+   * scripts da própria tela. O link da timeline é `javascript:void(0)`, então
+   * o endereço não existe até o JSF ser acionado.
+   *
+   * Por isso o clique. Ele dispara o mesmo AJAX que dispararia pro humano, e
+   * o endereço aparece na rede. Os bytes vêm depois por requisição direta,
+   * porque `response.body()` de PDF em iframe devolve o HTML do visualizador
+   * do Chromium em vez do arquivo.
+   */
+  private async baixarTeorPorClique(
+    page: Page,
+    context: BrowserContext,
+    idDocumento: string,
+  ): Promise<{ ok: true; texto: string } | { ok: false; erro: string }> {
+    const enderecos: string[] = [];
+    const anotar = (r: import("@playwright/test").Response) => {
+      const h = r.headers();
+      const tipo = (h["content-type"] ?? "").toLowerCase();
+      if (r.ok() && !enderecos.includes(r.url()) && podeSerDocumento(tipo, h)) {
+        enderecos.push(r.url());
+      }
+    };
+    page.on("response", anotar);
+    // O PJe costuma abrir o documento em aba nova; sem escutar o contexto
+    // inteiro, a resposta que interessa acontece fora do rádio.
+    context.on("page", (nova) => nova.on("response", anotar));
+
+    try {
+      const alvo = page
+        .locator(`#divTimeLine a:has-text("${idDocumento}"), #divTimeLine [onclick*="${idDocumento}"]`)
+        .first();
+      if ((await alvo.count()) === 0) {
+        return { ok: false, erro: `não achei o documento ${idDocumento} na timeline` };
+      }
+
+      await alvo.scrollIntoViewIfNeeded({ timeout: 5_000 }).catch(() => {});
+      await alvo.click({ timeout: 10_000 });
+      await page.waitForLoadState("networkidle", { timeout: TIMEOUT_NAV_MS }).catch(() => {});
+      await page.waitForTimeout(1_500);
+
+      const { textoDoDocumento } = await import("../../../../server/processos/teor-documento");
+      for (const endereco of enderecos) {
+        const resp = await context.request
+          .get(endereco, { timeout: TIMEOUT_NAV_MS, maxRedirects: 5 })
+          .catch(() => null);
+        if (!resp || !resp.ok()) continue;
+        const corpo = await resp.body().catch(() => Buffer.alloc(0));
+        if (corpo.length === 0 || corpo.length > MAX_BYTES_TEOR) continue;
+        try {
+          return { ok: true, texto: await textoDoDocumento(corpo, resp.headers()["content-type"] ?? null) };
+        } catch {
+          /* não era a peça — segue */
+        }
+      }
+      return { ok: false, erro: "cliquei no documento e nada veio como arquivo" };
+    } catch (err) {
+      return { ok: false, erro: err instanceof Error ? err.message : String(err) };
+    } finally {
+      page.off("response", anotar);
+    }
+  }
+
   private async baixarTeores(
     context: BrowserContext,
     movs: MovimentacaoProcesso[],
     teorMaximo: number,
+    page?: Page,
   ): Promise<void> {
     if (teorMaximo <= 0) return;
 
     const { deveBuscarTeor, textoDoDocumento, classificarFalhaTeor } = await import(
       "../../../../server/processos/teor-documento"
     );
+    const { lerDocumentoNoRotulo } = await import("../../../../shared/documento-no-rotulo");
 
     // Da mais nova pra mais antiga: se o teto cortar, que corte o histórico.
+    //
+    // Movimentação SEM url entra na fila também, desde que o rótulo traga o id
+    // da peça. No PJe o link é `javascript:void(0)` e a maioria das decisões
+    // cai nesse caso — filtrar por url deixava justamente elas de fora, e o
+    // sistema anunciava "não tem documento" com o id impresso na tela.
     const candidatas = movs
-      .filter((m) => m.documentoUrl && deveBuscarTeor(m.texto))
+      .filter((m) => deveBuscarTeor(m.texto))
+      .filter((m) => m.documentoUrl || lerDocumentoNoRotulo(m.texto)?.id)
       .sort((a, b) => (a.data < b.data ? 1 : -1))
       .slice(0, teorMaximo);
 
     for (const [i, mov] of candidatas.entries()) {
       if (i > 0) await new Promise((r) => setTimeout(r, PAUSA_ENTRE_TEORES_MS));
+
+      // Sem url, o caminho é clicar na timeline — e a página certa é esta, que
+      // já está aberta. Depois da varredura ela fecha, e aí só sobraria
+      // adivinhar endereço, que não funciona.
+      if (!mov.documentoUrl) {
+        const id = lerDocumentoNoRotulo(mov.texto)?.id;
+        if (!id || !page) {
+          mov.teorStatus = "pendente";
+          continue;
+        }
+        const r = await this.baixarTeorPorClique(page, context, id);
+        if (r.ok) {
+          mov.teor = r.texto;
+          mov.teorStatus = "ok";
+          mov.teorErro = null;
+        } else {
+          const { status, motivo } = classificarFalhaTeor(new Error(r.erro));
+          mov.teor = null;
+          mov.teorStatus = status;
+          mov.teorErro = motivo;
+        }
+        continue;
+      }
+
       try {
         const resp = await context.request.get(mov.documentoUrl!, {
           timeout: TIMEOUT_NAV_MS,
@@ -1732,11 +2013,24 @@ export class PjeTjceScraper {
         const kbdCount = await page.locator("kbd").count().catch(() => 0);
         const codeCount = await page.locator("code").count().catch(() => 0);
         const linkCount = await page.locator("a").count().catch(() => 0);
+        // Contar só "inputs" não diz nada: o que decide é se o campo do
+        // formulário existe. Sem isto o diagnóstico anterior mandava 3000
+        // chars de navbar e nenhuma informação sobre o form.
+        const nomesInputs = await page
+          .locator("input")
+          .evaluateAll((els) =>
+            els.map((e) => {
+              const i = e as HTMLInputElement;
+              return `${i.name || i.id || "?"}:${i.type}${i.value ? `(${i.value.length}ch)` : ""}`;
+            }),
+          )
+          .catch(() => [] as string[]);
 
         throw new Error(
           "PDPJ_CONFIGURE_TOTP: detectei a tela de configuração de 2FA mas não " +
             `consegui capturar o secret base32 da página. ` +
-            `Diagnóstico: ${inputsCount} inputs, ${kbdCount} <kbd>, ${codeCount} <code>, ${linkCount} <a>. ` +
+            `Diagnóstico: ${inputsCount} inputs [${nomesInputs.join(", ")}], ` +
+            `${kbdCount} <kbd>, ${codeCount} <code>, ${linkCount} <a>. ` +
             `URL: ${page.url()}. ` +
             `HTML (primeiros 3000 chars, sem style/script/svg): ${htmlLimpo.slice(0, 3000)}`,
         );
@@ -1988,21 +2282,54 @@ export class PjeTjceScraper {
    * uppercase). Retorna null se nada parecer secret base32.
    */
   private async extrairSecretTotpDaTela(page: Page): Promise<string | null> {
-    // ESTRATÉGIA 0: forçar URL com mode=manual.
-    // O Keycloak do PDPJ-cloud TJCE aceita ?mode=manual na URL pra mostrar
-    // o secret em texto direto (sem precisar clicar link). Confirmado via
-    // screenshot do usuário em 07/05/2026:
-    // sso.cloud.pje.jus.br/.../required-action?...&mode=manual&execution=CONFIGURE_TOTP
+    // ESTRATÉGIA 0: o campo escondido do próprio formulário.
+    //
+    // O template do Keycloak (login-config-totp.ftl) posta o secret de volta
+    // num input hidden, e ele está lá NOS DOIS modos — o `mode` decide só se a
+    // tela desenha o QR ou o texto, não o que o form carrega. É a captura
+    // determinística: não depende de tema, idioma, nem de clicar link.
+    //
+    // Ela vem antes de qualquer navegação de propósito. Cada render da tela
+    // gera um secret NOVO no servidor, então recarregar pra "ver melhor"
+    // invalida o que estava valendo e troca um problema por outro.
+    try {
+      const escondido = page.locator("input[name='totpSecret'], input#totpSecret").first();
+      if ((await escondido.count()) > 0) {
+        const bruto = (await escondido.getAttribute("value").catch(() => null)) ?? "";
+        const limpo = bruto.replace(/\s+/g, "").toUpperCase();
+        if (/^[A-Z2-7]{16,128}$/.test(limpo)) return limpo;
+      }
+    } catch {
+      // segue pras estratégias de tela
+    }
+
+    // ESTRATÉGIA 0.1: trocar pra mode=manual, que mostra o secret em texto.
+    //
+    // Só serve de rede: se o hidden acima existir, nem chega aqui. A troca é
+    // por `searchParams.set` e não por concatenação — a URL da tela JÁ vem com
+    // `mode=qr`, e grudar `&mode=manual` no fim produz dois `mode` na mesma
+    // query. O Keycloak lê o primeiro, continua em QR, e a tentativa parecia
+    // ter funcionado sem nunca ter mudado nada.
     const urlAtual = page.url();
-    if (urlAtual.includes("CONFIGURE_TOTP") && !urlAtual.includes("mode=manual")) {
-      const sep = urlAtual.includes("?") ? "&" : "?";
+    if (urlAtual.includes("CONFIGURE_TOTP") && !/[?&]mode=manual\b/.test(urlAtual)) {
       try {
-        await page.goto(`${urlAtual}${sep}mode=manual`, {
+        const alvo = new URL(urlAtual);
+        alvo.searchParams.set("mode", "manual");
+        await page.goto(alvo.toString(), {
           waitUntil: "domcontentloaded",
           timeout: 10_000,
         });
         await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
         await page.waitForTimeout(400);
+
+        // O render novo trouxe outro secret: o hidden desta tela é o que vale.
+        const escondido = page.locator("input[name='totpSecret'], input#totpSecret").first();
+        if ((await escondido.count()) > 0) {
+          const limpo = ((await escondido.getAttribute("value").catch(() => null)) ?? "")
+            .replace(/\s+/g, "")
+            .toUpperCase();
+          if (/^[A-Z2-7]{16,128}$/.test(limpo)) return limpo;
+        }
       } catch {
         // ignora — segue tentando os selectors mesmo sem o redirect
       }

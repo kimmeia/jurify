@@ -22,7 +22,7 @@ import {
   kanbanCards, kanbanColunas, kanbanMovimentacoes, kanbanFunis,
   colaboradores, setores, asaasCobrancas, categoriasCobranca,
   comissoesFechadas, users, canaisIntegrados, chamadas,
-  relatoriosProgramados,
+  relatoriosProgramados, atendimentos,
 } from "../../drizzle/schema";
 import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
@@ -144,6 +144,11 @@ const AtendimentoInput = z
     setorId: z.number().int().positive().optional(),
     atendenteId: z.number().int().positive().optional(),
     canalId: z.number().int().positive().optional(),
+    // Versão plural dos três filtros. Os singulares continuam aceitos porque
+    // envios programados antigos ficaram gravados com eles.
+    setorIds: z.array(z.number().int().positive()).max(100).optional(),
+    atendenteIds: z.array(z.number().int().positive()).max(200).optional(),
+    canalIds: z.array(z.number().int().positive()).max(100).optional(),
     /** Sigla da UF. Filtra o relatório inteiro, menos o próprio bloco de
      *  estados — que é o controle que aplica o filtro. */
     uf: z.string().trim().length(2).optional(),
@@ -173,45 +178,51 @@ export function metaProporcionalPeriodo(
   return metaMensal * (diasNoRange / diasNoMes);
 }
 
+/** Une o filtro singular (legado, gravado em envios programados antigos) com
+ *  o plural. `undefined` = sem filtro (todos). */
+export function idsDoFiltro(um?: number, varios?: number[]): number[] | undefined {
+  const lista = varios?.length ? varios : um != null ? [um] : [];
+  return lista.length ? [...new Set(lista)] : undefined;
+}
+
 /** Resolve a lista de colaboradorIds que satisfaz os filtros opcionais
- *  setorId + atendenteId, respeitando permissão (soProprios trava no
+ *  setorIds + atendenteIds, respeitando permissão (soProprios trava no
  *  próprio colaborador). Retorna null quando o filtro resultaria em
  *  "todos do escritório" (sem WHERE adicional). */
 async function resolverColaboradorIds(args: {
   db: any;
   escritorioId: number;
-  setorId?: number;
-  atendenteId?: number;
+  setorIds?: number[];
+  atendenteIds?: number[];
   soProprios: boolean;
   proprioColabId: number;
 }): Promise<number[] | null> {
-  const { db, escritorioId, setorId, atendenteId, soProprios, proprioColabId } = args;
+  const { db, escritorioId, setorIds, atendenteIds, soProprios, proprioColabId } = args;
 
   if (soProprios) return [proprioColabId];
 
-  if (atendenteId) {
-    if (setorId) {
-      const [c] = await db
+  if (atendenteIds?.length) {
+    if (setorIds?.length) {
+      const rows = await db
         .select({ id: colaboradores.id })
         .from(colaboradores)
         .where(and(
           eq(colaboradores.escritorioId, escritorioId),
-          eq(colaboradores.id, atendenteId),
-          eq(colaboradores.setorId, setorId),
-        ))
-        .limit(1);
-      return c ? [atendenteId] : [-1];
+          inArray(colaboradores.id, atendenteIds),
+          inArray(colaboradores.setorId, setorIds),
+        ));
+      return rows.length ? rows.map((r: any) => r.id) : [-1];
     }
-    return [atendenteId];
+    return atendenteIds;
   }
 
-  if (setorId) {
+  if (setorIds?.length) {
     const rows = await db
       .select({ id: colaboradores.id })
       .from(colaboradores)
       .where(and(
         eq(colaboradores.escritorioId, escritorioId),
-        eq(colaboradores.setorId, setorId),
+        inArray(colaboradores.setorId, setorIds),
       ));
     return rows.length ? rows.map((r: any) => r.id) : [-1];
   }
@@ -497,11 +508,15 @@ export const relatoriosRouter = router({
     const soProprios = !perm.verTodos && perm.verProprios;
     const colabId = esc.colaborador.id;
 
+    const setorIds = idsDoFiltro(input?.setorId, input?.setorIds);
+    const atendenteIds = idsDoFiltro(input?.atendenteId, input?.atendenteIds);
+    const canalIds = idsDoFiltro(input?.canalId, input?.canalIds);
+
     const colaboradorIds = await resolverColaboradorIds({
       db,
       escritorioId: eid,
-      setorId: input?.setorId,
-      atendenteId: input?.atendenteId,
+      setorIds,
+      atendenteIds,
       soProprios,
       proprioColabId: colabId,
     });
@@ -512,9 +527,16 @@ export const relatoriosRouter = router({
     const filtroRespLead = colaboradorIds
       ? [inArray(leads.responsavelId, colaboradorIds)]
       : [];
-    const filtroCanal = input?.canalId
-      ? [eq(conversas.canalId, input.canalId)]
+    const filtroCanal = canalIds
+      ? [inArray(conversas.canalId, canalIds)]
       : [];
+    // Fragmentos pros trechos em SQL cru (alias `c` = conversas).
+    const filtroCanalSql = canalIds
+      ? sql`AND c.canalIdConv IN (${sql.join(canalIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
+    const filtroAtendSql = colaboradorIds
+      ? sql`AND c.atendenteIdConv IN (${sql.join(colaboradorIds.map((id) => sql`${id}`), sql`, `)})`
+      : sql``;
 
     // Filtro por estado. Vale pro relatório inteiro, MENOS pro bloco que o
     // gera: o mapa é o controle que aplica o filtro, e controle que se filtra
@@ -604,10 +626,56 @@ export const relatoriosRouter = router({
       ));
     const conversasAtendidas = Number(atendidasRow?.total ?? 0);
 
+    // ─── Atendimentos INICIADOS no período ──────────────────────────────
+    // A pergunta que nenhuma das duas leituras acima responde: quem abriu
+    // atendimento nesta janela. A conversa nasce uma vez e é reaproveitada pra
+    // sempre, então cliente que voltou em agosto continuava contando como
+    // março; o episódio recorta o trabalho e tem dono próprio, congelado no
+    // que ABRIU — transferência não reescreve o passado dele.
+    const baseAtd = (di: Date, df: Date) => and(
+      eq(atendimentos.escritorioId, eid),
+      gte(atendimentos.abertoEm, di),
+      lte(atendimentos.abertoEm, df),
+      ...(colaboradorIds ? [inArray(atendimentos.atendenteAbriu, colaboradorIds)] : []),
+      ...(contatoIdsUf ? [inArray(atendimentos.contatoId, contatoIdsUf)] : []),
+    );
+    // Canal não está no episódio: vive na conversa. Sai por subquery pra não
+    // transformar todas as contagens num JOIN.
+    const filtroCanalAtd = canalIds
+      ? [inArray(
+          atendimentos.conversaId,
+          db.select({ id: conversas.id }).from(conversas).where(and(
+            eq(conversas.escritorioId, eid),
+            inArray(conversas.canalId, canalIds),
+          )),
+        )]
+      : [];
+
+    const [iniciadosRow, atdPorDiaRows] = await Promise.all([
+      db.select({ total: sql<number>`COUNT(*)` })
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd)),
+      db.select({
+        dia: sql<string>`DATE(${atendimentos.abertoEm})`,
+        total: sql<number>`COUNT(*)`,
+      })
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd))
+        .groupBy(sql`DATE(${atendimentos.abertoEm})`)
+        .orderBy(sql`DATE(${atendimentos.abertoEm})`),
+    ]);
+    const atendimentosIniciados = Number(iniciadosRow[0]?.total ?? 0);
+
     // ─── Leads: funil, agregados, por dia, motivos de perda ────────────
     // Canal filtra via join com conversas (NULL → fora se filtroCanal ativo).
-    const joinCanalLead = (q: any) => input?.canalId
-      ? q.innerJoin(conversas, eq(leads.conversaId, conversas.id))
+    // A condição de canal mora NO join: só o innerJoin, como era antes,
+    // exigia que o lead tivesse conversa mas aceitava conversa de QUALQUER
+    // canal — o filtro não filtrava.
+    const joinCanalLead = (q: any) => canalIds
+      ? q.innerJoin(conversas, and(
+          eq(leads.conversaId, conversas.id),
+          inArray(conversas.canalId, canalIds),
+        ))
       : q;
 
     const [
@@ -721,7 +789,8 @@ export const relatoriosRouter = router({
       WHERE c.escritorioIdConv = ${eid}
         AND c.createdAtConv >= ${dataInicio}
         AND c.createdAtConv <= ${dataFim}
-        ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+        ${filtroCanalSql}
+        ${filtroAtendSql}
     `);
     const segMedioPriResp = Number((tempoPriRespRow as any)[0]?.[0]?.segMedio ?? (tempoPriRespRow as any).rows?.[0]?.segMedio ?? 0);
 
@@ -745,7 +814,7 @@ export const relatoriosRouter = router({
     // conversas (atendenteId) pra atendimentos. Atendente pode ter um sem
     // ter o outro. Resolvemos via UNION + agregação no app.
     const filtroColabIdsArr = colaboradorIds && colaboradorIds.length > 0 ? colaboradorIds : null;
-    const [leadsPorResp, atendPorAtend] = await Promise.all([
+    const [leadsPorResp, atdOperacional] = await Promise.all([
       joinCanalLead(
         db.select({
           colabId: leads.responsavelId,
@@ -764,13 +833,22 @@ export const relatoriosRouter = router({
         filtroColabIdsArr ? inArray(leads.responsavelId, filtroColabIdsArr) : sql`1=1`,
       ))
         .groupBy(leads.responsavelId, leads.etapaFunil),
+      // Por quem ABRIU o atendimento, não pelo dono atual da conversa: com
+      // `conversas.atendenteId` o histórico inteiro migrava pro último
+      // atendente no dia em que alguém encostava na conversa, e o SDR que
+      // trabalhou o lead em março perdia o registro. colabId NULL = episódio
+      // que nenhum humano assumiu (robô) — aparece como linha própria, não
+      // some: sumir faria a tabela somar menos que o KPI.
       db.select({
-        colabId: conversas.atendenteId,
-        atendimentos: sql<number>`COUNT(*)`,
+        colabId: atendimentos.atendenteAbriu,
+        iniciados: sql<number>`COUNT(*)`,
+        resolvidos: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NOT NULL AND ${atendimentos.motivoFechamento} = 'resolvido' THEN 1 ELSE 0 END)`,
+        emAndamento: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NULL THEN 1 ELSE 0 END)`,
+        segPriResp: sql<number>`AVG(TIMESTAMPDIFF(SECOND, ${atendimentos.abertoEm}, ${atendimentos.primeiraRespostaEm}))`,
       })
-        .from(conversas)
-        .where(baseConv)
-        .groupBy(conversas.atendenteId),
+        .from(atendimentos)
+        .where(and(baseAtd(dataInicio, dataFim), ...filtroCanalAtd))
+        .groupBy(atendimentos.atendenteAbriu),
     ]);
 
     // Lista master de colaboradores (nome + email) pra hidratar a tabela.
@@ -805,7 +883,7 @@ export const relatoriosRouter = router({
       gte(chamadas.createdAt, dataInicio),
       lte(chamadas.createdAt, dataFim),
       ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
-      ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+      ...(canalIds ? [inArray(chamadas.canalId, canalIds)] : []),
     );
     const [chamGeral, chamPorAtend, chamPorDiaRows] = await Promise.all([
       db.select({
@@ -877,10 +955,45 @@ export const relatoriosRouter = router({
       else if (balde === "perdidos") { x.perdidos += t; }
       else { x.emAberto += t; }
     }
-    for (const r of atendPorAtend) {
+    for (const r of atdOperacional) {
       if (!r.colabId) continue;
       const x = garantir(r.colabId);
-      x.atendimentos += Number(r.atendimentos);
+      x.atendimentos += Number(r.iniciados);
+    }
+
+    // ─── Quadro operacional por atendente (o que o dono pediu ver) ──────
+    const tabelaAtendimento = atdOperacional
+      .map((r) => ({
+        colabId: r.colabId as number | null,
+        nome: r.colabId
+          ? (nomePorColab.get(r.colabId)?.nome || `#${r.colabId}`)
+          : "Sem atendente (robô)",
+        removido: r.colabId ? (nomePorColab.get(r.colabId)?.removido ?? false) : false,
+        iniciados: Number(r.iniciados),
+        resolvidos: Number(r.resolvidos || 0),
+        emAndamento: Number(r.emAndamento || 0),
+        segPriResp: r.segPriResp != null ? Number(r.segPriResp) : null,
+      }))
+      .sort((a, b) => b.iniciados - a.iniciados);
+    const atendimentosResolvidos = tabelaAtendimento.reduce((a, r) => a + r.resolvidos, 0);
+    const atendimentosEmAndamento = tabelaAtendimento.reduce((a, r) => a + r.emAndamento, 0);
+
+    // Estoque atual do Inbox (todas as conversas, de qualquer época). Vai no
+    // rodapé do relatório: é a resposta à pergunta "por que não bate com o
+    // Inbox" impressa no lugar onde a pergunta nasce.
+    const estoqueRows = await db
+      .select({ status: conversas.status, total: sql<number>`COUNT(*)` })
+      .from(conversas)
+      .where(eq(conversas.escritorioId, eid))
+      .groupBy(conversas.status);
+    let estoqueTodas = 0;
+    let estoqueEmAtendimento = 0;
+    let estoqueResolvidas = 0;
+    for (const r of estoqueRows) {
+      const t = Number(r.total);
+      estoqueTodas += t;
+      if (r.status === "em_atendimento") estoqueEmAtendimento += t;
+      if (r.status === "resolvido") estoqueResolvidas += t;
     }
     const tabelaAtendentes = [...porAtendente.values()]
       .map((a) => ({
@@ -957,12 +1070,11 @@ export const relatoriosRouter = router({
     }));
 
     // ─── Derivados ──────────────────────────────────────────────────────
-    // Taxa de conversão = ganhos / atendimentos do período. Reflete "do
-    // total de pessoas atendidas, qual % virou contrato". Antes era
-    // ganhos/(ganhos+perdidos) — ignorava leads em aberto e dava 100% pra
-    // quem só fechou poucos sem perder nenhum.
-    const taxaConversao = totalConversas > 0
-      ? Math.round((leadsGanhos / totalConversas) * 100)
+    // Taxa de conversão = ganhos / atendimentos INICIADOS — a mesma conta da
+    // tabela por atendente. O card dividia por conversas novas e a tabela por
+    // atendimentos: dois números diferentes pra "mesma" taxa no mesmo papel.
+    const taxaConversao = atendimentosIniciados > 0
+      ? Math.round((leadsGanhos / atendimentosIniciados) * 100)
       : null;
     const ticketMedio = leadsGanhos > 0 ? valorGanho / leadsGanhos : null;
     const cicloMedioDias = Number((cicloRows as any[])[0]?.diasMedio || 0);
@@ -970,9 +1082,6 @@ export const relatoriosRouter = router({
     // O filtro de atendente entra aqui também: sem ele o numerador varria o
     // escritório inteiro contra um denominador já filtrado, e a razão podia
     // passar de 100% ao escolher um atendente.
-    const filtroAtendSql = colaboradorIds
-      ? sql`AND c.atendenteIdConv IN (${sql.join(colaboradorIds.map((id) => sql`${id}`), sql`, `)})`
-      : sql``;
     const contarConvsComLead = async (di: Date, df: Date): Promise<number> => {
       const row = await db.execute(sql`
         SELECT COUNT(DISTINCT c.id) AS total
@@ -981,7 +1090,7 @@ export const relatoriosRouter = router({
         WHERE c.escritorioIdConv = ${eid}
           AND c.createdAtConv >= ${di}
           AND c.createdAtConv <= ${df}
-          ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+          ${filtroCanalSql}
           ${filtroAtendSql}
       `);
       return Number((row as any)[0]?.[0]?.total ?? (row as any).rows?.[0]?.total ?? 0);
@@ -993,7 +1102,7 @@ export const relatoriosRouter = router({
     // Só os agregados que a tela compara — sem funil, tabelas nem séries.
     const anterior = input?.comparar
       ? await (async () => {
-          const [convsAntRows, msgsAntRows, priRespAntRow, chamAntRows, convsComLeadAnt] =
+          const [convsAntRows, msgsAntRows, priRespAntRow, chamAntRows, convsComLeadAnt, atdAntRows] =
             await Promise.all([
               db.select({ total: sql<number>`COUNT(*)` }).from(conversas).where(and(
                 eq(conversas.escritorioId, eid),
@@ -1025,7 +1134,7 @@ export const relatoriosRouter = router({
                 WHERE c.escritorioIdConv = ${eid}
                   AND c.createdAtConv >= ${dataInicioAnt}
                   AND c.createdAtConv <= ${dataFimAnt}
-                  ${input?.canalId ? sql`AND c.canalIdConv = ${input.canalId}` : sql``}
+                  ${filtroCanalSql}
                   ${filtroAtendSql}
               `),
               db.select({
@@ -1038,28 +1147,37 @@ export const relatoriosRouter = router({
                 gte(chamadas.createdAt, dataInicioAnt),
                 lte(chamadas.createdAt, dataFimAnt),
                 ...(colaboradorIds ? [inArray(chamadas.atendenteId, colaboradorIds)] : []),
-                ...(input?.canalId ? [eq(chamadas.canalId, input.canalId)] : []),
+                ...(canalIds ? [inArray(chamadas.canalId, canalIds)] : []),
               )).groupBy(chamadas.direcao, chamadas.status),
               contarConvsComLead(dataInicioAnt, dataFimAnt),
+              db.select({
+                total: sql<number>`COUNT(*)`,
+                resolvidos: sql<number>`SUM(CASE WHEN ${atendimentos.fechadoEm} IS NOT NULL AND ${atendimentos.motivoFechamento} = 'resolvido' THEN 1 ELSE 0 END)`,
+              })
+                .from(atendimentos)
+                .where(and(baseAtd(dataInicioAnt, dataFimAnt), ...filtroCanalAtd)),
             ]);
 
           const totalConversasAnt = Number(convsAntRows[0]?.total || 0);
           const msgsAnt: Record<string, number> = {};
           for (const r of msgsAntRows) msgsAnt[r.direcao as string] = Number(r.total);
 
+          const atdIniciadosAnt = Number(atdAntRows[0]?.total || 0);
           return {
             periodo: {
               dataInicio: dataInicioAnt.toISOString().slice(0, 10),
               dataFim: dataFimAnt.toISOString().slice(0, 10),
             },
             totalConversas: totalConversasAnt,
+            atendimentosIniciados: atdIniciadosAnt,
+            atendimentosResolvidos: Number((atdAntRows[0] as any)?.resolvidos || 0),
             mensagensRecebidas: msgsAnt["entrada"] || 0,
             mensagensEnviadas: msgsAnt["saida"] || 0,
             segMedioPriResp: Number(
               (priRespAntRow as any)[0]?.[0]?.segMedio ?? (priRespAntRow as any).rows?.[0]?.segMedio ?? 0,
             ),
-            taxaConversao: totalConversasAnt > 0
-              ? Math.round((leadsGanhosAnt / totalConversasAnt) * 100)
+            taxaConversao: atdIniciadosAnt > 0
+              ? Math.round((leadsGanhosAnt / atdIniciadosAnt) * 100)
               : null,
             ticketMedio: leadsGanhosAnt > 0 ? valorGanhoAnt / leadsGanhosAnt : null,
             conversaParaLead: totalConversasAnt > 0
@@ -1086,6 +1204,9 @@ export const relatoriosRouter = router({
         setorId: input?.setorId ?? null,
         atendenteId: input?.atendenteId ?? null,
         canalId: input?.canalId ?? null,
+        setorIds: setorIds ?? null,
+        atendenteIds: atendenteIds ?? null,
+        canalIds: canalIds ?? null,
         uf: input?.uf ? input.uf.toUpperCase() : null,
       },
       // KPIs Funil
@@ -1117,6 +1238,16 @@ export const relatoriosRouter = router({
       conversasPorStatus,
       totalConversas,
       conversasAtendidas,
+      atendimentosIniciados,
+      atendimentosResolvidos,
+      atendimentosEmAndamento,
+      tabelaAtendimento,
+      estoqueConversas: {
+        todas: estoqueTodas,
+        emAtendimento: estoqueEmAtendimento,
+        resolvidas: estoqueResolvidas,
+      },
+      atendimentosPorDia: atdPorDiaRows.map((r) => ({ dia: String(r.dia), total: Number(r.total) })),
       mensagensEnviadas: msgsDirecao["saida"] || 0,
       mensagensRecebidas: msgsDirecao["entrada"] || 0,
       totalMensagens: (msgsDirecao["saida"] || 0) + (msgsDirecao["entrada"] || 0),
@@ -2437,8 +2568,8 @@ export const relatoriosRouter = router({
     const colaboradorIds = await resolverColaboradorIds({
       db,
       escritorioId: eid,
-      setorId: input?.setorId,
-      atendenteId: input?.atendenteId,
+      setorIds: idsDoFiltro(input?.setorId),
+      atendenteIds: idsDoFiltro(input?.atendenteId),
       soProprios,
       proprioColabId: esc.colaborador.id,
     });
@@ -2737,6 +2868,9 @@ export const relatoriosPdfRouter = router({
           setorId: z.number().int().positive().optional(),
           atendenteId: z.number().int().positive().optional(),
           canalId: z.number().int().positive().optional(),
+          setorIds: z.array(z.number().int().positive()).max(100).optional(),
+          atendenteIds: z.array(z.number().int().positive()).max(200).optional(),
+          canalIds: z.array(z.number().int().positive()).max(100).optional(),
           // Sem isto o zod descarta o `uf` que a tela manda e o PDF sai com o
           // relatório inteiro enquanto a tela mostra um estado só — divergência
           // silenciosa, que é a pior espécie.
@@ -2757,32 +2891,47 @@ export const relatoriosPdfRouter = router({
       }
 
       const db = await getDb();
+      // Rótulo humano de uma lista: "Todos", "Trabalhista" ou "A, B +2".
+      const juntarNomes = (nomes: string[]): string => {
+        if (!nomes.length) return "Todos";
+        const mostra = nomes.slice(0, 3).join(", ");
+        return nomes.length > 3 ? `${mostra} +${nomes.length - 3}` : mostra;
+      };
       const rotuloDe = async (
         tabela: "setor" | "canal",
-        id: number | undefined,
+        ids: number[] | undefined,
       ): Promise<string> => {
-        if (id == null) return "Todos";
-        if (!db) return `#${id}`;
-        if (tabela === "setor") {
-          const [row] = await db.select({ nome: setores.nome }).from(setores)
-            .where(and(eq(setores.id, id), eq(setores.escritorioId, esc.escritorio.id))).limit(1);
-          return row?.nome ?? `#${id}`;
-        }
-        const [row] = await db
-          .select({ nome: canaisIntegrados.nome, tipo: canaisIntegrados.tipo })
-          .from(canaisIntegrados)
-          .where(and(eq(canaisIntegrados.id, id), eq(canaisIntegrados.escritorioId, esc.escritorio.id)))
-          .limit(1);
-        return row?.nome || row?.tipo || `#${id}`;
+        if (!ids?.length) return "Todos";
+        if (!db) return ids.map((id) => `#${id}`).join(", ");
+        const rows = tabela === "setor"
+          ? await db.select({ id: setores.id, nome: setores.nome }).from(setores)
+            .where(and(inArray(setores.id, ids), eq(setores.escritorioId, esc.escritorio.id)))
+          : await db
+            .select({ id: canaisIntegrados.id, nome: canaisIntegrados.nome, tipo: canaisIntegrados.tipo })
+            .from(canaisIntegrados)
+            .where(and(inArray(canaisIntegrados.id, ids), eq(canaisIntegrados.escritorioId, esc.escritorio.id)));
+        const nomePorId = new Map<number, string>(
+          rows.map((r: any) => [r.id, r.nome || r.tipo || `#${r.id}`]),
+        );
+        return juntarNomes(ids.map((id) => nomePorId.get(id) ?? `#${id}`));
       };
-      const atendenteLabel = input?.atendenteId != null
-        ? (data.tabelaAtendentes.find((a) => a.colabId === input.atendenteId)?.nome ?? `#${input.atendenteId}`)
+      const setorIdsPdf = idsDoFiltro(input?.setorId, input?.setorIds);
+      const atendenteIdsPdf = idsDoFiltro(input?.atendenteId, input?.atendenteIds);
+      const canalIdsPdf = idsDoFiltro(input?.canalId, input?.canalIds);
+      const atendenteLabel = atendenteIdsPdf
+        ? juntarNomes(atendenteIdsPdf.map((id) =>
+            data.tabelaAtendentes.find((a) => a.colabId === id)?.nome ?? `#${id}`))
         : "Todos";
 
       const buffer = await gerarAtendimentoPdf({
         data: {
           periodo: data.periodo,
           totalConversas: data.totalConversas,
+          atendimentosIniciados: data.atendimentosIniciados,
+          atendimentosResolvidos: data.atendimentosResolvidos,
+          atendimentosEmAndamento: data.atendimentosEmAndamento,
+          tabelaAtendimento: data.tabelaAtendimento,
+          estoqueConversas: data.estoqueConversas,
           mensagensRecebidas: data.mensagensRecebidas,
           mensagensEnviadas: data.mensagensEnviadas,
           segMedioPriResp: data.segMedioPriResp,
@@ -2793,6 +2942,7 @@ export const relatoriosPdfRouter = router({
           leadsPerdidos: data.leadsPerdidos,
           anterior: data.anterior,
           conversasPorDia: data.conversasPorDia,
+          atendimentosPorDia: data.atendimentosPorDia,
           porCanal: data.porCanal.map((c) => ({ nome: c.nome, total: c.total })),
           motivosPerda: data.motivosPerda,
           tabelaAtendentes: data.tabelaAtendentes,
@@ -2800,9 +2950,9 @@ export const relatoriosPdfRouter = router({
           ligacoesPorAtendente: data.ligacoesPorAtendente,
         },
         nomeEscritorio: esc.escritorio.nome,
-        setorLabel: await rotuloDe("setor", input?.setorId),
+        setorLabel: await rotuloDe("setor", setorIdsPdf),
         atendenteLabel,
-        canalLabel: await rotuloDe("canal", input?.canalId),
+        canalLabel: await rotuloDe("canal", canalIdsPdf),
         ufLabel: input?.uf ? input.uf.toUpperCase() : "Todos",
       });
 

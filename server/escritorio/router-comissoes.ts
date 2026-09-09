@@ -13,11 +13,22 @@ import {
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { checkPermission } from "./check-permission";
-import { diagnosticarComissao, fecharComissao, FechamentoJaExisteError, simularComissao } from "./db-comissoes";
+import {
+  diagnosticarComissao,
+  fecharComissao,
+  FechamentoJaExisteError,
+  listarComissoesGestao,
+  obterComissaoGestaoAtiva,
+  salvarComissaoGestao,
+  simularComissao,
+  type OpcoesGestao,
+} from "./db-comissoes";
 import { gerarComissaoPdf, type ComissaoPdfItem } from "./comissao-pdf";
+import { FUSO_HORARIO_PADRAO, inicioDoDiaNoFuso } from "../../shared/escritorio-types";
 
 const DATA_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const dataInput = z.string().regex(DATA_REGEX, "Use o formato YYYY-MM-DD.");
+const tipoInput = z.enum(["venda", "gestao"]).optional();
 
 async function requireEscritorio(userId: number) {
   const result = await getEscritorioPorUsuario(userId);
@@ -59,6 +70,41 @@ async function exigirAcaoFinanceiro(
 // Função `simularComissao` foi extraída pra `db-comissoes.ts` —
 // reutilizada pelo cron worker de fechamento automático.
 
+/**
+ * Traduz "quero a comissão de gestão do colaborador X" nas opções que o
+ * cálculo consome. Recusa quem não está configurado como gestor em vez de
+ * cair num silencioso 0% — comissão que sai zerada sem explicação é pior
+ * do que erro na cara.
+ *
+ * O corte vira Date no fuso do escritório porque a comparação do outro lado
+ * é com `leads.fechadoEm`, que é timestamp.
+ */
+async function resolverGestao(
+  escritorioId: number,
+  fusoHorario: string | null | undefined,
+  colaboradorId: number,
+): Promise<OpcoesGestao> {
+  const cfg = await obterComissaoGestaoAtiva(escritorioId, colaboradorId);
+  if (!cfg) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Este colaborador não tem comissão de gestão ativa. Configure em Configurações → Financeiro.",
+    });
+  }
+  const fuso = fusoHorario || FUSO_HORARIO_PADRAO;
+  return {
+    dataCorte: cfg.dataCorte,
+    dataCorteEm: inicioDoDiaNoFuso(cfg.dataCorte, fuso),
+    fusoHorario: fuso,
+    aliquotaPercent: cfg.aliquotaPercent,
+    modo: cfg.modo,
+    baseFaixa: cfg.baseFaixa,
+    valorMinimo: cfg.valorMinimo,
+    faixas: cfg.faixas,
+  };
+}
+
 export const comissoesRouter = router({
   simular: protectedProcedure
     .input(
@@ -66,6 +112,7 @@ export const comissoesRouter = router({
         atendenteId: z.number(),
         periodoInicio: dataInput,
         periodoFim: dataInput,
+        tipo: tipoInput,
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -77,11 +124,16 @@ export const comissoesRouter = router({
           message: "Período inválido: início depois do fim.",
         });
       }
+      const gestao = input.tipo === "gestao"
+        ? await resolverGestao(esc.escritorio.id, esc.escritorio.fusoHorario, input.atendenteId)
+        : undefined;
       return simularComissao(
         esc.escritorio.id,
         input.atendenteId,
         input.periodoInicio,
         input.periodoFim,
+        undefined,
+        gestao,
       );
     }),
 
@@ -96,6 +148,7 @@ export const comissoesRouter = router({
         atendenteId: z.number(),
         periodoInicio: dataInput,
         periodoFim: dataInput,
+        tipo: tipoInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -118,8 +171,12 @@ export const comissoesRouter = router({
         .limit(1);
       if (!atendente) throw new TRPCError({ code: "NOT_FOUND", message: "Atendente não encontrado." });
 
+      const gestao = input.tipo === "gestao"
+        ? await resolverGestao(esc.escritorio.id, esc.escritorio.fusoHorario, input.atendenteId)
+        : undefined;
       const sim = await simularComissao(
         esc.escritorio.id, input.atendenteId, input.periodoInicio, input.periodoFim,
+        undefined, gestao,
       );
 
       const mapItem = (c: {
@@ -210,11 +267,21 @@ export const comissoesRouter = router({
          * (caso documentado de re-fechamento após correção).
          */
         forcarDuplicado: z.boolean().optional(),
+        tipo: tipoInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const esc = await requireEscritorio(ctx.user.id);
       await exigirAcaoFinanceiro(ctx.user.id, "criar");
+      if (input.periodoInicio > input.periodoFim) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Período inválido: início depois do fim.",
+        });
+      }
+      const gestao = input.tipo === "gestao"
+        ? await resolverGestao(esc.escritorio.id, esc.escritorio.fusoHorario, input.atendenteId)
+        : undefined;
       try {
         const r = await fecharComissao({
           escritorioId: esc.escritorio.id,
@@ -225,6 +292,7 @@ export const comissoesRouter = router({
           origem: "manual",
           observacoes: input.observacoes ?? null,
           forcarDuplicado: input.forcarDuplicado ?? false,
+          gestao,
         });
         return { status: "criado" as const, id: r.id };
       } catch (err) {
@@ -239,6 +307,81 @@ export const comissoesRouter = router({
         }
         throw err;
       }
+    }),
+
+  /** Gestores com comissão de gestão configurada (ativos e desligados). */
+  listarGestao: protectedProcedure.query(async ({ ctx }) => {
+    const esc = await requireEscritorio(ctx.user.id);
+    await exigirAcaoFinanceiro(ctx.user.id, "ver");
+    return listarComissoesGestao(esc.escritorio.id);
+  }),
+
+  /** Cria ou atualiza a comissão de gestão de um colaborador. */
+  salvarGestao: protectedProcedure
+    .input(
+      z.object({
+        colaboradorId: z.number().int().positive(),
+        aliquotaPercent: z.number().min(0).max(100),
+        dataCorte: dataInput,
+        ativo: z.boolean().default(true),
+        modo: z.enum(["flat", "faixas"]).default("flat"),
+        baseFaixa: z.enum(["bruto", "comissionavel"]).default("comissionavel"),
+        valorMinimo: z.number().min(0).default(0),
+        faixas: z
+          .array(
+            z.object({
+              // NULL = sem teto. Só faz sentido na última, e é o que o
+              // `selecionarFaixa` usa como faixa de estouro.
+              limiteAte: z.number().min(0).nullable(),
+              aliquotaPercent: z.number().min(0).max(100),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const esc = await requireEscritorio(ctx.user.id);
+      await exigirAcaoFinanceiro(ctx.user.id, "editar");
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      // Sem esta checagem daria pra pendurar comissão de gestão num
+      // colaborador de outro escritório — a config é por (escritório,
+      // colaborador) e o INSERT aceitaria o id estrangeiro sem reclamar.
+      const [colab] = await db
+        .select({ id: colaboradores.id })
+        .from(colaboradores)
+        .where(and(
+          eq(colaboradores.id, input.colaboradorId),
+          eq(colaboradores.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!colab) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Colaborador não encontrado." });
+      }
+
+      // Salvar "faixas" sem tabela deixaria o cálculo cair no flat com a
+      // alíquota que estiver gravada — comissão errada sem aviso.
+      if (input.modo === "faixas" && input.faixas.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Modo por faixas exige cadastrar pelo menos uma faixa.",
+        });
+      }
+
+      await salvarComissaoGestao({
+        escritorioId: esc.escritorio.id,
+        colaboradorId: input.colaboradorId,
+        aliquotaPercent: input.aliquotaPercent,
+        dataCorte: input.dataCorte,
+        ativo: input.ativo,
+        criadoPorUserId: ctx.user.id,
+        modo: input.modo,
+        baseFaixa: input.baseFaixa,
+        valorMinimo: input.valorMinimo,
+        faixas: input.faixas,
+      });
+      return { success: true };
     }),
 
   listarFechamentos: protectedProcedure
@@ -271,6 +414,8 @@ export const comissoesRouter = router({
           aliquotaUsada: comissoesFechadas.aliquotaUsada,
           fechadoEm: comissoesFechadas.fechadoEm,
           observacoes: comissoesFechadas.observacoes,
+          tipo: comissoesFechadas.tipo,
+          dataCorteUsada: comissoesFechadas.dataCorteUsada,
         })
         .from(comissoesFechadas)
         .innerJoin(
@@ -309,6 +454,8 @@ export const comissoesRouter = router({
           valorMinimoUsado: comissoesFechadas.valorMinimoUsado,
           fechadoEm: comissoesFechadas.fechadoEm,
           observacoes: comissoesFechadas.observacoes,
+          tipo: comissoesFechadas.tipo,
+          dataCorteUsada: comissoesFechadas.dataCorteUsada,
         })
         .from(comissoesFechadas)
         .innerJoin(

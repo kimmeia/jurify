@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --duvida:#b45309; --duvida-bg:#fffbeb; --duvida-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { flex:0 0 auto; display:flex; align-items:flex-start; justify-content:space-between; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .micro { font-size:9.5px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+
+  .btn { height:38px; border-radius:10px; padding:0 17px; display:inline-flex; align-items:center; gap:8px;
+         font-size:13.5px; font-weight:600; border:1px solid var(--borda); background:var(--surface); color:var(--corpo); }
+  .btn.pri { background:var(--acento); border-color:var(--acento); color:#fff; box-shadow:0 10px 20px -10px #7c3aed99; }
+
+  /* ── faixa de resumo ── */
+  .resumo { flex:0 0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .kpi { padding:12px 14px; }
+  .kpi .k { font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .kpi .n { font-size:24px; font-weight:700; letter-spacing:-.02em; margin-top:3px; font-variant-numeric:tabular-nums; }
+  .kpi .d { font-size:10.5px; color:var(--mudo); margin-top:1px; }
+  .kpi.ruim .n { color:var(--alerta-forte); }
+  .kpi.bom .n { color:#047857; }
+
+  .colunas { flex:1 1 auto; min-height:0; display:grid; grid-template-columns:1fr 1.05fr; gap:22px; align-items:start; overflow:hidden; }
+  .col { display:flex; flex-direction:column; gap:11px; min-width:0; }
+  .tit { font-family:'Poppins'; font-weight:700; font-size:14px; }
+  .tit-sub { font-size:11.5px; color:var(--mudo); margin-top:2px; }
+
+  /* ── lista de rotas ── */
+  .rotas { overflow:hidden; }
+  .rota { display:flex; align-items:center; gap:9px; padding:7px 13px; border-bottom:1px solid var(--hairline); }
+  .rota:last-child { border-bottom:0; }
+  .rota.falha { background:#fffbfb; }
+  .pt-st { width:8px; height:8px; border-radius:50%; flex:0 0 auto; }
+  .pt-st.ok { background:var(--ok); }
+  .pt-st.err { background:var(--alerta); }
+  .rota code { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .rota .ms { margin-left:auto; font-size:10.5px; color:var(--fraco); font-variant-numeric:tabular-nums; }
+  .rota .msg { font-size:11px; color:var(--alerta-forte); font-weight:500; }
+  .mais { padding:7px 13px; font-size:11px; color:var(--mudo); background:#fbfcfd; }
+
+  /* ── conferências ── */
+  .conf { padding:12px 14px; }
+  .conf + .conf { margin-top:0; }
+  .conf-cab { display:flex; align-items:center; gap:9px; }
+  .conf-cab .selo { font-size:9px; font-weight:700; letter-spacing:.05em; border-radius:999px; padding:2px 8px; }
+  .selo.ok { background:var(--ok-bg); color:#047857; border:1px solid var(--ok-borda); }
+  .selo.err { background:var(--alerta-bg); color:var(--alerta-forte); border:1px solid var(--alerta-borda); }
+  .conf-cab b { font-size:12.5px; font-weight:700; }
+  .passos { margin-top:8px; display:flex; flex-direction:column; gap:5px; }
+  .passo { display:flex; align-items:flex-start; gap:8px; font-size:11.5px; color:var(--corpo); }
+  .passo .n { width:16px; height:16px; border-radius:50%; background:var(--hairline); color:var(--mudo);
+              font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; margin-top:1px; }
+  .passo.falhou .n { background:var(--alerta); color:#fff; }
+  .passo.falhou { color:var(--alerta-forte); font-weight:600; }
+  .veredito { margin-top:9px; padding:8px 10px; border-radius:9px; font-size:11.5px; line-height:1.45; }
+  .veredito.err { background:var(--alerta-bg); border:1px solid var(--alerta-borda); color:#7f1d1d; }
+  .veredito b { font-weight:700; }
+
+  .nota { flex:0 0 auto; display:flex; align-items:flex-start; gap:10px; padding:11px 14px;
+          background:var(--duvida-bg); border:1px solid var(--duvida-borda); border-radius:12px; }
+  .nota .txt { font-size:11.5px; color:#78350f; line-height:1.5; }
+  .nota .txt b { font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Robô de jornada</div>
+        <div class="sub">Entra no sistema como usuário, percorre as telas e relata o que só o navegador vê</div>
+      </div>
+      <div style="display:flex;gap:9px">
+        <div class="btn">Histórico</div>
+        <div class="btn pri">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" stroke="#fff" stroke-width="2.1" stroke-linejoin="round"/></svg>
+          Rodar agora
+        </div>
+      </div>
+    </div>
+
+    <div class="resumo">
+      <div class="card kpi">
+        <div class="k">Última execução</div>
+        <div class="n" style="font-size:17px">há 6 min</div>
+        <div class="d">18/08 às 14:32 · automática</div>
+      </div>
+      <div class="card kpi">
+        <div class="k">Telas percorridas</div>
+        <div class="n">19</div>
+        <div class="d">rotas do app logado</div>
+      </div>
+      <div class="card kpi ruim">
+        <div class="k">Telas com achado</div>
+        <div class="n">2</div>
+        <div class="d">de 19</div>
+      </div>
+      <div class="card kpi ruim">
+        <div class="k">Conferências falhas</div>
+        <div class="n">1</div>
+        <div class="d">de 5</div>
+      </div>
+      <div class="card kpi bom">
+        <div class="k">Duração</div>
+        <div class="n" style="font-size:20px">4m 38s</div>
+        <div class="d">escritório de teste apagado ✓</div>
+      </div>
+    </div>
+
+    <div class="colunas">
+
+      <!-- ══ rotas ══ -->
+      <div class="col">
+        <div>
+          <div class="tit">As telas abriram?</div>
+          <div class="tit-sub">Exceção de JS, resposta 5xx e spinner que não sai</div>
+        </div>
+
+        <div class="card rotas">
+          <div class="rota"><span class="pt-st ok"></span><code>/dashboard</code><span class="ms">1,2 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/clientes</code><span class="ms">0,9 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/processos</code><span class="ms">1,4 s</span></div>
+          <div class="rota falha">
+            <span class="pt-st err"></span><code>/movimentacoes</code>
+            <span class="msg">TypeError: Cannot read properties of null (reading 'nome')</span>
+            <span class="ms">2,1 s</span>
+          </div>
+          <div class="rota"><span class="pt-st ok"></span><code>/atendimento</code><span class="ms">1,1 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/agenda</code><span class="ms">1,0 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/kanban</code><span class="ms">1,6 s</span></div>
+          <div class="rota falha">
+            <span class="pt-st err"></span><code>/relatorios</code>
+            <span class="msg">spinner não sumiu em 15 s</span>
+            <span class="ms">15,0 s</span>
+          </div>
+          <div class="rota"><span class="pt-st ok"></span><code>/financeiro</code><span class="ms">1,3 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/ponto</code><span class="ms">0,7 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/calculos</code><span class="ms">0,8 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/acordos</code><span class="ms">1,1 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/automacoes</code><span class="ms">1,5 s</span></div>
+          <div class="rota"><span class="pt-st ok"></span><code>/configuracoes</code><span class="ms">1,2 s</span></div>
+          <div class="mais">+ 5 rotas, todas sem achado</div>
+        </div>
+      </div>
+
+      <!-- ══ conferências ══ -->
+      <div class="col">
+        <div>
+          <div class="tit">O que apareceu era o certo?</div>
+          <div class="tit-sub">Cria o dado, navega até ele e confere — a parte que hoje não existe</div>
+        </div>
+
+        <div class="card conf">
+          <div class="conf-cab">
+            <span class="selo err">FALHOU</span>
+            <b>Prazo criado aparece na lista da Agenda</b>
+          </div>
+          <div class="passos">
+            <div class="passo"><span class="n">1</span> Abre uma movimentação e clica em “Criar prazo”</div>
+            <div class="passo"><span class="n">2</span> Preenche data inicial (hoje) e fatal (+15 dias)</div>
+            <div class="passo"><span class="n">3</span> Vai pra Agenda → aba Eventos</div>
+            <div class="passo falhou"><span class="n">4</span> Procura o prazo pelo título — <b>não encontrou</b></div>
+            <div class="passo"><span class="n">5</span> Vai pra aba Calendário — encontrou</div>
+          </div>
+          <div class="veredito err">
+            <b>O mesmo evento existe numa aba e não na outra.</b> É a assinatura de filtro ou
+            corte de consulta, não de dado faltando — o registro está no banco.
+          </div>
+        </div>
+
+        <div class="card conf">
+          <div class="conf-cab">
+            <span class="selo ok">PASSOU</span>
+            <b>Tarefa atribuída cai na lista de quem recebeu</b>
+          </div>
+          <div class="passos">
+            <div class="passo"><span class="n">1</span> Cria tarefa como Dono, responsável = Gestor</div>
+            <div class="passo"><span class="n">2</span> Sai, entra como Gestor</div>
+            <div class="passo"><span class="n">3</span> A tarefa está na Agenda dele ✓</div>
+          </div>
+        </div>
+
+        <div class="card conf">
+          <div class="conf-cab">
+            <span class="selo ok">PASSOU</span>
+            <b>Ponto não aparece pra quem não recebeu o módulo</b>
+          </div>
+          <div class="passos">
+            <div class="passo"><span class="n">1</span> Entra como Atendente — item “Ponto” some do menu ✓</div>
+            <div class="passo"><span class="n">2</span> Digita <code>/ponto</code> na URL — tela nega ✓</div>
+          </div>
+        </div>
+        <div class="card conf">
+          <div class="conf-cab">
+            <span class="selo ok">PASSOU</span>
+            <b>Movimentação sem documento explica o motivo</b>
+          </div>
+          <div class="passos">
+            <div class="passo"><span class="n">1</span> Abre a movimentação mais recente do processo semeado</div>
+            <div class="passo"><span class="n">2</span> Ou mostra o teor, ou diz por que não tem ✓</div>
+          </div>
+        </div>
+
+        <div class="card conf">
+          <div class="conf-cab">
+            <span class="selo ok">PASSOU</span>
+            <b>Cliente criado abre a própria ficha</b>
+          </div>
+          <div class="passos">
+            <div class="passo"><span class="n">1</span> Cria cliente, clica nele na lista</div>
+            <div class="passo"><span class="n">2</span> A ficha abre com o nome certo ✓</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="nota">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><path d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" stroke="#b45309" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="txt">
+        <b>O robô entra com um escritório de teste que ele mesmo cria e apaga no fim</b> — nenhum
+        dado seu é tocado, e nenhum botão destrutivo é clicado. O que ele não faz: conferir número
+        de relatório, valor de cálculo ou texto de contrato. Ele responde “a tela funciona e mostra
+        o que deveria”, não “a conta está certa” — para isso quem responde é o robô auditor, no banco.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

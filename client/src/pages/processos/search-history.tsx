@@ -214,7 +214,7 @@ export function SearchHistorySidebar({
                 className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/40 group cursor-pointer"
                 onClick={() => onSelect(f.tipo, f.valor)}
               >
-                <Star className="h-3 w-3 text-amber-500 shrink-0" />
+                <Star className="h-3 w-3 text-warning shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs truncate">{f.nome || f.valor}</p>
                   <Badge variant="outline" className="text-[9px] px-1 py-0">
@@ -272,7 +272,7 @@ export function SearchHistorySidebar({
                   className="opacity-0 group-hover:opacity-100"
                   title="Favoritar"
                 >
-                  <Star className="h-3 w-3 text-muted-foreground hover:text-amber-500" />
+                  <Star className="h-3 w-3 text-muted-foreground hover:text-warning" />
                 </button>
                 <button
                   onClick={(e) => {
@@ -306,7 +306,7 @@ export function KeywordAlertsButton() {
           <Bell className="h-3.5 w-3.5 mr-1" />
           Alertas
           {items.length > 0 && (
-            <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] bg-blue-500 border-0">
+            <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[9px] bg-info border-0">
               {items.length}
             </Badge>
           )}
@@ -360,7 +360,7 @@ export function KeywordAlertsButton() {
                 key={a.id}
                 className="flex items-center gap-2 px-2 py-1 rounded bg-muted/40"
               >
-                <Bell className="h-3 w-3 text-blue-500" />
+                <Bell className="h-3 w-3 text-info" />
                 <span className="text-xs flex-1">{a.palavra}</span>
                 <button
                   onClick={() => remove(a.id)}

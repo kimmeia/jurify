@@ -208,9 +208,26 @@ describe("marcarCredencialExpirada — notificação ao user", () => {
     dbState.proximoSelect = [];
 
     await expect(marcarCredencialExpirada(999, "tentativa em ghost")).resolves.toBeUndefined();
-    // Update ainda roda (best-effort)
+    // O UPDATE deixou de sair. Antes ele rodava "best-effort" contra um id que
+    // não existe — zero linhas afetadas, mesmo efeito. Agora a função sai
+    // antes, porque a mesma saída antecipada protege o caso que importa:
+    // credencial `removida` não pode ser marcada "expirada" e voltar pra lista
+    // do cofre.
     const upd = dbState.updates.find((u) => u.table === "cofre_credenciais");
-    expect(upd).toBeDefined();
+    expect(upd).toBeUndefined();
+    expect(emitirNotificacao).not.toHaveBeenCalled();
+  });
+
+  it("NÃO marca expirada credencial que o dono removeu", async () => {
+    dbState.proximoSelect = [
+      { status: "removida", apelido: "C1", sistema: "pje_tjce", criadoPor: 7 },
+    ];
+
+    await marcarCredencialExpirada(42, "login falhou");
+
+    // O caso real: a linha saía de `removida` pra `expirada` e reaparecia no
+    // cofre minutos depois de o dono ter apagado.
+    expect(dbState.updates.find((u) => u.table === "cofre_credenciais")).toBeUndefined();
     expect(emitirNotificacao).not.toHaveBeenCalled();
   });
 });

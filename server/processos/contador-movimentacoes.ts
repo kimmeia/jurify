@@ -28,11 +28,14 @@ import { eventosProcesso } from "../../drizzle/schema";
  */
 export const DIAS_JANELA_MOVIMENTACOES = 30;
 
-export async function contarMovimentacoesNaoLidas(escritorioId: number): Promise<number> {
+export async function contarMovimentacoesNaoLidas(
+  escritorioId: number,
+  dias: number = DIAS_JANELA_MOVIMENTACOES,
+): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
 
-  const desde = new Date(Date.now() - DIAS_JANELA_MOVIMENTACOES * 86_400_000);
+  const desde = new Date(Date.now() - dias * 86_400_000);
   const [row] = await db
     .select({ n: sql<number>`COUNT(*)` })
     .from(eventosProcesso)

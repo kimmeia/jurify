@@ -18,6 +18,8 @@
  * ativo — qualquer ocorrência em passivo já justifica o alerta.
  */
 
+import { documentosNoTexto } from "../../shared/nova-acao-polo";
+
 export type Polo = "ativo" | "passivo" | "terceiro";
 export type PoloIdentificado = Polo | "desconhecido";
 
@@ -99,10 +101,18 @@ export function identificarPoloDoCliente(
   const searchKeyDigitos = digitosDe(searchKey);
   const polosEncontrados = new Set<Polo>();
 
-  // Camada 1: match por documento (preferido)
+  // Camada 1: match por documento (preferido). O documento pode estar no
+  // campo próprio OU escrito dentro do nome — o TJCE devolve a parte como
+  // "NOME - CPF: 810.665.623-34 (AUTOR)", tudo numa célula, e só olhar o
+  // campo deixava o cliente sem polo (e a ação do próprio escritório virava
+  // alerta).
   for (const parte of partes) {
     const docDigitos = digitosDe(parte.documento);
     if (docDigitos && searchKeyDigitos && docDigitos === searchKeyDigitos) {
+      polosEncontrados.add(parte.polo);
+      continue;
+    }
+    if (searchKeyDigitos.length >= 11 && documentosNoTexto(parte.nome).includes(searchKeyDigitos)) {
       polosEncontrados.add(parte.polo);
     }
   }
@@ -121,7 +131,12 @@ export function identificarPoloDoCliente(
   // Prioridade: passivo > terceiro > ativo. Cliente aparecendo como
   // passivo (mesmo que também apareça como ativo, ex: reconvenção) é
   // alerta válido.
+  //
+  // "ativo" é afirmado, não assumido: é o único valor que faz o cron
+  // silenciar o alerta, e chegar nele por eliminação seria esconder um caso
+  // por falta de informação.
   if (polosEncontrados.has("passivo")) return "passivo";
   if (polosEncontrados.has("terceiro")) return "terceiro";
-  return "ativo";
+  if (polosEncontrados.has("ativo")) return "ativo";
+  return "desconhecido";
 }

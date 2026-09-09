@@ -1,0 +1,122 @@
+/**
+ * Comparação de telefone brasileiro entre fontes que digitam diferente.
+ *
+ * O mesmo número aparece no sistema de várias formas: o compromisso da agenda
+ * costuma trazer o que a secretária digitou ("8597965706"), o contato do CRM
+ * veio do WhatsApp com código do país e o nono dígito ("5585997965706"), e a
+ * ficha pode ter máscara ("(85) 99796-5706"). Comparar string com string
+ * erraria em todos esses pares, e o clique no telefone abriria "nova conversa"
+ * pra alguém que já tem conversa aberta.
+ *
+ * A chave normalizada é DDD + os 8 dígitos finais: é o que sobrevive às três
+ * variações. O nono dígito é descartado de propósito — ele foi acrescentado a
+ * celulares antigos e um mesmo número existe gravado das duas formas.
+ */
+
+function digitos(v: string): string {
+  return v.replace(/\D/g, "");
+}
+
+/**
+ * "DDD + 8 dígitos" quando dá pra reconhecer o formato; `null` quando não dá
+ * (fixo de 8 dígitos sem DDD, número estrangeiro, campo com lixo).
+ *
+ * Devolver `null` em vez de chutar é o que impede dois números diferentes de
+ * casarem por acidente — no caso de dúvida, é melhor abrir uma conversa nova
+ * do que jogar o atendente na conversa de outra pessoa.
+ */
+export function chaveTelefoneBR(valor: string | null | undefined): string | null {
+  if (!valor) return null;
+  let d = digitos(valor);
+
+  // Código do país. Só corta quando o resto continua tendo tamanho de número
+  // nacional — "55" também é DDD (RS), e cortar cegamente quebraria o Sul.
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+
+  if (d.length !== 10 && d.length !== 11) return null;
+
+  const ddd = d.slice(0, 2);
+  let resto = d.slice(2);
+  if (resto.length === 9) {
+    // Nono dígito: só existe em celular e sempre é 9. Se não for, o número
+    // não está no formato que esta função entende.
+    if (resto[0] !== "9") return null;
+    resto = resto.slice(1);
+  }
+  return `${ddd}${resto}`;
+}
+
+/**
+ * Máscara de digitação BR: `(85) 99796-5706`.
+ *
+ * Aceita até 11 dígitos (DDD + 9 do celular) e vai formatando parcialmente
+ * enquanto a pessoa digita — `"1199999"` já vira `"(11) 9999-9"`.
+ *
+ * O DDI é descartado antes de formatar: contato salvo pelo WhatsApp vem
+ * `5585997965706`, e cortar os 11 primeiros dígitos daria `(55) 85997-9657` —
+ * um número que não existe. Vale tanto pra exibir o que está no banco quanto
+ * pra quem cola o número com o +55 na frente.
+ */
+export function mascararTelefoneBR(valor: string | null | undefined): string {
+  let bruto = digitos(String(valor ?? ""));
+  if (bruto.length >= 12 && bruto.startsWith("55")) bruto = bruto.slice(2);
+  const d = bruto.slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+/**
+ * Link do WhatsApp Web: `https://wa.me/5585997965706`.
+ *
+ * O wa.me só aceita formato internacional, e o número chega aqui dos dois
+ * jeitos: o que nasceu do WhatsApp já vem "5585997965706", o do cadastro à
+ * mão vem "(85) 99796-5706". Prefixar 55 sempre dava `wa.me/555585…`; nunca
+ * prefixar dava `wa.me/85997965706` — os dois "número inválido" no WhatsApp.
+ * Mesma régua de `mascararTelefoneBR`: "55" com 10/11 dígitos é DDD (RS).
+ */
+export function telefoneParaWaMe(valor: string | null | undefined): string | null {
+  const d = digitos(String(valor ?? ""));
+  if (!d) return null;
+  const internacional = d.length >= 12 && d.startsWith("55") ? d : `55${d}`;
+  return `https://wa.me/${internacional}`;
+}
+
+export const MENSAGEM_WHATSAPP_OBRIGATORIO =
+  "Informe um WhatsApp com DDD — é obrigatório pra criar a conta.";
+
+/**
+ * WhatsApp digitado no cadastro, pronto pra gravar: só dígitos, sem o DDI,
+ * `null` quando não é um número brasileiro que dá pra chamar.
+ *
+ * O campo é a única forma de contato comercial que o cadastro pede, então
+ * "qualquer coisa com dígitos" não serve: "8599" ou "(55) 85997-9657" (o DDI
+ * colado como DDD) gravariam um número que o botão "Abrir WhatsApp" nunca
+ * alcança. Aceita fixo (DDD + 8) e celular (DDD + 9 + 8); o DDI é cortado com
+ * a mesma régua de `mascararTelefoneBR` — "55" com 10/11 dígitos é DDD (RS).
+ */
+export function normalizarWhatsappCadastro(valor: string | null | undefined): string | null {
+  let d = digitos(String(valor ?? ""));
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  if (d.length !== 10 && d.length !== 11) return null;
+  if (d[0] === "0") return null;
+  if (d.length === 11 && d[2] !== "9") return null;
+  return d;
+}
+
+/** Os dois valores apontam pro mesmo telefone? */
+export function mesmoTelefone(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const ka = chaveTelefoneBR(a);
+  const kb = chaveTelefoneBR(b);
+  if (ka && kb) return ka === kb;
+  // Sem formato reconhecível dos dois lados, só igualdade literal dos dígitos
+  // conta — e nunca com string vazia, que casaria com qualquer outro vazio.
+  const da = a ? digitos(a) : "";
+  const db = b ? digitos(b) : "";
+  return da.length > 0 && da === db;
+}

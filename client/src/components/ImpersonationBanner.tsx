@@ -52,22 +52,22 @@ export function ImpersonationBanner({ alvoNome }: { alvoNome: string }) {
   const escritorio = contexto.data?.escritorioNome;
 
   return (
-    <div className="flex items-stretch border-b border-amber-300 bg-amber-50 sticky top-0 z-50 dark:border-amber-900/70 dark:bg-amber-950/40">
-      <span className="w-1 shrink-0 bg-amber-500" />
+    <div className="flex items-stretch border-b border-warning/30 bg-warning-bg sticky top-0 z-50 dark:border-warning/30">
+      <span className="w-1 shrink-0 bg-warning" />
       <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-x-2.5 px-3 py-1.5">
-        <span className="hidden shrink-0 items-center gap-1.5 rounded border border-amber-400/60 bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-amber-900 sm:inline-flex dark:border-amber-800 dark:bg-amber-900/50 dark:text-amber-200">
+        <span className="hidden shrink-0 items-center gap-1.5 rounded border border-warning/30 bg-warning-bg px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-warning-fg sm:inline-flex dark:border-warning/30 dark:text-warning">
           <Eye className="h-3 w-3" />
           Vendo como
         </span>
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-warning-on">
             {iniciais(nome)}
           </span>
-          <span className="min-w-0 truncate text-[13px] font-semibold text-amber-950 dark:text-amber-100">
+          <span className="min-w-0 truncate text-[13px] font-semibold text-warning-fg">
             {nome}
           </span>
           {escritorio && (
-            <span className="hidden min-w-0 truncate text-[11.5px] text-amber-800/70 lg:inline dark:text-amber-200/60">
+            <span className="hidden min-w-0 truncate text-[11.5px] text-warning-fg/70 lg:inline dark:text-warning/60">
               · {escritorio}
             </span>
           )}
@@ -76,15 +76,15 @@ export function ImpersonationBanner({ alvoNome }: { alvoNome: string }) {
           <span
             className={
               urgente
-                ? "hidden shrink-0 items-center gap-1.5 text-[11.5px] font-bold tabular-nums text-rose-700 md:inline-flex dark:text-rose-300"
-                : "hidden shrink-0 items-center gap-1.5 text-[11.5px] tabular-nums text-amber-800 md:inline-flex dark:text-amber-200/80"
+                ? "hidden shrink-0 items-center gap-1.5 text-[11.5px] font-bold tabular-nums text-danger-fg md:inline-flex dark:text-danger"
+                : "hidden shrink-0 items-center gap-1.5 text-[11.5px] tabular-nums text-warning-fg md:inline-flex dark:text-warning/80"
             }
           >
             <Clock className="h-3.5 w-3.5" />
             expira em {formatarRestante(restanteMs)}
           </span>
         )}
-        <span className="hidden shrink-0 items-center gap-1.5 text-[11.5px] text-amber-800/80 xl:inline-flex dark:text-amber-200/70">
+        <span className="hidden shrink-0 items-center gap-1.5 text-[11.5px] text-warning-fg/80 xl:inline-flex dark:text-warning/70">
           <ShieldCheck className="h-3.5 w-3.5" />
           ações auditadas
         </span>
@@ -92,7 +92,7 @@ export function ImpersonationBanner({ alvoNome }: { alvoNome: string }) {
           type="button"
           onClick={() => encerrar.mutate()}
           disabled={encerrar.isPending}
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-amber-900 px-2.5 text-[12px] font-semibold text-amber-50 hover:bg-amber-950 disabled:opacity-60 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-warning px-2.5 text-[12px] font-semibold text-warning-on hover:bg-warning disabled:opacity-60"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           {encerrar.isPending ? "Voltando…" : "Voltar ao admin"}

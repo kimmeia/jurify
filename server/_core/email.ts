@@ -12,6 +12,7 @@
  */
 
 import { createLogger } from "./logger";
+import { ehEmailDeTeste } from "../../shared/escritorio-de-teste";
 const log = createLogger("email");
 
 const APP_URL = process.env.APP_URL || process.env.VITE_APP_URL || "https://juridflow.com.br";
@@ -149,6 +150,15 @@ export async function enviarEmail(options: EmailOptions): Promise<{ success: boo
     return { success: false, error: "Email options ausente." };
   }
   const tipo = options.tipo ?? "outro";
+  // O robô de jornada navega com contas @jurify.test. Toda integração de
+  // saída é por escritório e o dele nasce sem nenhuma — menos e-mail, que é
+  // global. Sem esta trava, um passo que clicasse em "reenviar convite"
+  // gastaria cota do Resend e produziria bounce de verdade.
+  if (ehEmailDeTeste(options.to)) {
+    log.info({ to: options.to, tipo }, "envio bloqueado: destinatário de escritório de teste");
+    return { success: false, error: "Destinatário de teste — envio bloqueado de propósito." };
+  }
+
   if (!options.to || typeof options.to !== "string" || !options.to.trim()) {
     log.error({ options }, "enviarEmail chamado sem 'to' válido");
     const erroMsg = "Destinatário (to) ausente.";
@@ -493,17 +503,19 @@ export async function enviarEmailTrialFaltam3Dias(params: {
   email: string;
   nome: string;
   planoNome: string;
+  /** Plano sob consulta: o CTA vira a conversa (wa.me), não uma tela sem checkout. */
+  cta?: { label: string; url: string };
 }): Promise<{ success: boolean; error?: string }> {
-  const link = `${APP_URL}/configuracoes?tab=meu-plano`;
+  const link = params.cta?.url ?? `${APP_URL}/configuracoes?tab=meu-plano`;
   const html = templateTrialBase({
     titulo: "Seu trial termina em 3 dias",
     saudacao: `Olá ${params.nome || "Usuário"},`,
     corpo: `Seu trial do plano <strong>${params.planoNome}</strong> termina em 3 dias. Adicione uma forma de pagamento agora pra continuar usando o JuridFlow sem interrupção.`,
-    ctaLabel: "Adicionar pagamento",
+    ctaLabel: params.cta?.label ?? "Adicionar pagamento",
     ctaUrl: link,
     rodape: "Se preferir não continuar, é só ignorar este email — sua conta será automaticamente desativada no fim do período.",
   });
-  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina em 3 dias.\n\nAdicione forma de pagamento: ${link}`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina em 3 dias.\n\n${params.cta?.label ?? "Adicione forma de pagamento"}: ${link}`;
   return enviarEmail({
     to: params.email,
     subject: "Seu trial JuridFlow termina em 3 dias",
@@ -517,16 +529,17 @@ export async function enviarEmailTrialFaltam1Dia(params: {
   email: string;
   nome: string;
   planoNome: string;
+  cta?: { label: string; url: string };
 }): Promise<{ success: boolean; error?: string }> {
-  const link = `${APP_URL}/configuracoes?tab=meu-plano`;
+  const link = params.cta?.url ?? `${APP_URL}/configuracoes?tab=meu-plano`;
   const html = templateTrialBase({
     titulo: "Seu trial termina amanhã",
     saudacao: `Olá ${params.nome || "Usuário"},`,
     corpo: `Última chamada: seu trial do plano <strong>${params.planoNome}</strong> termina amanhã. Adicione forma de pagamento agora pra não perder acesso.`,
-    ctaLabel: "Continuar com o plano",
+    ctaLabel: params.cta?.label ?? "Continuar com o plano",
     ctaUrl: link,
   });
-  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina amanhã.\n\nContinuar: ${link}`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} termina amanhã.\n\n${params.cta?.label ?? "Continuar"}: ${link}`;
   return enviarEmail({
     to: params.email,
     subject: "Seu trial JuridFlow termina amanhã",
@@ -540,17 +553,18 @@ export async function enviarEmailTrialExpirou(params: {
   email: string;
   nome: string;
   planoNome: string;
+  cta?: { label: string; url: string };
 }): Promise<{ success: boolean; error?: string }> {
-  const link = `${APP_URL}/configuracoes?tab=meu-plano`;
+  const link = params.cta?.url ?? `${APP_URL}/configuracoes?tab=meu-plano`;
   const html = templateTrialBase({
     titulo: "Seu trial expirou",
     saudacao: `Olá ${params.nome || "Usuário"},`,
     corpo: `Seu trial do plano <strong>${params.planoNome}</strong> expirou. Pra continuar usando o JuridFlow, assine um plano agora.`,
-    ctaLabel: "Assinar plano",
+    ctaLabel: params.cta?.label ?? "Assinar plano",
     ctaUrl: link,
     rodape: "Seus dados continuam guardados — você pode voltar a qualquer momento.",
   });
-  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} expirou.\n\nAssinar: ${link}`;
+  const text = `Olá ${params.nome || "Usuário"},\n\nSeu trial do plano ${params.planoNome} expirou.\n\n${params.cta?.label ?? "Assinar"}: ${link}`;
   return enviarEmail({
     to: params.email,
     subject: "Seu trial JuridFlow expirou",

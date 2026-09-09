@@ -155,3 +155,13 @@ simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
 - [ ] Apelação da conta antiga banida — protocolo `#2655121:WBxP-849705580-840938876`.
       NÃO clicar "Já resolvi" no banner até a Meta reinstaurar.
 - [ ] Remover inscrição do app legado `1641...` das WABAs.
+
+### Estado em 03/09/2026
+
+Os quatro itens acima só o dono consegue conferir (painel da Meta) — não
+foram re-conferidos daqui. Fatos novos desde julho: dois avisos "Sending
+spam" (19/08 e 22/08, análise até 20/11), plano de 14 dias sem disparo frio
+até ~05/09 e NÃO clicar "solicitar análise" antes; App Secret pra validação
+HMAC do webhook vem de `admin_integracoes` (painel) ou `META_APP_SECRET_EXTRA`
+— sem ele o webhook aceita com warning. Detalhe em `CLAUDE.md` (pendência 0)
+e `auditoria-meta-whatsapp-2026-08-19.md`.

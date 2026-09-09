@@ -40,13 +40,17 @@ describe("tribunais-pdpj (registro central)", () => {
     // Smoke: cada TJ habilitado aponta pro próprio portal — não pode
     // cair em pje.tjce.jus.br por engano.
     const casos: [string, string][] = [
-      ["tjrj", "https://pje.tjrj.jus.br/"],
+      // TJRJ foge do padrão: tribunal-como-subdomínio do pje.jus.br —
+      // pje.tjrj.jus.br nem resolve DNS (validação do Cofre, 20/08).
+      ["tjrj", "https://tjrj.pje.jus.br/1g/login.seam"],
       ["tjmg", "https://pje.tjmg.jus.br/"],
-      ["tjrn", "https://pje.tjrn.jus.br/"],
+      // Endereços reais confirmados na validação de 20/08 (o derivado caía
+      // em portal institucional ou não respondia).
+      ["tjrn", "https://pje1g.tjrn.jus.br/pje/login.seam"],
       ["tjma", "https://pje.tjma.jus.br/"],
-      ["tjpa", "https://pje.tjpa.jus.br/"],
-      ["tjro", "https://pje.tjro.jus.br/"],
-      ["tjpe", "https://pje.tjpe.jus.br/"],
+      ["tjpa", "https://pje.tjpa.jus.br/pje/login.seam"],
+      ["tjro", "https://pjepg.tjro.jus.br/pje/login.seam"],
+      ["tjpe", "https://pje.cloud.tjpe.jus.br/1g/login.seam"],
       ["tjpb", "https://pje.tjpb.jus.br/"],
       ["tjmt", "https://pje.tjmt.jus.br/"],
       ["tjrr", "https://pje.tjrr.jus.br/"],
@@ -86,9 +90,9 @@ describe("configPorSistema (login tribunal-aware)", () => {
   it("Lote 1: cada sistema cofre PJe-TJ leva ao portal correto", () => {
     // Garante que cred "pje_tjmg" não cai no portal TJCE
     expect(configPorSistema("pje_tjmg")?.urlEntrada).toBe("https://pje.tjmg.jus.br/");
-    expect(configPorSistema("pje_tjrj")?.urlEntrada).toBe("https://pje.tjrj.jus.br/");
-    expect(configPorSistema("pje_tjrn")?.urlEntrada).toBe("https://pje.tjrn.jus.br/");
-    expect(configPorSistema("pje_tjpe")?.urlEntrada).toBe("https://pje.tjpe.jus.br/");
+    expect(configPorSistema("pje_tjrj")?.urlEntrada).toBe("https://tjrj.pje.jus.br/1g/login.seam");
+    expect(configPorSistema("pje_tjrn")?.urlEntrada).toBe("https://pje1g.tjrn.jus.br/pje/login.seam");
+    expect(configPorSistema("pje_tjpe")?.urlEntrada).toBe("https://pje.cloud.tjpe.jus.br/1g/login.seam");
   });
 
   it("pje_tjdft (cofre) resolve via alias pra config do TJDF", () => {

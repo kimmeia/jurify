@@ -56,6 +56,10 @@ function rowParaPlano(row: PlanoRow): Plano {
     precoMensalCentavos: row.precoMensalCentavos,
     precoAnualCentavos: row.precoAnualCentavos,
     trialDias: row.trialDias,
+    precoSobConsulta: row.precoSobConsulta,
+    ctaDemonstracao: row.ctaDemonstracao,
+    atendentesInclusos: row.atendentesInclusos,
+    precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
     limites: {
       maxUsuarios: row.maxUsuarios,
       maxArmazenamentoMB: row.maxArmazenamentoMb,
@@ -63,6 +67,7 @@ function rowParaPlano(row: PlanoRow): Plano {
       maxConexoesWhatsapp: row.maxConexoesWhatsapp,
       maxAgentesIa: row.maxAgentesIa,
       maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
+      maxMonitoramentosCpf: row.maxMonitoramentosCpf,
       creditosCalculosMes: row.creditosCalculosMes,
       jurisiaMensagensMes: row.jurisiaMensagensMes,
     },
@@ -175,4 +180,17 @@ export async function deletarPlano(id: number): Promise<void> {
   if (!db) throw new Error("DB indisponível");
   await db.delete(planos).where(eq(planos.id, id));
   invalidarCachePlanos();
+}
+
+/**
+ * Slug pra cópia de um plano: "<base>-copia", com sufixo numérico enquanto
+ * colidir com um slug existente. Duplicar duas vezes o mesmo plano gera
+ * "-copia" e "-copia-2", não um erro de UNIQUE.
+ */
+export function gerarSlugCopia(slugOriginal: string, slugsExistentes: ReadonlySet<string>): string {
+  const base = `${slugOriginal}-copia`;
+  if (!slugsExistentes.has(base)) return base;
+  let n = 2;
+  while (slugsExistentes.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
 }

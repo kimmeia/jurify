@@ -127,7 +127,7 @@ export async function revalidarCofreCredenciais(
 
       if (resultado.ok && resultado.storageStateJson) {
         const expira = new Date(Date.now() + 90 * 60 * 1000);
-        await salvarSessao(c.id, resultado.storageStateJson, expira);
+        await salvarSessao(c.id, cfgTribunal.tribunal, resultado.storageStateJson, expira);
         okeis++;
         log.info({ credencialId: c.id, escritorioId: c.escritorioId }, "[cron-cofre] sessão renovada");
 

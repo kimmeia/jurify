@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --corpo:#334155; --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff;
+    --ok:#059669; --ok-bg:#ecfdf5; --rosa:#e11d48; --rosa-bg:#fff1f2;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); display:flex; }
+
+  /* sidebar */
+  .side { width:200px; background:#12141c; color:#cbd5e1; padding:14px 0; display:flex; flex-direction:column; flex:0 0 auto; }
+  .logo { display:flex; align-items:center; gap:8px; padding:0 16px 14px; color:#fff; font-family:'Poppins'; font-weight:700; font-size:15px; }
+  .logo .j { width:26px; height:26px; border-radius:8px; background:var(--acento); display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .sgrupo { font-size:8.5px; font-weight:800; letter-spacing:.08em; color:#64748b; padding:10px 16px 4px; }
+  .sitem { display:flex; align-items:center; gap:9px; padding:6.5px 16px; font-size:11.5px; font-weight:500; color:#94a3b8; }
+  .sitem.on { color:#fff; background:#ffffff10; border-left:3px solid var(--acento); padding-left:13px; font-weight:700; }
+  .sitem .bd { margin-left:auto; background:#dc2626; color:#fff; font-size:8.5px; font-weight:800; border-radius:8px; padding:1px 6px; }
+
+  .main { flex:1; padding:22px 28px; overflow:hidden; position:relative; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:24px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:12.5px; color:var(--mudo); }
+
+  /* linha única: abas + botões */
+  .linha-abas { display:flex; align-items:center; gap:10px; margin-top:14px; }
+  .pills { display:flex; gap:2px; background:#e9edf3; border-radius:12px; padding:4px; }
+  .pill { height:32px; display:flex; align-items:center; gap:6px; border-radius:9px; padding:0 12px; font-size:12.5px; font-weight:600; color:var(--mudo); }
+  .pill.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1f; }
+  .acoes { margin-left:auto; display:flex; gap:8px; }
+  .btn { height:32px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+         padding:0 12px; display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--corpo); }
+  .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; box-shadow:0 4px 12px -4px #7c3aed88; }
+
+  /* barra de filtros */
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .fbar { margin-top:12px; padding:10px 12px; display:flex; align-items:center; gap:9px; position:relative; }
+  .presets { display:flex; gap:2px; background:#eef1f6; border-radius:9px; padding:3px; }
+  .preset { height:26px; display:flex; align-items:center; border-radius:7px; padding:0 10px; font-size:11px; font-weight:600; color:var(--mudo); }
+  .preset.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 2px #0f172a1a; }
+  .filtro { height:32px; border:1px solid var(--borda); border-radius:9px; display:flex; align-items:center; gap:7px; padding:0 10px; position:relative; }
+  .filtro.aberto { border-color:var(--acento); box-shadow:0 0 0 3px #7c3aed22; }
+  .filtro .rot { font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .filtro .val { font-size:12px; font-weight:600; color:var(--tinta); }
+  .filtro .val.tudo { color:var(--mudo); font-weight:500; }
+  .filtro .caret { font-size:9px; color:var(--fraco); }
+  .filtro .num { background:var(--acento); color:#fff; font-size:9.5px; font-weight:800; border-radius:8px; padding:1px 6px; }
+  .comparar { margin-left:auto; height:32px; border:1px solid var(--borda); border-radius:9px; display:flex; align-items:center; gap:8px; padding:0 11px; font-size:11.5px; color:var(--corpo); }
+  .cbx { width:15px; height:15px; border-radius:4px; border:1.6px solid #cbd5e1; flex:0 0 auto; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:800; }
+  .cbx.on { background:var(--acento); border-color:var(--acento); }
+
+  /* popover multi-seleção */
+  .pop { position:absolute; top:calc(100% + 8px); left:0; width:316px; z-index:7;
+         background:#fff; border:1px solid var(--borda); border-radius:13px; padding:11px;
+         box-shadow:0 24px 50px -18px #0f172a44; }
+  .pop-busca { height:34px; border:1px solid var(--borda); border-radius:8px; display:flex; align-items:center;
+               gap:8px; padding:0 10px; font-size:12.5px; color:var(--fraco); margin-bottom:4px; }
+  .pop-sec { font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+             color:var(--fraco); margin:9px 0 5px; display:flex; align-items:center; justify-content:space-between; }
+  .pop-sec .todos { color:var(--acento); font-size:10.5px; font-weight:700; text-transform:none; letter-spacing:0; }
+  .row-p { display:flex; align-items:center; gap:9px; padding:6px 5px; border-radius:7px; }
+  .row-p.on { background:#f5f3ff; }
+  .row-p .nome { flex:1; font-size:12.8px; font-weight:500; color:#1e293b; display:flex; align-items:center; gap:7px; }
+  .row-p .qtd { font-size:11px; color:var(--fraco); font-weight:600; }
+  .av { width:20px; height:20px; border-radius:50%; color:#fff; font-size:8px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+  .pop-rod { border-top:1px solid var(--hairline); margin-top:9px; padding-top:9px;
+             display:flex; align-items:center; justify-content:space-between; }
+  .pop-rod .lim { font-size:11.5px; color:var(--mudo); font-weight:600; }
+  .pop-rod .apl { background:var(--acento); color:#fff; font-size:11.5px; font-weight:700; border-radius:7px; padding:6px 14px; }
+
+  /* conteúdo do relatório */
+  .kpis { margin-top:12px; display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .kpi { padding:12px 14px; }
+  .kpi .rot { font-size:9.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--fraco); }
+  .kpi .v { margin-top:5px; font-size:22px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:baseline; gap:8px; }
+  .delta { font-size:10.5px; font-weight:700; border-radius:6px; padding:2px 6px; }
+  .delta.up { background:var(--ok-bg); color:var(--ok); }
+  .delta.dn { background:var(--rosa-bg); color:var(--rosa); }
+  .kpi .ant { margin-top:4px; font-size:10.5px; color:var(--fraco); }
+  .grafico { margin-top:12px; padding:14px 16px; }
+  .grafico .t { font-size:13px; font-weight:700; display:flex; align-items:center; gap:8px; }
+  .barras { margin-top:12px; display:flex; align-items:flex-end; gap:4px; height:150px; }
+  .barras div { flex:1; background:#8b5cf6; border-radius:4px 4px 0 0; }
+  .barras div.fds { opacity:.3; }
+  .eixo { display:flex; justify-content:space-between; margin-top:6px; font-size:10px; color:var(--fraco); }
+
+  .chip-nota { position:absolute; font-size:10.5px; font-weight:800; background:#f59e0b; color:#451a03;
+               border-radius:7px; padding:4px 10px; box-shadow:0 4px 14px #0f172a33; z-index:8; }
+  .nota { margin-top:12px; display:flex; align-items:center; gap:10px; padding:10px 14px; }
+  .nota .d { font-size:11px; color:var(--mudo); line-height:1.5; }
+  .nota b { color:var(--corpo); font-weight:600; }
+  .micro { position:absolute; top:24px; right:28px; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); text-align:right; }
+</style>
+</head>
+<body>
+
+  <aside class="side">
+    <div class="logo"><span class="j">J</span> JuridFlow</div>
+    <div class="sgrupo">DIA A DIA</div>
+    <div class="sitem">Dashboard</div>
+    <div class="sitem">Agenda <span class="bd">36</span></div>
+    <div class="sitem">Atendimento <span class="bd">5</span></div>
+    <div class="sgrupo">CARTEIRA</div>
+    <div class="sitem">Clientes</div>
+    <div class="sitem">Processos <span class="bd">81</span></div>
+    <div class="sitem">Acordos</div>
+    <div class="sitem">Kanban</div>
+    <div class="sgrupo">FERRAMENTAS</div>
+    <div class="sitem">JurisIA</div>
+    <div class="sitem">Ponto</div>
+    <div class="sitem">Cálculos</div>
+    <div class="sitem">Modelos</div>
+    <div class="sitem">Automações</div>
+    <div class="sgrupo">GESTÃO</div>
+    <div class="sitem">Financeiro</div>
+    <div class="sitem on">Relatórios</div>
+    <div class="sitem">Roadmap</div>
+  </aside>
+
+  <main class="main">
+    <div class="micro">mockup pra aprovação<br>nomes fictícios</div>
+    <div class="h1">Relatórios</div>
+    <div class="sub">Atendimento, comercial, produção, agenda, cálculos e financeiro — no mesmo período</div>
+
+    <div class="linha-abas">
+      <div class="pills">
+        <div class="pill on">💬 Atendimento</div>
+        <div class="pill">📈 Comercial</div>
+        <div class="pill">🗂 Produção</div>
+        <div class="pill">📅 Agenda</div>
+        <div class="pill">🧮 Cálculos</div>
+        <div class="pill">💼 Financeiro</div>
+      </div>
+      <div class="acoes">
+        <div class="btn">🕐 Programar envio</div>
+        <div class="btn">✉ Enviar por e-mail</div>
+        <div class="btn btn-p">📄 Exportar PDF</div>
+      </div>
+    </div>
+    <div class="chip-nota" style="top:66px; right:28px">① botões sobem pra linha das abas ↓</div>
+
+    <div class="card fbar">
+      <div class="presets">
+        <div class="preset">7 dias</div>
+        <div class="preset on">30 dias</div>
+        <div class="preset">90 dias</div>
+        <div class="preset">Este mês</div>
+        <div class="preset">Personalizado</div>
+      </div>
+
+      <div class="filtro">
+        <span class="rot">Setor</span>
+        <span class="val tudo">Todos</span>
+        <span class="caret">▼</span>
+      </div>
+
+      <div class="filtro aberto">
+        <span class="rot">Atendente</span>
+        <span class="num">3</span>
+        <span class="val">Dayane, Jéssica +1</span>
+        <span class="caret">▲</span>
+
+        <div class="pop">
+          <div class="pop-busca">🔎 Buscar atendente…</div>
+          <div class="pop-sec">Atendentes <span class="todos">marcar todos · limpar</span></div>
+          <div class="row-p on"><span class="cbx on">✓</span><span class="nome"><span class="av" style="background:#7c3aed">DR</span>Dayane Rios</span><span class="qtd">124 conversas</span></div>
+          <div class="row-p on"><span class="cbx on">✓</span><span class="nome"><span class="av" style="background:#06b6d4">JA</span>Jéssica Andrade</span><span class="qtd">98</span></div>
+          <div class="row-p on"><span class="cbx on">✓</span><span class="nome"><span class="av" style="background:#f59e0b">CM</span>Carlos Menezes</span><span class="qtd">87</span></div>
+          <div class="row-p"><span class="cbx"></span><span class="nome"><span class="av" style="background:#10b981">AF</span>Ana Paula Freitas</span><span class="qtd">72</span></div>
+          <div class="row-p"><span class="cbx"></span><span class="nome"><span class="av" style="background:#f43f5e">RS</span>Rodrigo Sales</span><span class="qtd">64</span></div>
+          <div class="row-p"><span class="cbx"></span><span class="nome"><span class="av" style="background:#6366f1">ML</span>Marina Lopes</span><span class="qtd">51</span></div>
+          <div class="row-p"><span class="cbx"></span><span class="nome"><span class="av" style="background:#0ea5e9">PC</span>Pedro Cavalcante</span><span class="qtd">38</span></div>
+          <div class="row-p"><span class="cbx"></span><span class="nome"><span class="av" style="background:#a855f7">LR</span>Luana Ribeiro</span><span class="qtd">23</span></div>
+          <div class="pop-rod"><span class="lim">3 de 8 selecionados</span><span class="apl">Aplicar</span></div>
+        </div>
+      </div>
+
+      <div class="filtro">
+        <span class="rot">Canal</span>
+        <span class="num">2</span>
+        <span class="val">WhatsApp Principal +1</span>
+        <span class="caret">▼</span>
+      </div>
+
+      <div class="comparar"><span class="cbx on">✓</span> Comparar com período anterior</div>
+    </div>
+    <div class="chip-nota" style="top:193px; left:270px">② dá pra marcar vários — setor, atendente e canal →</div>
+
+    <div class="kpis">
+      <div class="card kpi"><div class="rot">Conversas</div><div class="v">309 <span class="delta up">↗ 12%</span></div><div class="ant">276 no período anterior</div></div>
+      <div class="card kpi"><div class="rot">Novos contatos</div><div class="v">87 <span class="delta up">↗ 9%</span></div><div class="ant">80 no período anterior</div></div>
+      <div class="card kpi"><div class="rot">Tempo de 1ª resposta</div><div class="v">4min <span class="delta up">↘ 18%</span></div><div class="ant">4,9min no período anterior</div></div>
+      <div class="card kpi"><div class="rot">Resolvidas</div><div class="v">241 <span class="delta dn">↘ 3%</span></div><div class="ant">248 no período anterior</div></div>
+    </div>
+
+    <div class="card grafico">
+      <div class="t">💬 Conversas por dia <span style="margin-left:auto; font-size:10.5px; color:var(--fraco); font-weight:600">somando só os 3 atendentes e 2 canais marcados</span></div>
+      <div class="barras">
+        <div style="height:42%"></div><div style="height:55%"></div><div style="height:48%"></div><div style="height:61%"></div><div style="height:52%"></div>
+        <div class="fds" style="height:18%"></div><div class="fds" style="height:12%"></div>
+        <div style="height:58%"></div><div style="height:66%"></div><div style="height:49%"></div><div style="height:72%"></div><div style="height:63%"></div>
+        <div class="fds" style="height:21%"></div><div class="fds" style="height:9%"></div>
+        <div style="height:68%"></div><div style="height:74%"></div><div style="height:57%"></div><div style="height:81%"></div><div style="height:70%"></div>
+        <div class="fds" style="height:16%"></div><div class="fds" style="height:11%"></div>
+        <div style="height:77%"></div><div style="height:85%"></div><div style="height:64%"></div><div style="height:92%"></div><div style="height:79%"></div>
+        <div class="fds" style="height:19%"></div><div class="fds" style="height:14%"></div>
+        <div style="height:88%"></div><div style="height:100%"></div>
+      </div>
+      <div class="eixo"><span>22/07</span><span>20/08</span></div>
+    </div>
+
+
+    <div class="card grafico" style="margin-top:12px; padding:14px 16px 16px">
+      <div class="t">🏅 Conversas por atendente <span style="margin-left:auto; font-size:10.5px; color:var(--fraco); font-weight:600">só os 3 marcados no filtro</span></div>
+      <div style="margin-top:12px; display:flex; flex-direction:column; gap:9px">
+        <div style="display:flex; align-items:center; gap:10px"><span class="av" style="background:#7c3aed">DR</span><span style="width:150px; font-size:12px; font-weight:600">Dayane Rios</span><div style="flex:1; height:10px; border-radius:6px; background:var(--hairline); overflow:hidden"><div style="width:100%; height:100%; background:#8b5cf6; border-radius:6px"></div></div><span style="width:34px; text-align:right; font-size:12px; font-weight:700">124</span><span style="width:36px; text-align:right; font-size:10.5px; color:var(--fraco)">40%</span></div>
+        <div style="display:flex; align-items:center; gap:10px"><span class="av" style="background:#06b6d4">JA</span><span style="width:150px; font-size:12px; font-weight:600">Jéssica Andrade</span><div style="flex:1; height:10px; border-radius:6px; background:var(--hairline); overflow:hidden"><div style="width:79%; height:100%; background:#8b5cf6; border-radius:6px"></div></div><span style="width:34px; text-align:right; font-size:12px; font-weight:700">98</span><span style="width:36px; text-align:right; font-size:10.5px; color:var(--fraco)">32%</span></div>
+        <div style="display:flex; align-items:center; gap:10px"><span class="av" style="background:#f59e0b">CM</span><span style="width:150px; font-size:12px; font-weight:600">Carlos Menezes</span><div style="flex:1; height:10px; border-radius:6px; background:var(--hairline); overflow:hidden"><div style="width:70%; height:100%; background:#8b5cf6; border-radius:6px"></div></div><span style="width:34px; text-align:right; font-size:12px; font-weight:700">87</span><span style="width:36px; text-align:right; font-size:10.5px; color:var(--fraco)">28%</span></div>
+      </div>
+    </div>
+
+    <div class="card nota">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="d"><b>Como funciona:</b> os botões Programar envio / Enviar por e-mail / Exportar PDF sobem pra linha das abas (uma linha a menos na tela). Setor, Atendente e Canal viram caixas de marcar vários: clica, marca quantos quiser, Aplicar — o botão mostra quantos estão ativos (ex.: "3 · Dayane, Jéssica +1"). "Marcar todos · limpar" resolve os extremos com um clique, e todos os números e gráficos abaixo passam a somar só o que está marcado. O PDF e o e-mail saem com os mesmos filtros aplicados.</div>
+    </div>
+  </main>
+
+</body>
+</html>

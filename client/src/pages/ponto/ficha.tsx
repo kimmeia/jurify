@@ -137,8 +137,24 @@ export default function FichaColaborador() {
   const id = Number(params?.id);
   const [ajustando, setAjustando] = useState<Jornada | null>(null);
 
+  // Mesma régua da tela de RH: sem o módulo Ponto não se abre ficha de
+  // ninguém, e nem chega a pedir os dados. O servidor já barrava, mas a URL
+  // direta rendia uma tela de erro em vez de um "isso não é seu".
+  const { data: minhasPerms, isLoading: permsCarregando } =
+    trpc.permissoes?.minhasPermissoes?.useQuery?.(undefined, {
+      retry: false,
+      refetchOnWindowFocus: false,
+    }) || { data: null, isLoading: false };
+  const podeVerPonto =
+    minhasPerms?.cargo === "Dono" ||
+    !!minhasPerms?.permissoes?.ponto?.verTodos ||
+    !!minhasPerms?.permissoes?.ponto?.verProprios;
+
   const utils = trpc.useUtils();
-  const equipe = trpc.rh.espelhoEquipe.useQuery({ competencia }, { retry: false });
+  const equipe = trpc.rh.espelhoEquipe.useQuery(
+    { competencia },
+    { retry: false, enabled: podeVerPonto },
+  );
 
   const pessoa = useMemo(
     () => ((equipe.data?.pessoas ?? []) as PessoaDaEquipe[]).find((p) => p.colaboradorId === id),
@@ -154,9 +170,23 @@ export default function FichaColaborador() {
     ? resumirJornada(normalizarJornada(pessoa.jornadaSemanal ?? null))
     : "";
 
+  // Depois de todos os hooks, sempre.
+  if (!podeVerPonto) {
+    return (
+      <div className="max-w-lg mx-auto mt-16 rounded-2xl border bg-card p-6 text-center">
+        <h1 className="text-base font-bold">Ponto não está no seu acesso</h1>
+        <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+          {permsCarregando
+            ? "Conferindo suas permissões…"
+            : "A ficha de ponto de um colaborador só abre pra quem recebeu o módulo Ponto."}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      <Link href="/ponto" className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-violet-600 hover:underline">
+      <Link href="/ponto" className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-info-fg hover:underline">
         <ArrowLeft className="h-3.5 w-3.5" />
         RH · Equipe
       </Link>
@@ -166,8 +196,7 @@ export default function FichaColaborador() {
       {equipe.isError && (
         <div className="rounded-xl border bg-card px-4 py-6 text-center">
           <p className="text-xs text-muted-foreground">
-            Só quem gerencia a equipe pode abrir a ficha de outra pessoa. O seu próprio ponto está
-            em <Link href="/ponto" className="font-semibold text-violet-600 hover:underline">RH</Link>.
+            Não consegui carregar a equipe agora. Tente de novo em instantes.
           </p>
         </div>
       )}
@@ -183,7 +212,7 @@ export default function FichaColaborador() {
       {pessoa && (
         <>
           <div className="flex flex-wrap items-center gap-2">
-            <Clock className="h-5 w-5 text-violet-600" />
+            <Clock className="h-5 w-5 text-info-fg" />
             <div>
               <h1 className="text-lg font-extrabold">
                 {pessoa.nome}

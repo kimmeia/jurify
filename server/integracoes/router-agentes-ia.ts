@@ -88,6 +88,7 @@ export async function exigirPermAgente(
   return perm;
 }
 import { decrypt as adminDecrypt } from "../escritorio/crypto-utils";
+import { encryptApiKey, decryptApiKey } from "./agentes-api-key-crypto";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -95,7 +96,6 @@ import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-agentes-ia");
 
-const ENCRYPTION_KEY = process.env.CANAIS_ENCRYPTION_KEY || "0".repeat(64);
 const UPLOAD_DIR = path.resolve("./uploads/agentes-escritorio");
 const MAX_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB
 const ALLOWED_MIMES = [
@@ -112,25 +112,6 @@ function ensureDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function encryptApiKey(apiKey: string) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", Buffer.from(ENCRYPTION_KEY, "hex"), iv);
-  let encrypted = cipher.update(apiKey, "utf8", "base64");
-  encrypted += cipher.final("base64");
-  return { encrypted, iv: iv.toString("base64"), tag: cipher.getAuthTag().toString("base64") };
-}
-
-function decryptApiKey(encrypted: string, iv: string, tag: string): string {
-  const decipher = crypto.createDecipheriv(
-    "aes-256-gcm",
-    Buffer.from(ENCRYPTION_KEY, "hex"),
-    Buffer.from(iv, "base64"),
-  );
-  decipher.setAuthTag(Buffer.from(tag, "base64"));
-  let decrypted = decipher.update(encrypted, "base64", "utf8");
-  decrypted += decipher.final("utf8");
-  return decrypted;
-}
 
 /**
  * Resolve qual API key do OpenAI usar para um agente:

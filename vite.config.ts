@@ -35,11 +35,18 @@ if (process.env.SENTRY_AUTH_TOKEN) {
 export default defineConfig({
   plugins,
   resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
-    },
+    alias: [
+      { find: "@", replacement: path.resolve(import.meta.dirname, "client", "src") },
+      { find: "@shared", replacement: path.resolve(import.meta.dirname, "shared") },
+      { find: "@assets", replacement: path.resolve(import.meta.dirname, "attached_assets") },
+      // pdfjs no build LEGACY (regex de match exato — subpaths como
+      // `pdfjs-dist/legacy/build/...` continuam resolvendo direto). O build
+      // moderno usa Promise.withResolvers, que não existe em iOS < 17.4 nem
+      // em Samsung Internet antigo: nesses aparelhos o preview do documento
+      // na tela pública de assinatura quebrava. Biblioteca e worker têm que
+      // ser da mesma variante.
+      { find: /^pdfjs-dist$/, replacement: "pdfjs-dist/legacy/build/pdf.mjs" },
+    ],
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),

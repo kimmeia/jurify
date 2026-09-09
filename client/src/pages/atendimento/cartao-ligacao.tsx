@@ -33,20 +33,20 @@ export function CartaoLigacao({ m, tz }: { m: any; tz: string }) {
     : (m.conteudo || "").replace(/^📞\s*/, "") || "Ligação";
 
   const tom = perdida
-    ? "bg-red-50 border-red-200 text-red-800"
+    ? "bg-danger-bg border-danger/30 text-danger-fg"
     : recusada
-      ? "bg-amber-50 border-amber-200 text-amber-800"
+      ? "bg-warning-bg border-warning/30 text-warning-fg"
       : andamento
-        ? "bg-blue-50 border-blue-200 text-blue-800"
-        : "bg-emerald-50 border-emerald-200 text-emerald-800";
+        ? "bg-info-bg border-info/30 text-info-fg"
+        : "bg-success-bg border-success/30 text-success-fg";
 
   const iconeTom = perdida
-    ? "bg-red-100 text-red-600"
+    ? "bg-danger-bg text-danger-fg"
     : recusada
-      ? "bg-amber-100 text-amber-600"
+      ? "bg-warning-bg text-warning-fg"
       : andamento
-        ? "bg-blue-100 text-blue-600"
-        : "bg-emerald-100 text-emerald-600";
+        ? "bg-info-bg text-info-fg"
+        : "bg-success-bg text-success-fg";
 
   const Icone = perdida ? PhoneMissed : direcao === "saida" ? PhoneOutgoing : PhoneIncoming;
   const mostrarAtendente = !!p.atendenteNome && status === "encerrada";

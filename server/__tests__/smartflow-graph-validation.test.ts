@@ -180,6 +180,128 @@ describe("validarGrafo", () => {
     expect(r.erros.join("|")).toContain("Aguardar resposta");
   });
 
+  // Regressão 27/08: fluxo real do dono — clique no botão "Podemos sim" e
+  // nada aconteceu. A seta daquele botão não existia em `proximoSe`, o engine
+  // encerrou EM SILÊNCIO e nenhuma validação acusou. O save agora aponta o
+  // botão solto pelo nome.
+  describe("Pergunta com opções — saídas dos botões", () => {
+    const perg = (config: Record<string, unknown>): PassoValidar => ({
+      nodeId: "perg",
+      clienteId: "cperg",
+      tipo: "whatsapp_pergunta_opcoes",
+      config,
+      temProximoSe: true,
+    });
+
+    it("ERRO — bloco sem NENHUMA saída (pergunta e morre calado)", () => {
+      const passos = [perg({ opcoes: [{ id: "b1", titulo: "Podemos sim" }] })];
+      const edges: EdgeValidar[] = [{ source: "gat", target: "perg" }];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros.some((e) => e.includes("Pergunta com opções sem nenhuma saída"))).toBe(true);
+    });
+
+    it("AVISO nomeando o botão sem seta — os outros ramos ligados não bastam", () => {
+      const passos = [
+        perg({ opcoes: [{ id: "b1", titulo: "Podemos sim" }, { id: "b2", titulo: "Podemos Não" }] }),
+        passo("fim", "cfim"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "perg" },
+        { source: "perg", target: "fim", sourceHandle: "cond_b2" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+      expect(r.avisos.some((a) => a.includes('"Podemos sim"') && a.includes("não tem seta"))).toBe(true);
+    });
+
+    it("todos os botões ligados → sem aviso de seta solta", () => {
+      const passos = [
+        perg({ opcoes: [{ id: "b1", titulo: "Sim" }, { id: "b2", titulo: "Não" }] }),
+        passo("a", "ca"),
+        passo("b", "cb"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "perg" },
+        { source: "perg", target: "a", sourceHandle: "cond_b1" },
+        { source: "perg", target: "b", sourceHandle: "cond_b2" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+      expect(r.avisos.some((a) => a.includes("não tem seta"))).toBe(false);
+    });
+
+    it("modo lista valida os itens das seções", () => {
+      const passos = [
+        perg({
+          modo: "lista",
+          secoes: [{ titulo: "S", itens: [{ id: "i1", titulo: "Agendar" }, { id: "i2", titulo: "Cancelar" }] }],
+        }),
+        passo("a", "ca"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "perg" },
+        { source: "perg", target: "a", sourceHandle: "cond_i1" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.avisos.some((a) => a.includes('"Cancelar"') && a.includes("não tem seta"))).toBe(true);
+    });
+  });
+
+  // "Enviar template" ramifica pelos botões quick-reply — mesmas regras de
+  // seta solta da Pergunta com opções, com uma exceção: template SEM botão
+  // é envio simples (fim natural permitido).
+  describe("Enviar template — saídas dos botões", () => {
+    const tpl = (config: Record<string, unknown>): PassoValidar => ({
+      nodeId: "tpl",
+      clienteId: "ctpl",
+      tipo: "whatsapp_enviar_template",
+      config,
+      temProximoSe: true,
+    });
+
+    it("ERRO — template COM botões e nenhuma saída", () => {
+      const passos = [tpl({ opcoes: [{ id: "qr0", titulo: "Podemos sim" }] })];
+      const edges: EdgeValidar[] = [{ source: "gat", target: "tpl" }];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros.some((e) => e.includes("Enviar template sem nenhuma saída"))).toBe(true);
+    });
+
+    it("template SEM botões e sem saída é fim natural (não é erro)", () => {
+      const passos = [tpl({ opcoes: [] })];
+      const edges: EdgeValidar[] = [{ source: "gat", target: "tpl" }];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+    });
+
+    it("AVISO nomeando o botão do template sem seta", () => {
+      const passos = [
+        tpl({ opcoes: [{ id: "qr0", titulo: "Podemos sim" }, { id: "qr1", titulo: "Podemos não" }] }),
+        passo("fim", "cfim"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "tpl" },
+        { source: "tpl", target: "fim", sourceHandle: "cond_qr1" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+      expect(r.avisos.some((a) => a.includes("Enviar template") && a.includes('"Podemos sim"'))).toBe(true);
+    });
+
+    it("ciclo passando pelo Enviar template é permitido (ele pausa esperando o clique)", () => {
+      const passos = [
+        tpl({ opcoes: [{ id: "qr0", titulo: "Sim" }] }),
+        passo("p1", "c1"),
+      ];
+      const edges: EdgeValidar[] = [
+        { source: "gat", target: "tpl" },
+        { source: "tpl", target: "p1", sourceHandle: "cond_qr0" },
+        { source: "p1", target: "tpl" },
+      ];
+      const r = validarGrafo("gat", passos, edges);
+      expect(r.erros).toEqual([]);
+    });
+  });
+
   it("múltiplos erros convivem (ciclo + condicional sem saída)", () => {
     const passos = [
       passo("p1", "c1"),

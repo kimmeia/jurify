@@ -1,5 +1,17 @@
 # Relatório de Auditoria Completa — JuridFlow (julho/2026)
 
+> **Estado em 03/09/2026 — relatório histórico.** As auditorias posteriores
+> (`auditoria-2026-08-18.md` e, como fonte atual, `auditoria-lancamento-2026-09-03.md`)
+> substituem este plano. Conferido de passagem no código em 03/09: S1 `/uploads`
+> autenticado desde 10/08; S2 volume validado pelo dono; S3 tenancy das colunas do
+> Kanban fechada em 18/08 (mas `deletarFunil` ainda cruza escritório — kanban-1,
+> P0 de 03/09); S5 body 3GB e CSP seguem abertos; I1 limites lendo da tabela
+> `planos` desde 25/08; AS1 `ultimoWebhookEm` existe no webhook; AS3
+> `syncCobrancasDeCliente` recebe `escritorioId`; A-Meta2 inbound grava
+> `idExterno`; A-Meta5 respostas do bot seguem sem `idExterno` (19/08);
+> A-Meta6 `whatsappCoex` segue montado (`server/routers.ts:157` — remover
+> precisa de autorização do dono). Demais itens não foram re-conferidos.
+
 Estudo completo da plataforma, levantamento de falhas e plano de correção.
 Elaborado após os dois incidentes de banimento WhatsApp (cliente Boyadjian) e
 como resposta à pergunta do dono: *"o que podemos fazer para nunca mais

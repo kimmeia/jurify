@@ -98,15 +98,15 @@ export function SeletorCaso({
     caso.nome;
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3.5 dark:border-violet-900 dark:bg-violet-950/25">
-      <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-violet-700 dark:text-violet-300">
+    <div className="rounded-xl border border-info/30 bg-info-bg/60 p-3.5 dark:border-info/30">
+      <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-info-fg">
         Caso em análise
       </p>
       <div className="mt-1.5 flex items-start justify-between gap-2">
         <p className="text-[13px] font-bold leading-tight">{nome}</p>
         <button
           type="button"
-          className="shrink-0 text-[11px] font-semibold text-violet-600 dark:text-violet-300"
+          className="shrink-0 text-[11px] font-semibold text-info-fg"
           onClick={() => onCaso(null)}
         >
           tirar
@@ -135,7 +135,7 @@ export function SeletorCaso({
         </Select>
       )}
       {(dossieQ.data?.documentos?.length ?? 0) > 0 && (
-        <div className="mt-2.5 border-t border-violet-200/70 pt-2 dark:border-violet-900">
+        <div className="mt-2.5 border-t border-info/30 pt-2 dark:border-info/30">
           <p className="text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-muted-foreground">
             Documentos anexados
           </p>

@@ -26,6 +26,7 @@ import {
   History, RotateCcw, Receipt, Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
+import { IconeTwilio } from "@/components/IconeTwilio";
 
 /**
  * Sub-seção do AsaasDialog: visibilidade da cota local do rate guard e
@@ -70,21 +71,21 @@ function RateGuardSection({ canEdit }: { canEdit: boolean }) {
   const bloqueado = status.bloqueado;
   const percent = status.quotaPercent ?? 0;
   const corBarra = bloqueado
-    ? "bg-red-500"
+    ? "bg-danger"
     : percent > 80
-      ? "bg-amber-500"
-      : "bg-emerald-500";
+      ? "bg-warning"
+      : "bg-success";
 
   return (
     <>
-      <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/40 dark:bg-slate-900/30 p-3 space-y-2">
+      <div className="rounded-lg border border-border bg-muted/40 p-3 space-y-2">
         <div className="flex items-center gap-2">
-          <Gauge className="h-4 w-4 text-slate-700 dark:text-slate-300" />
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <Gauge className="h-4 w-4 text-foreground" />
+          <span className="text-sm font-semibold text-foreground">
             Cota do Asaas
           </span>
           {bloqueado && (
-            <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+            <Badge className="bg-danger/15 text-danger-fg border-danger/30 text-[10px] ml-auto">
               <AlertTriangle className="h-3 w-3 mr-1" />
               Bloqueado
             </Badge>
@@ -92,21 +93,21 @@ function RateGuardSection({ canEdit }: { canEdit: boolean }) {
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex justify-between text-[11px] text-slate-700 dark:text-slate-300">
+          <div className="flex justify-between text-[11px] text-foreground">
             <span>{status.quotaUsada.toLocaleString("pt-BR")} / {status.quotaLimite.toLocaleString("pt-BR")} usadas</span>
             <span>{percent}%</span>
           </div>
-          <div className="h-2 bg-slate-200/60 dark:bg-slate-700/60 rounded-full overflow-hidden">
+          <div className="h-2 bg-muted/60 rounded-full overflow-hidden">
             <div className={`h-full transition-all ${corBarra}`} style={{ width: `${percent}%` }} />
           </div>
-          <p className="text-[10px] text-slate-600 dark:text-slate-400 flex items-center gap-1">
+          <p className="text-[10px] text-muted-foreground flex items-center gap-1">
             <Clock className="h-3 w-3" />
             Janela libera em ~{status.horasAteExpirar}h
           </p>
         </div>
 
         {bloqueado && (
-          <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+          <div className="rounded-md border border-warning/30 bg-warning-bg/60 p-2 text-[11px] text-warning-fg leading-relaxed">
             <strong>Sync não progride enquanto bloqueado.</strong> Tentar resetar verifica
             antes se o Asaas real liberou — se sim, libera a fila do JuridFlow.
             Se a cota REAL do Asaas estourou, o sistema recusa o reset (resetar
@@ -241,32 +242,32 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
       : 0;
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/40 dark:bg-blue-950/20 p-3 space-y-3">
+    <div className="rounded-lg border border-info/30 bg-info-bg/40 p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <History className="h-4 w-4 text-blue-700 dark:text-blue-300" />
-        <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+        <History className="h-4 w-4 text-info-fg" />
+        <span className="text-sm font-semibold text-info-fg">
           Importar histórico
         </span>
         {emAndamento && (
-          <Badge className="bg-blue-500/15 text-blue-700 border-blue-500/30 text-[10px] ml-auto">
+          <Badge className="bg-info/15 text-info-fg border-info/30 text-[10px] ml-auto">
             <Loader2 className="h-3 w-3 mr-1 animate-spin" />
             {status.status === "agendado" ? "Agendado" : "Importando"}
           </Badge>
         )}
         {pausado && (
-          <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px] ml-auto">
+          <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[10px] ml-auto">
             <Pause className="h-3 w-3 mr-1" />
             Pausado
           </Badge>
         )}
         {concluido && (
-          <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30 text-[10px] ml-auto">
+          <Badge className="bg-success/15 text-success-fg border-success/30 text-[10px] ml-auto">
             <CheckCircle className="h-3 w-3 mr-1" />
             Concluído
           </Badge>
         )}
         {erro && (
-          <Badge className="bg-red-500/15 text-red-700 border-red-500/30 text-[10px] ml-auto">
+          <Badge className="bg-danger/15 text-danger-fg border-danger/30 text-[10px] ml-auto">
             <AlertTriangle className="h-3 w-3 mr-1" />
             Erro
           </Badge>
@@ -275,7 +276,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
 
       {inativo && (
         <>
-          <p className="text-xs text-blue-900/80 dark:text-blue-200/80">
+          <p className="text-xs text-info-fg/80">
             O webhook já cobre cobranças <strong>daqui pra frente</strong> em tempo
             real. Use isto pra trazer cobranças <strong>antigas</strong> sem
             estourar a cota do Asaas (12h de bloqueio em rate limit). Importação
@@ -324,7 +325,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
           </div>
 
           {periodo === "completo" && (
-            <div className="rounded-md border border-amber-300/60 bg-amber-50/60 dark:border-amber-700/40 dark:bg-amber-950/30 p-2 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+            <div className="rounded-md border border-warning/30 bg-warning-bg/60 p-2 text-[11px] text-warning-fg leading-relaxed">
               <strong>Atenção:</strong> traz cobranças dos últimos 10 anos em
               modo turbo (5min entre janelas, 7 dias por tick). Inicie de noite
               — pela manhã o painel reflete tudo. Pode pausar/retomar a
@@ -387,7 +388,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
       {(emAndamento || pausado || concluido || erro) && (
         <>
           <div className="space-y-1.5">
-            <div className="flex justify-between text-[11px] text-blue-900/80 dark:text-blue-200/80">
+            <div className="flex justify-between text-[11px] text-info-fg/80">
               <span>
                 {status.de} a {status.ate}
               </span>
@@ -395,21 +396,21 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
                 {status.diasFeitos}/{status.totalDias} dias ({progresso}%)
               </span>
             </div>
-            <div className="h-2 bg-blue-200/40 rounded-full overflow-hidden">
+            <div className="h-2 bg-info-bg/40 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all ${
                   concluido
-                    ? "bg-emerald-500"
+                    ? "bg-success"
                     : erro
-                      ? "bg-red-500"
+                      ? "bg-danger"
                       : pausado
-                        ? "bg-amber-500"
-                        : "bg-blue-500"
+                        ? "bg-warning"
+                        : "bg-info"
                 }`}
                 style={{ width: `${progresso}%` }}
               />
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[11px] text-blue-900/80 dark:text-blue-200/80 pt-1">
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-info-fg/80 pt-1">
               <span>
                 Importadas: <strong>{status.cobrancasImportadas}</strong>
               </span>
@@ -418,7 +419,7 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
               </span>
             </div>
             {emAndamento && status.proximaJanelaEm && (
-              <p className="text-[10px] text-blue-700/70 dark:text-blue-300/70 flex items-center gap-1">
+              <p className="text-[10px] text-info-fg/70 flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Próxima janela:{" "}
                 {new Date(status.proximaJanelaEm).toLocaleTimeString("pt-BR", {
@@ -428,12 +429,12 @@ function ImportarHistoricoSection({ canEdit }: { canEdit: boolean }) {
               </p>
             )}
             {erro && status.erroMensagem && (
-              <p className="text-[11px] text-red-700 dark:text-red-300 font-mono bg-red-50 dark:bg-red-950/30 p-1.5 rounded">
+              <p className="text-[11px] text-danger-fg font-mono bg-danger-bg p-1.5 rounded">
                 {status.erroMensagem}
               </p>
             )}
             {pausado && status.erroMensagem && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-300 font-mono bg-amber-50 dark:bg-amber-950/30 p-1.5 rounded">
+              <p className="text-[11px] text-warning-fg font-mono bg-warning-bg p-1.5 rounded">
                 {status.erroMensagem}
               </p>
             )}
@@ -535,7 +536,8 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
       // Reflete as despesas novas na aba Despesas sem reload manual.
       (utils as any).despesas?.listar?.invalidate?.();
       const novos = r.novasDespesas;
-      const dup = r.duplicadas;
+      // Taxa que o webhook já tinha lançado conta como "duplicada" pro usuário.
+      const dup = r.duplicadas + (r.cobertasPeloWebhook ?? 0);
       if (r.parcial) {
         setParcialInfo({
           novasDespesas: novos,
@@ -599,15 +601,15 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <div className="rounded-lg border border-violet-200 bg-violet-50/40 dark:bg-violet-950/20 p-3 space-y-3">
+    <div className="rounded-lg border border-info/30 bg-info-bg/40 p-3 space-y-3">
       <div className="flex items-center gap-2">
-        <Receipt className="h-4 w-4 text-violet-700 dark:text-violet-300" />
-        <span className="text-sm font-semibold text-violet-900 dark:text-violet-100">
+        <Receipt className="h-4 w-4 text-info-fg" />
+        <span className="text-sm font-semibold text-info-fg">
           Sincronizar extrato (despesas)
         </span>
       </div>
 
-      <p className="text-xs text-violet-900/80 dark:text-violet-200/80">
+      <p className="text-xs text-info-fg/80">
         Importa do extrato do Asaas todas as <strong>despesas</strong>: PIX/TED
         saindo, taxas de notificação (SMS/WhatsApp/email/voz), mensalidade Asaas,
         antecipações, etc. Cobranças recebidas (créditos) não viram despesa —
@@ -675,7 +677,7 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
       </div>
 
       {parcialInfo && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-2.5 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+        <div className="rounded-md border border-warning/30 bg-warning-bg p-2.5 text-xs text-warning-fg space-y-1.5">
           <div className="font-semibold">⚠️ Importação incompleta — limite do Asaas atingido</div>
           <div>
             {parcialInfo.novasDespesas} despesa(s) nova(s) · {parcialInfo.duplicadas} duplicada(s)
@@ -688,7 +690,7 @@ export function SincronizarExtratoSection({ canEdit }: { canEdit: boolean }) {
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs border-amber-400"
+            className="h-7 text-xs border-warning/30"
             onClick={onSync}
             disabled={!canEdit || extratoMut.isPending}
           >
@@ -786,10 +788,10 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-xl shadow-md">💰</div>
+            <div className="h-10 w-10 rounded-xl bg-success flex items-center justify-center text-xl shadow-md">💰</div>
             <div>
               <span>Asaas</span>
-              {conectado && <Badge variant="outline" className="ml-2 text-[10px] text-emerald-600 bg-emerald-50 border-emerald-200"><Wifi className="h-3 w-3 mr-1" />Conectado</Badge>}
+              {conectado && <Badge variant="outline" className="ml-2 text-[10px] text-success-fg bg-success-bg border-success/30"><Wifi className="h-3 w-3 mr-1" />Conectado</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -801,21 +803,21 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
 
           {aguardandoValidacao ? (
             <div className="space-y-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+              <div className="rounded-lg border border-warning/30 bg-warning-bg p-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-amber-900 dark:text-amber-200 font-semibold">Aguardando validação</span>
-                  <Badge className="bg-amber-500/15 text-amber-700 border-amber-500/30 text-[10px]">
+                  <span className="text-warning-fg font-semibold">Aguardando validação</span>
+                  <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[10px]">
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                     Pendente
                   </Badge>
                 </div>
-                <p className="text-xs text-amber-800 dark:text-amber-200">
+                <p className="text-xs text-warning-fg">
                   Sua chave foi <strong>salva com sucesso</strong>, mas o Asaas está em
                   cota excedida (rate limit 12h). Vamos retentar automaticamente a cada
                   30min — você não precisa fazer nada.
                 </p>
                 {asaasStatus?.mensagemErro && (
-                  <p className="text-[10px] text-amber-700/70 font-mono bg-amber-100/50 dark:bg-amber-900/20 p-1.5 rounded">
+                  <p className="text-[10px] text-warning-fg font-mono bg-warning-bg p-1.5 rounded">
                     {asaasStatus.mensagemErro}
                   </p>
                 )}
@@ -854,7 +856,7 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
               <div className="rounded-lg border p-3 space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Status</span>
-                  <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/25 hover:bg-emerald-500/15 text-[10px]">
+                  <Badge className="bg-success/15 text-success-fg border-success/30 hover:bg-success/15 text-[10px]">
                     <CheckCircle className="h-3 w-3 mr-1" />Conectado
                   </Badge>
                 </div>
@@ -900,14 +902,14 @@ export function AsaasDialog({ open, onClose, canEdit, asaasStatus, onRefresh }: 
           ) : (
             <div className="space-y-3">
               {erroConexao && asaasStatus?.mensagemErro && (
-                <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 p-3 space-y-2">
-                  <p className="text-xs font-semibold text-red-900 dark:text-red-200">Última tentativa falhou</p>
-                  <p className="text-xs text-red-800 dark:text-red-200">
+                <div className="rounded-lg border border-danger/30 bg-danger-bg p-3 space-y-2">
+                  <p className="text-xs font-semibold text-danger-fg">Última tentativa falhou</p>
+                  <p className="text-xs text-danger-fg">
                     {asaasStatus.mensagemErro}
                   </p>
                   {asaasStatus?.apiKeyPreview && (
                     <>
-                      <p className="text-[10px] text-red-700 dark:text-red-300">
+                      <p className="text-[10px] text-danger-fg">
                         Chave já salva ({asaasStatus.apiKeyPreview}). Você não precisa colá-la
                         de novo — clique abaixo pra tentar reconectar.
                       </p>
@@ -993,11 +995,22 @@ export function TwilioDialog({ open, onClose, canEdit }: { open: boolean; onClos
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-xl shadow">📞</div>
+            <div className="h-10 w-10 rounded-xl bg-danger-bg border border-danger/30 flex items-center justify-center shadow">
+              <IconeTwilio className="h-5 w-5 text-[#F22F46]" />
+            </div>
             Twilio VoIP — Ligações
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* O formulário grava normalmente; o que ainda não existe é a ponte
+            * com o número do escritório, e é isso que o aviso diz. */}
+          <div className="rounded-lg bg-warning-bg border border-warning/30 p-3">
+            <p className="text-xs font-medium text-warning-fg">A ligação ainda não conecta as duas pontas</p>
+            <p className="mt-1 text-[11px] text-warning-fg">
+              Você pode guardar as credenciais agora, mas o botão de ligar na conversa segue desativado
+              até a ponte com o número do escritório ficar pronta.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Account SID *</Label>
             <Input type="password" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={sid} onChange={(e) => setSid(e.target.value)} disabled={!canEdit} />
@@ -1011,9 +1024,9 @@ export function TwilioDialog({ open, onClose, canEdit }: { open: boolean; onClos
             <Input placeholder="+5585999990000" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} disabled={!canEdit} />
             <p className="text-[10px] text-muted-foreground">Número comprado no Twilio Console</p>
           </div>
-          <div className="rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 p-3">
-            <p className="text-xs text-purple-700 font-medium">Como obter credenciais</p>
-            <p className="text-[11px] text-purple-600 mt-1">Acesse <a href="https://www.twilio.com/console" target="_blank" rel="noopener noreferrer" className="underline">twilio.com/console</a> → copie Account SID e Auth Token → compre um número em Phone Numbers.</p>
+          <div className="rounded-lg bg-info-bg border border-info/30 p-3">
+            <p className="text-xs text-info-fg font-medium">Como obter credenciais</p>
+            <p className="text-[11px] text-info-fg mt-1">Acesse <a href="https://www.twilio.com/console" target="_blank" rel="noopener noreferrer" className="underline">twilio.com/console</a> → copie Account SID e Auth Token → compre um número em Phone Numbers.</p>
           </div>
         </div>
         <DialogFooter>
@@ -1077,10 +1090,10 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center text-xl shadow">🤖</div>
+            <div className="h-10 w-10 rounded-xl bg-success flex items-center justify-center text-xl shadow">🤖</div>
             <div>
               <span>OpenAI / ChatGPT</span>
-              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+              {conectado && <Badge className="ml-2 bg-success/15 text-success-fg border-success/30 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -1112,7 +1125,7 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
             </p>
           </div>
 
-          <div className="space-y-2.5 rounded-lg border border-slate-200 p-3">
+          <div className="space-y-2.5 rounded-lg border border-border p-3">
             <p className="text-xs font-semibold flex items-center gap-1.5">🎙️ Recursos de mídia</p>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -1136,13 +1149,13 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
                 onCheckedChange={(v) => flagsMut.mutate({ visionAtivo: v })}
               />
             </div>
-            {!conectado && <p className="text-[10px] text-amber-600">Salve a chave da OpenAI primeiro para liberar estes recursos.</p>}
+            {!conectado && <p className="text-[10px] text-warning-fg">Salve a chave da OpenAI primeiro para liberar estes recursos.</p>}
             <p className="text-[10px] text-muted-foreground">Consome créditos da OpenAI (Whisper ~US$ 0,006/min; Vision usa um modelo com visão).</p>
           </div>
 
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 p-3 space-y-1">
-            <p className="text-xs font-semibold text-blue-700">📌 Próximo passo</p>
-            <p className="text-[11px] text-blue-600">
+          <div className="rounded-lg bg-info-bg border border-info/30 p-3 space-y-1">
+            <p className="text-xs font-semibold text-info-fg">📌 Próximo passo</p>
+            <p className="text-[11px] text-info-fg">
               Após salvar a chave, vá em <strong>Configurações → Agentes de IA</strong> para criar
               chatbots com prompts personalizados, vincular a canais (WhatsApp, Instagram) e ativar
               respostas automáticas.
@@ -1201,10 +1214,10 @@ export function ClaudeDialog({ open, onClose, canEdit }: { open: boolean; onClos
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-xl shadow">🧠</div>
+            <div className="h-10 w-10 rounded-xl bg-warning flex items-center justify-center text-xl shadow">🧠</div>
             <div>
               <span>Claude — Anthropic</span>
-              {conectado && <Badge className="ml-2 bg-emerald-500/15 text-emerald-700 border-emerald-500/25 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
+              {conectado && <Badge className="ml-2 bg-success/15 text-success-fg border-success/30 text-[10px]"><CheckCircle className="h-3 w-3 mr-1" />Configurada</Badge>}
             </div>
           </DialogTitle>
         </DialogHeader>

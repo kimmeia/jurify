@@ -10,7 +10,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, inArray, desc, and, gt, sql } from "drizzle-orm";
+import { eq, ne, inArray, desc, and, gt, lte, asc, isNotNull, sql } from "drizzle-orm";
 import { adminProcedure, protectedProcedure, router } from "../_core/trpc";
 import { registrarAuditoria } from "../_core/audit";
 import { consume as rateLimitConsume } from "../_core/rate-limit";
@@ -58,8 +58,10 @@ import {
   getActiveSubscription,
 } from "../db";
 import { PLANS } from "../billing/products";
-import { invalidarCachePlanos } from "../billing/planos-repo";
+import { invalidarCachePlanos, gerarSlugCopia } from "../billing/planos-repo";
+import { invalidarCacheGateModulos } from "../_core/gate-modulos";
 import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
+import { MENSAGEM_WHATSAPP_OBRIGATORIO, normalizarWhatsappCadastro } from "@shared/telefone";
 import { MODULO_JURISIA } from "@shared/addon-jurisia";
 import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
 import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
@@ -74,7 +76,35 @@ import {
   leads,
   contatos,
   agentesIa,
+  planos as planosTable,
 } from "../../drizzle/schema";
+
+/**
+ * Cortesia/ativação manual é uma decisão humana de dar acesso — mas o login
+ * continuava barrado no "confirme seu e-mail", que numa conta demo (e-mail
+ * fictício) nunca chega. Quem o admin libera na mão entra sem confirmar.
+ * O WHERE emailVerificado=false preserva a data original de quem já tinha.
+ */
+async function confirmarEmailPorAcaoAdmin(db: any, userId: number): Promise<void> {
+  await db
+    .update(users)
+    .set({ emailVerificado: true, emailVerificadoEm: new Date() })
+    .where(and(eq(users.id, userId), eq(users.emailVerificado, false)));
+}
+
+/**
+ * "Mais popular" é um selo só: ligar num plano desliga nos outros. Cada
+ * plano tinha o próprio interruptor e nada os relacionava — foi assim que a
+ * vitrine mostrou dois "Mais escolhido" ao mesmo tempo.
+ */
+async function apagarPopularDosOutros(
+  db: any,
+  planos: typeof import("../../drizzle/schema").planos,
+  slug: string,
+  atualizadoPor: number,
+): Promise<void> {
+  await db.update(planos).set({ popular: false, atualizadoPor }).where(ne(planos.slug, slug));
+}
 
 export const adminRouter = router({
   // ─── JurisIA · robô de ingestão do DataJud ────────────────────────────────
@@ -283,8 +313,60 @@ export const adminRouter = router({
       offset: z.number().int().min(0).default(0),
       busca: z.string().max(320).optional(),
       tipo: z.enum(["admin", "cliente", "colaborador", "todos"]).default("todos"),
+      funil: z.enum(["nunca_ativou", "teste_vencendo", "teste_vencido"]).optional(),
     }).optional())
     .query(async ({ input }) => getAllUsersWithSubscription(input ?? {})),
+
+  /** Os 3 cartões "Pra falar hoje" de /admin/clients (e o card da Visão Geral). */
+  funilRemarketing: adminProcedure.query(async () => {
+    const { calcularFunilRemarketing } = await import("../db");
+    return calcularFunilRemarketing();
+  }),
+
+  /**
+   * "Marcar contato": o caderninho de remarketing do dono da plataforma.
+   * Grava o resumo no user (a lista e os cartões leem daqui) e o registro
+   * completo nas notas da ficha (categoria comercial). Nada é enviado ao
+   * cliente — o contato em si acontece fora, no WhatsApp/e-mail do dono.
+   */
+  marcarContatoComercial: adminProcedure
+    .input(z.object({
+      userId: z.number().int().positive(),
+      canal: z.enum(["whatsapp", "email", "ligacao"]),
+      nota: z.string().max(2000).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { clienteNotasAdmin } = await import("../../drizzle/schema");
+
+      await db
+        .update(users)
+        .set({
+          ultimoContatoComercialEm: new Date(),
+          ultimoContatoComercialCanal: input.canal,
+        })
+        .where(eq(users.id, input.userId));
+
+      const canalLabel =
+        input.canal === "whatsapp" ? "WhatsApp" : input.canal === "email" ? "E-mail" : "Ligação";
+      await db.insert(clienteNotasAdmin).values({
+        userId: input.userId,
+        autorAdminId: ctx.user.id,
+        conteudo: `Remarketing via ${canalLabel}${input.nota?.trim() ? ` — ${input.nota.trim()}` : ""}`,
+        categoria: "comercial",
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.marcarContatoComercial",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        detalhes: { canal: input.canal },
+      });
+
+      return { success: true };
+    }),
 
   /** Get recent users (last 10) */
   recentUsers: adminProcedure.query(async () => getRecentUsers(10)),
@@ -374,19 +456,23 @@ export const adminRouter = router({
     const db = await getDb();
     if (!db) return [];
 
-    // Agrega no banco: pra cada (planId, mês de criação) traz a contagem
-    // de subs ativas. Antes carregava TODAS as subs em memória só pra
-    // iterar — quebrava com milhares de assinaturas. O `priceMonthly` mora
-    // em código (PLANS), por isso a resolução de valor fica em JS.
+    // Agrega no banco por mês de criação, já resolvendo o preço real de
+    // cada assinatura: valor negociado quando existe, senão o preço de
+    // tabela via JOIN com `planos` (o catálogo que o admin edita). Só
+    // pagantes contam — trial e cortesia não são receita (antes entravam
+    // como R$ 97 fictícios e o gráfico virava ficção).
     const rows = await db
       .select({
-        planId: subscriptionsTable.planId,
         mesCriacao: sql<string>`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`,
-        qtd: sql<number>`COUNT(*)`,
+        valorMes: sql<number>`SUM(COALESCE(${subscriptionsTable.valorNegociadoCentavos}, ${planosTable.precoMensalCentavos}, 0))`,
       })
       .from(subscriptionsTable)
-      .where(inArray(subscriptionsTable.status, ["active", "trialing"]))
-      .groupBy(subscriptionsTable.planId, sql`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`);
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
+      .where(and(
+        eq(subscriptionsTable.status, "active"),
+        eq(subscriptionsTable.cortesia, false),
+      ))
+      .groupBy(sql`DATE_FORMAT(${subscriptionsTable.createdAt}, '%Y-%m')`);
 
     const meses: Record<string, number> = {};
     for (let i = 11; i >= 0; i--) {
@@ -395,13 +481,10 @@ export const adminRouter = router({
       meses[`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`] = 0;
     }
 
-    // Pra cada (planId, mesCriacao): a sub conta em TODOS os meses
-    // >= mesCriacao (no horizonte de 12 meses). Multiplica por qtd e
-    // priceMonthly do plano.
+    // Cada grupo (mesCriacao) soma em TODOS os meses >= mesCriacao no
+    // horizonte de 12 meses — receita recorrente acumula.
     for (const r of rows) {
-      const plan = PLANS.find((p) => p.id === r.planId);
-      if (!plan) continue;
-      const valor = plan.priceMonthly * Number(r.qtd);
+      const valor = Number(r.valorMes);
       const mesCri = String(r.mesCriacao);
       for (const mesKey of Object.keys(meses)) {
         if (mesCri <= mesKey) meses[mesKey] += valor;
@@ -502,6 +585,7 @@ export const adminRouter = router({
           createdAt: users.createdAt,
           updatedAt: users.updatedAt,
           lastSignedIn: users.lastSignedIn,
+          whatsapp: users.whatsapp,
         })
         .from(users)
         .where(eq(users.id, input.userId))
@@ -1208,6 +1292,50 @@ export const adminRouter = router({
    * Inclui dados do usuário pra contato direto. Usado pro dashboard
    * de cobrança / financeiro tomar ação.
    */
+  /**
+   * Pendências da Visão Geral: testes grátis vencendo em até 7 dias (inclui
+   * os já vencidos que seguem "trialing"). É a janela de fechar a venda —
+   * o painel mostra em cima, com nome e data, pro admin chamar antes de vencer.
+   */
+  pendenciasDashboard: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { trialsVencendo: [] };
+
+    // trial_expira_em é epoch em ms (bigint), não DATETIME.
+    const emSeteDias = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const rows = await db
+      .select({
+        subId: subscriptionsTable.id,
+        userId: users.id,
+        userName: users.name,
+        userEmail: users.email,
+        planId: subscriptionsTable.planId,
+        trialExpiraEm: subscriptionsTable.trialExpiraEm,
+      })
+      .from(subscriptionsTable)
+      .innerJoin(users, eq(subscriptionsTable.userId, users.id))
+      .where(
+        and(
+          eq(subscriptionsTable.status, "trialing"),
+          eq(subscriptionsTable.cortesia, false),
+          isNotNull(subscriptionsTable.trialExpiraEm),
+          lte(subscriptionsTable.trialExpiraEm, emSeteDias),
+        ),
+      )
+      .orderBy(asc(subscriptionsTable.trialExpiraEm));
+
+    const { planos } = await import("../../drizzle/schema");
+    const nomes = await db.select({ slug: planos.slug, nome: planos.nome }).from(planos);
+    const nomePorSlug = new Map(nomes.map((p) => [p.slug, p.nome]));
+
+    return {
+      trialsVencendo: rows.map((r) => ({
+        ...r,
+        planNome: (r.planId && nomePorSlug.get(r.planId)) || r.planId || "sem plano",
+      })),
+    };
+  }),
+
   listarInadimplentes: adminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
@@ -1223,20 +1351,21 @@ export const adminRouter = router({
         currentPeriodEnd: subscriptionsTable.currentPeriodEnd,
         asaasSubscriptionId: subscriptionsTable.asaasSubscriptionId,
         createdAt: subscriptionsTable.createdAt,
+        valorNegociadoCentavos: subscriptionsTable.valorNegociadoCentavos,
+        planNome: planosTable.nome,
+        planPrecoCentavos: planosTable.precoMensalCentavos,
       })
       .from(subscriptionsTable)
       .innerJoin(users, eq(subscriptionsTable.userId, users.id))
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
       .where(eq(subscriptionsTable.status, "past_due"))
       .orderBy(desc(subscriptionsTable.currentPeriodEnd));
 
-    return rows.map((r) => {
-      const plan = PLANS.find((p) => p.id === r.planId);
-      return {
-        ...r,
-        planName: plan?.name || r.planId,
-        valorMensal: plan?.priceMonthly || 0,
-      };
-    });
+    return rows.map((r) => ({
+      ...r,
+      planName: r.planNome || r.planId,
+      valorMensal: r.valorNegociadoCentavos ?? r.planPrecoCentavos ?? 0,
+    }));
   }),
 
   /**
@@ -1424,6 +1553,26 @@ export const adminRouter = router({
     const { planos } = await import("../../drizzle/schema");
     const rows = await db.select().from(planos).orderBy(planos.ordem);
 
+    // Assinantes por plano — a lista mostra "quem depende deste plano"
+    // antes de o admin esconder/duplicar/editar.
+    const contagens = await db
+      .select({
+        planId: subscriptionsTable.planId,
+        status: subscriptionsTable.status,
+        total: sql<number>`COUNT(*)`,
+      })
+      .from(subscriptionsTable)
+      .where(inArray(subscriptionsTable.status, ["active", "trialing"]))
+      .groupBy(subscriptionsTable.planId, subscriptionsTable.status);
+    const porPlano = new Map<string, { ativos: number; emTeste: number }>();
+    for (const c of contagens) {
+      if (!c.planId) continue;
+      const atual = porPlano.get(c.planId) ?? { ativos: 0, emTeste: 0 };
+      if (c.status === "active") atual.ativos += Number(c.total);
+      else atual.emTeste += Number(c.total);
+      porPlano.set(c.planId, atual);
+    }
+
     return rows.map((row) => {
       const modulosRaw = Array.isArray(row.modulosLiberados)
         ? row.modulosLiberados
@@ -1450,8 +1599,13 @@ export const adminRouter = router({
         maxConexoesWhatsapp: row.maxConexoesWhatsapp,
         maxAgentesIa: row.maxAgentesIa,
         maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
+        maxMonitoramentosCpf: row.maxMonitoramentosCpf,
         creditosCalculosMes: row.creditosCalculosMes,
         jurisiaMensagensMes: row.jurisiaMensagensMes,
+        precoSobConsulta: row.precoSobConsulta,
+        ctaDemonstracao: row.ctaDemonstracao,
+        atendentesInclusos: row.atendentesInclusos,
+        precoAtendenteAdicionalCentavos: row.precoAtendenteAdicionalCentavos,
         modulosLiberados: modulos.filter(ehModuloValido),
         features,
         popular: row.popular,
@@ -1459,9 +1613,83 @@ export const adminRouter = router({
         ordem: row.ordem,
         slugProtegido,
         atualizadoEm: row.atualizadoEm,
+        assinantesAtivos: porPlano.get(row.slug)?.ativos ?? 0,
+        emTeste: porPlano.get(row.slug)?.emTeste ?? 0,
       };
     });
   }),
+
+  /**
+   * Duplica um plano: cópia integral com slug "<original>-copia", nome
+   * "(cópia)" e SEMPRE fora da vitrine — o admin edita com calma e liga
+   * a vitrine quando estiver pronto.
+   */
+  duplicarPlano: adminProcedure
+    .input(z.object({ slug: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { planos } = await import("../../drizzle/schema");
+
+      const [original] = await db.select().from(planos).where(eq(planos.slug, input.slug)).limit(1);
+      if (!original) throw new Error(`Plano "${input.slug}" não encontrado`);
+
+      const existentes = await db.select({ slug: planos.slug }).from(planos);
+      const slugNovo = gerarSlugCopia(original.slug, new Set(existentes.map((p) => p.slug)));
+
+      const { id: _id, criadoEm: _c, atualizadoEm: _a, ...resto } = original;
+      await db.insert(planos).values({
+        ...resto,
+        slug: slugNovo,
+        nome: `${original.nome} (cópia)`,
+        oculto: true,
+        popular: false,
+        criadoPor: ctx.user.id,
+        atualizadoPor: ctx.user.id,
+      });
+
+      invalidarCachePlanos();
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.duplicar",
+        alvoTipo: "plano",
+        alvoNome: slugNovo,
+        detalhes: { origem: input.slug },
+      });
+
+      return { success: true, slug: slugNovo, mensagem: `Cópia criada fora da vitrine` };
+    }),
+
+  /**
+   * Reordena os planos da vitrine de uma vez (arrastar na lista). Recebe os
+   * slugs na ordem final; cada um vira ordem = posição.
+   */
+  reordenarPlanos: adminProcedure
+    .input(z.object({ slugs: z.array(z.string().min(1)).min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { planos } = await import("../../drizzle/schema");
+
+      for (let i = 0; i < input.slugs.length; i++) {
+        await db
+          .update(planos)
+          .set({ ordem: i + 1, atualizadoPor: ctx.user.id })
+          .where(eq(planos.slug, input.slugs[i]));
+      }
+
+      invalidarCachePlanos();
+
+      await registrarAuditoria({
+        ctx,
+        acao: "plano.reordenar",
+        alvoTipo: "plano",
+        alvoNome: input.slugs.join(","),
+      });
+
+      return { success: true };
+    }),
 
   /** Cria plano novo. Gera slug imutável a partir do nome (+ sufixo se colidir). */
   criarPlano: adminProcedure
@@ -1480,6 +1708,8 @@ export const adminRouter = router({
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).default(0),
       jurisiaMensagensMes: z.number().int().min(0).default(0),
+      atendentesInclusos: z.number().int().min(0).nullable().optional(),
+      precoAtendenteAdicionalCentavos: z.number().int().min(0).default(0),
       modulosLiberados: z.array(z.string()).default([]),
       features: z.array(z.string()).default([]),
       popular: z.boolean().default(false),
@@ -1518,6 +1748,8 @@ export const adminRouter = router({
         maxMonitoramentosProcessos: input.maxMonitoramentosProcessos ?? null,
         creditosCalculosMes: input.creditosCalculosMes,
         jurisiaMensagensMes: input.jurisiaMensagensMes,
+        atendentesInclusos: input.atendentesInclusos ?? null,
+        precoAtendenteAdicionalCentavos: input.precoAtendenteAdicionalCentavos,
         modulosLiberados: modulosValidos,
         features: input.features,
         popular: input.popular,
@@ -1526,6 +1758,7 @@ export const adminRouter = router({
         criadoPor: ctx.user.id,
         atualizadoPor: ctx.user.id,
       });
+      if (input.popular) await apagarPopularDosOutros(db, planos, slug, ctx.user.id);
 
       invalidarCachePlanos();
 
@@ -1629,6 +1862,11 @@ export const adminRouter = router({
       maxMonitoramentosProcessos: z.number().int().min(0).nullable().optional(),
       creditosCalculosMes: z.number().int().min(0).optional(),
       jurisiaMensagensMes: z.number().int().min(0).optional(),
+      maxMonitoramentosCpf: z.number().int().min(0).nullable().optional(),
+      precoSobConsulta: z.boolean().optional(),
+      ctaDemonstracao: z.boolean().optional(),
+      atendentesInclusos: z.number().int().min(0).nullable().optional(),
+      precoAtendenteAdicionalCentavos: z.number().int().min(0).optional(),
       modulosLiberados: z.array(z.string()).optional(),
       features: z.array(z.string()).optional(),
       popular: z.boolean().optional(),
@@ -1660,6 +1898,11 @@ export const adminRouter = router({
       if (input.maxMonitoramentosProcessos !== undefined) dadosUpdate.maxMonitoramentosProcessos = input.maxMonitoramentosProcessos;
       if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
       if (input.jurisiaMensagensMes !== undefined) dadosUpdate.jurisiaMensagensMes = input.jurisiaMensagensMes;
+      if (input.maxMonitoramentosCpf !== undefined) dadosUpdate.maxMonitoramentosCpf = input.maxMonitoramentosCpf;
+      if (input.precoSobConsulta !== undefined) dadosUpdate.precoSobConsulta = input.precoSobConsulta;
+      if (input.ctaDemonstracao !== undefined) dadosUpdate.ctaDemonstracao = input.ctaDemonstracao;
+      if (input.atendentesInclusos !== undefined) dadosUpdate.atendentesInclusos = input.atendentesInclusos;
+      if (input.precoAtendenteAdicionalCentavos !== undefined) dadosUpdate.precoAtendenteAdicionalCentavos = input.precoAtendenteAdicionalCentavos;
       if (input.modulosLiberados !== undefined) dadosUpdate.modulosLiberados = input.modulosLiberados.filter(ehModuloValido);
       if (input.features !== undefined) dadosUpdate.features = input.features;
       if (input.popular !== undefined) dadosUpdate.popular = input.popular;
@@ -1667,6 +1910,7 @@ export const adminRouter = router({
       if (input.ordem !== undefined) dadosUpdate.ordem = input.ordem;
 
       await db.update(planos).set(dadosUpdate).where(eq(planos.slug, input.slug));
+      if (input.popular === true) await apagarPopularDosOutros(db, planos, input.slug, ctx.user.id);
 
       invalidarCachePlanos();
 
@@ -1732,6 +1976,255 @@ export const adminRouter = router({
       obrigatorio: m.obrigatorio,
     }));
   }),
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // COBRANÇA POR MÓDULO — catálogo de preços, avulsos e desconto (Fase 3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /** WhatsApp comercial dos botões "Falar com a gente" da LP. */
+  obterWhatsappComercial: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { whatsapp: "" };
+    const { configSistema } = await import("../../drizzle/schema");
+    const [row] = await db
+      .select({ valor: configSistema.valor })
+      .from(configSistema)
+      .where(eq(configSistema.chave, "whatsapp_comercial"))
+      .limit(1);
+    return { whatsapp: row?.valor ?? "" };
+  }),
+
+  salvarWhatsappComercial: adminProcedure
+    .input(z.object({ whatsapp: z.string().max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const digitos = input.whatsapp.replace(/\D/g, "");
+      if (digitos && digitos.length < 10) {
+        throw new Error("Número incompleto — use DDI+DDD+número (ex: 5585999999999).");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { configSistema } = await import("../../drizzle/schema");
+      await db
+        .insert(configSistema)
+        .values({ chave: "whatsapp_comercial", valor: digitos, atualizadoPor: ctx.user.id })
+        .onDuplicateKeyUpdate({ set: { valor: digitos, atualizadoPor: ctx.user.id } });
+      await registrarAuditoria({
+        ctx,
+        acao: "config.whatsapp_comercial",
+        alvoTipo: "config",
+        detalhes: { whatsapp: digitos },
+      });
+      return { ok: true };
+    }),
+
+  /** Módulos vendáveis com o preço mensal avulso gravado (0 = a definir). */
+  listarCatalogoModulos: adminProcedure.query(async () => {
+    const { listarCatalogoModulos } = await import("../billing/modulos-cobranca");
+    return listarCatalogoModulos();
+  }),
+
+  salvarPrecoModulo: adminProcedure
+    .input(z.object({
+      modulo: z.string().min(1).max(48),
+      precoMensalCentavos: z.number().int().min(0).max(100_000_000),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { salvarPrecoModulo } = await import("../billing/modulos-cobranca");
+      await salvarPrecoModulo({
+        modulo: input.modulo,
+        precoMensalCentavos: input.precoMensalCentavos,
+        atualizadoPor: ctx.user.id,
+      });
+      await registrarAuditoria({
+        ctx,
+        acao: "modulo.preco",
+        alvoTipo: "modulo",
+        alvoNome: input.modulo,
+        detalhes: { precoMensalCentavos: input.precoMensalCentavos },
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Visão de cobrança de um escritório: fatura composta (pacote + avulsos +
+   * atendentes adicionais − desconto), avulsos com status e a assinatura
+   * Asaas atual (pra comparar valor cobrado × valor calculado).
+   */
+  cobrancaDoEscritorio: adminProcedure
+    .input(z.object({ escritorioId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const { faturaDoEscritorio, listarAvulsosDoEscritorio } = await import("../billing/modulos-cobranca");
+      const [fatura, avulsos] = await Promise.all([
+        faturaDoEscritorio(input.escritorioId),
+        listarAvulsosDoEscritorio(input.escritorioId),
+      ]);
+
+      // Valor atualmente cobrado no Asaas (se existir assinatura vinculada).
+      let assinatura: { asaasSubscriptionId: string; valorCentavos: number | null } | null = null;
+      try {
+        const db = await getDb();
+        if (db) {
+          const { escritorios } = await import("../../drizzle/schema");
+          const [esc] = await db
+            .select({ ownerId: escritorios.ownerId })
+            .from(escritorios)
+            .where(eq(escritorios.id, input.escritorioId))
+            .limit(1);
+          if (esc?.ownerId) {
+            const { getActiveSubscriptionComHeranca } = await import("../db");
+            const sub = await getActiveSubscriptionComHeranca(esc.ownerId);
+            if (sub?.asaasSubscriptionId) {
+              assinatura = { asaasSubscriptionId: sub.asaasSubscriptionId, valorCentavos: null };
+              const { getAdminAsaasClient, isAsaasBillingConfigured } = await import("../billing/asaas-billing-client");
+              if (await isAsaasBillingConfigured()) {
+                const client = await getAdminAsaasClient();
+                const remota = await client.buscarAssinatura(sub.asaasSubscriptionId);
+                assinatura.valorCentavos = Math.round((remota.value ?? 0) * 100);
+              }
+            }
+          }
+        }
+      } catch {
+        // Asaas fora do ar não pode derrubar o painel — a fatura calculada já apareceu.
+      }
+
+      return { fatura, avulsos, assinatura };
+    }),
+
+  /**
+   * Concede/edita/remove módulo avulso do escritório. Preço fica congelado
+   * na linha (default sugerido = catálogo). Status "cancelado" desliga.
+   */
+  salvarModuloAvulso: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      modulo: z.string().min(1).max(48),
+      status: z.enum(["ativo", "suspenso", "cancelado"]),
+      precoCentavos: z.number().int().min(0).max(100_000_000),
+      expiraEm: z.string().datetime().nullable().default(null),
+      observacao: z.string().max(500).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { salvarModuloAvulso } = await import("../billing/modulos-cobranca");
+      await salvarModuloAvulso({
+        escritorioId: input.escritorioId,
+        modulo: input.modulo,
+        status: input.status,
+        precoCentavos: input.precoCentavos,
+        expiraEm: input.expiraEm ? new Date(input.expiraEm) : null,
+        observacao: input.observacao,
+        concedidoPor: ctx.user.id,
+      });
+      // O porteiro cacheia 30s por usuário — limpar faz o módulo novo valer já.
+      invalidarCacheGateModulos();
+      await registrarAuditoria({
+        ctx,
+        acao: "modulo.avulso",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          modulo: input.modulo,
+          status: input.status,
+          precoCentavos: input.precoCentavos,
+          expiraEm: input.expiraEm,
+        },
+      });
+      return { ok: true };
+    }),
+
+  /** Desconto comercial do escritório — percentual ou fixo, validade opcional. */
+  salvarDescontoEscritorio: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      /** null = remover desconto. */
+      tipo: z.enum(["percentual", "fixo"]).nullable(),
+      valor: z.number().int().min(0).max(100_000_000).default(0),
+      validoAte: z.string().datetime().nullable().default(null),
+      observacao: z.string().max(255).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (input.tipo === "percentual" && input.valor > 100) {
+        throw new Error("Desconto percentual não pode passar de 100%.");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { escritorios } = await import("../../drizzle/schema");
+      await db
+        .update(escritorios)
+        .set({
+          descontoTipo: input.tipo,
+          descontoValor: input.tipo ? input.valor : 0,
+          descontoValidoAte: input.tipo && input.validoAte ? new Date(input.validoAte) : null,
+          descontoObservacao: input.tipo ? input.observacao : null,
+        })
+        .where(eq(escritorios.id, input.escritorioId));
+      await registrarAuditoria({
+        ctx,
+        acao: "escritorio.desconto",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: { tipo: input.tipo, valor: input.valor, validoAte: input.validoAte },
+      });
+      return { ok: true };
+    }),
+
+  /**
+   * Aplica o total calculado da fatura na assinatura Asaas do escritório.
+   * O valor é SEMPRE recalculado aqui — o painel mostra um preview, mas o
+   * número que vai pra cobrança nasce no servidor.
+   */
+  aplicarValorAssinatura: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      /** Também atualiza cobranças já geradas e ainda não pagas. */
+      atualizarPendentes: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { faturaDoEscritorio } = await import("../billing/modulos-cobranca");
+      const fatura = await faturaDoEscritorio(input.escritorioId);
+      if (!fatura.planoSlug) throw new Error("Escritório sem plano ativo — nada a aplicar.");
+      if (fatura.cortesia) throw new Error("Assinatura de cortesia não é cobrada.");
+      if (fatura.totalCentavos <= 0) throw new Error("Fatura calculada em R$ 0 — confira preços antes de aplicar.");
+
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+      const { escritorios } = await import("../../drizzle/schema");
+      const [esc] = await db
+        .select({ ownerId: escritorios.ownerId })
+        .from(escritorios)
+        .where(eq(escritorios.id, input.escritorioId))
+        .limit(1);
+      if (!esc?.ownerId) throw new Error("Escritório não encontrado.");
+
+      const { getActiveSubscriptionComHeranca } = await import("../db");
+      const sub = await getActiveSubscriptionComHeranca(esc.ownerId);
+      if (!sub?.asaasSubscriptionId) {
+        throw new Error("Escritório sem assinatura Asaas vinculada (trial ou cobrança manual).");
+      }
+
+      const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+      const client = await getAdminAsaasClient();
+      await client.atualizarAssinatura(sub.asaasSubscriptionId, {
+        value: fatura.totalCentavos / 100,
+        updatePendingPayments: input.atualizarPendentes,
+      });
+
+      await registrarAuditoria({
+        ctx,
+        acao: "assinatura.valor",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          asaasSubscriptionId: sub.asaasSubscriptionId,
+          totalCentavos: fatura.totalCentavos,
+          itens: fatura.itens,
+          descontoCentavos: fatura.descontoCentavos,
+          atualizarPendentes: input.atualizarPendentes,
+        },
+      });
+
+      return { ok: true, totalCentavos: fatura.totalCentavos };
+    }),
 
   // ═══════════════════════════════════════════════════════════════════════
   // CUPONS DE DESCONTO — Sprint 3
@@ -1935,13 +2428,25 @@ export const adminRouter = router({
       ? ultimos3.reduce((sum, m) => sum + m.churnRate, 0) / ultimos3.length
       : 0;
 
-    // LTV estimado = (MRR médio por cliente) / (churn rate mensal)
-    const subsAtivas = allSubs.filter((s) => s.status === "active");
-    const mrrTotal = subsAtivas.reduce((sum, s) => {
-      const plan = PLANS.find((p) => p.id === s.planId);
-      return sum + (plan?.priceMonthly || 0);
-    }, 0);
-    const arpu = subsAtivas.length > 0 ? mrrTotal / subsAtivas.length : 0;
+    // LTV estimado = (MRR médio por cliente) / (churn rate mensal). O preço
+    // de cada assinatura é o mesmo do receitaMensal: valor negociado, senão
+    // o de tabela do catálogo — a lista fixa PLANS somava R$ 497 pra cada
+    // "completo", que é sob consulta. Só pagantes contam (cortesia não é
+    // receita, e entrava no denominador puxando o ARPU pra baixo).
+    const [pagantes] = await db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        mrr: sql<number>`SUM(COALESCE(${subscriptionsTable.valorNegociadoCentavos}, ${planosTable.precoMensalCentavos}, 0))`,
+      })
+      .from(subscriptionsTable)
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
+      .where(and(
+        eq(subscriptionsTable.status, "active"),
+        eq(subscriptionsTable.cortesia, false),
+      ));
+    const pagantesAtivos = Number(pagantes?.total ?? 0);
+    const mrrTotal = Number(pagantes?.mrr ?? 0);
+    const arpu = pagantesAtivos > 0 ? mrrTotal / pagantesAtivos : 0;
     const ltvEstimado = churnAtual > 0 ? arpu / (churnAtual / 100) : 0;
 
     // Retenção 12m: clientes que ainda estão ativos vs criados há 12+ meses
@@ -2092,6 +2597,12 @@ export const adminRouter = router({
       const newPlan = await getPlanByIdResolved(input.newPlanId);
       if (!newPlan) throw new Error("Plano não encontrado");
 
+      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao, exigirPlanoContratavel } =
+        await import("./subscription");
+      // Plano sob consulta se fecha por "Ativar assinatura negociada": aqui o
+      // preço cru do plano viraria assinatura de R$ 0 no Asaas.
+      await exigirPlanoContratavel(input.newPlanId, input.interval);
+
       if (!u.asaasCustomerId) {
         throw new Error(
           "Cliente não tem cadastro de cobrança no Asaas — não é possível trocar o plano por aqui. Use cortesia para liberar acesso.",
@@ -2099,23 +2610,9 @@ export const adminRouter = router({
       }
 
       const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
-      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
       const client = await getAdminAsaasClient();
 
       const currentSub = await getActiveSubscription(input.userId);
-
-      // Cancela a antiga no Asaas (best-effort) + marca local como canceled.
-      if (currentSub?.asaasSubscriptionId) {
-        try {
-          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
-          await db
-            .update(subscriptionsTable)
-            .set({ status: "canceled" })
-            .where(eq(subscriptionsTable.id, currentSub.id));
-        } catch (err: any) {
-          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
-        }
-      }
 
       const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, "");
       const value = input.interval === "monthly" ? newPlan.priceMonthly : newPlan.priceYearly;
@@ -2145,6 +2642,20 @@ export const adminRouter = router({
         });
       }
 
+      // A antiga só sai com a nova de pé no Asaas (best-effort). Cancelar
+      // antes deixava o cliente sem assinatura nenhuma quando o Asaas falhava.
+      if (currentSub?.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
+          await db
+            .update(subscriptionsTable)
+            .set({ status: "canceled" })
+            .where(eq(subscriptionsTable.id, currentSub.id));
+        } catch (err: any) {
+          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
+        }
+      }
+
       await registrarAuditoria({
         ctx,
         acao: "subscription.trocarPlanoAdmin",
@@ -2155,6 +2666,136 @@ export const adminRouter = router({
       });
 
       return { success: true, mensagem: `Plano alterado para ${newPlan.name}` };
+    }),
+
+  /**
+   * Fecha a venda de um plano sob consulta: cria a assinatura Asaas com o
+   * valor negociado na conversa e grava esse valor na subscription. É o
+   * único caminho de conversão trial → pagante desses planos (o checkout
+   * self-service os recusa de propósito).
+   *
+   * O acesso não é cortado enquanto o pagamento não cai: o trial é
+   * estendido por 7 dias (prazo do boleto/Pix) e o webhook de pagamento
+   * ativa a assinatura.
+   */
+  ativarAssinaturaNegociada: adminProcedure
+    .input(z.object({
+      userId: z.number().int().positive(),
+      /** Valor do ciclo escolhido (mensal ou anual), em centavos. */
+      valorCentavos: z.number().int().min(100).max(100_000_000),
+      cpfCnpj: z.string().max(24).optional(),
+      interval: z.enum(["monthly", "yearly"]).default("monthly"),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const [u] = await db
+        .select({ id: users.id, name: users.name, email: users.email })
+        .from(users)
+        .where(eq(users.id, input.userId))
+        .limit(1);
+      if (!u) throw new Error("Usuário não encontrado");
+
+      // Última subscription do cliente, mesmo com trial expirado/cancelado —
+      // é o cenário típico: a conversa fecha depois que o teste venceu.
+      const [ultima] = await db
+        .select()
+        .from(subscriptionsTable)
+        .where(eq(subscriptionsTable.userId, input.userId))
+        .orderBy(desc(subscriptionsTable.id))
+        .limit(1);
+      if (!ultima?.planId) {
+        throw new Error("Cliente sem plano definido — use 'Trocar plano' ou cortesia primeiro.");
+      }
+      if (ultima.cortesia) {
+        throw new Error("Cliente em cortesia — remova a cortesia antes de ativar cobrança.");
+      }
+      if (ultima.asaasSubscriptionId && ultima.status === "active") {
+        throw new Error(
+          "Cliente já tem assinatura Asaas ativa — ajuste o valor pelo card Módulos & cobrança.",
+        );
+      }
+
+      const { getPlanoBySlug } = await import("../billing/planos-repo");
+      const plano = await getPlanoBySlug(ultima.planId);
+      const planoNome = plano?.nome ?? ultima.planId;
+
+      const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
+      const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
+      const client = await getAdminAsaasClient();
+      const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, input.cpfCnpj || "");
+
+      // Assinatura Asaas antiga pendurada (retry incompleto) sai da frente.
+      if (ultima.asaasSubscriptionId) {
+        try {
+          await client.cancelarAssinatura(ultima.asaasSubscriptionId);
+        } catch (err: any) {
+          log.warn({ err: err?.message }, "cancelamento de assinatura antiga falhou (segue)");
+        }
+      }
+
+      const sub = await criarAssinaturaComFallback(client, {
+        customer: customerId,
+        billingType: "UNDEFINED", // cliente escolhe PIX/boleto/cartão no link
+        value: input.valorCentavos / 100,
+        nextDueDate: dataVencimentoPadrao(),
+        cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
+        description: `${planoNome} — JuridFlow (valor fechado)`,
+        externalReference: `${input.userId}:${ultima.planId}`,
+      });
+
+      // A fatura composta trabalha em base mensal.
+      const valorMensalCentavos =
+        input.interval === "monthly" ? input.valorCentavos : Math.round(input.valorCentavos / 12);
+
+      const prazoPagamento = Date.now() + 7 * 24 * 60 * 60 * 1000;
+      await db
+        .update(subscriptionsTable)
+        .set({
+          asaasSubscriptionId: sub.id,
+          asaasCustomerId: customerId,
+          status: "trialing",
+          trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
+          trialConvertido: true,
+          valorNegociadoCentavos: valorMensalCentavos,
+        })
+        .where(eq(subscriptionsTable.id, ultima.id));
+
+      // Link da 1ª cobrança — o dono manda na mesma conversa do WhatsApp.
+      let invoiceUrl = "";
+      try {
+        const cobrancas = await client.listarCobrancas({ customer: customerId, limit: 5 });
+        invoiceUrl =
+          cobrancas.data.find(
+            (c) => c.externalReference === `${input.userId}:${ultima.planId}` && !c.deleted,
+          )?.invoiceUrl || "";
+      } catch (err: any) {
+        log.warn({ err: err?.message }, "não achei o link da 1ª cobrança (segue sem)");
+      }
+
+      await confirmarEmailPorAcaoAdmin(db, input.userId);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "assinatura.ativarNegociada",
+        alvoTipo: "subscription",
+        alvoId: ultima.id,
+        alvoNome: u.name || u.email || undefined,
+        detalhes: {
+          planId: ultima.planId,
+          valorCentavos: input.valorCentavos,
+          interval: input.interval,
+          asaasSubscriptionId: sub.id,
+        },
+      });
+
+      return {
+        success: true,
+        invoiceUrl,
+        asaasSubscriptionId: sub.id,
+        mensagem: `Assinatura de ${planoNome} criada — pagamento em até 7 dias ativa de vez`,
+      };
     }),
 
   /**
@@ -2196,6 +2837,8 @@ export const adminRouter = router({
           cortesiaExpiraEm: input.expiraEm ?? null,
         })
         .where(eq(subscriptionsTable.id, input.subscriptionId));
+
+      await confirmarEmailPorAcaoAdmin(db, sub.userId);
 
       const [u] = await db.select({ id: users.id, name: users.name, email: users.email })
         .from(users).where(eq(users.id, sub.userId)).limit(1);
@@ -2274,6 +2917,126 @@ export const adminRouter = router({
    * `cortesia=true`. `getActiveSubscription` retorna ela por causa da
    * priorização de cortesia (helper `temAcessoAtivo`).
    */
+  /**
+   * Cria uma conta de cliente direto do painel (mockup aprovado 26/08) —
+   * pra demo e pra cliente fechado no WhatsApp, sem passar pelo cadastro
+   * público. O e-mail nasce confirmado (é o dono entregando o acesso);
+   * os TERMOS não são forjados — o TermosGate pede o aceite no primeiro
+   * login do cliente, como manda a trilha LGPD. Nada é enviado por e-mail:
+   * o admin copia login+senha da tela e entrega do jeito dele.
+   */
+  criarCliente: adminProcedure
+    .input(z.object({
+      nome: z.string().min(2).max(255),
+      email: z.string().email().max(320),
+      senha: z.string().min(8).max(128),
+      /** Mesma exigência do cadastro público: conta de dono nasce com WhatsApp. */
+      whatsapp: z.string().max(32),
+      planId: z.string().max(64).optional(),
+      acesso: z.enum(["cortesia", "trial"]),
+      cortesiaExpiraEm: z.number().int().positive().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new Error("Database not available");
+
+      const email = input.email.trim().toLowerCase();
+      const whatsapp = normalizarWhatsappCadastro(input.whatsapp);
+      if (!whatsapp) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: MENSAGEM_WHATSAPP_OBRIGATORIO });
+      }
+      const { getUserByEmail, upsertUser } = await import("../db");
+      if (await getUserByEmail(email)) {
+        throw new Error("Já existe conta com esse e-mail.");
+      }
+      if (input.cortesiaExpiraEm != null && input.cortesiaExpiraEm <= Date.now()) {
+        throw new Error("Validade da cortesia precisa estar no futuro.");
+      }
+
+      let plano = null as Awaited<ReturnType<typeof import("../billing/planos-repo").getPlanoBySlug>> | null;
+      if (input.planId) {
+        const { getPlanoBySlug } = await import("../billing/planos-repo");
+        plano = await getPlanoBySlug(input.planId);
+        if (!plano) throw new Error("Plano não encontrado no catálogo.");
+      }
+      if (input.acesso === "trial" && !plano) {
+        throw new Error("Escolha o plano pro teste de 14 dias.");
+      }
+
+      const { hashPassword } = await import("../_core/password");
+      const passwordHash = await hashPassword(input.senha);
+      // Mesmo formato de openId do signup por e-mail — a conta é idêntica
+      // a uma auto-cadastrada, só nasce pela mão do admin.
+      const openId = `email-${Buffer.from(email).toString("base64url")}`;
+
+      await upsertUser({
+        openId,
+        name: input.nome.trim(),
+        email,
+        loginMethod: "email",
+        passwordHash,
+        whatsapp,
+        lastSignedIn: new Date(),
+      });
+      const criado = await getUserByEmail(email);
+      if (!criado) throw new Error("Falha ao criar a conta.");
+
+      await db
+        .update(users)
+        .set({ emailVerificado: true, emailVerificadoEm: new Date() })
+        .where(eq(users.id, criado.id));
+
+      // Escritório nasce junto: é ele que faz a conta aparecer como dono na
+      // lista/funil, em vez de "cadastro solto".
+      const { criarEscritorio, getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      let escr = await getEscritorioPorUsuario(criado.id);
+      if (!escr) {
+        await criarEscritorio(criado.id, input.nome.trim(), email);
+        escr = await getEscritorioPorUsuario(criado.id);
+      }
+
+      if (input.acesso === "cortesia") {
+        await db.insert(subscriptionsTable).values({
+          userId: criado.id,
+          planId: input.planId ?? null,
+          status: "active",
+          cortesia: true,
+          cortesiaMotivo: "Conta criada pelo admin no painel",
+          cortesiaExpiraEm: input.cortesiaExpiraEm ?? null,
+        });
+      } else {
+        const dias = plano!.trialDias > 0 ? plano!.trialDias : 14;
+        const agora = Date.now();
+        const expira = agora + dias * 24 * 60 * 60 * 1000;
+        await db.insert(subscriptionsTable).values({
+          userId: criado.id,
+          planId: input.planId!,
+          status: "trialing",
+          trialIniciadoEm: agora,
+          trialExpiraEm: expira,
+          currentPeriodEnd: expira,
+          creditsLimit: plano!.limites.creditosCalculosMes,
+        });
+        if (escr) {
+          await db
+            .update(escritorios)
+            .set({ jaUsouTrial: true, trialUsadoEm: new Date() })
+            .where(eq(escritorios.id, escr.escritorio.id));
+        }
+      }
+
+      await registrarAuditoria({
+        ctx,
+        acao: "user.criarCliente",
+        alvoTipo: "user",
+        alvoId: criado.id,
+        alvoNome: input.nome.trim(),
+        detalhes: { email, acesso: input.acesso, planId: input.planId ?? null },
+      });
+
+      return { userId: criado.id };
+    }),
+
   marcarCortesiaUser: adminProcedure
     .input(z.object({
       userId: z.number(),
@@ -2332,6 +3095,8 @@ export const adminRouter = router({
         subscriptionId = inserido[0].id;
         foiCriadaVirtual = true;
       }
+
+      await confirmarEmailPorAcaoAdmin(db, input.userId);
 
       await registrarAuditoria({
         ctx,

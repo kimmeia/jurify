@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:24px 30px; height:100%; display:flex; flex-direction:column; gap:13px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:13.5px;
+                 border-radius:10px; padding:11px 18px; display:flex; align-items:center; gap:8px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+  .btn-ghost { border:1px solid var(--borda); background:var(--surface); color:var(--corpo);
+               font-weight:600; font-size:12.5px; border-radius:9px; padding:9px 14px;
+               display:inline-flex; align-items:center; gap:7px; }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+
+  /* origem */
+  .origem { flex:0 0 auto; padding:13px 16px; display:flex; align-items:center; gap:13px;
+            background:var(--acento-bg-2); border:1px solid #ddd6fe; border-radius:14px; }
+  .origem .txt { font-size:12.5px; color:var(--acento-forte); line-height:1.5; }
+  .origem b { font-weight:700; }
+  .arq { display:inline-flex; align-items:center; gap:6px; background:#fff; border:1px solid #ddd6fe;
+         border-radius:8px; padding:5px 10px; font-size:11.5px; font-weight:600; color:var(--acento-forte); }
+
+  /* tiles */
+  .tiles { flex:0 0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:11px; }
+  .tile { padding:13px 15px; }
+  .tile .n { font-size:26px; font-weight:700; letter-spacing:-.02em; margin-top:5px; line-height:1; }
+  .tile .d { font-size:11px; color:var(--mudo); margin-top:6px; }
+
+  /* de-para */
+  .depara { flex:0 0 auto; padding:14px 16px; }
+  .dp-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:11px; margin-top:11px; }
+  .dp { border:1px solid var(--borda); border-radius:11px; padding:11px 12px; }
+  .dp .cab { display:flex; align-items:center; justify-content:space-between; }
+  .dp .nome { font-size:12.5px; font-weight:700; }
+  .dp .frac { font-size:11.5px; font-weight:700; }
+  .dp .barra { height:5px; border-radius:99px; background:var(--hairline); margin:9px 0 8px; overflow:hidden; }
+  .dp .barra i { display:block; height:100%; border-radius:99px; }
+  .dp .obs { font-size:11px; color:var(--mudo); line-height:1.45; }
+  .dp .obs b { color:var(--corpo); font-weight:600; }
+
+  /* tabela */
+  .prev { flex:1 1 auto; padding:14px 16px 0; display:flex; flex-direction:column; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  thead th { text-align:left; font-size:10.5px; font-weight:700; letter-spacing:.06em;
+             text-transform:uppercase; color:var(--fraco); padding:0 9px 7px; border-bottom:1px solid var(--borda); }
+  tbody td { padding:8px 9px; font-size:12px; color:var(--corpo); border-bottom:1px solid var(--hairline);
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  tbody td.nome { color:var(--tinta); font-weight:600; }
+  tbody tr.pular td { color:var(--fraco); }
+  tbody tr.pular td.nome { color:var(--mudo); font-weight:500; text-decoration:line-through; }
+
+  .tag { display:inline-flex; align-items:center; gap:5px; border-radius:99px;
+         padding:3px 9px; font-size:10.5px; font-weight:700; letter-spacing:.02em; }
+  .t-criar { background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-borda); }
+  .t-pular { background:var(--hairline); color:var(--mudo); border:1px solid var(--borda); }
+  .t-aten  { background:var(--ambar-bg); color:var(--ambar); border:1px solid var(--ambar-borda); }
+  .dot { width:5px; height:5px; border-radius:50%; }
+
+  .mais { padding:9px 9px 11px; font-size:11.5px; color:var(--fraco); font-weight:500; }
+
+  /* rodapé fixo */
+  .rodape { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between;
+            padding:13px 16px; }
+  .resumo { display:flex; align-items:center; gap:18px; }
+  .resumo .it { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--corpo); }
+  .resumo .it b { color:var(--tinta); font-weight:700; }
+  .aviso { font-size:11.5px; color:var(--mudo); display:flex; align-items:center; gap:7px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Restaurar cards perdidos</div>
+        <div class="sub">Recria no quadro os cards que sumiram, a partir de um relatório antigo. Só cria — nunca apaga nem sobrescreve.</div>
+      </div>
+      <div style="display:flex; gap:9px; align-items:center;">
+        <div class="btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7M12 3v13m0 0l-4-4m4 4l4-4" stroke="#334155" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Trocar arquivo
+        </div>
+      </div>
+    </div>
+
+    <div class="origem">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto"><path d="M12 8v5m0 3h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.7 3.9a2 2 0 00-3.4 0z" stroke="#5b21b6" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="txt">
+        Lendo <span class="arq">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z M14 2v6h6" stroke="#5b21b6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          cards_kanban_06-08-2026.pdf
+        </span>
+        &nbsp;— <b>157 cards</b> naquele dia, dos quais <b>82 não existem mais</b> no quadro de hoje.
+        Card que apenas mudou de coluna foi reencontrado e não entra aqui.
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="card tile">
+        <div class="micro">Ausentes hoje</div>
+        <div class="n">82</div>
+        <div class="d">estavam em 06/08, não estão em 18/08</div>
+      </div>
+      <div class="card tile" style="border-color:var(--ok-borda); background:var(--ok-bg);">
+        <div class="micro" style="color:#047857">Prontos para recriar</div>
+        <div class="n" style="color:var(--ok)">58</div>
+        <div class="d" style="color:#047857">coluna e dados resolvidos</div>
+      </div>
+      <div class="card tile" style="border-color:var(--ambar-borda); background:var(--ambar-bg);">
+        <div class="micro" style="color:var(--ambar)">Precisam de você</div>
+        <div class="n" style="color:var(--ambar)">8</div>
+        <div class="d" style="color:var(--ambar)">responsável não encontrado no time</div>
+      </div>
+      <div class="card tile">
+        <div class="micro">Serão pulados</div>
+        <div class="n" style="color:var(--mudo)">16</div>
+        <div class="d">alguém já refez esse card na mão</div>
+      </div>
+    </div>
+
+    <div class="card depara">
+      <div style="display:flex; align-items:baseline; justify-content:space-between;">
+        <div class="h2">De-para: o relatório tem nome, o quadro precisa de cadastro</div>
+        <div style="font-size:11.5px; color:var(--mudo);">Nada é criado no cadastro — se não achar, o campo fica vazio e o card entra assim mesmo.</div>
+      </div>
+      <div class="dp-grid">
+        <div class="dp">
+          <div class="cab"><div class="nome">Coluna do quadro</div><div class="frac" style="color:var(--ok)">7 de 7</div></div>
+          <div class="barra"><i style="width:100%; background:var(--ok)"></i></div>
+          <div class="obs">Todas as colunas do relatório ainda existem no funil <b>Produção Operacional</b>. 80 dos 82 voltam para <b>DAR ENTRADA</b>.</div>
+        </div>
+        <div class="dp">
+          <div class="cab"><div class="nome">Responsável</div><div class="frac" style="color:var(--ambar)">9 de 11</div></div>
+          <div class="barra"><i style="width:82%; background:var(--ambar)"></i></div>
+          <div class="obs">Não encontrei <b>“Felipe”</b> e <b>“LICIANE D. CARVAL…”</b> — o relatório corta o nome. Você escolhe na lista ou deixa sem responsável.</div>
+        </div>
+        <div class="dp">
+          <div class="cab"><div class="nome">Cliente vinculado</div><div class="frac" style="color:var(--mudo)">41 de 82</div></div>
+          <div class="barra"><i style="width:50%; background:var(--fantasma)"></i></div>
+          <div class="obs">Os outros 41 já estavam como <b>“— sem cliente —”</b> no relatório antigo. Voltam do mesmo jeito, sem vínculo.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card prev">
+      <div style="display:flex; align-items:baseline; justify-content:space-between;">
+        <div class="h2">O que vai acontecer com cada um</div>
+        <div style="display:flex; gap:6px;">
+          <div class="chip" style="border:1px solid var(--borda); border-radius:999px; padding:5px 11px; font-size:11.5px; font-weight:600; color:#fff; background:var(--tinta);">Todos 82</div>
+          <div class="chip" style="border:1px solid var(--borda); border-radius:999px; padding:5px 11px; font-size:11.5px; font-weight:500; color:var(--corpo-2);">Só os 8 com pendência</div>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:23%">Card</th>
+            <th style="width:16%">Cliente</th>
+            <th style="width:13%">Volta para</th>
+            <th style="width:14%">Responsável</th>
+            <th style="width:9%">Cadastro</th>
+            <th style="width:7%">Prazo</th>
+            <th style="width:18%">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="nome">Antonio Pessoa Nobre Filho</td><td>Antonio P. Nobre Filho</td>
+            <td>DAR ENTRADA</td><td>Eduardo F. Braga</td><td>04/08/2026</td><td>19/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Manoel Irineu Gomes</td><td>— sem cliente —</td>
+            <td>DAR ENTRADA</td><td>Antonio J. V. Marques</td><td>30/07/2026</td><td>14/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Juliane Amaro da Silva Lopes</td><td>Juliane A. S. Lopes</td>
+            <td>DAR ENTRADA</td><td style="color:var(--ambar); font-weight:600">Felipe &nbsp;⚠</td><td>29/07/2026</td><td>13/08</td>
+            <td><span class="tag t-aten"><span class="dot" style="background:var(--ambar)"></span>Escolher responsável</span></td>
+          </tr>
+          <tr class="pular">
+            <td class="nome">Edineudo da Silva</td><td>Edineudo da Silva</td>
+            <td>DAR ENTRADA</td><td>Antonio J. V. Marques</td><td>04/08/2026</td><td>19/08</td>
+            <td><span class="tag t-pular">Pular — refeito em 17/08</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Gleison Carlos Miguel</td><td>— sem cliente —</td>
+            <td>DAR ENTRADA</td><td>Dayane Rios</td><td>23/07/2026</td><td>07/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Severino Sebag de Magalhães</td><td>Severino S. Magalhães</td>
+            <td>DAR ENTRADA</td><td>Eduardo F. Braga</td><td>24/07/2026</td><td>08/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Josefa Marinho de Andrade</td><td>— sem cliente —</td>
+            <td>EXECUÇÃO DE HONORÁRIOS</td><td style="color:var(--ambar); font-weight:600">Liciane D. C… &nbsp;⚠</td><td>21/07/2026</td><td>05/08</td>
+            <td><span class="tag t-aten"><span class="dot" style="background:var(--ambar)"></span>Escolher responsável</span></td>
+          </tr>
+          <tr class="pular">
+            <td class="nome">Elienilda Florindo Lima Fontes</td><td>Elienilda F. L. Fontes</td>
+            <td>DAR ENTRADA</td><td>Eduardo F. Braga</td><td>05/08/2026</td><td>20/08</td>
+            <td><span class="tag t-pular">Pular — refeito em 14/08</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Raimunda Nonata de Sousa</td><td>Raimunda N. de Sousa</td>
+            <td>DAR ENTRADA</td><td>Dayane Rios</td><td>22/07/2026</td><td>06/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+          <tr>
+            <td class="nome">Cícero Bandeira de Melo</td><td>— sem cliente —</td>
+            <td>DAR ENTRADA</td><td>Antonio J. V. Marques</td><td>18/07/2026</td><td>02/08</td>
+            <td><span class="tag t-criar"><span class="dot" style="background:var(--ok)"></span>Recriar</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="mais">+ 72 cards na lista — role para ver todos</div>
+    </div>
+
+    <div class="card rodape">
+      <div class="resumo">
+        <div class="it"><span class="dot" style="background:var(--ok); width:7px; height:7px;"></span><b>58</b> serão recriados</div>
+        <div class="it"><span class="dot" style="background:var(--ambar); width:7px; height:7px;"></span><b>8</b> aguardando você escolher o responsável</div>
+        <div class="it"><span class="dot" style="background:var(--fantasma); width:7px; height:7px;"></span><b>16</b> pulados</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <div class="aviso">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4M12 3l7 4v5c0 4.5-3 8.3-7 9-4-.7-7-4.5-7-9V7l7-4z" stroke="#64748b" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Só cria. Nenhum card existente é alterado ou apagado.
+        </div>
+        <div class="btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 12a9 9 0 109-9 9 9 0 00-6.4 2.7L3 8M3 3v5h5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Recriar 58 cards
+        </div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

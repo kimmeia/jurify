@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); display:flex; }
+
+  /* ── sidebar (fiel ao app) ── */
+  .side { flex:0 0 232px; background:#16132a; height:100%; padding:18px 14px 12px; display:flex; flex-direction:column; gap:2px; }
+  .logo { font-family:'Poppins'; font-weight:700; font-size:17px; color:#fff; padding:0 10px 12px; display:flex; align-items:center; gap:8px; }
+  .logo .sino { margin-left:auto; position:relative; width:18px; height:18px; opacity:.85; }
+  .logo .sino i { position:absolute; top:-6px; right:-8px; background:#f43f5e; color:#fff; font-style:normal;
+                  font-size:8.5px; font-weight:800; border-radius:99px; padding:1px 4px; }
+  .sgrupo { font-size:9.5px; font-weight:800; letter-spacing:.09em; color:#ffffff59; padding:11px 10px 4px; }
+  .sitem { display:flex; align-items:center; gap:9px; padding:7px 10px; border-radius:8px;
+           font-size:12.5px; font-weight:500; color:#ffffffb8; }
+  .sitem svg { opacity:.75; flex:0 0 auto; }
+  .sitem.on { background:#ffffff14; color:#fff; font-weight:600; }
+  .sitem .b { margin-left:auto; font-size:9.5px; font-weight:800; border-radius:99px; padding:1.5px 7px; }
+  .b-nov { background:var(--acento); color:#fff; }
+  .b-ale { background:#f43f5e; color:#fff; }
+  .b-beta { margin-left:auto; font-size:8.5px; font-weight:800; letter-spacing:.05em; border-radius:5px; padding:2px 6px; background:#fbbf24; color:#422006; }
+  .suser { margin-top:auto; border-top:1px solid #ffffff1c; padding:10px 6px 0; display:flex; align-items:center; gap:8px; }
+  .suser .avatar { width:26px; height:26px; border-radius:50%; background:#7c3aed; color:#fff; font-size:10px; font-weight:700;
+                   display:flex; align-items:center; justify-content:center; }
+  .suser .nome { font-size:11.5px; font-weight:600; color:#fff; line-height:1.2; }
+  .suser .cargo { font-size:9.5px; color:#ffffff77; }
+  .suser svg { margin-left:auto; opacity:.6; }
+  .suser svg + svg { margin-left:2px; }
+
+  /* ── conteúdo ── */
+  .wrap { flex:1 1 auto; padding:22px 30px 16px; height:100%; display:flex; flex-direction:column; gap:11px; overflow:hidden; }
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13px; color:var(--mudo); }
+  .pastilhas { display:flex; gap:8px; margin-top:9px; }
+  .pastilha { display:inline-flex; align-items:baseline; gap:5px; border:1px solid var(--borda); background:var(--surface);
+              border-radius:99px; padding:4px 11px; font-size:11px; color:var(--mudo); }
+  .pastilha b { font-size:12.5px; color:var(--tinta); }
+  .btn { height:37px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+         padding:0 14px; display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .btn-p { background:var(--acento); border-color:var(--acento); color:#fff; box-shadow:0 8px 18px -8px #7c3aed88; }
+  .btn-mini { height:29px; border:1px solid var(--borda); background:var(--surface); border-radius:8px;
+              padding:0 11px; display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--corpo); white-space:nowrap; }
+  .btn-mini.p { background:var(--acento); border-color:var(--acento); color:#fff; }
+  .btn-mini.ghost { border-color:transparent; color:var(--mudo); }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* abas — sem "Consultar" */
+  .abas { flex:0 0 auto; display:inline-flex; gap:4px; background:var(--hairline); padding:3px; border-radius:10px; align-self:flex-start; }
+  .aba { padding:7px 13px; font-size:12px; font-weight:600; color:var(--mudo); border-radius:8px;
+         display:flex; align-items:center; gap:7px; }
+  .aba.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .aba .n { font-size:9.5px; font-weight:800; border-radius:99px; padding:1.5px 6px; background:#e2e8f0; color:var(--mudo); }
+  .aba.on .n { background:var(--acento); color:#fff; }
+
+  /* toolbar */
+  .filtros { flex:0 0 auto; display:flex; gap:10px; align-items:center; }
+  .busca { position:relative; flex:1; }
+  .busca input { width:100%; height:37px; border:1px solid var(--borda); border-radius:9px; background:var(--surface);
+                 padding:0 12px 0 36px; font-family:'Inter'; font-size:13px; color:var(--tinta); outline:none; }
+  .busca input::placeholder { color:var(--fraco); }
+  .busca svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); }
+  .per { display:inline-flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .per span { padding:6px 12px; font-size:11.5px; font-weight:600; color:var(--mudo); border-radius:7px; display:flex; align-items:center; gap:6px; }
+  .per span.on { background:var(--surface); color:var(--tinta); box-shadow:0 1px 3px #0f172a1a; }
+  .per i { font-style:normal; font-size:9.5px; font-weight:800; border-radius:99px; padding:1px 6px; background:#e2e8f0; color:var(--mudo); }
+  .per span.on i { background:var(--acento); color:#fff; }
+  .select { height:37px; border:1px solid var(--borda); background:var(--surface); border-radius:9px;
+            padding:0 12px; display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:500; color:var(--corpo); }
+
+  /* seções da triagem */
+  .secao { flex:0 0 auto; }
+  .sec-cab { display:flex; align-items:baseline; gap:9px; padding:2px 2px 7px; }
+  .sec-cab .t { font-family:'Poppins'; font-weight:700; font-size:14px; }
+  .sec-cab .n { font-size:10px; font-weight:800; border-radius:99px; padding:2px 8px; }
+  .sec-cab .d { font-size:11px; color:var(--fraco); margin-left:auto; }
+
+  .acao-card { display:flex; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--hairline); }
+  .acao-card:last-child { border-bottom:none; }
+  .tag { font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+         border-radius:99px; padding:2.5px 8px; white-space:nowrap; flex:0 0 auto; }
+  .t-sent { background:var(--alerta-bg); color:var(--alerta); border:1px solid var(--alerta-borda); }
+  .t-aud  { background:var(--ambar-bg); color:var(--ambar); border:1px solid var(--ambar-borda); }
+  .t-desp { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+  .t-rot  { background:var(--hairline); color:var(--mudo); border:1px solid var(--borda); }
+  .rotulo { font-size:13px; font-weight:700; color:var(--tinta-2); }
+  .meta { font-size:11px; color:var(--mudo); margin-top:2.5px; }
+  .meta b { color:var(--corpo); font-weight:600; }
+  .idade { font-size:10.5px; font-weight:600; color:var(--fraco); white-space:nowrap; }
+  .acoes-r { margin-left:auto; display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+
+  .leve { display:flex; align-items:center; gap:12px; padding:9px 16px; border-bottom:1px solid var(--hairline); }
+  .leve:last-child { border-bottom:none; }
+  .leve .rotulo { font-size:12.5px; font-weight:600; }
+  .mais { padding:9px 16px; font-size:11.5px; font-weight:600; color:var(--acento-forte); background:var(--acento-bg); border-radius:0 0 13px 13px; }
+
+  .rotina-bar { display:flex; align-items:center; gap:12px; padding:12px 16px; }
+  .rotina-bar .t { font-size:12.5px; font-weight:600; color:var(--corpo); }
+  .rotina-bar .d { font-size:11px; color:var(--mudo); margin-top:2px; }
+
+  .nota { flex:0 0 auto; margin-top:auto; display:flex; align-items:center; gap:10px; padding:9px 16px; }
+  .nota .d { font-size:11.5px; color:var(--mudo); }
+  .nota b { color:var(--corpo); font-weight:600; }
+</style>
+</head>
+<body>
+
+  <div class="side">
+    <div class="logo">
+      J. JuridFlow
+      <span class="sino"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><i>17</i></span>
+    </div>
+    <div class="sgrupo">DIA A DIA</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.5" stroke="#fff" stroke-width="1.8"/><rect x="14" y="3" width="7" height="5" rx="1.5" stroke="#fff" stroke-width="1.8"/><rect x="14" y="12" width="7" height="9" rx="1.5" stroke="#fff" stroke-width="1.8"/><rect x="3" y="16" width="7" height="5" rx="1.5" stroke="#fff" stroke-width="1.8"/></svg>Dashboard</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M8 3v4M16 3v4M3 10h18" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Agenda<span class="b b-ale">25</span></div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 0116 0v5a2 2 0 01-2 2h-1v-6h3M4 12v5a2 2 0 002 2h1v-6H4" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Atendimento<span class="b b-nov">8</span></div>
+    <div class="sgrupo">CARTEIRA</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="7" r="4" stroke="#fff" stroke-width="1.8"/></svg>Clientes</div>
+    <div class="sitem on"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#fff" stroke-width="1.8"/><path d="M20 20l-3.5-3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/><path d="M8.5 11h5M11 8.5v5" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>Processos<span class="b b-nov">99</span></div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7l3-7z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Acordos</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="5" height="18" rx="1" stroke="#fff" stroke-width="1.8"/><rect x="10" y="3" width="5" height="12" rx="1" stroke="#fff" stroke-width="1.8"/><rect x="17" y="3" width="5" height="8" rx="1" stroke="#fff" stroke-width="1.8"/></svg>Kanban</div>
+    <div class="sgrupo">FERRAMENTAS</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2a7 7 0 017 7c0 2.5-1.3 4.7-3.3 6l-.7 4h-6l-.7-4A7 7 0 0112 2z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>JurisIA<span class="b-beta">BETA</span></div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="1.8"/><path d="M12 7v5l3 3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Ponto</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="2" width="16" height="20" rx="2" stroke="#fff" stroke-width="1.8"/><path d="M8 7h8M8 12h3M8 17h3M13 12h3M13 17h3" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Cálculos</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2v6h6" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Modelos</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Automações</div>
+    <div class="sgrupo">GESTÃO</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v20M17 7H9.5a2.5 2.5 0 000 5h5a2.5 2.5 0 010 5H7" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Financeiro</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M7 21V9M12 21V3M17 21v-8" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>Relatórios</div>
+    <div class="sitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18h6M10 21h4M12 3a6 6 0 014 10.5c-.6.5-1 1.3-1 2v.5h-6v-.5c0-.7-.4-1.5-1-2A6 6 0 0112 3z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg>Roadmap</div>
+    <div class="suser">
+      <div class="avatar">BB</div>
+      <div><div class="nome">Bruno...</div><div class="cargo">escritor...</div></div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="#fff" stroke-width="1.8"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L14 3h-4l-.5 2.7a7 7 0 00-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2L10 21h4l.5-2.7a7 7 0 002-1.2l2.4 1 2-3.4-2-1.5c.06-.4.1-.8.1-1.2z" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Processos</div>
+        <div class="sub">O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos</div>
+        <div class="pastilhas">
+          <span class="pastilha"><b>61</b> monitorados</span>
+          <span class="pastilha"><b>184</b> créditos</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px">
+        <div class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#64748b" stroke-width="1.8"/><path d="M20 20l-3.5-3.5" stroke="#64748b" stroke-width="1.8" stroke-linecap="round"/></svg>Consultar CNJ</div>
+        <div class="btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#64748b" stroke-width="1.8"/><path d="M3 8l9 6 9-6" stroke="#64748b" stroke-width="1.8" stroke-linejoin="round"/></svg>Resumo diário</div>
+      </div>
+    </div>
+
+    <div class="abas">
+      <div class="aba on">Movimentações<span class="n">99</span></div>
+      <div class="aba">Monitoramento<span class="n">61</span></div>
+      <div class="aba">Novas Ações<span class="n">3</span></div>
+      <div class="aba">Alertas<span class="n">5</span></div>
+      <div class="aba">Cofre</div>
+    </div>
+
+    <div class="filtros">
+      <div class="busca">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="#94a3b8" stroke-width="2"/><path d="M20 20l-3.5-3.5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+        <input placeholder="Buscar por cliente, CNJ ou trecho da decisão...">
+      </div>
+      <div class="per">
+        <span>Esta semana<i>0</i></span>
+        <span class="on">30 dias<i>99</i></span>
+        <span>90 dias</span>
+      </div>
+      <div class="select">Todos os tipos<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#64748b" stroke-width="2.2" stroke-linecap="round"/></svg></div>
+    </div>
+
+    <div class="secao">
+      <div class="sec-cab">
+        <div class="t">Exigem ação</div>
+        <span class="n" style="background:var(--alerta-bg); color:var(--alerta)">3</span>
+        <div class="d">resolvidas aqui, o dia está feito</div>
+      </div>
+      <div class="card" style="border-color:var(--alerta-borda)">
+        <div class="acao-card">
+          <span class="tag t-sent">Sentença</span>
+          <div>
+            <div class="rotulo">Sentença publicada — procedente em parte</div>
+            <div class="meta">Marcos Vilar · 0801234-55.2026.8.06.0112 · <b>prazo sugerido: Embargos, 5 dias úteis (vence 26/08)</b></div>
+          </div>
+          <div class="acoes-r"><span class="idade">há 9 dias</span><div class="btn-mini p">Criar prazo</div><div class="btn-mini ghost">Já resolvi</div></div>
+        </div>
+        <div class="acao-card">
+          <span class="tag t-aud">Audiência</span>
+          <div>
+            <div class="rotulo">Audiência de conciliação designada — 15/09 às 10h</div>
+            <div class="meta">Camila Rocha · 0803456-88.2026.8.06.0090</div>
+          </div>
+          <div class="acoes-r"><span class="idade">há 14 dias</span><div class="btn-mini p">Agendar</div><div class="btn-mini ghost">Já resolvi</div></div>
+        </div>
+        <div class="acao-card">
+          <span class="tag t-sent">Decisão</span>
+          <div>
+            <div class="rotulo">Tutela de urgência indeferida</div>
+            <div class="meta">Paulo Siqueira · 0802290-17.2026.8.06.0071 · <b>teor disponível, ainda não lido</b></div>
+          </div>
+          <div class="acoes-r"><span class="idade">há 25 dias</span><div class="btn-mini p">Ler teor</div><div class="btn-mini ghost">Já resolvi</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="secao">
+      <div class="sec-cab">
+        <div class="t">Vale ler</div>
+        <span class="n" style="background:var(--acento-bg); color:var(--acento-forte)">12</span>
+        <div class="d">nada a fazer agora, mas você quer saber</div>
+      </div>
+      <div class="card">
+        <div class="leve">
+          <span class="tag t-desp">Despacho</span>
+          <div><div class="rotulo">Despacho — intime-se a parte autora</div><div class="meta">Luciana Prado · 0807781-20.2026.8.06.0034</div></div>
+          <div class="acoes-r"><span class="idade">há 11 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="leve">
+          <span class="tag t-desp">Decisão</span>
+          <div><div class="rotulo">Perícia contábil deferida — nomeado perito</div><div class="meta">Roberto Feitosa · 0809912-41.2026.8.06.0007</div></div>
+          <div class="acoes-r"><span class="idade">há 16 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="leve">
+          <span class="tag t-desp">Decisão</span>
+          <div><div class="rotulo">Embargos de declaração não acolhidos</div><div class="meta">Fernanda Dias · 0806648-93.2026.8.06.0022</div></div>
+          <div class="acoes-r"><span class="idade">há 21 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="leve">
+          <span class="tag t-desp">Despacho</span>
+          <div><div class="rotulo">Designada nova data para perícia médica</div><div class="meta">Eduardo Martins · 0805567-02.2026.8.06.0055</div></div>
+          <div class="acoes-r"><span class="idade">há 22 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="leve">
+          <span class="tag t-desp">Decisão</span>
+          <div><div class="rotulo">Gratuidade da justiça deferida</div><div class="meta">Helena Castro · 0802914-70.2026.8.06.0018</div></div>
+          <div class="acoes-r"><span class="idade">há 26 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="leve">
+          <span class="tag t-desp">Despacho</span>
+          <div><div class="rotulo">Vista à parte contrária por 15 dias</div><div class="meta">Otávio Ramos · 0808103-29.2026.8.06.0140</div></div>
+          <div class="acoes-r"><span class="idade">há 28 dias</span><div class="btn-mini ghost">Ver resumo</div></div>
+        </div>
+        <div class="mais">+ 6 para ler — o resto é leitura, não pendência</div>
+      </div>
+    </div>
+
+    <div class="secao">
+      <div class="sec-cab">
+        <div class="t">Rotina</div>
+        <span class="n" style="background:var(--hairline); color:var(--mudo)">84</span>
+        <div class="d">expediente do cartório — existe pra não sumir, não pra ser lido</div>
+      </div>
+      <div class="card rotina-bar">
+        <span class="tag t-rot">84 itens</span>
+        <div style="flex:1">
+          <div class="t">Juntadas, conclusos, atos ordinatórios e publicações de expediente</div>
+          <div class="d">É daqui que vem quase todo o 99 do menu — movimento de cartório, não pendência sua.</div>
+        </div>
+        <div class="btn-mini ghost">Ver a lista</div>
+        <div class="btn-mini">Marcar as 84 como vistas</div>
+      </div>
+    </div>
+
+    <div class="card nota">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#94a3b8" stroke-width="1.8"/><path d="M12 8h.01M12 11v5" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/></svg>
+      <div class="d"><b>O 99 do menu = 3 + 12 + 84.</b> "Criar prazo", "Já resolvi" e "Marcar como vistas" derrubam o número no menu e aqui ao mesmo tempo. A aba Consultar saiu — consultar CNJ virou o botão ali em cima, do lado do Resumo diário.</div>
+    </div>
+
+  </div>
+</body>
+</html>

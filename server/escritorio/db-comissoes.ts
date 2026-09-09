@@ -14,11 +14,14 @@ import {
   categoriasCobranca,
   categoriasDespesa,
   colaboradores,
+  comissaoGestao,
+  comissaoGestaoFaixas,
   comissoesFechadas,
   comissoesFechadasItens,
   comissoesLancamentosLog,
   contatos,
   despesas,
+  leads,
   users,
 } from "../../drizzle/schema";
 import { and, asc, between, eq, inArray, isNotNull, sql } from "drizzle-orm";
@@ -35,6 +38,7 @@ import {
 } from "../../shared/calculo-comissao";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
+import { diaCivilEmTz } from "../_core/dates";
 
 const log = createLogger("db-comissoes");
 
@@ -142,6 +146,33 @@ export async function carregarRegraComissao(
   return { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa };
 }
 
+/**
+ * Trilha de GESTÃO: o gestor ganha sobre o recebido de todos os clientes
+ * que fecharam contrato a partir de `dataCorte`, não importa quem vendeu.
+ *
+ * `dataCorteEm` é a mesma data já resolvida no fuso do escritório — a
+ * comparação com `leads.fechadoEm` (timestamp) tem que acontecer no fuso
+ * certo, e não no do servidor.
+ */
+export interface OpcoesGestao {
+  /** YYYY-MM-DD, pra exibir e congelar no snapshot. */
+  dataCorte: string;
+  /** Início do dia de `dataCorte` no fuso do escritório. */
+  dataCorteEm: Date;
+  /** Mesmo fuso do corte — é o que decide em que DIA o contrato fechou.
+   *  Sem ele, um fechamento às 22h em Fortaleza viraria o dia seguinte na
+   *  tela e o operador leria uma data diferente da que a regra usou. */
+  fusoHorario: string;
+  aliquotaPercent: number;
+  /** Faixas progressivas do gestor, como as da venda. Ausente = flat. */
+  modo?: "flat" | "faixas";
+  baseFaixa?: "bruto" | "comissionavel";
+  faixas?: FaixaComissao[];
+  /** Piso por cobrança da trilha de gestão. Substitui o do escritório, que
+   *  é a regra da venda e pode ter um valor diferente negociado. */
+  valorMinimo?: number;
+}
+
 /** Simula comissão detalhada de um atendente em um período. Lê regra
  *  vigente, faixas (se modo=faixas) e cobranças com JOIN em categoria.
  *  Retorna estrutura usada por UI e por `fecharComissao`.
@@ -149,18 +180,39 @@ export async function carregarRegraComissao(
  *  Pode receber `regraCarregada` pré-carregada — caller que invoca em
  *  loop (cron mensal por atendente do mesmo escritório) economiza N×2
  *  queries idênticas. UI manual (uma chamada por clique) ignora o
- *  parâmetro e a função carrega normalmente. */
+ *  parâmetro e a função carrega normalmente.
+ *
+ *  Com `gestao`, muda a trilha: some o filtro por atendente da cobrança
+ *  (o gestor ganha sobre tudo), entra o corte por data de fechamento do
+ *  cliente, e o anti-duplicidade passa a ser o do próprio gestor — dois
+ *  gestores podem comissionar a mesma cobrança, o mesmo gestor não. */
 export async function simularComissao(
   escritorioId: number,
   atendenteId: number,
   periodoInicio: string,
   periodoFim: string,
   regraCarregada?: RegraComissaoCarregada,
+  gestao?: OpcoesGestao,
 ) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
 
-  const regra = regraCarregada ?? (await carregarRegraComissao(escritorioId));
+  const regraEscritorio = regraCarregada ?? (await carregarRegraComissao(escritorioId));
+  // Na gestão a regra é a do GESTOR — alíquota, modo (flat ou faixas
+  // progressivas), base da faixa e piso por cobrança. Só o dia de vencimento
+  // da despesa continua sendo o do escritório: é regra de caixa, não de quem
+  // recebe. `modo='faixas'` sem tabela cadastrada cai no flat pelo próprio
+  // `calcularComissao`, igual à venda.
+  const regra: RegraComissaoCarregada = gestao
+    ? {
+      ...regraEscritorio,
+      aliquotaPercent: gestao.aliquotaPercent,
+      modo: gestao.modo ?? "flat",
+      baseFaixa: gestao.baseFaixa ?? "comissionavel",
+      faixas: gestao.faixas ?? [],
+      valorMinimo: gestao.valorMinimo ?? 0,
+    }
+    : regraEscritorio;
   const { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas } = regra;
 
   // Cobranças que já entraram em algum fechamento (de qualquer atendente)
@@ -179,19 +231,64 @@ export async function simularComissao(
   // num fechamento antigo podem re-entrar — semântica preservada).
   const condicoes = [
     eq(asaasCobrancas.escritorioId, escritorioId),
-    eq(asaasCobrancas.atendenteId, atendenteId),
     isNotNull(asaasCobrancas.dataPagamento),
     between(asaasCobrancas.dataPagamento, periodoInicio, periodoFim),
     inArray(asaasCobrancas.status, STATUS_PAGOS),
-    sql`NOT EXISTS (
+  ];
+
+  if (!gestao) {
+    condicoes.push(eq(asaasCobrancas.atendenteId, atendenteId));
+    // `tipo = 'venda'` não muda nada no acervo atual (toda linha gravada
+    // até aqui é de venda) — separa as trilhas daqui pra frente, pra que
+    // uma cobrança comissionada na gestão não suma da comissão do vendedor.
+    condicoes.push(sql`NOT EXISTS (
       SELECT 1 FROM ${comissoesFechadasItens}
       INNER JOIN ${comissoesFechadas}
         ON ${comissoesFechadas.id} = ${comissoesFechadasItens.comissaoFechadaId}
       WHERE ${comissoesFechadasItens.asaasCobrancaId} = ${asaasCobrancas.id}
         AND ${comissoesFechadas.escritorioId} = ${escritorioId}
+        AND ${comissoesFechadas.tipo} = 'venda'
         AND ${comissoesFechadasItens.foiComissionavel} = TRUE
-    )`,
-  ];
+    )`);
+  }
+
+  // Na gestão a cobrança já comissionada NÃO sai da consulta: ela aparece
+  // na lista de "ficou de fora" com o motivo. Some do cálculo sem sumir da
+  // tela — é como o operador confere que a parcela não foi paga duas vezes.
+  const jaComissionadaSql = gestao
+    ? sql<number>`EXISTS (
+        SELECT 1 FROM ${comissoesFechadasItens}
+        INNER JOIN ${comissoesFechadas}
+          ON ${comissoesFechadas.id} = ${comissoesFechadasItens.comissaoFechadaId}
+        WHERE ${comissoesFechadasItens.asaasCobrancaId} = ${asaasCobrancas.id}
+          AND ${comissoesFechadas.escritorioId} = ${escritorioId}
+          AND ${comissoesFechadas.tipo} = 'gestao'
+          AND ${comissoesFechadas.atendenteId} = ${atendenteId}
+          AND ${comissoesFechadasItens.foiComissionavel} = TRUE
+      )`
+    : sql<number>`FALSE`;
+
+  // Cliente real = COALESCE(beneficiário, pagador), o mesmo critério do
+  // resto do módulo. Basta UM fechamento a partir do corte pra o cliente
+  // entrar; `fechouEm` (o fechamento mais recente) é só pra exibir.
+  const dentroDoCorteSql = gestao
+    ? sql<number>`EXISTS (
+        SELECT 1 FROM ${leads}
+        WHERE ${leads.escritorioId} = ${escritorioId}
+          AND ${leads.etapaFunil} = 'fechado_ganho'
+          AND ${leads.contatoId} = COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})
+          AND ${leads.fechadoEm} >= ${gestao.dataCorteEm}
+      )`
+    : sql<number>`FALSE`;
+
+  const fechouEmSql = gestao
+    ? sql<Date | null>`(
+        SELECT MAX(${leads.fechadoEm}) FROM ${leads}
+        WHERE ${leads.escritorioId} = ${escritorioId}
+          AND ${leads.etapaFunil} = 'fechado_ganho'
+          AND ${leads.contatoId} = COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})
+      )`
+    : sql<Date | null>`NULL`;
 
   const linhas = await db
     .select({
@@ -206,7 +303,15 @@ export async function simularComissao(
       categoriaComissionavel: categoriasCobranca.comissionavel,
       descricao: asaasCobrancas.descricao,
       contatoNome: contatos.nome,
+      // Quem vendeu. Na gestão as cobranças vêm de todos os atendentes do
+      // escritório, então sem o nome não dá pra conferir a lista.
+      atendenteNome: users.name,
       asaasPaymentId: asaasCobrancas.asaasPaymentId,
+      parcelaAtual: asaasCobrancas.parcelaAtual,
+      parcelaTotal: asaasCobrancas.parcelaTotal,
+      fechouEm: fechouEmSql,
+      dentroDoCorte: dentroDoCorteSql,
+      jaComissionada: jaComissionadaSql,
     })
     .from(asaasCobrancas)
     .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
@@ -218,17 +323,34 @@ export async function simularComissao(
       contatos,
       sql`${contatos.id} = COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
     )
+    // 1:1 pelas chaves primárias — não multiplica linha nem muda o cálculo.
+    .leftJoin(colaboradores, eq(colaboradores.id, asaasCobrancas.atendenteId))
+    .leftJoin(users, eq(users.id, colaboradores.userId))
     .where(and(...condicoes))
     .orderBy(asc(asaasCobrancas.dataPagamento));
 
-  const cobrancasParaCalculo: CobrancaParaComissao[] = linhas.map((l) => ({
-    id: l.id,
-    valor: Number(l.valor),
-    dataPagamento: new Date(l.dataPagamento + "T00:00:00"),
-    atendenteId: l.atendenteId,
-    categoriaComissionavel: l.categoriaComissionavel ?? null,
-    comissionavelOverride: l.comissionavelOverride ?? null,
-  }));
+  // Exclusões que dependem do banco (data de fechamento do cliente e
+  // fechamentos anteriores do gestor) são resolvidas aqui, antes do cálculo
+  // puro. `calcularComissao` continua vendo só a cascata de elegibilidade
+  // por categoria/mínimo, que é o que ele sabe fazer.
+  const preExcluidas = new Map<number, MotivoExclusao>();
+  if (gestao) {
+    for (const l of linhas) {
+      if (Number(l.jaComissionada) === 1) preExcluidas.set(l.id, "ja_comissionada");
+      else if (Number(l.dentroDoCorte) !== 1) preExcluidas.set(l.id, "fechou_antes_do_corte");
+    }
+  }
+
+  const cobrancasParaCalculo: CobrancaParaComissao[] = linhas
+    .filter((l) => !preExcluidas.has(l.id))
+    .map((l) => ({
+      id: l.id,
+      valor: Number(l.valor),
+      dataPagamento: new Date(l.dataPagamento + "T00:00:00"),
+      atendenteId: l.atendenteId,
+      categoriaComissionavel: l.categoriaComissionavel ?? null,
+      comissionavelOverride: l.comissionavelOverride ?? null,
+    }));
 
   const resultado = calcularComissao(cobrancasParaCalculo, {
     modo,
@@ -248,22 +370,48 @@ export async function simularComissao(
       dataPagamento: l.dataPagamento,
       descricao: l.descricao,
       contatoNome: l.contatoNome,
+      atendenteNome: l.atendenteNome ?? null,
       categoriaNome: l.categoriaNome,
       categoriaComissionavel: l.categoriaComissionavel,
       comissionavelOverride: l.comissionavelOverride,
+      parcelaAtual: l.parcelaAtual ?? null,
+      parcelaTotal: l.parcelaTotal ?? null,
+      // "YYYY-MM-DD" como o resto da tela: dataPagamento e dataCorte chegam
+      // assim, e o formatador do client parte a string em três.
+      fechouEm: l.fechouEm && gestao
+        ? diaCivilEmTz(new Date(l.fechouEm), gestao.fusoHorario)
+        : null,
       motivoExclusao: motivo ?? null,
     };
   };
 
+  const naoComissionaveis = [
+    ...resultado.naoComissionaveis.map((n) => enriquecer(n.cobranca.id, n.motivo)),
+    ...Array.from(preExcluidas).map(([id, motivo]) => enriquecer(id, motivo)),
+  ].sort((a, b) => (a.dataPagamento ?? "").localeCompare(b.dataPagamento ?? ""));
+
+  // O bruto é tudo que entrou no período, inclusive o que a gestão descartou
+  // por corte ou por já ter sido comissionado — senão o card "Bruto recebido"
+  // mudaria de significado entre as duas trilhas.
+  const brutoTotal = linhas.reduce((soma, l) => soma + Number(l.valor), 0);
+  const totais = gestao
+    ? {
+      bruto: +brutoTotal.toFixed(2),
+      comissionavel: resultado.totais.comissionavel,
+      naoComissionavel: +(brutoTotal - resultado.totais.comissionavel).toFixed(2),
+      valorComissao: resultado.totais.valorComissao,
+    }
+    : resultado.totais;
+
   return {
     regra: { aliquotaPercent, valorMinimo, modo, baseFaixa, faixas, diaVencimentoDespesa: regra.diaVencimentoDespesa },
+    tipo: gestao ? ("gestao" as const) : ("venda" as const),
+    dataCorte: gestao?.dataCorte ?? null,
     aliquotaAplicada: resultado.aliquotaAplicada,
     faixaAplicada: resultado.faixaAplicada ?? null,
     comissionaveis: resultado.comissionaveis.map((c) => enriquecer(c.id)),
-    naoComissionaveis: resultado.naoComissionaveis.map((n) =>
-      enriquecer(n.cobranca.id, n.motivo),
-    ),
-    totais: resultado.totais,
+    naoComissionaveis,
+    totais,
   };
 }
 
@@ -339,8 +487,7 @@ export async function diagnosticarComissao(
     descricao: string | null;
     categoriaNome: string | null;
     atendenteIdCobranca: number | null;
-    motivo: "comissionavel" | "atendente_diferente" | "override_manual" |
-            "categoria_nao_comissionavel" | "abaixo_minimo" | "ja_fechada";
+    motivo: "comissionavel" | "atendente_diferente" | "ja_fechada" | MotivoExclusao;
     detalhe: string;
     /** ID do fechamento que já incluiu essa cobrança (só pra motivo=ja_fechada). */
     fechamentoExistenteId?: number;
@@ -380,6 +527,11 @@ export async function diagnosticarComissao(
         override_manual: "Marcada como NÃO comissionável manualmente (comissionavelOverride=false).",
         categoria_nao_comissionavel: `Categoria "${c.categoriaNome ?? "—"}" não é comissionável.`,
         abaixo_minimo: "Valor abaixo do mínimo configurado na regra de comissão.",
+        // Motivos da trilha de gestão. O diagnóstico roda sobre a trilha de
+        // venda, então na prática não caem aqui — o Record só não pode ter
+        // buraco, e um texto explícito é melhor que um `??` mudo.
+        fechou_antes_do_corte: "Cliente fechou contrato antes da data de corte da comissão de gestão.",
+        ja_comissionada: "Já entrou num fechamento anterior de comissão de gestão deste gestor.",
       };
       return { ...base, motivo: motivoExclusao, detalhe: detalhes[motivoExclusao] };
     }
@@ -437,6 +589,9 @@ export interface FecharComissaoParams {
    * O cron sempre usa `false` (dedup silencioso — pula no caller).
    */
   forcarDuplicado?: boolean;
+  /** Trilha de gestão. Presente = comissão do gestor sobre o recebido dos
+   *  clientes fechados a partir do corte; ausente = comissão de venda. */
+  gestao?: OpcoesGestao;
 }
 
 /** Lançado por `fecharComissao` quando já existe fechamento pro período
@@ -473,6 +628,10 @@ export async function fecharComissao(
   // Re-fechamento legítimo após correção: caller passa `forcarDuplicado=true`
   // → pula check (1) e calcula `versao` incremental via MAX+1. UNIQUE
   // permite múltiplos fechamentos com versões diferentes.
+  // A trilha entra em toda chave de dedup: um gestor que também vende tem
+  // dois fechamentos legítimos no mesmo período, um de cada tipo.
+  const tipo = params.gestao ? ("gestao" as const) : ("venda" as const);
+
   if (!params.forcarDuplicado) {
     const [existente] = await db
       .select({
@@ -484,6 +643,7 @@ export async function fecharComissao(
         and(
           eq(comissoesFechadas.escritorioId, params.escritorioId),
           eq(comissoesFechadas.atendenteId, params.atendenteId),
+          eq(comissoesFechadas.tipo, tipo),
           eq(comissoesFechadas.periodoInicio, params.periodoInicio),
           eq(comissoesFechadas.periodoFim, params.periodoFim),
           eq(comissoesFechadas.versao, 0),
@@ -512,6 +672,7 @@ export async function fecharComissao(
         and(
           eq(comissoesFechadas.escritorioId, params.escritorioId),
           eq(comissoesFechadas.atendenteId, params.atendenteId),
+          eq(comissoesFechadas.tipo, tipo),
           eq(comissoesFechadas.periodoInicio, params.periodoInicio),
           eq(comissoesFechadas.periodoFim, params.periodoFim),
         ),
@@ -525,6 +686,7 @@ export async function fecharComissao(
     params.periodoInicio,
     params.periodoFim,
     params.regraCarregada,
+    params.gestao,
   );
 
   let novo: { id: number };
@@ -550,6 +712,8 @@ export async function fecharComissao(
         origem: params.origem ?? "manual",
         agendaId: params.agendaId ?? null,
         versao,
+        tipo,
+        dataCorteUsada: params.gestao?.dataCorte ?? null,
       })
       .$returningId();
   } catch (err: unknown) {
@@ -573,6 +737,7 @@ export async function fecharComissao(
           and(
             eq(comissoesFechadas.escritorioId, params.escritorioId),
             eq(comissoesFechadas.atendenteId, params.atendenteId),
+            eq(comissoesFechadas.tipo, tipo),
             eq(comissoesFechadas.periodoInicio, params.periodoInicio),
             eq(comissoesFechadas.periodoFim, params.periodoFim),
             eq(comissoesFechadas.versao, 0),
@@ -597,13 +762,18 @@ export async function fecharComissao(
       foiComissionavel: true,
       motivoExclusao: null,
     })),
-    ...sim.naoComissionaveis.map((c) => ({
-      comissaoFechadaId: novo.id,
-      asaasCobrancaId: c.id,
-      valor: c.valor.toFixed(2),
-      foiComissionavel: false,
-      motivoExclusao: c.motivoExclusao ?? null,
-    })),
+    // "já comissionada" não vira item: a cobrança pertence ao fechamento
+    // anterior, e gravá-la de novo criaria duas linhas pra mesma cobrança
+    // dentro da mesma trilha, atrapalhando qualquer conferência futura.
+    ...sim.naoComissionaveis
+      .filter((c) => c.motivoExclusao !== "ja_comissionada")
+      .map((c) => ({
+        comissaoFechadaId: novo.id,
+        asaasCobrancaId: c.id,
+        valor: c.valor.toFixed(2),
+        foiComissionavel: false,
+        motivoExclusao: c.motivoExclusao ?? null,
+      })),
   ];
 
   if (itens.length > 0) {
@@ -636,7 +806,8 @@ export async function fecharComissao(
       } catch {
         /* fallback acima */
       }
-      const descricao = `Comissão ${nomeAtendente} — ${formatarDataBR(params.periodoInicio)} a ${formatarDataBR(params.periodoFim)}`;
+      const rotulo = tipo === "gestao" ? "Comissão de gestão" : "Comissão";
+      const descricao = `${rotulo} ${nomeAtendente} — ${formatarDataBR(params.periodoInicio)} a ${formatarDataBR(params.periodoFim)}`;
       const [despNova] = await db
         .insert(despesas)
         .values({
@@ -664,6 +835,193 @@ export async function fecharComissao(
   }
 
   return { id: novo.id, totais: sim.totais };
+}
+
+// ─── Configuração da comissão de gestão ──────────────────────────────────────
+
+/** Gestores configurados no escritório, com nome pra exibir. Traz também os
+ *  inativos: desligar é reversível e a lista é a tela de configuração. */
+export async function listarComissoesGestao(escritorioId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const linhas = await db
+    .select({
+      id: comissaoGestao.id,
+      colaboradorId: comissaoGestao.colaboradorId,
+      aliquotaPercent: comissaoGestao.aliquotaPercent,
+      modo: comissaoGestao.modo,
+      baseFaixa: comissaoGestao.baseFaixa,
+      valorMinimo: comissaoGestao.valorMinimo,
+      dataCorte: comissaoGestao.dataCorte,
+      ativo: comissaoGestao.ativo,
+      nome: users.name,
+      email: users.email,
+      cargo: colaboradores.cargo,
+    })
+    .from(comissaoGestao)
+    .innerJoin(colaboradores, eq(colaboradores.id, comissaoGestao.colaboradorId))
+    .leftJoin(users, eq(users.id, colaboradores.userId))
+    .where(eq(comissaoGestao.escritorioId, escritorioId))
+    .orderBy(asc(comissaoGestao.id));
+  if (linhas.length === 0) return [];
+
+  const faixas = await db
+    .select({
+      comissaoGestaoId: comissaoGestaoFaixas.comissaoGestaoId,
+      limiteAte: comissaoGestaoFaixas.limiteAte,
+      aliquotaPercent: comissaoGestaoFaixas.aliquotaPercent,
+    })
+    .from(comissaoGestaoFaixas)
+    .where(inArray(comissaoGestaoFaixas.comissaoGestaoId, linhas.map((l) => l.id)))
+    .orderBy(asc(comissaoGestaoFaixas.ordem));
+
+  return linhas.map((l) => ({
+    ...l,
+    aliquotaPercent: Number(l.aliquotaPercent),
+    valorMinimo: Number(l.valorMinimo),
+    faixas: faixas
+      .filter((f) => f.comissaoGestaoId === l.id)
+      .map((f) => ({
+        limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
+        aliquotaPercent: Number(f.aliquotaPercent),
+      })),
+  }));
+}
+
+/** Config de um gestor. `null` quando ele não está cadastrado ou está
+ *  desligado — nos dois casos não há comissão de gestão a calcular. */
+export async function obterComissaoGestaoAtiva(
+  escritorioId: number,
+  colaboradorId: number,
+): Promise<{
+  aliquotaPercent: number;
+  dataCorte: string;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  valorMinimo: number;
+  faixas: FaixaComissao[];
+} | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const [linha] = await db
+    .select({
+      id: comissaoGestao.id,
+      aliquotaPercent: comissaoGestao.aliquotaPercent,
+      dataCorte: comissaoGestao.dataCorte,
+      modo: comissaoGestao.modo,
+      baseFaixa: comissaoGestao.baseFaixa,
+      valorMinimo: comissaoGestao.valorMinimo,
+    })
+    .from(comissaoGestao)
+    .where(and(
+      eq(comissaoGestao.escritorioId, escritorioId),
+      eq(comissaoGestao.colaboradorId, colaboradorId),
+      eq(comissaoGestao.ativo, true),
+    ))
+    .limit(1);
+  if (!linha) return null;
+
+  const faixasRows = linha.modo === "faixas"
+    ? await db
+      .select({
+        limiteAte: comissaoGestaoFaixas.limiteAte,
+        aliquotaPercent: comissaoGestaoFaixas.aliquotaPercent,
+      })
+      .from(comissaoGestaoFaixas)
+      .where(eq(comissaoGestaoFaixas.comissaoGestaoId, linha.id))
+      .orderBy(asc(comissaoGestaoFaixas.ordem))
+    : [];
+
+  return {
+    aliquotaPercent: Number(linha.aliquotaPercent),
+    dataCorte: linha.dataCorte,
+    modo: linha.modo,
+    baseFaixa: linha.baseFaixa,
+    valorMinimo: Number(linha.valorMinimo),
+    faixas: faixasRows.map((f) => ({
+      limiteAte: f.limiteAte === null ? null : Number(f.limiteAte),
+      aliquotaPercent: Number(f.aliquotaPercent),
+    })),
+  };
+}
+
+/**
+ * Cria ou atualiza a config de um gestor (UNIQUE escritório+colaborador).
+ *
+ * Tudo numa transação pelo mesmo motivo de `salvarRegraComissao`: se o INSERT
+ * das faixas falhar depois do DELETE, o gestor ficaria com `modo='faixas'` e
+ * zero faixas, e o cálculo cairia no flat com a alíquota que estiver lá —
+ * comissão errada em silêncio até alguém conferir.
+ */
+export async function salvarComissaoGestao(params: {
+  escritorioId: number;
+  colaboradorId: number;
+  aliquotaPercent: number;
+  dataCorte: string;
+  ativo: boolean;
+  criadoPorUserId: number;
+  modo: "flat" | "faixas";
+  baseFaixa: "bruto" | "comissionavel";
+  valorMinimo: number;
+  faixas: FaixaComissao[];
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database indisponível");
+
+  await db.transaction(async (tx) => {
+    const [existente] = await tx
+      .select({ id: comissaoGestao.id })
+      .from(comissaoGestao)
+      .where(and(
+        eq(comissaoGestao.escritorioId, params.escritorioId),
+        eq(comissaoGestao.colaboradorId, params.colaboradorId),
+      ))
+      .limit(1);
+
+    let id: number;
+    if (existente) {
+      id = existente.id;
+      await tx
+        .update(comissaoGestao)
+        .set({
+          aliquotaPercent: params.aliquotaPercent.toFixed(2),
+          dataCorte: params.dataCorte,
+          ativo: params.ativo,
+          modo: params.modo,
+          baseFaixa: params.baseFaixa,
+          valorMinimo: params.valorMinimo.toFixed(2),
+        })
+        .where(eq(comissaoGestao.id, id));
+    } else {
+      const [novo] = await tx.insert(comissaoGestao).values({
+        escritorioId: params.escritorioId,
+        colaboradorId: params.colaboradorId,
+        aliquotaPercent: params.aliquotaPercent.toFixed(2),
+        dataCorte: params.dataCorte,
+        ativo: params.ativo,
+        criadoPorUserId: params.criadoPorUserId,
+        modo: params.modo,
+        baseFaixa: params.baseFaixa,
+        valorMinimo: params.valorMinimo.toFixed(2),
+      }).$returningId();
+      id = novo.id;
+    }
+
+    await tx
+      .delete(comissaoGestaoFaixas)
+      .where(eq(comissaoGestaoFaixas.comissaoGestaoId, id));
+
+    if (params.faixas.length > 0) {
+      await tx.insert(comissaoGestaoFaixas).values(
+        params.faixas.map((f, i) => ({
+          comissaoGestaoId: id,
+          ordem: i,
+          limiteAte: f.limiteAte === null ? null : f.limiteAte.toFixed(2),
+          aliquotaPercent: f.aliquotaPercent.toFixed(2),
+        })),
+      );
+    }
+  });
 }
 
 /** Retorna ID da categoria "Comissões" do escritório, criando se não existir.

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:742px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+
+  /* ── cabeçalho de conversa (recorte real do Inbox) ── */
+  .conv { padding:13px 16px; display:flex; align-items:flex-start; gap:12px; min-height:78px; }
+  .av { width:38px; height:38px; border-radius:50%; flex:0 0 auto; display:flex; align-items:center;
+        justify-content:center; font-size:12px; font-weight:700; color:#fff; background:#8b5cf6; }
+  .nome { font-size:14.5px; font-weight:700; color:var(--tinta); }
+  .linha1 { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+  .linha2 { margin-top:5px; display:flex; align-items:center; gap:7px; font-size:11.5px; color:var(--mudo); }
+  .zap { color:var(--ok); font-weight:600; }
+
+  .pill { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700;
+          padding:2.5px 8px; border-radius:999px; border:1px solid; letter-spacing:.01em; }
+  .pill.aguardando { background:var(--ambar-bg); color:var(--ambar); border-color:var(--ambar-borda); }
+  .pill.bot { background:#ecfdf5; color:#047857; border-color:#a7f3d0; }
+  .pill.off { background:var(--alerta-bg); color:var(--alerta-forte); border-color:var(--alerta-borda); }
+  .pill.reaberto { background:var(--ambar-bg); color:var(--ambar); border-color:var(--ambar-borda); }
+  .dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
+
+  /* ── grade dos 3 estados ── */
+  .estados { margin-top:16px; display:grid; grid-template-columns:repeat(3,1fr); gap:14px; flex:0 0 auto; }
+  .est { display:flex; flex-direction:column; }
+  .est .card.conv { margin-bottom:0; }
+  .est-topo { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .num { width:19px; height:19px; border-radius:6px; background:var(--tinta); color:#fff;
+         font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .est-nome { font-size:13px; font-weight:700; color:var(--tinta); }
+  .est-quando { margin-top:9px; font-size:11.5px; color:var(--mudo); line-height:1.55; padding:0 2px; }
+  .est-quando b { color:var(--corpo); font-weight:600; }
+  .novo { background:var(--acento); color:#fff; font-size:9px; font-weight:800; letter-spacing:.06em;
+          padding:2px 6px; border-radius:5px; }
+
+  /* ── tooltip aberto ── */
+  .tip { margin-top:10px; background:var(--surface); border:1px solid var(--borda); border-radius:11px;
+         padding:10px 11px; box-shadow:0 18px 38px -20px #0f172a55; position:relative; }
+  .tip:before { content:""; position:absolute; top:-5px; left:26px; width:9px; height:9px;
+                background:var(--surface); border-left:1px solid var(--borda); border-top:1px solid var(--borda);
+                transform:rotate(45deg); }
+  .tip-t { font-size:11.5px; font-weight:700; color:var(--tinta); margin-bottom:4px; }
+  .tip-p { font-size:11px; color:var(--mudo); line-height:1.6; }
+  .tip-p b { color:var(--corpo); font-weight:600; }
+  .vazio { font-size:11.5px; color:var(--fantasma); font-style:italic; padding:11px 0 0 2px; }
+
+  /* ── faixa de regra ── */
+  .regra { margin-top:18px; display:grid; grid-template-columns:1fr 1fr; gap:14px; flex:0 0 auto; }
+  .bloco { padding:14px 16px; }
+  .bloco h3 { font-family:'Poppins'; font-weight:700; font-size:14px; margin-bottom:10px; }
+  .passo { display:flex; gap:9px; align-items:flex-start; padding:7px 0; border-top:1px solid var(--hairline); }
+  .passo:first-of-type { border-top:0; padding-top:0; }
+  .ico { width:18px; height:18px; border-radius:5px; flex:0 0 auto; display:flex; align-items:center;
+         justify-content:center; font-size:10px; font-weight:800; color:#fff; margin-top:1px; }
+  .ico.no { background:var(--alerta); }
+  .ico.si { background:var(--ok); }
+  .passo-t { font-size:12px; font-weight:600; color:var(--tinta-2); }
+  .passo-d { font-size:11px; color:var(--mudo); margin-top:2px; line-height:1.5; }
+
+  .onde { margin-top:18px; padding:14px 16px; flex:0 0 auto; }
+  .onde h3 { font-family:'Poppins'; font-weight:700; font-size:14px; margin-bottom:4px; }
+  .onde-sub { font-size:11.5px; color:var(--mudo); margin-bottom:11px; }
+  .locais { display:grid; grid-template-columns:repeat(3,1fr); gap:11px; }
+  .local { border:1px solid var(--borda); border-radius:11px; padding:10px 12px; background:var(--hairline-2); }
+  .local-t { font-size:11.5px; font-weight:700; color:var(--tinta-2); }
+  .local-d { font-size:10.5px; color:var(--mudo); margin-top:3px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div>
+    <div class="h1">A tag de avisos conta o estado real</div>
+    <div class="sub">Atendimento → cabeçalho da conversa. O envio já segue a regra nova desde 27/08 — o que ficou para trás é o que a tela mostra.</div>
+  </div>
+
+  <div class="estados">
+
+    <!-- 1 -->
+    <div class="est">
+      <div class="est-topo"><span class="num">1</span><span class="est-nome">Nunca pediu para parar</span></div>
+      <div class="card conv">
+        <div class="av">RR</div>
+        <div>
+          <div class="linha1">
+            <span class="nome">Rafael Rocha</span>
+            <span class="pill aguardando"><span class="dot"></span>Aguardando</span>
+            <span class="pill bot">Bot ativo</span>
+          </div>
+          <div class="linha2"><span>Sem atendente</span><span>·</span><span class="zap">+55 85 8793-5555</span></div>
+        </div>
+      </div>
+      <div class="vazio">Nenhuma tag — nada mudou aqui.</div>
+      <div class="est-quando">O normal. <b>Envio automático liberado.</b></div>
+    </div>
+
+    <!-- 2 -->
+    <div class="est">
+      <div class="est-topo"><span class="num">2</span><span class="est-nome">Pediu para parar e não voltou</span></div>
+      <div class="card conv">
+        <div class="av" style="background:#0891b2">MA</div>
+        <div>
+          <div class="linha1">
+            <span class="nome">Marina Albuquerque</span>
+            <span class="pill aguardando"><span class="dot"></span>Aguardando</span>
+            <span class="pill off">🔕 Avisos desativados</span>
+          </div>
+          <div class="linha2"><span>Pablo Menezes</span><span>·</span><span class="zap">+55 85 9914-2207</span></div>
+        </div>
+      </div>
+      <div class="tip">
+        <div class="tip-t">Avisos desativados desde 12/08</div>
+        <div class="tip-p">Ela respondeu <b>SAIR</b> e não escreveu depois disso. Cobranças e avisos automáticos seguem <b>bloqueados</b> até ela voltar a falar com o escritório.</div>
+      </div>
+      <div class="est-quando">Igual a hoje. <b>Envio automático bloqueado.</b></div>
+    </div>
+
+    <!-- 3 -->
+    <div class="est">
+      <div class="est-topo"><span class="num">3</span><span class="est-nome">Voltou a escrever</span><span class="novo">NOVO</span></div>
+      <div class="card conv">
+        <div class="av">RR</div>
+        <div>
+          <div class="linha1">
+            <span class="nome">Rafael Rocha</span>
+            <span class="pill aguardando"><span class="dot"></span>Aguardando</span>
+            <span class="pill reaberto">🔔 Reaberto pelo cliente · 23h</span>
+            <span class="pill bot">Bot ativo</span>
+          </div>
+          <div class="linha2"><span>Sem atendente</span><span>·</span><span class="zap">+55 85 8793-5555</span></div>
+        </div>
+      </div>
+      <div class="tip">
+        <div class="tip-t">Ele reabriu a conversa às 12:32</div>
+        <div class="tip-p">Tinha pedido <b>SAIR</b> em 20/08, mas voltou a escrever — para a Meta, isso é consentimento novo. <b>Envio liberado até amanhã 12:32.</b> Depois disso volta a bloquear sozinho, até ele escrever de novo.</div>
+      </div>
+      <div class="est-quando">É o caso do seu print. <b>Envio automático liberado.</b></div>
+    </div>
+
+  </div>
+
+  <div class="regra">
+    <div class="card bloco">
+      <h3>O que a tag vermelha diz hoje — e por que engana</h3>
+      <div class="passo">
+        <span class="ico no">!</span>
+        <div>
+          <div class="passo-t">Ela lê só "ele já pediu SAIR alguma vez?"</div>
+          <div class="passo-d">Por isso continua vermelha mesmo depois de o cliente voltar a escrever. O atendente lê "não posso mandar nada" e segura uma mensagem que o sistema mandaria sem problema.</div>
+        </div>
+      </div>
+      <div class="passo">
+        <span class="ico si">✓</span>
+        <div>
+          <div class="passo-t">O bloqueio de verdade já está certo</div>
+          <div class="passo-d">Quem decide o envio é a regra nova, que olha se ele voltou a falar e se está dentro das 24h. Nenhuma mensagem foi barrada indevidamente — o erro é só de informação na tela.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card bloco">
+      <h3>Por que não some com a tag de vez</h3>
+      <div class="passo">
+        <span class="ico no">!</span>
+        <div>
+          <div class="passo-t">Sumir seria mentir para o outro lado</div>
+          <div class="passo-d">Ele pediu SAIR de verdade, e o bloqueio volta sozinho quando a janela fechar. Se a tag simplesmente sumisse, o atendente acharia que o contato está liberado para sempre.</div>
+        </div>
+      </div>
+      <div class="passo">
+        <span class="ico si">✓</span>
+        <div>
+          <div class="passo-t">A tag muda de cor e conta o prazo</div>
+          <div class="passo-d">Âmbar em vez de vermelho, com as horas que faltam. O atendente vê que está liberado agora e que isso tem hora para acabar.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card onde">
+    <h3>Os três lugares que mostram isso</h3>
+    <div class="onde-sub">Todos passam a ler a mesma conta feita no servidor — a mesma que decide o envio. Nenhum deles refaz a regra por conta própria; foi assim que a tela ficou para trás desta vez.</div>
+    <div class="locais">
+      <div class="local">
+        <div class="local-t">1 · Cabeçalho da conversa</div>
+        <div class="local-d">A tag do print. Vira âmbar com o prazo quando o cliente reabriu.</div>
+      </div>
+      <div class="local">
+        <div class="local-t">2 · Resumo acima da conversa</div>
+        <div class="local-d">A linha "· 🔕 Avisos desativados" ao lado do canal. Mesmo texto da tag.</div>
+      </div>
+      <div class="local">
+        <div class="local-t">3 · Ficha do cliente (painel lateral)</div>
+        <div class="local-d">A chavinha continua desligada — ele pediu SAIR —, mas ganha a linha "reaberto por ele hoje 12:32".</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -182,8 +182,8 @@ export function ImportarTrelloDialog({ open, onOpenChange, onSuccess }: Props) {
 
           {/* Preview */}
           {preview && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded p-3 space-y-3 dark:bg-emerald-950/30 dark:border-emerald-900">
-              <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+            <div className="bg-success-bg border border-success/30 rounded p-3 space-y-3 dark:bg-success/30">
+              <p className="flex items-center gap-2 text-sm font-semibold text-success-fg">
                 <CheckCircle2 className="h-4 w-4" />
                 JSON válido — prévia da importação
               </p>
@@ -211,7 +211,7 @@ export function ImportarTrelloDialog({ open, onOpenChange, onSuccess }: Props) {
                 </p>
               )}
               {(preview.listasIgnoradas > 0 || preview.cardsIgnorados > 0) && (
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                <p className="text-[11px] text-warning-fg">
                   ⚠ Ignorados: {preview.listasIgnoradas} lista(s),{" "}
                   {preview.cardsIgnorados} card(s) (arquivados, sem nome, ou em lista
                   removida).

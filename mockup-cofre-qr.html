@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9; --hairline-2:#f8fafc;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-claro:#8b5cf6;
+    --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-forte:#b91c1c; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:26px 30px; height:100%; display:flex; flex-direction:column; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:27px; letter-spacing:-.01em; }
+  .sub { margin-top:3px; font-size:13.5px; color:var(--mudo); }
+
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:16px; }
+
+  .corpo-row { display:flex; gap:22px; margin-top:18px; flex:0 0 auto; align-items:flex-start; }
+
+  /* ── diálogo ── */
+  .dialog { width:604px; flex:0 0 auto; background:var(--surface); border:1px solid var(--borda);
+            border-radius:16px; box-shadow:0 24px 50px -18px #0f172a44; padding:20px 22px 18px;
+            display:flex; flex-direction:column; }
+  .dlg-titulo { font-family:'Poppins'; font-weight:700; font-size:17px; }
+  .dlg-sub { font-size:12px; color:var(--mudo); margin-top:4px; line-height:1.5; }
+  .campo { margin-top:13px; }
+  .rot { font-size:11.5px; font-weight:600; color:var(--corpo); margin-bottom:5px; display:block; }
+  .inp { height:36px; border:1px solid var(--borda); border-radius:9px; padding:0 11px;
+         display:flex; align-items:center; justify-content:space-between;
+         font-size:12.5px; color:var(--tinta); background:var(--surface); }
+  .inp .ph { color:var(--fraco); }
+  .dois { display:flex; gap:10px; }
+  .dois > * { flex:1; }
+
+  /* ── bloco 2FA ── */
+  .fa { margin-top:14px; border:1px solid var(--borda); border-radius:12px; padding:12px; background:var(--hairline-2); }
+  .fa-topo { display:flex; align-items:center; justify-content:space-between; }
+  .seg { display:flex; gap:4px; background:var(--hairline); padding:3px; border-radius:9px; }
+  .seg span { padding:6px 12px; font-size:11.5px; font-weight:600; color:var(--mudo); border-radius:7px;
+              display:inline-flex; align-items:center; gap:6px; }
+  .seg span.on { background:var(--surface); color:var(--acento-forte); box-shadow:0 1px 3px #0f172a1a; }
+  .novo, .seg .novo { background:var(--acento); color:#fff; font-size:9px; font-weight:800;
+          letter-spacing:.08em; border-radius:999px; padding:3px 7px; line-height:1;
+          margin-left:3px; text-transform:uppercase; }
+
+  .drop { margin-top:11px; border:1.5px dashed #c4b5fd; background:var(--acento-bg); border-radius:11px;
+          padding:20px 16px; display:flex; flex-direction:column; align-items:center; gap:7px; }
+  .drop .t { font-size:13px; font-weight:600; color:var(--acento-forte); }
+  .drop .s { font-size:11.5px; color:var(--mudo); }
+  .kbd { display:inline-flex; align-items:center; gap:3px; }
+  .kbd b { background:var(--surface); border:1px solid var(--borda); border-bottom-width:2px;
+           border-radius:5px; padding:1px 6px; font-size:10.5px; font-weight:700; color:var(--corpo); }
+  .ou { font-size:11px; color:var(--fraco); }
+  .btn-ghost { height:30px; border:1px solid var(--borda); background:var(--surface); border-radius:8px;
+               padding:0 12px; display:inline-flex; align-items:center; gap:7px;
+               font-size:11.5px; font-weight:600; color:var(--corpo); }
+
+  .dlg-rodape { display:flex; align-items:center; justify-content:flex-end; gap:9px; margin-top:16px;
+                padding-top:14px; border-top:1px solid var(--hairline); }
+  .btn-cancel { font-size:12.5px; font-weight:600; color:var(--mudo); padding:9px 14px; }
+  .btn-primary { background:var(--acento); color:#fff; font-weight:600; font-size:12.5px;
+                 border-radius:9px; padding:10px 16px; display:flex; align-items:center; gap:7px;
+                 box-shadow:0 8px 18px -8px #7c3aed88; }
+
+  /* ── coluna direita ── */
+  .col { flex:1 1 auto; display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .painel { padding:15px 16px; }
+  .painel-topo { display:flex; align-items:center; gap:9px; }
+  .selo { width:22px; height:22px; border-radius:7px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+
+  .lido { border:1px solid var(--ok-borda); background:var(--ok-bg); border-radius:11px; padding:12px; margin-top:11px; }
+  .lido-linha { display:flex; align-items:center; gap:9px; }
+  .qr-mini { width:44px; height:44px; border-radius:8px; background:var(--surface);
+             border:1px solid var(--ok-borda); display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .kv { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .kv .k { font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:#047857; }
+  .kv .v { font-size:12.5px; font-weight:600; color:var(--tinta); }
+  .secret { margin-top:10px; padding-top:10px; border-top:1px solid var(--ok-borda);
+            display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .secret .cod { font-family:'Inter'; font-size:13px; font-weight:700; letter-spacing:.13em; color:var(--tinta); }
+  .link { font-size:11.5px; font-weight:600; color:var(--acento-forte); }
+
+  .erro { border:1px solid var(--alerta-borda); background:var(--alerta-bg); border-radius:11px; padding:12px; margin-top:11px; }
+  .erro .t { font-size:12.5px; font-weight:700; color:var(--alerta-forte); }
+  .erro ul { margin:8px 0 0 15px; }
+  .erro li { font-size:11.5px; color:#7f1d1d; line-height:1.65; }
+  .saida { margin-top:10px; padding-top:10px; border-top:1px solid var(--alerta-borda);
+           font-size:11.5px; color:#7f1d1d; }
+
+  /* ── passos ── */
+  .passos { display:flex; gap:0; margin-top:11px; }
+  .passo { flex:1; padding:0 13px; position:relative; }
+  .passo:first-child { padding-left:0; }
+  .passo + .passo { border-left:1px solid var(--hairline); }
+  .num { width:19px; height:19px; border-radius:50%; background:var(--acento-bg); color:var(--acento-forte);
+         font-size:10.5px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .passo .t { font-size:12px; font-weight:600; color:var(--tinta); margin-top:7px; }
+  .passo .s { font-size:11px; color:var(--mudo); margin-top:3px; line-height:1.55; }
+
+  .nota { display:flex; align-items:flex-start; gap:9px; margin-top:12px; padding-top:12px; border-top:1px solid var(--hairline); }
+  .nota p { font-size:11.5px; color:var(--corpo-2); line-height:1.6; }
+  .nota b { color:var(--tinta); font-weight:600; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topo">
+      <div>
+        <div class="h1">Cofre de Credenciais</div>
+        <div class="sub">Cadastrar o login do advogado — agora o 2FA pode vir do print do QR, sem digitar código</div>
+      </div>
+    </div>
+
+    <div class="corpo-row">
+      <!-- ─────────────── DIÁLOGO ─────────────── -->
+      <div class="dialog">
+        <div class="dlg-titulo">Cadastrar credencial</div>
+        <div class="dlg-sub">Login de advogado do tribunal. A senha será criptografada imediatamente e <b>não poderá ser recuperada</b>.</div>
+
+        <div class="campo">
+          <span class="rot">Apelido da credencial *</span>
+          <div class="inp">B. Boyadjian OAB/CE 38.828</div>
+        </div>
+
+        <div class="campo">
+          <span class="rot">Tribunal/Sistema *</span>
+          <div class="inp">
+            PJe TJCE — 1º grau
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+
+        <div class="campo dois">
+          <div>
+            <span class="rot">CPF ou OAB *</span>
+            <div class="inp">CE038828</div>
+          </div>
+          <div>
+            <span class="rot">Senha *</span>
+            <div class="inp">
+              ••••••••••••
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="#94a3b8" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" stroke="#94a3b8" stroke-width="1.8"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLOCO 2FA -->
+        <div class="fa">
+          <div class="fa-topo" style="flex-direction:column;align-items:stretch;gap:9px">
+            <span class="rot" style="margin:0">Verificação em duas etapas (2FA)</span>
+            <div class="seg" style="align-self:flex-start">
+              <span>Colar o código</span>
+              <span class="on">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.6" stroke="#5b21b6" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.6" stroke="#5b21b6" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.6" stroke="#5b21b6" stroke-width="2"/><path d="M14 14h3v3h-3zM20 14h1M14 20h3M20 18v3" stroke="#5b21b6" stroke-width="2" stroke-linecap="round"/></svg>
+                Ler do print do QR
+                <span class="novo">NOVO</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="drop">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.6" stroke="#8b5cf6" stroke-width="1.9"/><rect x="14" y="3" width="7" height="7" rx="1.6" stroke="#8b5cf6" stroke-width="1.9"/><rect x="3" y="14" width="7" height="7" rx="1.6" stroke="#8b5cf6" stroke-width="1.9"/><path d="M14 14h3v3h-3zM20.5 14.5v2M14.5 20.5h2M20.5 19.5v2" stroke="#8b5cf6" stroke-width="1.9" stroke-linecap="round"/></svg>
+            <div class="t">Cole o print do QR aqui</div>
+            <div class="s kbd">Tecle <b>Ctrl</b> + <b>V</b> depois do Print Screen</div>
+            <div class="ou">ou</div>
+            <div class="btn-ghost">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" stroke="#334155" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2.5A1.5 1.5 0 005.5 20h13a1.5 1.5 0 001.5-1.5V16" stroke="#334155" stroke-width="2" stroke-linecap="round"/></svg>
+              Escolher arquivo
+            </div>
+          </div>
+        </div>
+
+        <div class="dlg-rodape">
+          <div class="btn-cancel">Cancelar</div>
+          <div class="btn-primary">Cadastrar e testar login</div>
+        </div>
+      </div>
+
+      <!-- ─────────────── COLUNA DIREITA ─────────────── -->
+      <div class="col">
+        <div class="card painel">
+          <div class="painel-topo">
+            <div class="selo" style="background:var(--ok-bg);border:1px solid var(--ok-borda)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div>
+              <div class="h2" style="font-size:15px">Depois de colar o print</div>
+              <div style="font-size:11.5px;color:var(--mudo);margin-top:2px">O bloco do 2FA passa a mostrar o que foi lido, para conferência antes de salvar</div>
+            </div>
+          </div>
+
+          <div class="lido">
+            <div class="lido-linha">
+              <div class="qr-mini">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.4" stroke="#059669" stroke-width="1.9"/><rect x="14" y="3" width="7" height="7" rx="1.4" stroke="#059669" stroke-width="1.9"/><rect x="3" y="14" width="7" height="7" rx="1.4" stroke="#059669" stroke-width="1.9"/><path d="M14 14h3v3h-3zM20.5 14.5v2M14.5 20.5h2M20.5 19.5v2" stroke="#059669" stroke-width="1.9" stroke-linecap="round"/></svg>
+              </div>
+              <div class="kv">
+                <span class="k">QR lido — confira a conta</span>
+                <span class="v">PJe — Processo Judicial Eletrônico</span>
+                <span style="font-size:11.5px;color:var(--corpo-2)">conta: 38828@oab-ce · sso.cloud.pje.jus.br</span>
+              </div>
+            </div>
+            <div class="secret">
+              <div>
+                <div class="micro" style="color:#047857">Código capturado</div>
+                <div class="cod" style="margin-top:3px">KZ4F •••• •••• •••• 7QT2</div>
+              </div>
+              <div style="display:flex;gap:12px;align-items:center">
+                <span class="link">Ver completo</span>
+                <span class="link">Trocar print</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card painel">
+          <div class="painel-topo">
+            <div class="selo" style="background:var(--alerta-bg);border:1px solid var(--alerta-borda)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 8v5" stroke="#dc2626" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="16.6" r="1.2" fill="#dc2626"/></svg>
+            </div>
+            <div>
+              <div class="h2" style="font-size:15px">Quando o print não dá para ler</div>
+              <div style="font-size:11.5px;color:var(--mudo);margin-top:2px">Falha comum, e o caminho de sempre continua ali do lado</div>
+            </div>
+          </div>
+
+          <div class="erro">
+            <div class="t">Não consegui ler o QR dessa imagem</div>
+            <ul>
+              <li>O QR ficou cortado no recorte da tela</li>
+              <li>É foto do monitor com reflexo, e não um print</li>
+              <li>A imagem foi reduzida e o quadriculado embaralhou</li>
+            </ul>
+            <div class="saida">Tire outro print com <b>Win + Shift + S</b> pegando o QR inteiro — ou volte em <b>“Colar o código”</b> e informe o base32 na mão.</div>
+          </div>
+        </div>
+
+        <div class="card painel">
+          <div class="painel-topo">
+            <div class="selo" style="background:var(--hairline);border:1px solid var(--borda)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M8 7h9a3 3 0 013 3v0a3 3 0 01-3 3H7a3 3 0 00-3 3v0a3 3 0 003 3h9" stroke="#64748b" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <div>
+              <div class="h2" style="font-size:15px">O jeito de hoje continua igual</div>
+              <div style="font-size:11.5px;color:var(--mudo);margin-top:2px">Nada foi substituído — o QR é uma segunda porta para o mesmo campo</div>
+            </div>
+          </div>
+
+          <div class="fa" style="margin-top:11px;background:var(--surface)">
+            <div class="fa-topo">
+              <span class="rot" style="margin:0">Verificação em duas etapas (2FA)</span>
+              <div class="seg">
+                <span class="on">Colar o código</span>
+                <span>Ler do print do QR</span>
+              </div>
+            </div>
+            <div style="margin-top:10px">
+              <div class="inp"><span class="ph">JBSW Y3DP EHPK 3PXP …</span>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" stroke="#94a3b8" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" stroke="#94a3b8" stroke-width="1.8"/></svg>
+              </div>
+              <div style="font-size:11px;color:var(--mudo);margin-top:6px">Cole o secret base32 do app autenticador. Opcional.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card painel" style="flex:0 0 auto;margin-top:16px;padding:15px 18px">
+      <div class="painel-topo">
+        <div class="selo" style="background:var(--acento-bg);border:1px solid #ddd6fe">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="#5b21b6" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="h2" style="font-size:15px">O caminho, do PJe até aqui</div>
+      </div>
+
+      <div class="passos">
+        <div class="passo">
+          <div class="num">1</div>
+          <div class="t">No PJe, gere o QR</div>
+          <div class="s">Tela de configuração da verificação em duas etapas</div>
+        </div>
+        <div class="passo">
+          <div class="num">2</div>
+          <div class="t">Print da tela</div>
+          <div class="s">Print Screen, ou recorte com Win + Shift + S</div>
+        </div>
+        <div class="passo">
+          <div class="num">3</div>
+          <div class="t">Ctrl + V aqui</div>
+          <div class="s">Sem salvar arquivo e sem procurar em pasta</div>
+        </div>
+        <div class="passo">
+          <div class="num">4</div>
+          <div class="t">Cadastrar e testar login</div>
+          <div class="s">O robô entra no tribunal e confirma que o código funciona</div>
+        </div>
+      </div>
+
+      <div class="nota">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex:0 0 auto;margin-top:1px"><path d="M12 3l7.5 3v6c0 4.6-3.1 8.2-7.5 9.4C7.6 20.2 4.5 16.6 4.5 12V6L12 3z" stroke="#7c3aed" stroke-width="1.9" stroke-linejoin="round"/><path d="M9.3 12.2l1.9 1.9 3.6-3.9" stroke="#7c3aed" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <p><b>A imagem não sai do seu navegador.</b> A leitura acontece na sua máquina e só o código de 2FA é enviado — já criptografado, junto com o resto do cadastro. O print não é guardado em lugar nenhum.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

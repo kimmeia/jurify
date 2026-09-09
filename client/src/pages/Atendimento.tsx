@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo, useId, Fragment } from "react";
 import { useLocation } from "wouter";
+import { mesmoTelefone, mascararTelefoneBR } from "@shared/telefone";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "@/compon
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { NovoCompromissoDialog } from "@/components/NovoCompromissoDialog";
-import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive } from "lucide-react";
+import { MessageCircle, TrendingUp, BarChart3, Plus, Loader2, Send, Search, Phone, CheckCircle, XCircle, Inbox, PhoneCall, Percent, X, Trash2, Calendar, Mic, Square, PlusCircle, Zap, ArrowRightLeft, Link2, User, Check, AlertTriangle, List, Filter, Image as ImageIcon, FileText, Paperclip, Video as VideoIcon, ChevronLeft, Archive, Pencil, Lock, Pin } from "lucide-react";
 import { useIsMobile } from "@/hooks/useMobile";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
@@ -61,7 +62,8 @@ import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown } from "lucide-react";
+import { IconeTwilio } from "@/components/IconeTwilio";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -71,14 +73,14 @@ function initials(n: string) { return n.split(" ").map(w => w[0]).slice(0, 2).jo
 // qualquer device. Inspirado em Slack/Linear: ajuda atendente reconhecer
 // cliente recorrente sem ler o nome.
 const AVATAR_PALETTE = [
-  "bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300",
-  "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-  "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300",
-  "bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300",
-  "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300",
-  "bg-pink-100 text-pink-700 dark:bg-pink-950/40 dark:text-pink-300",
-  "bg-teal-100 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300",
-  "bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300",
+  "bg-danger-bg text-danger-fg dark:text-danger",
+  "bg-warning-bg text-warning-fg dark:text-warning",
+  "bg-success-bg text-success-fg dark:text-success",
+  "bg-info-bg text-info-fg dark:text-info",
+  "bg-info-bg text-info-fg dark:text-info",
+  "bg-danger-bg text-danger-fg dark:text-danger",
+  "bg-success-bg text-success-fg dark:text-success",
+  "bg-info-bg text-info-fg dark:text-info",
 ];
 function colorFromName(name: string) {
   let h = 0;
@@ -149,12 +151,12 @@ function previewMensagem(c: any): string {
 }
 
 const EST: Record<EtapaFunil, { bg: string; border: string; header: string; dot: string; text: string }> = {
-  novo: { bg: "bg-slate-100", border: "border-slate-200", header: "bg-slate-100", dot: "bg-slate-400", text: "text-slate-700" },
-  qualificado: { bg: "bg-blue-100", border: "border-blue-200", header: "bg-blue-100", dot: "bg-blue-500", text: "text-blue-700" },
-  proposta: { bg: "bg-violet-100", border: "border-violet-200", header: "bg-violet-100", dot: "bg-violet-500", text: "text-violet-700" },
-  negociacao: { bg: "bg-amber-100", border: "border-amber-200", header: "bg-amber-100", dot: "bg-amber-500", text: "text-amber-700" },
-  fechado_ganho: { bg: "bg-emerald-100", border: "border-emerald-200", header: "bg-emerald-100", dot: "bg-emerald-500", text: "text-emerald-700" },
-  fechado_perdido: { bg: "bg-red-100", border: "border-red-200", header: "bg-red-100", dot: "bg-red-400", text: "text-red-700" },
+  novo: { bg: "bg-muted", border: "border-border", header: "bg-muted", dot: "bg-muted-foreground/50", text: "text-foreground" },
+  qualificado: { bg: "bg-info-bg", border: "border-info/30", header: "bg-info-bg", dot: "bg-info", text: "text-info-fg" },
+  proposta: { bg: "bg-info-bg", border: "border-info/30", header: "bg-info-bg", dot: "bg-info", text: "text-info-fg" },
+  negociacao: { bg: "bg-warning-bg", border: "border-warning/30", header: "bg-warning-bg", dot: "bg-warning", text: "text-warning-fg" },
+  fechado_ganho: { bg: "bg-success-bg", border: "border-success/30", header: "bg-success-bg", dot: "bg-success", text: "text-success-fg" },
+  fechado_perdido: { bg: "bg-danger-bg", border: "border-danger/30", header: "bg-danger-bg", dot: "bg-danger", text: "text-danger-fg" },
 };
 const ETAPAS: EtapaFunil[] = ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"];
 
@@ -262,15 +264,15 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
   const fmt = (s: number) => String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
 
   return (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"><div className="bg-background rounded-2xl shadow-2xl w-[340px] p-8 text-center space-y-6">
-    <div className={"h-20 w-20 rounded-full flex items-center justify-center mx-auto shadow-lg " + (status === "em_chamada" ? "bg-gradient-to-br from-green-500 to-emerald-600 animate-pulse" : "bg-gradient-to-br from-blue-500 to-blue-600")}><Phone className="h-10 w-10 text-white" /></div>
+    <div className={"h-20 w-20 rounded-full flex items-center justify-center mx-auto shadow-lg " + (status === "em_chamada" ? "bg-success animate-pulse" : "bg-info")}><Phone className="h-10 w-10 text-white" /></div>
     <div>
       <p className="text-lg font-bold">+{clean}</p>
       <p className="text-sm text-muted-foreground mt-1">
         {status === "iniciando" ? "Conectando..." : status === "discando" ? "Discando..." : status === "em_chamada" ? fmt(dur) : status === "erro" ? "Erro na chamada" : "Chamada encerrada"}
       </p>
-      {erroMsg && <p className="text-xs text-red-500 mt-2">{erroMsg}</p>}
+      {erroMsg && <p className="text-xs text-danger mt-2">{erroMsg}</p>}
     </div>
-    {(status === "iniciando" || status === "discando") && <Loader2 className="h-6 w-6 animate-spin text-blue-500 mx-auto" />}
+    {(status === "iniciando" || status === "discando") && <Loader2 className="h-6 w-6 animate-spin text-info mx-auto" />}
     <div className="flex justify-center gap-4">
       {status !== "encerrada" && status !== "erro" ? (
         <Button variant="destructive" size="lg" className="rounded-full h-14 w-14 p-0" onClick={handleDesligar} disabled={encerrarMut.isPending}>
@@ -285,27 +287,154 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
 }
 
 /**
- * Aplica máscara brasileira no telefone enquanto o usuário digita.
- * Aceita até 11 dígitos (DDD + 9 dígitos do celular). O DDI 55 é
- * adicionado automaticamente no envio.
- *
- *   "11999990000"   -> "(11) 99999-0000"
- *   "1199999"       -> "(11) 9999-9"
- *   "11"            -> "(11) "
+ * Máscara brasileira do telefone enquanto o usuário digita. Delega pra régua
+ * do shared, que corta o DDI antes de mascarar: o deep-link `?telefone=` e o
+ * `?contatoId=` chegam com o número do cadastro ("5585997965706"), e a cópia
+ * local cortava nos 11 primeiros dígitos — preenchia "(55) 85997-9657", que
+ * passava na validação e ia pro envio com 55 na frente de novo.
  */
 function maskPhoneBR(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11);
-  if (digits.length === 0) return "";
-  if (digits.length <= 2) return `(${digits}`;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  return mascararTelefoneBR(value);
 }
 
 /** Valida se o telefone tem ao menos DDD + número (10 ou 11 dígitos) */
 function isValidPhoneBR(value: string): boolean {
   const d = value.replace(/\D/g, "");
   return d.length === 10 || d.length === 11;
+}
+
+/** "há 2 h", "há 3 dias", "agora há pouco" — o bastante pro atendente saber se
+ *  a conversa está quente ou é arqueologia. */
+function haQuantoTempo(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!isFinite(ms) || ms < 0) return "";
+  const min = Math.floor(ms / 60000);
+  if (min < 2) return "agora há pouco";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `há ${d} ${d === 1 ? "dia" : "dias"}`;
+  return `em ${new Date(iso).toLocaleDateString("pt-BR")}`;
+}
+
+type ChecagemNumero = {
+  estado: "incompleto" | "livre" | "cadastrado" | "aberta" | "encerrada" | "sem_acesso";
+  contatoNome?: string;
+  conversaId?: number;
+  status?: string;
+  atendenteNome?: string;
+  ultimaMensagemAt?: string | null;
+  totalMensagens?: number;
+};
+
+/**
+ * Aviso de "este número já tem conversa", enquanto o telefone é digitado.
+ *
+ * Serve pra não nascer uma segunda conversa com quem já está sendo atendido.
+ * Quando o atendimento é de OUTRA pessoa e quem digita só enxerga os próprios,
+ * o aviso sai seco — sem nome, sem histórico e sem botão de abrir: evitar a
+ * duplicata não é motivo pra escancarar o atendimento alheio.
+ */
+function AvisoNumeroExistente({
+  dados, carregando, onAbrir,
+}: {
+  dados?: ChecagemNumero;
+  carregando: boolean;
+  onAbrir: (conversaId: number) => void;
+}) {
+  if (carregando) {
+    return (
+      <div className="rounded-lg border border-dashed px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2">
+        <Loader2 className="h-3 w-3 animate-spin" /> Conferindo se este número já tem conversa…
+      </div>
+    );
+  }
+  if (!dados || dados.estado === "incompleto") return null;
+
+  if (dados.estado === "livre") {
+    return (
+      <div className="rounded-lg border border-success/30 bg-success-bg px-3 py-2">
+        <p className="text-[11.5px] font-semibold text-success-fg flex items-center gap-1.5">
+          <Check className="h-3.5 w-3.5" /> Nenhuma conversa com este número
+        </p>
+        <p className="text-[10.5px] text-success-fg/80 mt-1">
+          É um contato novo pro Atendimento. Vai criar a conversa e enviar normalmente.
+        </p>
+      </div>
+    );
+  }
+
+  if (dados.estado === "cadastrado") {
+    return (
+      <div className="rounded-lg border border-info/30 bg-info-bg px-3 py-2">
+        <p className="text-[11.5px] font-semibold text-info-fg flex items-center gap-1.5">
+          <User className="h-3.5 w-3.5" /> Nenhuma conversa — mas o número é de um cliente cadastrado
+        </p>
+        <p className="text-[10.5px] text-info-fg/80 mt-1">
+          <strong>{dados.contatoNome}</strong> já está na sua base. O nome vem preenchido
+          sozinho, pra conversa nascer com o cadastro certo em vez de virar contato duplicado.
+        </p>
+      </div>
+    );
+  }
+
+  if (dados.estado === "sem_acesso") {
+    return (
+      <div className="rounded-lg border bg-muted/40 px-3 py-2">
+        <p className="text-[11.5px] font-semibold flex items-center gap-1.5">
+          <Lock className="h-3.5 w-3.5" /> Já existe conversa com este número
+        </p>
+        <p className="text-[10.5px] text-muted-foreground mt-1">
+          Está com outra pessoa da equipe e você não tem acesso a ela. O aviso aparece pra
+          você não abrir uma segunda conversa com o mesmo cliente.
+        </p>
+      </div>
+    );
+  }
+
+  const aberta = dados.estado === "aberta";
+  const rodape = aberta
+    ? "Se enviar por aqui, a mensagem cai nessa mesma conversa — não cria outra."
+    : dados.status === "resolvido"
+      ? "Enviar por aqui retoma esse atendimento."
+      : "Enviar por aqui abre um novo atendimento com o mesmo contato — o histórico antigo continua na ficha dele.";
+
+  return (
+    <div className="rounded-lg border border-warning/30 bg-warning-bg px-3 py-2">
+      <p className="text-[11.5px] font-semibold text-warning-fg flex items-center gap-1.5">
+        {aberta ? <MessageCircle className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
+        {aberta ? "Já existe conversa com este número" : "Este número já foi atendido"}
+      </p>
+      <div className="flex items-center gap-2 mt-1.5">
+        <div className="flex-1 min-w-0 text-[11px] text-warning-fg/90 leading-snug">
+          <strong>{dados.contatoNome}</strong>
+          {aberta
+            ? <> · em atendimento{dados.atendenteNome ? ` com ${dados.atendenteNome}` : ""}</>
+            : <> · atendimento {dados.status === "resolvido" ? "resolvido" : "fechado"}
+                {dados.atendenteNome ? ` por ${dados.atendenteNome}` : ""}</>}
+          <br />
+          <span className="text-[10px] opacity-75">
+            {aberta
+              ? `última mensagem ${haQuantoTempo(dados.ultimaMensagemAt)}`
+              : `${dados.totalMensagens ?? 0} mensagens no histórico`}
+          </span>
+        </div>
+        {dados.conversaId != null && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] shrink-0 border-warning/30"
+            onClick={() => onAbrir(dados.conversaId!)}
+          >
+            {aberta ? "Abrir conversa" : "Ver conversa"}
+          </Button>
+        )}
+      </div>
+      <p className="text-[10.5px] text-warning-fg/80 mt-1.5">{rodape}</p>
+    </div>
+  );
 }
 
 function IniciarConversaDialog({
@@ -337,6 +466,25 @@ function IniciarConversaDialog({
       if (preencherDe.nome) setNome(preencherDe.nome);
     }
   }, [open, preencherDe]);
+
+  // Consulta "já existe conversa com este número?". Atrasada de propósito: sem
+  // isso sairia uma consulta por tecla digitada.
+  const [telChecagem, setTelChecagem] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setTelChecagem(tel), 350);
+    return () => clearTimeout(t);
+  }, [tel]);
+  const checagem = trpc.crm.conversaPorTelefone.useQuery(
+    { telefone: telChecagem },
+    { enabled: open && isValidPhoneBR(telChecagem), staleTime: 15_000 },
+  );
+  const dadosChecagem = checagem.data as ChecagemNumero | undefined;
+  // Nome só é preenchido quando está vazio — quem digitou um nome manda nele.
+  useEffect(() => {
+    const n = dadosChecagem?.contatoNome;
+    if (n) setNome((atual) => atual || n);
+  }, [dadosChecagem?.contatoNome]);
+
   const ini = trpc.crm.iniciarConversa.useMutation({ onSuccess: (r: any) => { toast.success("Conversa iniciada!"); onOpenChange(false); setTel(""); setNome(""); setMsg(""); onSuccess(r.conversaId); }, onError: (e: any) => toast.error(e.message) });
   const telDigits = tel.replace(/\D/g, "");
   const telValido = isValidPhoneBR(tel);
@@ -346,8 +494,13 @@ function IniciarConversaDialog({
     // Envia só os dígitos — o servidor adiciona DDI 55 e converte para JID
     ini.mutate({ telefone: telDigits, nome: nome || undefined, mensagem: msg, canalId });
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-emerald-600" /> Nova Conversa</DialogTitle></DialogHeader>
-    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-red-400" : ""} />{tel && !telValido && <p className="text-[10px] text-red-500">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-success-fg" /> Nova Conversa</DialogTitle></DialogHeader>
+    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-danger/30" : ""} />{tel && !telValido && <p className="text-[10px] text-danger">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+    <AvisoNumeroExistente
+      dados={dadosChecagem}
+      carregando={telValido && (checagem.isLoading || telChecagem !== tel)}
+      onAbrir={(id) => { onOpenChange(false); onSuccess(id); }}
+    />
     <div className="space-y-1.5"><Label>Mensagem *</Label><Input placeholder="Olá! Como posso ajudar?" value={msg} onChange={(e) => setMsg(e.target.value)} /></div>
     {waCh.length > 1 && (
       <div className="space-y-1.5">
@@ -365,7 +518,7 @@ function IniciarConversaDialog({
         </select>
       </div>
     )}
-    {waCh.length === 0 && <p className="text-xs text-red-600">Nenhum WhatsApp conectado.</p>}</div>
+    {waCh.length === 0 && <p className="text-xs text-danger-fg">Nenhum WhatsApp conectado.</p>}</div>
     <DialogFooter><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={handleEnviar} disabled={!telValido || !msg || !canalId || ini.isPending}>{ini.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />} Enviar</Button></DialogFooter>
   </DialogContent></Dialog>);
 }
@@ -381,7 +534,7 @@ function NovoLeadDialog({ open, onOpenChange, onSuccess }: { open: boolean; onOp
       await criarLead.mutateAsync({ contatoId: contato.id, valorEstimado: valor || undefined, origemLead: origem || undefined });
     } catch (e: any) { toast.error(e.message); }
   };
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Novo Lead</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-info-fg" /> Novo Lead</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Nome *</Label><Input placeholder="Nome do lead" value={nome} onChange={(e) => setNome(e.target.value)} /></div><div className="space-y-1.5"><Label>Telefone</Label><Input placeholder="(85) 99999-0000" value={tel} onChange={(e) => setTel(e.target.value)} /></div></div>
       <div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Valor estimado</Label><Input placeholder="5000" value={valor} onChange={(e) => setValor(e.target.value)} /></div><div className="space-y-1.5"><Label>Origem</Label><Input placeholder="Indicação, Site..." value={origem} onChange={(e) => setOrigem(e.target.value)} /></div></div>
@@ -409,10 +562,10 @@ function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes,
     onSuccess: () => { toast.success("Lead adicionado ao Pipeline!"); onOpenChange(false); setValor(""); onSuccess(); },
     onError: (e: any) => toast.error(e.message),
   });
-  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-violet-600" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
+  return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-sm"><DialogHeader><DialogTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-info-fg" /> Adicionar ao Pipeline</DialogTitle></DialogHeader>
     <div className="space-y-3 py-2">
       <div className="space-y-1.5">
-        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-blue-600" /> Responsável</Label>
+        <Label className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-info-fg" /> Responsável</Label>
         <Select value={responsavelId != null ? String(responsavelId) : undefined} onValueChange={(v) => setResponsavelId(Number(v))}>
           <SelectTrigger><SelectValue placeholder="Selecione o responsável" /></SelectTrigger>
           <SelectContent>
@@ -465,7 +618,11 @@ export default function Atendimento() {
   const [atendentesFiltro, setAtendentesFiltro] = useState<number[]>([]);
   const [setorFiltro, setSetorFiltro] = useState<number | null>(null);
   const [canalFiltro, setCanalFiltro] = useState<number | null>(null);
-  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "7d" | "30d" | "90d">("todos");
+  const [periodoFiltro, setPeriodoFiltro] = useState<"todos" | "hoje" | "7d" | "30d" | "90d">("todos");
+  // Como o período conta (27/08): "inicio" = início do atendimento atual
+  // (novo padrão — pega quem PEDIU atendimento na janela); "mensagens" =
+  // comportamento antigo (qualquer mensagem na janela), mantido como opção.
+  const [modoPeriodo, setModoPeriodo] = useState<"inicio" | "mensagens">("inicio");
   // Período customizado (datas escolhidas pelo usuário). Quando preenchido,
   // tem prioridade sobre os presets acima. Hora é opcional: vazia, o extremo
   // assume o dia inteiro (De=00:00, Até=23:59) — comportamento antigo.
@@ -498,6 +655,13 @@ export default function Atendimento() {
     const raw = p.get("contatoId");
     return raw ? Number(raw) : null;
   });
+  // Deep link por TELEFONE, vindo da agenda: o compromisso pode ter só o número
+  // que alguém digitou, sem cliente vinculado — e aí não há contatoId pra usar.
+  const [telefoneUrl] = useState<string | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    const raw = p.get("telefone");
+    return raw && raw.trim() ? raw.trim() : null;
+  });
   const [preencherConversa, setPreencherConversa] = useState<{ nome?: string; telefone?: string } | null>(null);
   const [contatoUrlConsumido, setContatoUrlConsumido] = useState(false);
   const { data: contatoUrl } = trpc.clientes.detalhe.useQuery(
@@ -519,9 +683,18 @@ export default function Atendimento() {
     // haver mensagem". O backend também ignora sem dataInicio.
     if (somenteNovos && dataIni) f.somenteNovos = true;
     if (!dataIni && !dataFim && periodoFiltro !== "todos") {
-      const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
-      f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+      if (periodoFiltro === "hoje") {
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        f.dataInicio = hoje.toISOString();
+      } else {
+        const dias = periodoFiltro === "7d" ? 7 : periodoFiltro === "30d" ? 30 : 90;
+        f.dataInicio = new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+      }
     }
+    // O modo só importa quando há período; mandar sempre que houver mantém
+    // lista e contadores no MESMO critério.
+    if (f.dataInicio || f.dataFim) f.modoPeriodo = modoPeriodo;
     return Object.keys(f).length > 0 ? f : undefined;
   })();
   // Limite alto: o Inbox precisa enxergar além de 100 (escritório com muitos
@@ -543,10 +716,39 @@ export default function Atendimento() {
     { refetchInterval: 5000 },
   );
   const { data: resumoArq, refetch: rArq } = trpc.crm.resumoArquivadas.useQuery(undefined, { refetchInterval: 60000 });
+  // Nota de transparência do modo "início do atendimento": quem trocou
+  // mensagem no período mas começou antes dele fica fora da lista — a nota
+  // diz quem são, pra conversa não "sumir" em silêncio.
+  const notaForaInput = (() => {
+    const f: any = filtrosBackend;
+    if (!f?.dataInicio || f.modoPeriodo !== "inicio" || mostrarArquivadas) return null;
+    return {
+      dataInicio: f.dataInicio,
+      ...(f.dataFim ? { dataFim: f.dataFim } : {}),
+      ...(f.atendenteIds ? { atendenteIds: f.atendenteIds } : {}),
+      ...(f.setorId ? { setorId: f.setorId } : {}),
+      ...(f.canalId ? { canalId: f.canalId } : {}),
+      ...(inboxBuscaDebounced ? { busca: inboxBuscaDebounced } : {}),
+    };
+  })();
+  const { data: foraDoPeriodo } = (trpc as any).crm.conversasForaDoPeriodo.useQuery(
+    notaForaInput ?? { dataInicio: "" },
+    { enabled: !!notaForaInput, refetchInterval: 30000 },
+  );
   const arquivarMut = trpc.crm.arquivarConversa.useMutation({
     onSuccess: () => { rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const marcarNaoLidaMut = trpc.crm.marcarConversaNaoLida.useMutation({
+    onSuccess: () => rC(),
+    onError: (e: any) => toast.error(e.message),
+  });
+  // Marcar a conversa ABERTA como não lida também a fecha: aberta, o
+  // "abrir = ler" desfaria a marcação em seguida.
+  const marcarNaoLida = (conversaId: number) => {
+    if (selId === conversaId) setSelId(null);
+    marcarNaoLidaMut.mutate({ conversaId });
+  };
   const arquivarBulkMut = trpc.crm.arquivarCanaisDesativados.useMutation({
     onSuccess: (r) => { toast.success(`${r.arquivadas} conversa(s) arquivada(s).`); rC(); rArq(); },
     onError: (e: any) => toast.error(e.message),
@@ -580,6 +782,7 @@ export default function Atendimento() {
     setSetorFiltro(null);
     setCanalFiltro(null);
     setPeriodoFiltro("todos");
+    setModoPeriodo("inicio");
     setSomenteNovos(false);
     setDataIni("");
     setDataFim("");
@@ -646,9 +849,54 @@ export default function Atendimento() {
 
   // Consome o contatoId da URL assim que `convs` carregou. Roda uma vez só
   // (contatoUrlConsumido evita reabrir o diálogo se o usuário navegar depois).
+  // Telefone na URL: mesma ideia do contatoId, mas casando pelo número. Roda
+  // antes do outro efeito porque os dois parâmetros nunca vêm juntos.
+  // "Existe conversa com esse número?" perguntado ao SERVIDOR. A lista
+  // carregada é filtrada por período: procurar só nela fazia a tela concluir
+  // que não havia conversa e oferecer criar outra — justamente o que este
+  // caminho deveria evitar.
+  const checagemUrl = trpc.crm.conversaPorTelefone.useQuery(
+    { telefone: telefoneUrl || "" },
+    { enabled: !!telefoneUrl && !contatoUrlConsumido },
+  );
+  useEffect(() => {
+    if (contatoUrlConsumido || !telefoneUrl || !convs) return;
+    const naLista = convs.find((c: any) => mesmoTelefone(c.contatoTelefone, telefoneUrl));
+    const doServidor = checagemUrl.data as any;
+    // Espera a resposta antes de decidir: sem isso a decisão sai no primeiro
+    // render, com a lista ainda sendo o único dado disponível.
+    if (!naLista && checagemUrl.isLoading) return;
+    const idAchado = naLista?.id ?? doServidor?.conversaId;
+    if (idAchado) {
+      setSelId(idAchado);
+      setTab("inbox");
+    } else if (doServidor?.estado === "sem_acesso") {
+      // A conversa existe, mas é de outra pessoa e você só vê as suas. Criar
+      // outra seria abrir uma segunda conversa com o mesmo cliente.
+      toast.info("Já existe conversa com este número, com outra pessoa da equipe.");
+    } else {
+      // Nenhuma conversa com esse número — abre o diálogo já preenchido em vez
+      // de deixar o atendente numa lista que não explica por que ele veio parar
+      // ali. O nome fica em branco: quem digitou o número no compromisso pode
+      // ter escrito qualquer coisa no título, e chutar nome cria contato errado.
+      setPreencherConversa({ telefone: telefoneUrl });
+      setShowIniciar(true);
+    }
+    setContatoUrlConsumido(true);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("telefone");
+    window.history.replaceState({}, "", url.toString());
+  }, [telefoneUrl, convs, contatoUrlConsumido, checagemUrl.data, checagemUrl.isLoading]);
+
+  const convDoContatoUrl = trpc.crm.conversaDoContato.useQuery(
+    { contatoId: contatoIdUrl || 0 },
+    { enabled: !!contatoIdUrl && !contatoUrlConsumido },
+  );
   useEffect(() => {
     if (contatoUrlConsumido || !contatoIdUrl || !convs) return;
-    const conv = convs.find((c: any) => c.contatoId === contatoIdUrl);
+    const naLista = convs.find((c: any) => c.contatoId === contatoIdUrl);
+    if (!naLista && convDoContatoUrl.isLoading) return;
+    const conv = naLista ?? (convDoContatoUrl.data as any);
     if (conv) {
       setSelId(conv.id);
       setTab("inbox");
@@ -664,7 +912,7 @@ export default function Atendimento() {
     const url = new URL(window.location.href);
     url.searchParams.delete("contatoId");
     window.history.replaceState({}, "", url.toString());
-  }, [contatoIdUrl, convs, contatoUrl, contatoUrlConsumido]);
+  }, [contatoIdUrl, convs, contatoUrl, contatoUrlConsumido, convDoContatoUrl.data, convDoContatoUrl.isLoading]);
 
   const goToConversaFromLead = useCallback((conversaId: number) => {
     setSelId(conversaId);
@@ -724,7 +972,7 @@ export default function Atendimento() {
             <TabsTrigger value="chamadas" className="text-xs sm:text-sm gap-1.5 px-4">
               <Phone className="h-3.5 w-3.5" /> Chamadas
               {chamadaWa.filaAoVivo.length > 0 && (
-                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center animate-pulse">
+                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-success text-success-on text-[10px] font-bold flex items-center justify-center animate-pulse">
                   {chamadaWa.filaAoVivo.length}
                 </span>
               )}
@@ -735,7 +983,7 @@ export default function Atendimento() {
             <Button
               size="sm"
               onClick={() => setShowIniciar(true)}
-              className="h-10 bg-gradient-to-br from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-md shadow-emerald-500/20"
+              className="h-10 bg-success shadow-md shadow-emerald-500/20"
             >
               <MessageCircle className="h-4 w-4 mr-1.5" /> Nova Conversa
             </Button>
@@ -921,9 +1169,9 @@ export default function Atendimento() {
                       </div>
                       <div className="space-y-1.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {(["todos", "7d", "30d", "90d"] as const).map((p) => {
-                            const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {(["hoje", "7d", "30d", "90d", "todos"] as const).map((p) => {
+                            const label = p === "hoje" ? "Hoje" : p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
                             const ativo = periodoFiltro === p;
                             return (
                               <button
@@ -988,6 +1236,49 @@ export default function Atendimento() {
                             ? "Período exato ativo — os presets acima ficam ignorados. Hora vazia considera o dia inteiro."
                             : "Hora é opcional — em branco, o filtro considera o dia inteiro (00:00 a 23:59)."}
                         </p>
+
+                        {/* Como o período conta (27/08, aprovado): início do
+                            atendimento (novo default) × qualquer mensagem
+                            (comportamento antigo — nada removido). */}
+                        <div className="rounded-lg border border-info/30 bg-info-bg/60 p-2.5 space-y-1.5 mt-1.5">
+                          <p className="text-[10px] font-bold uppercase tracking-wide text-info-fg">
+                            O período conta pelo…
+                          </p>
+                          <label className="flex items-start gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="modo-periodo-inbox"
+                              checked={modoPeriodo === "inicio"}
+                              onChange={() => setModoPeriodo("inicio")}
+                              className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
+                            />
+                            <span className="text-[11px] leading-snug">
+                              <span className="font-semibold">Início do atendimento</span>
+                              <span className="text-muted-foreground">
+                                {" "}— pega quem <strong>pediu atendimento</strong> no período: vale a primeira
+                                mensagem da conversa, e se um atendimento foi <strong>encerrado e o cliente
+                                voltou</strong>, o retorno conta como novo início. Conversa antiga que só
+                                continuou trocando mensagem fica fora.
+                              </span>
+                            </span>
+                          </label>
+                          <label className="flex items-start gap-2 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name="modo-periodo-inbox"
+                              checked={modoPeriodo === "mensagens"}
+                              onChange={() => setModoPeriodo("mensagens")}
+                              className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
+                            />
+                            <span className="text-[11px] leading-snug">
+                              <span className="font-semibold">Qualquer mensagem no período</span>
+                              <span className="text-muted-foreground">
+                                {" "}— como era antes: toda conversa com alguma mensagem na janela, mesmo que o
+                                atendimento tenha começado semanas atrás.
+                              </span>
+                            </span>
+                          </label>
+                        </div>
                         {/* No WhatsApp a conversa é reaproveitada pra sempre, então
                             sem este recorte não dá pra separar lead novo de cliente
                             que já falava com o escritório antes. */}
@@ -997,7 +1288,7 @@ export default function Atendimento() {
                             checked={somenteNovos}
                             disabled={!dataIni}
                             onChange={(e) => setSomenteNovos(e.target.checked)}
-                            className="mt-0.5 h-3.5 w-3.5 accent-violet-600 cursor-pointer disabled:opacity-40"
+                            className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer disabled:opacity-40"
                           />
                           <span className="text-[11px] leading-snug">
                             <span className="font-semibold">Somente primeiro contato</span>
@@ -1060,7 +1351,7 @@ export default function Atendimento() {
                         <span
                           className={
                             "block text-[10px] font-semibold leading-tight truncate " +
-                            (ativo ? "text-violet-600" : "text-muted-foreground")
+                            (ativo ? "text-info-fg" : "text-muted-foreground")
                           }
                         >
                           {p.l}
@@ -1069,7 +1360,7 @@ export default function Atendimento() {
                           data-testid="inbox-pill-contagem"
                           className={
                             "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
-                            (ativo ? "text-violet-600" : "text-muted-foreground/70")
+                            (ativo ? "text-info-fg" : "text-muted-foreground/70")
                           }
                         >
                           {p.n}
@@ -1104,6 +1395,20 @@ export default function Atendimento() {
                     </Button>
                   </div>
                 )}
+                {notaForaInput && (foraDoPeriodo?.total ?? 0) > 0 && (
+                  <div className="mx-2 mb-1.5 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
+                    <span className="font-semibold">
+                      {(foraDoPeriodo?.nomes || []).slice(0, 2).join(", ") || "Algumas conversas"}
+                      {(foraDoPeriodo?.total ?? 0) > (foraDoPeriodo?.nomes?.length ?? 0)
+                        ? ` e +${(foraDoPeriodo!.total as number) - (foraDoPeriodo!.nomes as string[]).length}`
+                        : ""}
+                    </span>{" "}
+                    trocaram mensagem no período, mas o atendimento começou antes — fora do filtro.{" "}
+                    <button onClick={() => setModoPeriodo("mensagens")} className="font-bold underline">
+                      mostrar mesmo assim
+                    </button>
+                  </div>
+                )}
                 {!convs?.length ? (
                   <div className="text-center py-16 px-4">
                     <MessageCircle className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
@@ -1128,6 +1433,10 @@ export default function Atendimento() {
                 ) : (
                   convs.map((c: any) => {
                     const naoLidas = Number(c.naoLidas || 0);
+                    // Marcação manual: mesmo destaque de mensagem nova, mas com
+                    // bolinha sem número. Mensagem real chegando, o contador assume.
+                    const marcadaNaoLida = (c as any).marcadaNaoLida === true;
+                    const destaqueNaoLida = naoLidas > 0 || marcadaNaoLida;
                     const selecionada = selId === c.id;
                     // Canal da conversa fora do ar (restrição Meta/banido/erro/
                     // desconectado) — sinaliza em vermelho pra ver o estrago de
@@ -1136,28 +1445,34 @@ export default function Atendimento() {
                       (c as any).canalRestrito === true ||
                       ["erro", "banido", "desconectado"].includes(String((c as any).canalStatus || ""));
                     return (
+                      // w-0 min-w-full: o viewport do ScrollArea embrulha o
+                      // conteúdo num display:table, e o min-content do texto
+                      // com truncate (nowrap) infla a coluna além do viewport —
+                      // hora/badge/kebab saíam do enquadramento. Zerar a
+                      // contribuição intrínseca (mesmo truque do wrapper do
+                      // Radix) prende a linha na largura da coluna.
+                      <div key={c.id} className="relative group/conv w-0 min-w-full">
                       <button
-                        key={c.id}
                         data-testid="inbox-conversa"
                         className={
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada
-                            ? "bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/30 dark:hover:bg-violet-950/40"
-                            : naoLidas > 0
-                              // Mensagem nova: card inteiro destacado até abrir
-                              // a conversa — preto translúcido (pedido do dono;
-                              // o violeta confundia com a selecionada)
+                            ? "bg-info-bg hover:bg-info-bg dark:hover:bg-info/40"
+                            : destaqueNaoLida
+                              // Mensagem nova (ou marcação manual): card inteiro
+                              // destacado até abrir a conversa — preto translúcido
+                              // (pedido do dono; o violeta confundia com a selecionada)
                               ? "bg-black/[0.07] hover:bg-black/[0.10] dark:bg-white/10 dark:hover:bg-white/[0.14]"
                               : canalCaiu
-                                ? "bg-rose-50/70 hover:bg-rose-100/60 dark:bg-rose-950/20 dark:hover:bg-rose-950/30"
+                                ? "bg-danger-bg/70 hover:bg-danger-bg/60 dark:hover:bg-danger/30"
                                 : "hover:bg-muted/40")
                         }
                         onClick={() => setSelId(c.id)}
                       >
                         {selecionada ? (
-                          <span className="absolute left-0 top-3 bottom-3 w-1 bg-violet-600 rounded-r" aria-hidden />
-                        ) : naoLidas > 0 ? (
-                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-slate-600 dark:bg-slate-300 rounded-r" aria-hidden />
+                          <span className="absolute left-0 top-3 bottom-3 w-1 bg-info rounded-r" aria-hidden />
+                        ) : destaqueNaoLida ? (
+                          <span className="absolute left-0 top-3 bottom-3 w-[3px] bg-foreground/80 rounded-r" aria-hidden />
                         ) : null}
                         <div className="flex items-start gap-2.5">
                           <div className="relative shrink-0">
@@ -1174,7 +1489,7 @@ export default function Atendimento() {
                               <div
                                 className={
                                   "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border-2 " +
-                                  (canalCaiu ? "bg-red-100 border-red-500 dark:bg-red-950" : "bg-background border-background")
+                                  (canalCaiu ? "bg-danger-bg border-danger/30" : "bg-background border-background")
                                 }
                                 title={
                                   canalCaiu
@@ -1187,7 +1502,7 @@ export default function Atendimento() {
                             )}
                             {canalCaiu && (
                               <span
-                                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-background animate-pulse"
+                                className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-danger border-2 border-background animate-pulse"
                                 aria-hidden
                               />
                             )}
@@ -1197,7 +1512,7 @@ export default function Atendimento() {
                               <p
                                 className={
                                   "text-sm truncate " +
-                                  (naoLidas > 0 ? "font-bold text-foreground" : "font-medium")
+                                  (destaqueNaoLida ? "font-bold text-foreground" : "font-medium")
                                 }
                               >
                                 {c.contatoNome}
@@ -1205,7 +1520,7 @@ export default function Atendimento() {
                               <span
                                 className={
                                   "text-[10px] shrink-0 tabular-nums " +
-                                  (naoLidas > 0 ? "text-violet-600 font-bold" : "text-muted-foreground")
+                                  (destaqueNaoLida ? "text-info-fg font-bold" : "text-muted-foreground")
                                 }
                               >
                                 {timeAgo(c.ultimaMensagemAt)}
@@ -1215,20 +1530,25 @@ export default function Atendimento() {
                               <p
                                 className={
                                   "text-xs truncate " +
-                                  (naoLidas > 0 ? "text-foreground/85 font-medium" : "text-muted-foreground")
+                                  (destaqueNaoLida ? "text-foreground/85 font-medium" : "text-muted-foreground")
                                 }
                               >
                                 {previewMensagem(c)}
                               </p>
-                              {naoLidas > 0 && (
-                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-emerald-500 text-white text-[10.5px] font-extrabold tabular-nums">
+                              {naoLidas > 0 ? (
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-success text-success-on text-[10.5px] font-extrabold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
-                              )}
+                              ) : marcadaNaoLida ? (
+                                <span
+                                  className="shrink-0 w-[11px] h-[11px] rounded-full bg-success"
+                                  title="Marcada como não lida"
+                                />
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {(c as any).temAtraso ? (
-                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-red-100 text-red-700 border border-red-200 inline-flex items-center gap-0.5">
+                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-danger-bg text-danger-fg border border-danger/30 inline-flex items-center gap-0.5">
                                   <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
                                 </span>
                               ) : (
@@ -1241,15 +1561,41 @@ export default function Atendimento() {
                                   <span
                                     className={
                                       "w-1.5 h-1.5 rounded-full " +
-                                      (c.status === "aguardando" ? "bg-amber-500"
-                                        : c.status === "em_atendimento" ? "bg-blue-500"
-                                        : c.status === "resolvido" ? "bg-emerald-500"
-                                        : "bg-slate-400")
+                                      (c.status === "aguardando" ? "bg-warning"
+                                        : c.status === "em_atendimento" ? "bg-info"
+                                        : c.status === "resolvido" ? "bg-success"
+                                        : "bg-muted-foreground/50")
                                     }
                                   />
                                   {STATUS_CONVERSA_LABELS[c.status as StatusConversa]}
                                 </span>
                               )}
+                              {/* Com período ativo no modo "início do atendimento",
+                                  a tag diz POR QUE a conversa está no filtro:
+                                  iniciada na janela ou reaberta nela (cliente
+                                  voltou depois de encerrada). */}
+                              {(filtrosBackend as any)?.dataInicio && modoPeriodo === "inicio" && (c as any).atendimentoIniciadoEm && (() => {
+                                const ini = new Date((c as any).atendimentoIniciadoEm);
+                                if (isNaN(ini.getTime())) return null;
+                                const criada = c.createdAt ? new Date(c.createdAt) : null;
+                                const reaberto = !!criada && !isNaN(criada.getTime()) && ini.getTime() - criada.getTime() > 60_000;
+                                const quando = ini.toDateString() === new Date().toDateString()
+                                  ? `hoje · ${ini.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                                  : ini.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+                                return (
+                                  <span
+                                    className={
+                                      "text-[9px] px-1.5 py-0 rounded font-bold shrink-0 " +
+                                      (reaberto
+                                        ? "bg-info-bg text-info-fg"
+                                        : "bg-success-bg text-success-fg")
+                                    }
+                                    title={reaberto ? "Cliente voltou depois de um atendimento encerrado" : "Primeira mensagem da conversa dentro do período"}
+                                  >
+                                    {reaberto ? "reaberto" : "iniciado"} {quando}
+                                  </span>
+                                );
+                              })()}
                               {(c as any).atendenteNome && (
                                 <span className="text-[9px] px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
                                   · {(c as any).atendenteNome.split(" ")[0]}
@@ -1281,6 +1627,31 @@ export default function Atendimento() {
                           </div>
                         </div>
                       </button>
+                      {/* Menu rápido (hover): marcar não lida / arquivar sem
+                          precisar abrir a conversa. Fica fora do <button> da
+                          linha (irmão absoluto) — botão dentro de botão é
+                          HTML inválido e o clique abriria a conversa. */}
+                      {!mostrarArquivadas && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button
+                              aria-label="Ações rápidas da conversa"
+                              className="absolute right-1.5 top-1.5 h-6 w-6 rounded-md border bg-background shadow-sm items-center justify-center text-muted-foreground hover:text-foreground hidden group-hover/conv:flex data-[state=open]:flex"
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onClick={() => marcarNaoLida(c.id)}>
+                              <CircleDot className="h-4 w-4 mr-2" />Marcar como não lida
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => arquivarMut.mutate({ id: c.id, arquivar: true })}>
+                              <Archive className="h-4 w-4 mr-2" />Arquivar conversa
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      </div>
                     );
                   })
                 )}
@@ -1310,6 +1681,14 @@ export default function Atendimento() {
                   cid={selId}
                   convs={convsAll || []}
                   onVoltar={isMobile ? () => setSelId(null) : undefined}
+                  onMostrarNaLista={(tel) => {
+                    // A busca por número varre o banco inteiro — período,
+                    // status e arquivadas incluídos. É o caminho mais curto
+                    // pra conversa aparecer na lista sem mexer nos filtros
+                    // que a pessoa escolheu.
+                    setInboxBusca(tel);
+                    setFiltro("todos");
+                  }}
                   onUpdate={rC}
                   onLeadUpdate={rL}
                   onWA={hasWhatsapp ? (p) => setWaPopup(p) : undefined}
@@ -1319,6 +1698,10 @@ export default function Atendimento() {
                     rC();
                   }}
                   onTransferido={() => {
+                    setSelId(null);
+                    rC();
+                  }}
+                  onMarcadaNaoLida={() => {
                     setSelId(null);
                     rC();
                   }}
@@ -1370,7 +1753,7 @@ export default function Atendimento() {
         <button
           onClick={() => setShowIniciar(true)}
           aria-label="Nova conversa"
-          className="fixed right-5 z-40 h-14 w-14 rounded-full bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
+          className="fixed right-5 z-40 h-14 w-14 rounded-full bg-success text-success-on shadow-lg shadow-emerald-500/40 flex items-center justify-center active:scale-95 transition"
           style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
         >
           <SquarePen className="h-6 w-6" />
@@ -1400,7 +1783,7 @@ export default function Atendimento() {
   );
 }
 
-function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void }) {
+function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, onTransferido, onMarcadaNaoLida, onAbrirLinhaTempo, onLigarWhatsApp, onVoltar, onMostrarNaLista }: { cid: number; convs: any[]; onUpdate: () => void; onLeadUpdate: () => void; onWA?: (p: string) => void; onTel?: (p: string) => void; onDeleted: () => void; onTransferido?: () => void; onMarcadaNaoLida?: () => void; onAbrirLinhaTempo?: () => void; onLigarWhatsApp?: (info: { canalId: number; telefone: string; contatoId?: number; contatoNome?: string; conversaId: number }) => void; onVoltar?: () => void; onMostrarNaLista?: (telefone: string) => void }) {
   const [msg, setMsg] = useState(""); const ref = useRef<HTMLDivElement>(null);
   // Mídia "pendente": foi anexada via template (ou upload manual no futuro)
   // mas ainda não foi enviada. Renderiza preview acima do composer e é
@@ -1422,6 +1805,24 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const [tom, setTom] = useState<"formal" | "direto" | "empatico" | "amigavel">("empatico");
   const [confirmExcluirConversa, setConfirmExcluirConversa] = useState(false);
   const [metaParamsDialog, setMetaParamsDialog] = useState<{ template: any; preview: string } | null>(null);
+  // Renomear o contato sem sair da conversa. `null` = não está editando.
+  // O nome mora num lugar só (cadastro do contato): a lista de conversas lê
+  // dele por junção e o lead só aponta pro contato — por isso salvar aqui
+  // atualiza tudo de uma vez, sem cópia pra dessincronizar.
+  const [nomeEditando, setNomeEditando] = useState<string | null>(null);
+  const { data: permsContato } = (trpc as any).permissoes?.minhasPermissoes?.useQuery?.(
+    undefined,
+    { retry: false, refetchOnWindowFocus: false },
+  ) || { data: null };
+  const podeEditarContato = !!permsContato?.permissoes?.clientes?.editar;
+  const renomearContato = trpc.clientes.atualizar.useMutation({
+    onSuccess: () => {
+      toast.success("Nome atualizado");
+      setNomeEditando(null);
+      onUpdate();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
   // Compor com IA — gera sugestão no tom escolhido
   const composerSugestao = trpc.atendimentoIa.composerSugestao.useMutation({
     onSuccess: (data) => {
@@ -1454,7 +1855,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const convCacheRef = useRef<any>(null);
   const convEncontrada = convs.find((c: any) => c.id === cid);
   if (convEncontrada) convCacheRef.current = convEncontrada;
-  const conv = convEncontrada ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // A conversa aberta responde por si quando não está na lista: aberta por
+  // link, pelo aviso de número repetido ou pela pasta Arquivadas, ela não
+  // aparece no array filtrado por período — e o cabeçalho chegava "Contato ·
+  // Sem atendente" com o cliente vinculado o tempo todo.
+  const { data: convAvulsa } = trpc.crm.conversaPorId.useQuery(
+    { id: cid },
+    { enabled: !!cid && !convEncontrada, staleTime: 30_000 },
+  );
+  const conv = convEncontrada
+    ?? (convAvulsa && (convAvulsa as any).id === cid ? convAvulsa : undefined)
+    ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // Está aberta mas fora do recorte atual do Inbox: a lista ao lado não a
+  // mostra, e sem dizer isso a tela parece quebrada.
+  const foraDoFiltro = !!conv && !convEncontrada;
   const bot = botStatusInfo(conv?.status);
   const botToggle = useBotToggle(onUpdate);
   // Templates Meta (HSM) — só faz query quando o canal da conversa é
@@ -1535,6 +1949,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     onError: (e: any) => toast.error(e.message),
   });
   const atualizar = trpc.crm.atualizarConversa.useMutation({ onSuccess: () => { onUpdate(); toast.success("Atualizado!"); } });
+  // Marcar não lida fecha a conversa junto (via onMarcadaNaoLida): aberta,
+  // o "abrir = ler" do effect acima desfaria a marcação em seguida.
+  const marcarNaoLidaMut = trpc.crm.marcarConversaNaoLida.useMutation({
+    onSuccess: () => onMarcadaNaoLida?.(),
+    onError: (e: any) => toast.error(e.message),
+  });
   const excluir = trpc.crm.excluirConversa.useMutation({ onSuccess: () => { toast.success("Conversa excluída."); onDeleted(); }, onError: (e: any) => toast.error(e.message) });
   // Auto-scroll só dispara em mudanças do LIVE (polling/envio), não quando
   // prependemos antigas — senão o "carregar mais" pulava pra fim e o usuário
@@ -1675,15 +2095,15 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
             {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
             {(conv as any)?.optOutWhatsapp ? " · 🔕 Avisos desativados" : ""}
-            {canalInoperante && <span className="text-red-600 dark:text-red-400 font-semibold"> · ⛔ Canal inoperante</span>}
+            {canalInoperante && <span className="text-danger-fg font-semibold"> · ⛔ Canal inoperante</span>}
           </p>
         </div>
         {(() => {
           const tel = conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || "";
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (<>
-            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
-            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-green-600 shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
+            {onWA && tel && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-success-fg shrink-0" title="Abrir no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-4 w-4" /></Button>}
+            {podeLigarWa && <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-success-fg shrink-0" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-4 w-4" /></Button>}
           </>);
         })()}
         <DropdownMenu>
@@ -1710,8 +2130,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Archive className="h-4 w-4 mr-2" />Arquivar conversa
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => marcarNaoLidaMut.mutate({ conversaId: cid })}><CircleDot className="h-4 w-4 mr-2" />Marcar como não lida</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-emerald-600" />Resolver</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-4 w-4 mr-2 text-success-fg" />Resolver</DropdownMenuItem>
             <DropdownMenuItem onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-4 w-4 mr-2" />Fechar</DropdownMenuItem>
             <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
           </DropdownMenuContent>
@@ -1736,32 +2157,77 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <div className="flex-1 min-w-0">
           {/* Linha 1: nome + status + bot (controle). Antes o nome dividia espaço
               com 5 badges coloridos; o resto do contexto foi pro subtítulo abaixo. */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {conv?.contatoId ? (
-              <button
-                type="button"
-                onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
-                title="Abrir cadastro do contato (cliente/lead)"
-                className="text-sm font-semibold truncate text-left hover:text-violet-600 hover:underline dark:hover:text-violet-400"
-              >
-                {conv?.contatoNome || "Contato"}
-              </button>
+          <div className="group flex items-center gap-2 flex-wrap">
+            {nomeEditando !== null && conv?.contatoId ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  autoFocus
+                  value={nomeEditando}
+                  onChange={(e) => setNomeEditando(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const nome = nomeEditando.trim();
+                      if (nome.length >= 2) renomearContato.mutate({ id: conv.contatoId, nome });
+                    }
+                    if (e.key === "Escape") setNomeEditando(null);
+                  }}
+                  maxLength={255}
+                  className="h-7 w-48 text-sm font-semibold"
+                  aria-label="Nome do contato"
+                />
+                <Button
+                  size="sm"
+                  className="h-7 px-2.5 text-xs"
+                  disabled={renomearContato.isPending || nomeEditando.trim().length < 2}
+                  onClick={() => renomearContato.mutate({ id: conv.contatoId, nome: nomeEditando.trim() })}
+                >
+                  {renomearContato.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Salvar"}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setNomeEditando(null)}>
+                  Cancelar
+                </Button>
+              </div>
             ) : (
-              <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+              <>
+                {conv?.contatoId ? (
+                  <button
+                    type="button"
+                    onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}
+                    title="Abrir cadastro do contato (cliente/lead)"
+                    className="text-sm font-semibold truncate text-left hover:text-info-fg hover:underline dark:hover:text-info"
+                  >
+                    {conv?.contatoNome || "Contato"}
+                  </button>
+                ) : (
+                  <p className="text-sm font-semibold truncate">{conv?.contatoNome || "Contato"}</p>
+                )}
+                {conv?.contatoId && podeEditarContato && (
+                  <button
+                    type="button"
+                    onClick={() => setNomeEditando(conv?.contatoNome || "")}
+                    title="Editar o nome do contato"
+                    aria-label="Editar o nome do contato"
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition rounded p-0.5 text-muted-foreground hover:text-info-fg"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {canalInoperante && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={`Canal fora do ar: ${canalInoperanteDetalhe}. Nenhuma mensagem sai por ele.`}
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
                 Canal inoperante
               </span>
             )}
             {(conv as any)?.optOutWhatsapp && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-300 dark:border-red-800"
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={
                   "Contato pediu pra não receber cobranças e avisos automáticos no WhatsApp" +
                   ((conv as any)?.optOutWhatsappEm ? ` (desde ${new Date((conv as any).optOutWhatsappEm).toLocaleDateString("pt-BR")})` : "")
@@ -1781,11 +2247,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 className={
                   "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold transition disabled:opacity-50 " +
                   (bot.pausado
-                    ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800"
-                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-800")
+                    ? "bg-warning-bg text-warning-fg border-warning/30 hover:bg-warning-bg dark:text-warning"
+                    : "bg-success-bg text-success-fg border-success/30 hover:bg-success-bg dark:text-success")
                 }
               >
-                <span className={"w-1.5 h-1.5 rounded-full " + (bot.pausado ? "bg-amber-500" : "bg-emerald-500")} />
+                <span className={"w-1.5 h-1.5 rounded-full " + (bot.pausado ? "bg-warning" : "bg-success")} />
                 <Bot className="h-3 w-3" />
                 {bot.pausado ? "Bot pausado" : "Bot ativo"}
               </button>
@@ -1799,7 +2265,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <User className="h-3 w-3" />{(conv as any).atendenteNome}
               </span>
             ) : (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">Sem atendente</span>
+              <span className="text-warning-fg font-medium">Sem atendente</span>
             )}
             {(conv as any)?.canalNome && (
               <span
@@ -1812,7 +2278,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               >
                 <span className="text-muted-foreground/40">·</span>
                 <CanalLogo tipo={(conv as any).canalTipo} className="w-3.5 h-3.5" />
-                <span className={canalInoperante ? "text-red-600 dark:text-red-400 font-semibold line-through decoration-red-400" : undefined}>
+                <span className={canalInoperante ? "text-danger-fg font-semibold line-through decoration-danger" : undefined}>
                   {(conv as any).canalTelefone || (conv as any).canalNome}
                 </span>
                 {canalInoperante && <span aria-hidden>⛔</span>}
@@ -1832,9 +2298,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           const podeLigarWa = !!onLigarWhatsApp && conv?.canalTipo === "whatsapp_api" && !!conv?.canalId && !!tel;
           return (
             <div className="flex items-center gap-1 shrink-0">
-              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
-              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
-              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+              {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
+              {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
+              {/* Desligado até a ponte existir: o servidor recebe só o número do
+                * cliente, então cai no ramo sem atendente e toca "chamada de
+                * teste do sistema" pra quem atende. O botão continua na tela, e
+                * o popup e as procedures seguem intactos — é religar quando a
+                * ligação conectar as duas pontas de verdade. */}
+              {onTel && <Button variant="ghost" size="sm" disabled className="h-7 w-7 p-0 text-muted-foreground disabled:opacity-100" title="Ligação por telefone (Twilio) — em breve"><IconeTwilio className="h-3.5 w-3.5" /></Button>}
             </div>
           );
         })()}
@@ -1847,7 +2318,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
         <div className="flex-1" />
         <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-300 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-success-fg bg-success-bg hover:bg-success-bg hover:text-success-fg dark:bg-success/40" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
         <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -1858,12 +2329,37 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <DropdownMenuItem onClick={() => setShowAddLead(true)}><TrendingUp className="h-4 w-4 mr-2" />Pipeline</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowAgendar(true)}><Calendar className="h-4 w-4 mr-2" />Agendar</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setShowVincular(true)}><Link2 className="h-4 w-4 mr-2" />Vincular</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => marcarNaoLidaMut.mutate({ conversaId: cid })}><CircleDot className="h-4 w-4 mr-2" />Marcar como não lida</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </div>
+    )}
+    {/* Aberta por link, por aviso de número repetido ou pela pasta Arquivadas:
+        a conversa existe e está inteira, mas o recorte atual do Inbox não a
+        lista. Sem dizer isso, a tela parece ter perdido a conversa. */}
+    {foraDoFiltro && (
+      <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
+        <Pin className="h-3.5 w-3.5 shrink-0" />
+        <span className="flex-1">
+          Esta conversa está <strong>fora do filtro atual</strong> do Inbox — por isso ela
+          não aparece na lista ao lado.
+        </span>
+        {onMostrarNaLista && (conv?.contatoTelefone || conv?.chatIdExterno) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 text-[10.5px] shrink-0 border-warning/30"
+            onClick={() => onMostrarNaLista(
+              String(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || ""),
+            )}
+          >
+            Mostrar na lista
+          </Button>
+        )}
+      </div>
     )}
     {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só
         o "o que mudou" e os cards de ação, que já aparecem só quando há conteúdo. */}
@@ -1919,12 +2415,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                       {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
                       {m.direcao === "saida" && m.status === "falha" && (
                         <span title={(m as any).erroEntrega || "Falha no envio — veja logs do WhatsApp"}>
-                          <AlertTriangle className="h-3 w-3 text-red-200" aria-label="Falha no envio" />
+                          <AlertTriangle className="h-3 w-3 text-danger" aria-label="Falha no envio" />
                         </span>
                       )}
                     </div>
                     {m.direcao === "saida" && m.status === "falha" && (m as any).erroEntrega && (
-                      <p className="text-[10px] mt-1 text-red-100/90 leading-snug break-words">
+                      <p className="text-[10px] mt-1 text-danger/90 leading-snug break-words">
                         ⚠ Não entregue — {(m as any).erroEntrega}
                       </p>
                     )}
@@ -1952,7 +2448,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px] border-violet-300 text-violet-700 hover:bg-violet-50 hover:text-violet-700 px-2.5"
+          className="h-7 text-[11px] border-info/30 text-info-fg hover:bg-info-bg hover:text-info-fg px-2.5"
           disabled={composerSugestao.isPending || composerBloqueado}
           onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
           title={composerBloqueado ? "Envio de texto livre bloqueado nesta conversa" : "Gerar resposta com IA no tom selecionado"}
@@ -1977,7 +2473,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <DropdownMenuItem
                 key={t}
                 onClick={() => setTom(t)}
-                className={tom === t ? "font-semibold text-violet-700 dark:text-violet-300" : ""}
+                className={tom === t ? "font-semibold text-info-fg" : ""}
               >
                 {t === "formal" ? "Formal" : t === "direto" ? "Direto" : t === "empatico" ? "Empático" : "Amigável"}
                 {tom === t && <Check className="ml-auto h-3.5 w-3.5" />}
@@ -1992,16 +2488,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Preview de mídia anexada (vinda do template). Some ao enviar. */}
       {pendingMedia && (
-        <div className="mx-3 mb-1 flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-md px-2.5 py-1.5">
-          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-emerald-700 shrink-0" /> :
-           <Paperclip className="h-3.5 w-3.5 text-emerald-700 shrink-0" />}
+        <div className="mx-3 mb-1 flex items-center gap-2 bg-success-bg border border-success/30 rounded-md px-2.5 py-1.5">
+          {pendingMedia.tipo === "imagem" ? <ImageIcon className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           pendingMedia.tipo === "video" ? <VideoIcon className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           pendingMedia.tipo === "documento" ? <FileText className="h-3.5 w-3.5 text-success-fg shrink-0" /> :
+           <Paperclip className="h-3.5 w-3.5 text-success-fg shrink-0" />}
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-emerald-800 dark:text-emerald-200 truncate">
+            <p className="text-xs font-medium text-success-fg truncate">
               {pendingMedia.nome || pendingMedia.tipo}
             </p>
-            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 truncate">
+            <p className="text-[10px] text-success-fg/80 truncate">
               {pendingMedia.tamanho
                 ? `${(pendingMedia.tamanho / 1024 / 1024).toFixed(1)} MB · o texto digitado vira a legenda`
                 : pendingMedia.url}
@@ -2009,7 +2505,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
           <button
             onClick={() => setPendingMedia(null)}
-            className="text-emerald-700 hover:text-emerald-900 shrink-0"
+            className="text-success-fg hover:text-success-fg shrink-0"
             title="Remover anexo"
           >
             <X className="h-3.5 w-3.5" />
@@ -2018,7 +2514,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       )}
 
       {canalInoperante ? (
-        <div className="mx-3 mt-2 mb-1 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-red-800 dark:text-red-200">
+        <div className="mx-3 mt-2 mb-1 bg-danger-bg border border-danger/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-danger-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">⛔</span>
             <span>
@@ -2032,7 +2528,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[11px] px-2 border-red-300 text-red-700 hover:bg-red-100 hover:text-red-800 dark:border-red-800 dark:text-red-300"
+              className="h-6 text-[11px] px-2 border-danger/30 text-danger-fg hover:bg-danger-bg hover:text-danger-fg dark:text-danger"
               onClick={() => setLocation("/configuracoes?tab=canais")}
             >
               Ver status do canal
@@ -2040,7 +2536,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
         </div>
       ) : janela24hFechada ? (
-        <div className="mx-3 mt-2 mb-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-md px-2.5 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+        <div className="mx-3 mt-2 mb-1 bg-warning-bg border border-warning/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-warning-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">🔒</span>
             <span>
@@ -2051,7 +2547,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <div className="flex items-center gap-2 mt-1.5 pl-5">
             <Button
               size="sm"
-              className="h-6 text-[11px] px-2.5 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+              className="h-6 text-[11px] px-2.5 bg-info"
               onClick={() => setShowTemplates(true)}
             >
               <Zap className="h-3 w-3 mr-1" /> Enviar template aprovado
@@ -2068,7 +2564,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Button
                 variant="ghost"
                 size="sm"
-                className={"h-9 w-9 p-0 shrink-0 rounded-full transition-transform " + (maisMenuAberto ? "bg-gradient-to-br from-violet-600 to-indigo-600 text-white rotate-45" : "bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300")}
+                className={"h-9 w-9 p-0 shrink-0 rounded-full transition-transform " + (maisMenuAberto ? "bg-info text-info-on rotate-45" : "bg-info-bg text-info-fg dark:text-info")}
                 title="Mais ações"
                 aria-label="Mais ações"
               >
@@ -2082,7 +2578,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onClick={() => { setMaisMenuAberto(false); composerSugestao.mutate({ conversaId: cid, tom }); }}
                 className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
-                <span className="h-9 w-9 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300 flex items-center justify-center shrink-0">
+                <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                   {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 </span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">Compor com IA</span><span className="block text-[11px] text-muted-foreground">Gera a resposta no tom escolhido</span></span>
@@ -2093,7 +2589,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onClick={() => { setMaisMenuAberto(false); setShowTemplates(true); }}
                 className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60"
               >
-                <span className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 flex items-center justify-center shrink-0">
+                <span className="h-9 w-9 rounded-xl bg-success-bg text-success-fg dark:text-success flex items-center justify-center shrink-0">
                   <Zap className="h-4 w-4" />
                 </span>
                 <span className="min-w-0"><span className="block text-sm font-semibold">Respostas rápidas / Templates</span><span className="block text-[11px] text-muted-foreground">Atalho “/” e templates da Meta</span></span>
@@ -2102,7 +2598,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 onAnexar={(m) => { setPendingMedia(m); setMaisMenuAberto(false); }}
                 trigger={
                   <button type="button" disabled={composerBloqueado} className="w-full flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-muted text-left disabled:opacity-60">
-                    <span className="h-9 w-9 rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300 flex items-center justify-center shrink-0">
+                    <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                       <Paperclip className="h-4 w-4" />
                     </span>
                     <span className="min-w-0"><span className="block text-sm font-semibold">Anexar</span><span className="block text-[11px] text-muted-foreground">Foto, vídeo ou documento</span></span>
@@ -2149,12 +2645,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-xs">{t.titulo}</p>
                           {t.atalho && (
-                            <span className="font-mono text-[10px] bg-violet-100 text-violet-700 px-1 py-0.5 rounded">
+                            <span className="font-mono text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">
                               /{t.atalho}
                             </span>
                           )}
                           {t.midiaTipo && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-success-bg text-success-fg px-1 py-0.5 rounded">
                               {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
                                t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
                                <Paperclip className="h-2.5 w-2.5" />}
@@ -2194,9 +2690,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                           >
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-mono text-xs">{t.name}</p>
-                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">{t.language}</span>
+                              <span className="text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">{t.language}</span>
                               {totalVars > 0 && (
-                                <span className="text-[10px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded">
+                                <span className="text-[10px] bg-warning-bg text-warning-fg px-1 py-0.5 rounded">
                                   {totalVars} {totalVars === 1 ? "var" : "vars"}
                                 </span>
                               )}
@@ -2255,7 +2751,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           onClick={send}
           disabled={!msg.trim() || enviar.isPending || composerBloqueado}
           title={composerBloqueado ? (canalInoperante ? "Canal inoperante — envio desativado" : "Janela de 24h fechada — use um template") : undefined}
-          className="px-4 bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+          className="px-4 bg-info"
         >
           {enviar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         </Button>
@@ -2270,7 +2766,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
         </span>
         {composerSugestao.data?.ia === false && (
-          <span className="text-amber-600 text-[10px]">⚠ IA não configurada — usando template</span>
+          <span className="text-warning-fg text-[10px]">⚠ IA não configurada — usando template</span>
         )}
       </div>
       )}
@@ -2298,7 +2794,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
     {showVincular && (
       <Dialog open={showVincular} onOpenChange={(v) => { setShowVincular(v); setBuscaVincular(""); }}>
         <DialogContent className="sm:max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-indigo-600" /> Vincular a cliente</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Link2 className="h-5 w-5 text-info-fg" /> Vincular a cliente</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">Busque o cliente cadastrado para vincular esta conversa:</p>
             <Input placeholder="Buscar por nome, CPF..." value={buscaVincular} onChange={(e) => setBuscaVincular(e.target.value)} />
@@ -2308,7 +2804,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                   className="w-full flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/50 text-left transition-colors"
                   disabled={vincularMut.isPending}
                 >
-                  <User className="h-4 w-4 text-violet-500 shrink-0" />
+                  <User className="h-4 w-4 text-info shrink-0" />
                   <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{c.nome}</p>{c.cpfCnpj && <p className="text-[9px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}</div>
                 </button>
               ))}
@@ -2324,7 +2820,11 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       <NovoCompromissoDialog
         open={showAgendar}
         onOpenChange={setShowAgendar}
-        contexto={conv?.contatoId ? { contatoId: conv.contatoId, contatoNome: conv?.contatoNome || "" } : undefined}
+        contexto={{
+          contatoId: conv?.contatoId ?? undefined,
+          contatoNome: conv?.contatoNome || "",
+          contatoTelefone: conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "") || undefined,
+        }}
       />
     )}
 
@@ -2510,8 +3010,8 @@ function AudioRecordButton({ onSend, disabled }: { onSend: (args: EnvioComposer)
         >
           <X className="h-4 w-4" />
         </Button>
-        <span className="text-xs font-mono tabular-nums text-rose-600 flex items-center gap-1">
-          <span className="h-2 w-2 rounded-full bg-rose-600 animate-pulse" />
+        <span className="text-xs font-mono tabular-nums text-danger-fg flex items-center gap-1">
+          <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />
           {fmtDur(duracao)}
         </span>
         <Button
@@ -2668,21 +3168,21 @@ function AnexoButton({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-56">
           <DropdownMenuItem onClick={() => escolher("imagem")}>
-            <ImageIcon className="h-4 w-4 mr-2 text-emerald-600" />
+            <ImageIcon className="h-4 w-4 mr-2 text-success-fg" />
             <span className="text-sm">
               Foto
               <span className="block text-[10px] text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("video")}>
-            <VideoIcon className="h-4 w-4 mr-2 text-violet-600" />
+            <VideoIcon className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Vídeo
               <span className="block text-[10px] text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("documento")}>
-            <FileText className="h-4 w-4 mr-2 text-blue-600" />
+            <FileText className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Documento
               <span className="block text-[10px] text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
@@ -2878,12 +3378,12 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   return (<div className="space-y-4">
     {/* Hero gradient com 4 KPIs */}
     <div
-      className="relative overflow-hidden rounded-2xl px-6 py-5 text-white shadow-lg"
+      className="faixa-hero relative overflow-hidden rounded-2xl px-6 py-5 text-white shadow-lg"
       style={{
         background:
           "radial-gradient(circle at 20% 0%, rgba(255,255,255,0.18), transparent 40%), " +
           "radial-gradient(circle at 80% 100%, rgba(255,255,255,0.12), transparent 50%), " +
-          "linear-gradient(135deg, #4338ca 0%, #4f46e5 40%, #06b6d4 100%)",
+          "linear-gradient(135deg, var(--hero) 0%, var(--hero-2) 100%)",
       }}
     >
       <div className="flex items-start gap-3">
@@ -2891,7 +3391,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <h2 className="text-xl font-extrabold tracking-tight leading-tight">Pipeline de Vendas</h2>
           <p className="text-xs text-white/85 mt-1 flex items-center gap-2">
             <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
-              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-card animate-pulse" />
               Atualização ao vivo
             </span>
             Negociações em andamento · arraste os cards entre etapas
@@ -2926,7 +3426,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         className={
           "relative h-9 px-3 inline-flex items-center gap-1.5 rounded-md border text-xs font-semibold transition " +
           (filtrosAtivos > 0 || showFiltros
-            ? "border-violet-500 text-violet-700 bg-violet-50"
+            ? "border-info/30 text-info-fg bg-info-bg"
             : "text-muted-foreground hover:bg-muted")
         }
         title="Filtros: atendente, setor, período, valor"
@@ -2934,7 +3434,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         <Filter className="h-3.5 w-3.5" />
         Filtros
         {filtrosAtivos > 0 && (
-          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-violet-600 text-white text-[9px] font-bold">
+          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-info text-info-on text-[9px] font-bold">
             {filtrosAtivos}
           </span>
         )}
@@ -2946,7 +3446,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(false)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (!compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (!compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards no tamanho normal"
         >
@@ -2957,7 +3457,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setCompacto(true)}
           className={
             "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
-            (compacto ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards menores — cabem mais por coluna"
         >
@@ -2970,7 +3470,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("kanban")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "kanban" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "kanban" ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Kanban"
         >
@@ -2981,14 +3481,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           onClick={() => setView("lista")}
           className={
             "px-2.5 py-1.5 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition " +
-            (view === "lista" ? "bg-background text-violet-600 shadow-sm" : "text-muted-foreground hover:text-foreground")
+            (view === "lista" ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Visualização Lista"
         >
           <List className="h-3.5 w-3.5" /> Lista
         </button>
       </div>
-      <Button size="sm" onClick={onAddLead} className="bg-gradient-to-br from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-md h-9">
+      <Button size="sm" onClick={onAddLead} className="bg-info shadow-md h-9">
         <Plus className="h-4 w-4 mr-1" /> Novo Lead
       </Button>
     </div>
@@ -2999,7 +3499,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <DialogTitle className="flex items-center gap-2">
             Filtros do pipeline
             {filtrosAtivos > 0 && (
-              <span className="rounded-full bg-violet-100 text-violet-700 text-[11px] font-bold px-2 py-0.5 dark:bg-violet-950 dark:text-violet-300">
+              <span className="rounded-full bg-info-bg text-info-fg text-[11px] font-bold px-2 py-0.5">
                 {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
               </span>
             )}
@@ -3041,13 +3541,13 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                         onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
                         className={
                           "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
-                          (ativo ? "bg-violet-50 text-violet-700 font-medium dark:bg-violet-950 dark:text-violet-300" : "text-foreground/80 hover:bg-muted/40")
+                          (ativo ? "bg-info-bg text-info-fg font-medium" : "text-foreground/80 hover:bg-muted/40")
                         }
                       >
                         <span
                           className={
                             "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
-                            (ativo ? "bg-violet-600 border-violet-600 text-white" : "border-muted-foreground/40")
+                            (ativo ? "bg-info border-info/30 text-info-on" : "border-muted-foreground/40")
                           }
                         >
                           {ativo ? "✓" : ""}
@@ -3065,7 +3565,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                 <button
                   onClick={() => setResponsaveisFiltro([])}
                   disabled={responsaveisFiltro.length === 0}
-                  className="font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+                  className="font-semibold text-info-fg hover:underline disabled:opacity-40 disabled:no-underline"
                 >
                   Limpar seleção
                 </button>
@@ -3123,7 +3623,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                   <button
                     key={p}
                     onClick={() => setPeriodoFiltro(p)}
-                    className={"h-8 rounded-md text-xs border " + (ativo ? "bg-violet-600 text-white border-violet-600" : "bg-muted/30 hover:bg-muted")}
+                    className={"h-8 rounded-md text-xs border " + (ativo ? "bg-info text-info-on border-info/30" : "bg-muted/30 hover:bg-muted")}
                   >
                     {label}
                   </button>
@@ -3144,7 +3644,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <button
             onClick={limparFiltrosAv}
             disabled={filtrosAtivos === 0}
-            className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-40 disabled:no-underline"
+            className="text-xs font-semibold text-info-fg hover:underline disabled:opacity-40 disabled:no-underline"
           >
             Limpar filtros
           </button>
@@ -3181,15 +3681,15 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
               >
                 <div className="flex items-center gap-2">
                   <span className={"h-2.5 w-2.5 rounded-full shrink-0 " + (isGanho ? st.dot + " animate-pulse" : st.dot)} />
-                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-emerald-800" : "text-foreground")}>
+                  <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-success-fg" : "text-foreground")}>
                     {ETAPA_FUNIL_LABELS[etapa]}
                   </span>
-                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-emerald-600 text-white border-emerald-600" : "")}>
+                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-success text-success-on border-success/30" : "")}>
                     {items.length}
                   </Badge>
                 </div>
                 {val > 0 && (
-                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-emerald-700" : "text-muted-foreground")}>
+                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-success-fg" : "text-muted-foreground")}>
                     {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
                   </p>
                 )}
@@ -3202,8 +3702,8 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                     className={
                       "rounded-lg flex items-center justify-center text-[11px] py-6 transition-colors " +
                       (isOver
-                        ? "border-2 border-dashed border-violet-400 bg-violet-50 text-violet-700"
-                        : "border border-dashed border-slate-300 text-muted-foreground/60")
+                        ? "border-2 border-dashed border-info/30 bg-info-bg text-info-fg"
+                        : "border border-dashed border-border text-muted-foreground/60")
                     }
                   >
                     {isOver ? "soltar aqui" : "arraste aqui"}
@@ -3390,7 +3890,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.conversaId ? (
                   <button
                     onClick={() => onGoToConversa(lead.conversaId)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 text-[12.5px] font-semibold hover:bg-blue-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-info-bg text-info-fg border border-info/30 text-[12.5px] font-semibold hover:bg-info-bg"
                   >
                     <Inbox className="h-3.5 w-3.5" /> Ir pra conversa
                   </button>
@@ -3400,7 +3900,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.contatoTelefone && onWA ? (
                   <button
                     onClick={() => onWA(lead.contatoTelefone)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-[12.5px] font-semibold hover:bg-emerald-100"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-success-bg text-success-fg border border-success/30 text-[12.5px] font-semibold hover:bg-success-bg"
                   >
                     <PhoneCall className="h-3.5 w-3.5" /> WhatsApp
                   </button>
@@ -3450,7 +3950,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                           onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
                           className="flex-1"
                         />
-                        <span className="text-[13px] font-bold text-violet-700 tabular-nums w-9 text-right">{probEdit}%</span>
+                        <span className="text-[13px] font-bold text-info-fg tabular-nums w-9 text-right">{probEdit}%</span>
                       </div>
                     </div>
                   </div>
@@ -3494,7 +3994,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
               <Button
                 onClick={salvar}
                 disabled={!dirty || mutEdit.isPending}
-                className="flex-1 h-10 bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 font-bold shadow-md shadow-indigo-500/25"
+                className="flex-1 h-10 bg-info font-bold shadow-md shadow-indigo-500/25"
               >
                 {mutEdit.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
                 Salvar alterações
@@ -3538,12 +4038,12 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
         <tbody className="divide-y">
           {leads.map((l: any) => {
             const v = parseValorBR(l.valorEstimado);
-            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-emerald-100 text-emerald-700"
-              : l.etapaFunil === "fechado_perdido" ? "bg-rose-100 text-rose-700"
-              : l.etapaFunil === "negociacao" ? "bg-amber-100 text-amber-700"
-              : l.etapaFunil === "proposta" ? "bg-violet-100 text-violet-700"
-              : l.etapaFunil === "qualificado" ? "bg-blue-100 text-blue-700"
-              : "bg-slate-100 text-slate-700";
+            const corBg = l.etapaFunil === "fechado_ganho" ? "bg-success-bg text-success-fg"
+              : l.etapaFunil === "fechado_perdido" ? "bg-danger-bg text-danger-fg"
+              : l.etapaFunil === "negociacao" ? "bg-warning-bg text-warning-fg"
+              : l.etapaFunil === "proposta" ? "bg-info-bg text-info-fg"
+              : l.etapaFunil === "qualificado" ? "bg-info-bg text-info-fg"
+              : "bg-muted text-foreground";
             return (
               <tr key={l.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-2">
@@ -3561,17 +4061,17 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
                     {ETAPA_FUNIL_LABELS[l.etapaFunil as EtapaFunil]}
                   </span>
                 </td>
-                <td className="px-3 py-2 text-right font-bold text-emerald-700 text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
+                <td className="px-3 py-2 text-right font-bold text-success-fg text-xs">{v > 0 ? formatBRL(v) : "—"}</td>
                 <td className="px-3 py-2 text-right text-xs text-muted-foreground tabular-nums">{l.probabilidade ? `${l.probabilidade}%` : "—"}</td>
                 <td className="px-3 py-2">
                   <div className="flex items-center justify-end gap-0.5">
                     {l.conversaId && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-blue-600" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Ir para conversa" onClick={() => onGoToConversa(l.conversaId)}>
                         <Inbox className="h-3.5 w-3.5" />
                       </Button>
                     )}
                     {l.contatoTelefone && onWA && (
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-emerald-600" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="WhatsApp" onClick={() => onWA(l.contatoTelefone)}>
                         <PhoneCall className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -3601,13 +4101,13 @@ const ETAPA_HEX: Record<EtapaFunil, string> = {
 
 /** Gradients de avatar determinístico por hash do nome — paleta consistente. */
 const AVATAR_GRADIENTS = [
-  "bg-gradient-to-br from-violet-500 to-pink-500",
-  "bg-gradient-to-br from-blue-500 to-cyan-500",
-  "bg-gradient-to-br from-amber-500 to-red-500",
-  "bg-gradient-to-br from-emerald-500 to-teal-600",
-  "bg-gradient-to-br from-indigo-500 to-violet-500",
-  "bg-gradient-to-br from-pink-500 to-rose-500",
-  "bg-gradient-to-br from-teal-500 to-emerald-500",
+  "bg-gradient-to-br from-info to-danger",
+  "bg-info",
+  "bg-gradient-to-br from-warning to-danger",
+  "bg-success",
+  "bg-info",
+  "bg-danger",
+  "bg-success",
 ];
 function gradientFromName(name: string) {
   let h = 0;
@@ -3628,13 +4128,13 @@ function KpiCard({ label, value, hint }: { label: string; value: string; hint?: 
 /** Cor do chip baseada na origem do lead (paleta segura, fallback cinza). */
 function corOrigem(origem: string): { bg: string; text: string; dot: string } {
   const s = (origem || "").toLowerCase();
-  if (s.includes("indica")) return { bg: "bg-emerald-100", text: "text-emerald-700", dot: "bg-emerald-500" };
-  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-violet-100", text: "text-violet-700", dot: "bg-violet-500" };
-  if (s.includes("google")) return { bg: "bg-blue-100", text: "text-blue-700", dot: "bg-blue-500" };
-  if (s.includes("site") || s.includes("organico")) return { bg: "bg-cyan-100", text: "text-cyan-700", dot: "bg-cyan-500" };
-  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-amber-100", text: "text-amber-700", dot: "bg-amber-500" };
-  if (s.includes("evento") || s.includes("present")) return { bg: "bg-pink-100", text: "text-pink-700", dot: "bg-pink-500" };
-  return { bg: "bg-slate-100", text: "text-slate-700", dot: "bg-slate-400" };
+  if (s.includes("indica")) return { bg: "bg-success-bg", text: "text-success-fg", dot: "bg-success" };
+  if (s.includes("facebook") || s.includes("fb") || s.includes("instagram") || s.includes("meta")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("google")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("site") || s.includes("organico")) return { bg: "bg-info-bg", text: "text-info-fg", dot: "bg-info" };
+  if (s.includes("ligac") || s.includes("telefone") || s.includes("call")) return { bg: "bg-warning-bg", text: "text-warning-fg", dot: "bg-warning" };
+  if (s.includes("evento") || s.includes("present")) return { bg: "bg-danger-bg", text: "text-danger-fg", dot: "bg-danger" };
+  return { bg: "bg-muted", text: "text-foreground", dot: "bg-muted-foreground/50" };
 }
 
 /** Badge contextual por etapa: diz o próximo passo pro atendente. */
@@ -3671,8 +4171,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
   const diasParado = lead.updatedAt ? Math.floor((Date.now() - new Date(lead.updatedAt).getTime()) / (24 * 60 * 60 * 1000)) : null;
   const paradoCls = diasParado === null || isGanho || isPerd
     ? "text-muted-foreground"
-    : diasParado > 7 ? "text-red-700 font-semibold"
-    : diasParado > 3 ? "text-orange-700 font-semibold"
+    : diasParado > 7 ? "text-danger-fg font-semibold"
+    : diasParado > 3 ? "text-warning-fg font-semibold"
     : "text-muted-foreground";
 
   const acao = ACAO_POR_ETAPA[etapa];
@@ -3680,10 +4180,10 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
 
   // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
   const cardBg = isGanho
-    ? "bg-gradient-to-br from-emerald-50/70 to-white"
+    ? "bg-gradient-to-br from-success-bg/70 to-white dark:to-muted"
     : isPerd
-    ? "bg-gradient-to-br from-rose-50/70 to-white"
-    : "bg-white";
+    ? "bg-gradient-to-br from-danger-bg/70 to-white dark:to-muted"
+    : "bg-card";
 
   return (
     <div
@@ -3705,9 +4205,9 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
       style={{ borderLeftColor: hex, opacity: isDragging ? 0.4 : 1 }}
       onClick={() => { if (!isDragging) onOpen?.(); }}
       className={
-        "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-slate-400 transition-all cursor-pointer active:cursor-grabbing group " +
+        "relative rounded-xl border border-l-[3px] shadow-sm hover:shadow-md hover:border-border transition-all cursor-pointer active:cursor-grabbing group " +
         cardBg +
-        (isOver ? " ring-2 ring-violet-500 ring-offset-1 border-violet-300" : " border-slate-200") +
+        (isOver ? " ring-2 ring-info ring-offset-1 border-info/30" : " border-border") +
         (compacto ? " px-2.5 py-2" : " p-3")
       }
     >
@@ -3736,7 +4236,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Valor + probabilidade */}
           <div className="flex items-center justify-between mt-1.5 gap-2">
             {v > 0 ? (
-              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-emerald-700 tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
+              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-success-fg tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
             ) : (
               <span className="text-[10px] text-muted-foreground italic">sem valor</span>
             )}
@@ -3749,7 +4249,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {!compacto && lead.probabilidade > 0 && (
             <div className="h-1 rounded-full bg-muted overflow-hidden mt-1">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-400 to-emerald-500 transition-all"
+                className="h-full rounded-full bg-gradient-to-r from-warning to-success transition-all"
                 style={{ width: lead.probabilidade + "%" }}
               />
             </div>
@@ -3760,8 +4260,8 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             <div className={
               "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border " +
               (acao.tone === "emerald"
-                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-                : "bg-amber-50 text-amber-800 border-amber-200")
+                ? "bg-success-bg text-success-fg border-success/30"
+                : "bg-warning-bg text-warning-fg border-warning/30")
             }>
               <span>{acao.emoji}</span> {acao.label}
             </div>
@@ -3798,7 +4298,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.conversaId && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 px-1.5 text-[10px] text-blue-600"
+                className="h-6 px-1.5 text-[10px] text-info-fg"
                 title="Ir para conversa"
                 onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}
               >
@@ -3808,7 +4308,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.contatoTelefone && onWA && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 w-6 p-0 text-emerald-600"
+                className="h-6 w-6 p-0 text-success-fg"
                 title="WhatsApp"
                 onClick={(e) => { e.stopPropagation(); onWA(lead.contatoTelefone); }}
               >
@@ -3883,13 +4383,13 @@ function MotivoPerdaDialog({
               onClick={() => setEscolha(m.id)}
               className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
                 escolha === m.id
-                  ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
-                  : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+                  ? "border-danger/30 bg-danger-bg font-medium"
+                  : "border-border hover:bg-muted/40"
               }`}
             >
               <span className="text-lg">{m.emoji}</span>
               <span className="flex-1">{m.label}</span>
-              {escolha === m.id && <Check className="h-4 w-4 text-rose-600" />}
+              {escolha === m.id && <Check className="h-4 w-4 text-danger-fg" />}
             </button>
           ))}
           <button
@@ -3897,13 +4397,13 @@ function MotivoPerdaDialog({
             onClick={() => setEscolha("outro")}
             className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-md border text-sm transition-colors ${
               escolha === "outro"
-                ? "border-rose-400 bg-rose-50 dark:bg-rose-950/30 font-medium"
-                : "border-slate-200 dark:border-slate-800 hover:bg-muted/40"
+                ? "border-danger/30 bg-danger-bg font-medium"
+                : "border-border hover:bg-muted/40"
             }`}
           >
             <span className="text-lg">✏️</span>
             <span className="flex-1">Outro motivo</span>
-            {escolha === "outro" && <Check className="h-4 w-4 text-rose-600" />}
+            {escolha === "outro" && <Check className="h-4 w-4 text-danger-fg" />}
           </button>
           {escolha === "outro" && (
             <Input
@@ -3922,7 +4422,7 @@ function MotivoPerdaDialog({
           <AlertDialogAction
             disabled={!podeConfirmar}
             onClick={(e) => { e.preventDefault(); if (podeConfirmar) onConfirm(motivoFinal); }}
-            className="bg-rose-600 text-white hover:bg-rose-700"
+            className="bg-danger text-danger-on hover:bg-danger"
           >
             Marcar como perdido
           </AlertDialogAction>

@@ -15,8 +15,8 @@ export function CtaFinal({ onCta }: Props) {
     <section className="mx-auto max-w-6xl px-4 pb-24 pt-8">
       <Reveal>
         <div
-          className="relative overflow-hidden rounded-[28px] border border-white/10 p-12 text-center shadow-[0_50px_120px_-30px_rgba(124,58,237,0.7)] lg:p-16"
-          style={{ background: "linear-gradient(120deg, #4c1d95, #7c3aed 55%, #4f46e5)" }}
+          className="relative overflow-hidden rounded-[28px] border border-white/10 p-12 text-center shadow-[0_50px_120px_-30px_rgba(47,111,189,0.7)] lg:p-16"
+          style={{ background: "linear-gradient(120deg, #12325c, #1a4b86 55%, #215a9e)" }}
         >
           <div
             className="pointer-events-none absolute inset-0"
@@ -27,14 +27,14 @@ export function CtaFinal({ onCta }: Props) {
             <h2 className="font-display text-3xl font-extrabold tracking-tight text-white md:text-5xl">
               Comece em 5 minutos.
             </h2>
-            <p className="mx-auto mt-4 max-w-xl text-lg text-violet-100/85">
+            <p className="mx-auto mt-4 max-w-xl text-lg text-info/85">
               14 dias grátis em qualquer plano. Sem cartão de crédito pra começar. Cancele quando
               quiser.
             </p>
             <Button
               size="lg"
               variant="secondary"
-              className="mt-8 px-8 text-base shadow-xl"
+              className="cta-branco mt-8 px-8 text-base font-semibold"
               onClick={() => onCta("signup")}
             >
               Criar conta grátis

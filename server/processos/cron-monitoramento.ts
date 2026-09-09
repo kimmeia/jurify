@@ -26,10 +26,13 @@ import {
   motorTransacoes,
   notificacoes,
   prazosSugeridos,
+  escritorios,
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
 import { getConfigTribunal, tribunalRequerCredencial } from "./tribunais-pdpj";
+import { lerTribunaisDoMonitor, lerTribunaisBaseline } from "./monitor-tribunais";
+import { siglaDoTribunal } from "../../shared/tribunais-pje";
 import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
 import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
@@ -39,6 +42,8 @@ import {
   identificarPoloDoCliente,
   type PoloIdentificado,
 } from "./polo-matcher";
+import { montarCapaNovaAcao, type CapaNovaAcao } from "../../shared/nova-acao-capa";
+import { lerDocumentoNoRotulo } from "../../shared/documento-no-rotulo";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
@@ -101,6 +106,11 @@ let pollNovasAcoesRodando = false;
  * distinção: sem_documento é um fato do movimento (rotina não tem documento e
  * nunca vai ter), pendente é "ainda não tentamos" — só o segundo justifica um
  * botão de "buscar o documento".
+ *
+ * A ausência de URL não prova ausência de documento. Os links da timeline do
+ * PJe são `javascript:void(0)` (JSF), então `documentoUrl` vem null mesmo
+ * quando a peça existe — e o rótulo diz o número dela. Quando o rótulo
+ * entrega o id, o movimento é `pendente`, não `sem_documento`.
  */
 function camposTeor(mov: {
   texto: string;
@@ -110,8 +120,9 @@ function camposTeor(mov: {
   teorStatus?: string;
   teorErro?: string | null;
 }) {
+  const noRotulo = lerDocumentoNoRotulo(mov.texto);
   const status = (mov.teorStatus ??
-    (mov.documentoUrl ? "pendente" : "sem_documento")) as
+    (mov.documentoUrl || noRotulo ? "pendente" : "sem_documento")) as
     | "pendente"
     | "ok"
     | "sem_documento"
@@ -125,6 +136,8 @@ function camposTeor(mov: {
     teorTentativas: mov.teorStatus ? 1 : 0,
     teorErro: mov.teorErro?.slice(0, 255) ?? null,
     teorObtidoEm: mov.teor ? new Date() : null,
+    documentoIdTribunal: noRotulo?.id ?? null,
+    documentoTipo: noRotulo?.tipo ?? null,
   };
 }
 
@@ -292,7 +305,7 @@ export async function pollarUmMonitoramentoMovs(
         return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
       }
 
-      const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+      const sessao = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
       if (!sessao) {
         await db
           .update(motorMonitoramentos)
@@ -320,7 +333,7 @@ export async function pollarUmMonitoramentoMovs(
       // não dispara nesse caso e o monitoramento falha com "Sessão expirada" sem
       // refazer login. Relogin é dedupado por credencial (cofre-helpers).
       if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-        const sessaoNova = await recuperarSessao(mon.credencialId, {
+        const sessaoNova = await recuperarSessao(mon.credencialId, mon.tribunal, {
           tentarRelogin: true,
           forcarRelogin: true,
         });
@@ -367,7 +380,7 @@ export async function pollarUmMonitoramentoMovs(
     const cfg2grau = requerCred ? getConfigTribunal(mon.tribunal, 2) : null;
     if (deteccaoGrau.subiu && cfg2grau && mon.credencialId) {
       try {
-        const sessao2 = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
+        const sessao2 = await recuperarSessao(mon.credencialId, mon.tribunal, { tentarRelogin: true });
         if (sessao2) {
           const r2 = await consultarTjce(mon.searchKey, sessao2, cfg2grau, { teorMaximo });
           if (r2.ok && r2.movimentacoes.length > 0) {
@@ -849,58 +862,101 @@ export async function pollarUmMonitoramentoNovasAcoes(
       return { ok: false, detectadas: 0, erro: "Credencial não vinculada" };
     }
 
-    const sessao = await recuperarSessao(mon.credencialId, { tentarRelogin: true });
-    if (!sessao) {
-      await db
-        .update(motorMonitoramentos)
-        .set({
-          status: "erro",
-          ultimoErro: "Sessão expirada — revalide a credencial",
-          ultimaConsultaEm: new Date(),
-        })
-        .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: "Sessão expirada" };
-    }
+    // Um monitoramento vigia N tribunais (aprovado no mockup de 20/08). A
+    // falha de UM estado não pode derrubar a varredura dos outros — ela vira
+    // linha em `varreduraJson`, que é o que a faixa de cobertura mostra.
+    const tribunais = lerTribunaisDoMonitor(mon);
+    const baselineFeito = new Set<string>(lerTribunaisBaseline(mon));
 
-    const cfgTribunal = getConfigTribunal(mon.tribunal);
-    let resultado;
-    if (cfgTribunal) {
-      resultado = await consultarTjcePorCpf(mon.searchKey, sessao, cfgTribunal);
-    } else {
-      return { ok: false, detectadas: 0, erro: `Tribunal ${mon.tribunal} sem adapter de CPF` };
-    }
+    type ConsultaTribunal = {
+      tribunal: string;
+      sessao: string;
+      cfg: NonNullable<ReturnType<typeof getConfigTribunal>>;
+      cnjs: string[];
+    };
+    const consultas: ConsultaTribunal[] = [];
+    const falhas: Array<{ tribunal: string; erro: string }> = [];
 
-    // Sessão morta no ponto de uso: força relogin e tenta de novo uma vez
-    // (mesmo motivo do poll de movimentações). Relogin dedupado por credencial.
-    if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
-      const sessaoNova = await recuperarSessao(mon.credencialId, {
-        tentarRelogin: true,
-        forcarRelogin: true,
-      });
-      if (sessaoNova) {
-        resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova, cfgTribunal);
+    for (const tribunal of tribunais) {
+      const cfgTribunal = getConfigTribunal(tribunal);
+      if (!cfgTribunal) {
+        falhas.push({ tribunal, erro: "sem adapter de CPF" });
+        continue;
       }
+      const sessao = await recuperarSessao(mon.credencialId, tribunal, { tentarRelogin: true });
+      if (!sessao) {
+        falhas.push({ tribunal, erro: "Sessão expirada — revalide a credencial" });
+        continue;
+      }
+      let resultado = await consultarTjcePorCpf(mon.searchKey, sessao, cfgTribunal);
+      // Sessão morta no ponto de uso: força relogin e tenta de novo uma vez
+      // (mesmo motivo do poll de movimentações). Relogin dedupado por credencial.
+      if (!resultado.ok && resultado.categoriaErro === "sessao_expirada") {
+        const sessaoNova = await recuperarSessao(mon.credencialId, tribunal, {
+          tentarRelogin: true,
+          forcarRelogin: true,
+        });
+        if (sessaoNova) {
+          resultado = await consultarTjcePorCpf(mon.searchKey, sessaoNova, cfgTribunal);
+        }
+      }
+      if (!resultado.ok) {
+        falhas.push({ tribunal, erro: (resultado.mensagemErro ?? "Erro na consulta CPF").slice(0, 200) });
+        continue;
+      }
+      consultas.push({ tribunal, sessao, cfg: cfgTribunal, cnjs: resultado.cnjs });
     }
 
-    if (!resultado.ok) {
+    const varreduraJson = JSON.stringify({
+      em: new Date().toISOString(),
+      resultados: [
+        ...consultas.map((c) => ({ tribunal: c.tribunal, ok: true, total: c.cnjs.length })),
+        ...falhas.map((f) => ({ tribunal: f.tribunal, ok: false, erro: f.erro })),
+      ],
+    });
+    const resumoFalhas = falhas.length
+      ? `Falha em ${falhas.map((f) => siglaDoTribunal(f.tribunal)).join(", ")}: ${falhas[0].erro}`
+      : null;
+
+    if (consultas.length === 0) {
       await db
         .update(motorMonitoramentos)
         .set({
           ultimaConsultaEm: new Date(),
-          ultimoErro: resultado.mensagemErro ?? "Erro na consulta CPF",
+          ultimoErro: resumoFalhas ?? "Erro na consulta CPF",
+          varreduraJson,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
-      return { ok: false, detectadas: 0, erro: resultado.mensagemErro ?? "Erro na consulta CPF" };
+      return { ok: false, detectadas: 0, erro: resumoFalhas ?? "Erro na consulta CPF" };
     }
 
     const cnjsConhecidos: string[] = mon.cnjsConhecidos
       ? (JSON.parse(mon.cnjsConhecidos) as string[])
       : [];
-    const isPrimeiraExecucao = cnjsConhecidos.length === 0;
-    const cnjsNovos = resultado.cnjs.filter((c) => !cnjsConhecidos.includes(c));
+
+    // Baseline é POR TRIBUNAL: estado adicionado depois faz a 1ª varredura em
+    // silêncio (registra sem alarmar), senão todo o estoque antigo dele viraria
+    // "ação nova" no dia seguinte à ampliação.
+    const cnjsBaseline: Array<{ cnj: string; tribunal: string }> = [];
+    const cnjsNovos: Array<{ cnj: string; tribunal: string; sessao: string; cfg: ConsultaTribunal["cfg"] }> = [];
+    // Baseline "novo" inclui a varredura que achou zero — ela também precisa
+    // ficar registrada (cnjsConhecidos regravado + tribunal no baseline),
+    // senão o primeiro processo futuro entraria mudo de novo.
+    let houveBaselineNovo = false;
+    for (const c of consultas) {
+      const primeiraDoTribunal = !baselineFeito.has(c.tribunal);
+      if (primeiraDoTribunal) houveBaselineNovo = true;
+      for (const cnj of c.cnjs) {
+        if (cnjsConhecidos.includes(cnj)) continue;
+        if (primeiraDoTribunal) cnjsBaseline.push({ cnj, tribunal: c.tribunal });
+        else cnjsNovos.push({ cnj, tribunal: c.tribunal, sessao: c.sessao, cfg: c.cfg });
+      }
+      baselineFeito.add(c.tribunal);
+    }
+    const isPrimeiraExecucao = cnjsBaseline.length > 0;
 
     if (isPrimeiraExecucao) {
-      for (const cnj of resultado.cnjs) {
+      for (const { cnj, tribunal } of cnjsBaseline) {
         const dedup = hashEvento(["nova_acao", String(mon.id), cnj]);
         try {
           await db.insert(eventosProcesso).values({
@@ -915,7 +971,7 @@ export async function pollarUmMonitoramentoNovasAcoes(
               baseline: true,
               searchKey: mon.searchKey,
               searchType: mon.searchType,
-              tribunal: mon.tribunal,
+              tribunal,
             }),
             cnjAfetado: cnj,
             hashDedup: dedup,
@@ -934,16 +990,35 @@ export async function pollarUmMonitoramentoNovasAcoes(
           }
         }
       }
+      log.info(
+        { monId: mon.id, baseline: cnjsBaseline.length, tribunais: [...baselineFeito] },
+        "[motor-cron] baseline silencioso de novas ações registrado",
+      );
+    }
+
+    // Sem incremento pra apurar: fecha a varredura aqui (baseline puro ou
+    // rodada sem novidade).
+    if (cnjsNovos.length === 0) {
       await db
         .update(motorMonitoramentos)
         .set({
-          cnjsConhecidos: JSON.stringify(resultado.cnjs),
+          // Sem baseline novo, a lista não mudou — não regrava (rodada
+          // quieta atualiza só o carimbo, como sempre foi).
+          ...(houveBaselineNovo
+            ? { cnjsConhecidos: JSON.stringify([...cnjsConhecidos, ...cnjsBaseline.map((b) => b.cnj)]) }
+            : {}),
+          tribunaisBaseline: JSON.stringify([...baselineFeito]),
+          varreduraJson,
           ultimaConsultaEm: new Date(),
-          ultimoErro: null,
+          ultimoErro: resumoFalhas,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
-      log.info({ monId: mon.id, baseline: resultado.cnjs.length }, "[motor-cron] baseline silencioso de novas ações registrado");
-      return { ok: true, detectadas: 0, baseline: true };
+      return {
+        ok: falhas.length === 0,
+        detectadas: 0,
+        baseline: isPrimeiraExecucao,
+        erro: resumoFalhas ?? undefined,
+      };
     }
 
     if (cnjsNovos.length > 0) {
@@ -957,17 +1032,28 @@ export async function pollarUmMonitoramentoNovasAcoes(
       // (1-5/mês típico). Se o scrape falhar, assume relevante por
       // segurança (FP é menos pior que perder ação real).
       const dataRef = mon.dataReferenciaCadastro;
+      // A OAB do escritório entre as partes diz "foi o escritório que
+      // ajuizou" — só informação pra tela; não decide polo.
+      const [escDoMon] = await db
+        .select({ oab: escritorios.oab })
+        .from(escritorios)
+        .where(eq(escritorios.id, mon.escritorioId))
+        .limit(1);
+      const oabEscritorio = escDoMon?.oab ?? null;
       const cnjsRelevantes: string[] = [];
       const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" }> = [];
 
-      for (const cnj of cnjsNovos) {
+      for (const { cnj, tribunal, sessao, cfg } of cnjsNovos) {
         let isRelevante = true;
         let motivoSilencio: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" | null = null;
         let dataDistribuicao: Date | null = null;
         let poloDoCliente: PoloIdentificado = "desconhecido";
+        let capaColetada: CapaNovaAcao | null = null;
 
         try {
-          const detalhe = await consultarTjce(cnj, sessao, cfgTribunal);
+          // O detail scrape roda no tribunal DO CNJ — sessão e config vieram
+          // da consulta que o achou, não do tribunal-sede do monitoramento.
+          const detalhe = await consultarTjce(cnj, sessao, cfg);
           if (detalhe.ok && detalhe.capa) {
             if (detalhe.capa.dataDistribuicao) {
               const candidato = new Date(detalhe.capa.dataDistribuicao);
@@ -977,6 +1063,14 @@ export async function pollarUmMonitoramentoNovasAcoes(
             }
             const partes = Array.isArray(detalhe.capa.partes) ? detalhe.capa.partes : [];
             poloDoCliente = identificarPoloDoCliente(mon.apelido, mon.searchKey, partes);
+            // Este scrape é o único que acontece por CNJ novo. O que não for
+            // guardado aqui só volta pagando outra consulta.
+            capaColetada = montarCapaNovaAcao(
+              detalhe.capa,
+              poloDoCliente,
+              new Date().toISOString(),
+              { oabEscritorio },
+            );
           }
         } catch (err) {
           log.warn(
@@ -1037,17 +1131,24 @@ export async function pollarUmMonitoramentoNovasAcoes(
               cnj,
               dataDistribuicao: dataDistribuicao?.toISOString() ?? null,
               poloDoCliente,
+              capa: capaColetada,
+              capaFalhou: capaColetada === null,
               motivoSilencio,
               filtradoPorData: motivoSilencio === "anterior_cadastro",
               filtradoPorPolo: motivoSilencio === "polo_ativo",
               filtradoPorAnoCnj: motivoSilencio === "cnj_antigo",
               searchKey: mon.searchKey,
               searchType: mon.searchType,
-              tribunal: mon.tribunal,
+              tribunal,
             }),
             cnjAfetado: cnj,
             hashDedup: dedup,
-            lido: !isRelevante, // silenciado já entra lido (sem alerta)
+            poloCliente: poloDoCliente,
+            // Silenciado já entra lido (sem alerta) — exceto o autor
+            // confirmado, que tem gaveta própria na aba e precisa aparecer
+            // lá como pendente. O alerta dele é barrado pelo polo, não pelo
+            // lido.
+            lido: !isRelevante && motivoSilencio !== "polo_ativo",
           });
         } catch {
           /* duplicate hashDedup → ignora */
@@ -1057,14 +1158,20 @@ export async function pollarUmMonitoramentoNovasAcoes(
         else if (motivoSilencio) cnjsSilenciados.push({ cnj, motivo: motivoSilencio });
       }
 
-      const todosCnjs = [...cnjsConhecidos, ...cnjsNovos];
+      const todosCnjs = [
+        ...cnjsConhecidos,
+        ...cnjsBaseline.map((b) => b.cnj),
+        ...cnjsNovos.map((n) => n.cnj),
+      ];
       await db
         .update(motorMonitoramentos)
         .set({
           cnjsConhecidos: JSON.stringify(todosCnjs),
+          tribunaisBaseline: JSON.stringify([...baselineFeito]),
+          varreduraJson,
           totalNovasAcoes: mon.totalNovasAcoes + cnjsRelevantes.length,
           ultimaConsultaEm: new Date(),
-          ultimoErro: null,
+          ultimoErro: resumoFalhas,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
 
@@ -1104,14 +1211,23 @@ export async function pollarUmMonitoramentoNovasAcoes(
         });
       }
 
-      return { ok: true, detectadas: cnjsRelevantes.length };
+      return {
+        ok: falhas.length === 0,
+        detectadas: cnjsRelevantes.length,
+        erro: resumoFalhas ?? undefined,
+      };
     }
 
     await db
       .update(motorMonitoramentos)
-      .set({ ultimaConsultaEm: new Date(), ultimoErro: null })
+      .set({
+        ultimaConsultaEm: new Date(),
+        ultimoErro: resumoFalhas,
+        tribunaisBaseline: JSON.stringify([...baselineFeito]),
+        varreduraJson,
+      })
       .where(eq(motorMonitoramentos.id, mon.id));
-    return { ok: true, detectadas: 0 };
+    return { ok: falhas.length === 0, detectadas: 0, erro: resumoFalhas ?? undefined };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log.error({ monId: mon.id, err: msg }, "[motor-cron] erro no poll de CPF");

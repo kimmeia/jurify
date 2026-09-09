@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --borda:#e2e8f0; --hairline:#f1f5f9;
+    --tinta:#0f172a; --tinta-2:#1e293b; --corpo:#334155; --corpo-2:#475569;
+    --mudo:#64748b; --fraco:#94a3b8; --fantasma:#cbd5e1;
+    --acento:#7c3aed; --acento-forte:#5b21b6; --acento-bg:#faf5ff; --acento-bg-2:#f5f3ff;
+    --alerta:#dc2626; --alerta-bg:#fef2f2; --alerta-borda:#fecaca;
+    --ok:#059669; --ok-bg:#ecfdf5; --ok-borda:#a7f3d0;
+    --ambar:#b45309; --ambar-bg:#fffbeb; --ambar-borda:#fde68a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1600px; height:1050px; overflow:hidden; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--tinta); }
+  .wrap { padding:22px 30px; height:100%; display:flex; flex-direction:column; gap:12px; }
+
+  .topo { display:flex; align-items:flex-start; justify-content:space-between; flex:0 0 auto; }
+  .h1 { font-family:'Poppins'; font-weight:700; font-size:26px; letter-spacing:-.01em; }
+  .sub { margin-top:2px; font-size:13px; color:var(--mudo); }
+  .micro { font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--fraco); }
+  .card { background:var(--surface); border:1px solid var(--borda); border-radius:14px; }
+  .h2 { font-family:'Poppins'; font-weight:700; font-size:15px; }
+
+  .tiles { flex:0 0 auto; display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .tile { padding:11px 14px; }
+  .tile .n { font-size:24px; font-weight:700; letter-spacing:-.02em; margin-top:4px; line-height:1; }
+  .tile .d { font-size:10.5px; color:var(--mudo); margin-top:5px; line-height:1.35; }
+
+  .grid { flex:1 1 auto; display:grid; grid-template-columns:1.06fr 1fr 1fr; gap:12px; overflow:hidden; }
+  .col { display:flex; flex-direction:column; gap:10px; padding:16px; overflow:hidden; }
+  .col .item { flex:1 1 auto; display:flex; flex-direction:column; justify-content:center; }
+  .col .cab { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2px; }
+  .col .cab .tagp { font-size:10px; font-weight:800; letter-spacing:.05em; border-radius:99px; padding:3px 9px; }
+
+  .item { border:1px solid var(--borda); border-radius:11px; padding:11px 13px; }
+  .item .t { font-size:12.8px; font-weight:700; line-height:1.35; }
+  .item .d { font-size:11.6px; color:var(--mudo); margin-top:4px; line-height:1.5; }
+  .item .d b { color:var(--corpo); font-weight:600; }
+
+  .selo { display:inline-flex; align-items:center; gap:5px; border-radius:99px; padding:2px 8px;
+          font-size:9.5px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; }
+  .s-feito { background:var(--ok-bg); color:var(--ok); border:1px solid var(--ok-borda); }
+  .s-voce  { background:var(--acento-bg); color:var(--acento-forte); border:1px solid #ddd6fe; }
+
+  .rodape { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; padding:11px 16px; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <div class="topo">
+      <div>
+        <div class="h1">Auditoria completa — o plano</div>
+        <div class="sub">Sistema inteiro lido por módulos em 18/08. O que já foi fechado hoje, o que ataco agora, e o que só você decide.</div>
+      </div>
+      <div style="text-align:right">
+        <div class="micro">Relatório completo</div>
+        <div style="font-size:12px; font-weight:600; color:var(--acento-forte); margin-top:3px">docs/auditoria-2026-08-18.md</div>
+      </div>
+    </div>
+
+    <div class="tiles">
+      <div class="card tile"><div class="micro">Routers varridos</div><div class="n">68</div><div class="d">+ 10 crons e 6 rotas HTTP</div></div>
+      <div class="card tile"><div class="micro">Linhas lidas</div><div class="n">235 mil</div><div class="d">queries por id conferidas: 165, uma a uma</div></div>
+      <div class="card tile" style="border-color:var(--ok-borda); background:var(--ok-bg)"><div class="micro" style="color:#047857">Fechado hoje</div><div class="n" style="color:var(--ok)">4</div><div class="d" style="color:#047857">portas graves, já em produção</div></div>
+      <div class="card tile" style="border-color:var(--ambar-borda); background:var(--ambar-bg)"><div class="micro" style="color:var(--ambar)">Abertos no plano</div><div class="n" style="color:var(--ambar)">16</div><div class="d" style="color:var(--ambar)">priorizados em P0 · P1 · P2</div></div>
+      <div class="card tile"><div class="micro">Saudável, conferido</div><div class="n" style="color:var(--mudo)">12</div><div class="d">itens auditados e aprovados — ninguém re-audita à toa</div></div>
+    </div>
+
+    <div class="grid">
+
+      <div class="card col" style="border-color:var(--ok-borda)">
+        <div class="cab"><div class="h2">Fechado hoje, já no ar</div><span class="tagp" style="background:var(--ok-bg); color:var(--ok)">FEITO ✓</span></div>
+        <div class="item" style="border-color:var(--ok-borda); background:var(--ok-bg)">
+          <div class="t">Lembrete vazava entre escritórios</div>
+          <div class="d">Listagem aceitava id de agendamento de <b>qualquer</b> escritório. Agora amarra no pai, como o excluir sempre fez.</div>
+        </div>
+        <div class="item" style="border-color:var(--ok-borda); background:var(--ok-bg)">
+          <div class="t">Canais Meta sem porteiro</div>
+          <div class="d">Qualquer colaborador conectava/trocava o <b>WhatsApp do escritório</b>. Agora exige gestão, como o resto da config.</div>
+        </div>
+        <div class="item" style="border-color:var(--ok-borda); background:var(--ok-bg)">
+          <div class="t">Financeiro escapando pelo perfil 360</div>
+          <div class="d">Cobranças e valores apareciam pra quem <b>não tem</b> permissão de Financeiro. Agora o bloco respeita a matriz.</div>
+        </div>
+        <div class="item" style="border-color:var(--ok-borda); background:var(--ok-bg)">
+          <div class="t">Webhook do SmartFlow virava túnel</div>
+          <div class="d">Mandava nome, telefone e pagamento do cliente pra <b>qualquer URL</b> — inclusive endereços internos da infra. Cercado: destino validado + teto de 10s.</div>
+        </div>
+        <div class="item" style="border-color:var(--ok-borda); background:var(--ok-bg)">
+          <div class="t">E os 5 conferidos e aprovados</div>
+          <div class="d">SSE, /uploads, tokens, webhooks Asaas, cofre — auditados e <b>saudáveis</b>. Registrado pra não re-flagrar.</div>
+        </div>
+      </div>
+
+      <div class="card col" style="border-color:var(--alerta-borda)">
+        <div class="cab"><div class="h2">P0 — ataco agora</div><span class="tagp" style="background:var(--alerta-bg); color:var(--alerta)">DADO & DINHEIRO</span></div>
+        <div class="item">
+          <div class="t">1 · Política de privacidade sem os operadores de IA <span class="selo s-voce">revisão sua</span></div>
+          <div class="d">O sistema manda teor de decisão e conversa de WhatsApp pra OpenAI/Anthropic — e a política <b>não os lista</b> (LGPD exige). Eu escrevo o parágrafo, você revisa antes de publicar.</div>
+        </div>
+        <div class="item">
+          <div class="t">2 · HMAC da Meta em modo brando</div>
+          <div class="d">Sem App Secret cadastrado, o webhook <b>aceita mensagem forjada</b> com um aviso no log que ninguém lê. Em produção: sem secret = rejeitar.</div>
+        </div>
+        <div class="item">
+          <div class="t">3 · Robô de jornada nos 32 segundos</div>
+          <div class="d">Você apontou, está errado. O termômetro novo já grava tempo por tela + <b>“X de 19 mostraram esqueleto”</b> — a próxima execução diz onde está a mentira.</div>
+        </div>
+        <div class="cab" style="margin-top:4px"><div class="h2">P1 — na sequência</div><span class="tagp" style="background:var(--ambar-bg); color:var(--ambar)">SEMANA</span></div>
+        <div class="item">
+          <div class="t">4 · Conferências do robô no painel + cron de staging</div>
+          <div class="d">São elas que pegam <b>“tela abre, dado errado”</b> — a classe de bug de hoje.</div>
+        </div>
+        <div class="item">
+          <div class="t">5 · CSP ligado &nbsp;·&nbsp; 6 · fim do upload de 3GB em memória</div>
+          <div class="d">Os dois débitos de infra documentados “pra depois” que nunca vieram. O segundo sai junto com a migração S3.</div>
+        </div>
+      </div>
+
+      <div class="card col" style="border-color:#ddd6fe">
+        <div class="cab"><div class="h2">P2 — decisões suas</div><span class="tagp" style="background:var(--acento-bg); color:var(--acento-forte)">VOCÊ ESCOLHE</span></div>
+        <div class="item">
+          <div class="t">SmartFlow — blocos que faltam</div>
+          <div class="d"><b>Enviar e-mail</b> (Resend já está integrado), <b>notificar a equipe</b>, <b>criar contato</b> quando a busca não acha, <b>gerar documento</b> de modelo.</div>
+        </div>
+        <div class="item">
+          <div class="t">SmartFlow — redundâncias pra fundir</div>
+          <div class="d">3 condições de horário que se sobrepõem viram <b>uma</b>; o gatilho antigo de WhatsApp é caso particular do novo.</div>
+        </div>
+        <div class="item">
+          <div class="t">Roadmap mostra nome de usuário de outros escritórios</div>
+          <div class="d">Feature global de propósito, mas nome completo é dado pessoal. Trocar por <b>primeiro nome ou iniciais</b>?</div>
+        </div>
+        <div class="item">
+          <div class="t">Assinatura digital sem permissão própria</div>
+          <div class="d">Hoje qualquer colaborador cria/cancela pedido. Amarrar em <b>clientes.editar</b>?</div>
+        </div>
+        <div class="item">
+          <div class="t">Ponto do colaborador</div>
+          <div class="d">Espelho próprio + pausa de almoço — segue <b>represado</b> esperando sua decisão.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="card rodape">
+      <div style="font-size:12.5px; color:var(--corpo)">
+        Ordem que eu recomendo: <b>parágrafo da política</b> (escrevo hoje, você revisa) → <b>HMAC da Meta</b> → <b>robô dos 32s</b>.
+      </div>
+      <div style="display:flex; gap:14px; font-size:11px; color:var(--mudo)">
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:5px"></span>feito hoje</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--alerta);margin-right:5px"></span>P0</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d97706;margin-right:5px"></span>P1</span>
+        <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--acento);margin-right:5px"></span>P2 — sua decisão</span>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

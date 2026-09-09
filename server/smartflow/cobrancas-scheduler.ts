@@ -30,7 +30,7 @@ import {
   acharSlotAtivo,
   calcularSlotsDoDia,
   parseVencimento,
-  diasEntre,
+  diasCalendarioAteVencimento,
   temHorarioConfigurado,
 } from "./dispatcher-helpers";
 import { createLogger } from "../_core/logger";
@@ -230,7 +230,10 @@ export async function rodarCicloCobrancas(
         if (!vencStr) continue;
         const venc = parseVencimento(vencStr);
         if (!venc) continue;
-        const diffDias = diasEntre(venc, hoje);
+        // Dias por CALENDÁRIO no fuso do escritório — o mesmo critério do
+        // dispatcher. Contar a partir da meia-noite UTC fazia a cobrança que
+        // vence HOJE virar "vencida" às 21h de Brasília.
+        const diasCalendario = diasCalendarioAteVencimento(vencStr, agora, tz);
 
         // Pagou entre um lembrete e outro? skip qualquer disparo.
         if (STATUS_PAGO.has(cb.status)) continue;
@@ -271,7 +274,7 @@ export async function rodarCicloCobrancas(
           // Filtra janela de cobrança pelo tipo de cenário.
           const venceuDif = venc.getTime() - hoje.getTime();
           if (cen.gatilho === "pagamento_vencido") {
-            if (diffDias >= 0) continue; // ainda não venceu
+            if (diasCalendario >= 0) continue; // ainda não venceu
           } else {
             // Tolerância de 1 dia no piso: `hoje` é meia-noite UTC e `venc` pode
             // ser lido em UTC, então uma cobrança "vence hoje" (diasAntes=0) no

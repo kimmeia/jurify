@@ -279,6 +279,49 @@ async function persistirEnvioTemplate(
 /**
  * Cria executores reais para um escritório específico.
  */
+
+/**
+ * A URL que um passo de webhook pode chamar.
+ *
+ * Quem monta o fluxo é gente do escritório, mas o engine roda com a rede do
+ * SERVIDOR — endereço interno que o autor do fluxo nem alcançaria do
+ * navegador dele vira alcançável por aqui. Por isso a lista é de destino
+ * proibido, não de confiança no autor.
+ *
+ * Não protege contra DNS que resolve pra IP privado depois do check (DNS
+ * rebinding) — proteção completa exigiria resolver e conectar no IP validado.
+ * Cobre o caso prático: URL interna digitada direto.
+ */
+export function validarUrlDeWebhook(url: string): URL {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error("URL do webhook inválida");
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") {
+    throw new Error("Webhook só aceita http(s)");
+  }
+  const host = u.hostname.toLowerCase();
+  const proibidos = [
+    "localhost", "0.0.0.0", "127.0.0.1", "::1", "[::1]",
+    "metadata.google.internal", "169.254.169.254",
+  ];
+  if (proibidos.includes(host) || host.endsWith(".internal") || host.endsWith(".local")) {
+    throw new Error("Webhook não pode apontar pra endereço interno");
+  }
+  // IP literal em faixa privada (10/8, 172.16/12, 192.168/16, 169.254/16, 127/8)
+  const m = host.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    const privado =
+      a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) || (a === 169 && b === 254) || a === 0;
+    if (privado) throw new Error("Webhook não pode apontar pra endereço interno");
+  }
+  return u;
+}
+
 export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemAnexa): SmartflowExecutores {
   return {
     async chamarIA(prompt: string, mensagem: string, contatoId?: number, conversaId?: number): Promise<string> {
@@ -605,12 +648,14 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       const roteiroFinal = params.roteiro?.trim() ? interp(params.roteiro.trim()) : "";
       const instrucao = [
         roteiroFinal ? `ROTEIRO DESTE ATENDIMENTO:\n${roteiroFinal}` : "",
-        "Conduza a conversa de forma humana e natural, seguindo o roteiro.",
+        // Meta exige transparência em experiência automatizada — e bot se
+        // apresentando como advogado(a) é risco OAB, não só de política.
+        "Conduza a conversa em tom natural e acolhedor, seguindo o roteiro — mas NUNCA se apresente como pessoa, advogado(a) ou membro humano da equipe. Você é o assistente virtual do escritório: se o cliente perguntar se você é robô, pessoa ou advogado, confirme com naturalidade que é o assistente virtual e ofereça transferir para a equipe humana.",
         `AGORA é ${hojeFmt} (fuso de Brasília). Datas E HORÁRIOS anteriores a este momento JÁ PASSARAM — NUNCA ofereça nem confirme um horário que já passou hoje (ex: se agora são 16:54, NÃO ofereça 15h hoje — ofereça só os horários FUTUROS da lista). Mesmo que apareça na lista da consulta por engano, ignore qualquer horário ≤ agora.`,
         `CONSULTAS (buscam um dado e voltam pra você continuar):\n${lista(DESC_CONSULTA, consultas)}`,
         `AÇÕES (encerram seu turno e seguem o fluxo):\n${lista(DESC_ACAO, ferramentas)}`,
         "Quando precisar de um dado (ex: horários), dispare a CONSULTA correspondente AGORA, no MESMO turno. NUNCA responda só \"um momento\"/\"vou verificar\" e pare — isso deixa o cliente esperando sem resposta. A lista da consulta é COMPLETA: ofereça POUCOS horários ao cliente, mas pra confirmar ou negar um horário específico que ele pedir, olhe a lista INTEIRA — se o horário está nela, está LIVRE (não negue só porque não foi um dos que você ofereceu). Só diga que não tem se realmente não estiver na lista; nunca invente nem prometa checar separado.",
-        "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null), não agendando. Na dúvida, acao=null.",
+        "REGRA DAS AÇÕES (siga à risca): o padrão é acao=null — continue conversando. Só preencha `acao` quando a CONDIÇÃO daquela ação (descrita acima) estiver claramente satisfeita pela ÚLTIMA mensagem do cliente. NUNCA dispare uma ação na saudação, na 1ª troca, nem só porque ela está habilitada. Ex.: não use \"agendar\" enquanto o cliente não tiver escolhido/confirmado um horário; uma pergunta como \"você é advogado?\" ou \"tenho uma dúvida\" se responde conversando (acao=null; no primeiro caso, dizendo com transparência que você é o assistente virtual), não agendando. Na dúvida, acao=null.",
         "NÃO peça confirmação redundante: quando o cliente JÁ indicar um horário específico que está entre os que você ofereceu (ex: \"quinta às 10\", \"pode ser as 14h\"), dispare `agendar` DIRETO com esse horário em `quando` — dizer um horário da lista JÁ é a confirmação, não pergunte \"confirma?\" de novo. Só confirme se houver ambiguidade real (data sem hora, dois horários possíveis, ou horário fora dos que você ofereceu).",
         "AÇÕES CUSTOMIZADAS (nomes diferentes de agendar/transferir/encerrar/gerar_cobranca/buscar_processo): assim que a CONDIÇÃO descrita na ação (o \"use quando…\") estiver satisfeita pela conversa até aqui, DISPARE A AÇÃO IMEDIATAMENTE na sua próxima resposta. Ex.: se a ação `dados_ok` diz \"use quando já coletou nome, caso e telefone\" e você JÁ tem essas 3 informações, dispare `dados_ok` AGORA — não fique perguntando \"mais alguma coisa?\" nem \"posso prosseguir?\". Confie na descrição e dispare; o fluxo cuida do próximo passo.",
         'Responda SEMPRE em JSON puro (sem markdown): {"resposta": "<mensagem pro cliente>", "acao": "<ação ou null>", "consulta": "<consulta ou null>", "quando": "<ISO do horário escolhido quando acao=agendar; senão null>"}',
@@ -1082,7 +1127,12 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
       }
     },
 
-    async enviarWhatsAppInteractive(p): Promise<boolean> {
+    async enviarWhatsAppInteractive(p): Promise<{ ok: boolean; erro?: string }> {
+      // Devolve { ok, erro } — o motor persiste o motivo REAL na execução
+      // (guard anti-ban, canal, recusa da Meta). Antes devolvia boolean e o
+      // painel só mostrava o genérico "verifique canal Cloud API conectado",
+      // indistinguível de qualidade RED / teto diário / opt-out (caso real
+      // do dono em 27/08: timeout disparou, envio barrado, causa invisível).
       try {
         const { enviarInterativoPeloCanalApi } = await import("../integracoes/canal-envio");
         const r = await enviarInterativoPeloCanalApi({
@@ -1114,10 +1164,10 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
             assunto: "Automação (SmartFlow)",
           });
         }
-        return r.ok;
+        return { ok: r.ok, erro: r.erro };
       } catch (err: any) {
         log.error({ err: err.message }, "SmartFlow: erro ao enviar WhatsApp interativo");
-        return false;
+        return { ok: false, erro: err?.message ? String(err.message) : undefined };
       }
     },
 
@@ -1477,13 +1527,35 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
     },
 
     async chamarWebhook(url: string, dados: any): Promise<any> {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dados),
-      });
-      if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
-      return res.json();
+      // O corpo carrega o contexto do fluxo — nome, telefone e dados de
+      // pagamento do cliente. Sem validação, a URL podia apontar pra dentro
+      // da própria infra (localhost, IP de metadado, serviço interno do
+      // Railway) e o engine viraria um proxy autenticado — SSRF clássico, com
+      // dado de cliente no payload de brinde.
+      const destino = validarUrlDeWebhook(url);
+
+      // Sem timeout, um endpoint pendurado segurava o passo (e a conversa)
+      // pra sempre.
+      const controle = new AbortController();
+      const teto = setTimeout(() => controle.abort(), 10_000);
+      try {
+        const res = await fetch(destino.toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dados),
+          signal: controle.signal,
+          redirect: "error",
+        });
+        if (!res.ok) throw new Error(`Webhook retornou ${res.status}`);
+        const tamanho = Number(res.headers.get("content-length") ?? 0);
+        if (tamanho > 1_000_000) throw new Error("resposta do webhook grande demais");
+        return await res.json();
+      } catch (err) {
+        if (controle.signal.aborted) throw new Error("Webhook não respondeu em 10s");
+        throw err;
+      } finally {
+        clearTimeout(teto);
+      }
     },
 
     async buscarCobrancasAbertas(params): Promise<string> {
