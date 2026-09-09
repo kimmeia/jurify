@@ -657,6 +657,54 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
 Amarras: `meu-plano-vitrine-sob-consulta` (21) e
 `cadastro-whatsapp-obrigatorio` (20) — 44 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
+- **Entregue 09/09 (noite), Relatório Comercial: funil 20 × 18, leads por
+  canal e recebido por origem — mockup navegável
+  `mockup-relatorio-comercial-funil-origem.html` (revisado por 5 céticos do
+  diagnóstico + 4 críticos do HTML), "tudo no mockup aprovado" do dono.**
+  Origem: print dele (card Contratos fechados 20 × barra Ganho 18; "Contatos
+  por canal" 28+11 que não batia com nada; pediu o pago por origem).
+  - Funil em dois blocos (`montarEtapasFunil`): etapas abertas por
+    `createdAt` (quem ENTROU), Ganho/Perdido por `fechadoEm` (quem foi
+    DECIDIDO — a data do card) + `funilResumo` (entraram total/emAberto/
+    jaDecididos; por decisão "N entraram no período · N antes"). Os dois
+    comentários que afirmavam que card e funil batiam foram corrigidos.
+  - "Contatos por canal" (cadastros com whitelist `ORIGENS_LEAD` + lead no
+    período) virou `leadsPorCanal`: os MESMOS leads do funil pelo
+    `contatos.origem`, qualquer canal (`asaas` ganhou rótulo). A soma é o
+    total do funil. `ORIGENS_LEAD` só sobrevive na procedure `comercial`,
+    que não tem consumidor no client. Por que "Manual" engorda: Novo
+    Cliente, Novo cliente do Financeiro, Novo lead do Atendimento,
+    importação e Clientes essencial gravam `manual`, e o canal nunca é
+    corrigido depois; mensagem de canal Instagram/Facebook grava
+    `whatsapp` — conserto é no cadastro (não pedido).
+  - Fechamentos por origem com recebido: `atribuirRecebidoAosFechamentos`
+    distribui as MESMAS cobranças do card Recebido (filtros idênticos ao
+    `agg`) pelo fechamento do cliente — dia civil no fuso (`dataHojeBR`),
+    o mais recente ≤ dia do pagamento, mesmo dia conta, empate → menor id,
+    antes de todos → o primeiro, busca entre TODOS os fechamentos do
+    cliente no período (não só os do filtro — senão a atribuição mudaria
+    com o filtro). Cada cobrança entra UMA vez: Σ origens = card Recebido.
+    Balde `ORIGEM_SEM_OU_FORA_DO_FILTRO` junta fechamento sem origem (antes
+    sumia do card) e pagamento cujo fechamento está fora do setor/atendente
+    filtrado — este só com cliente e recebido (verProprios não vê
+    fechamento alheio). `chaveOrigem` junta "Google"/"google" (rótulo = a
+    grafia do fechamento mais recente; `origemLead` é texto no lead, o
+    catálogo só alimenta a lista — renomear no catálogo não mexe nos
+    antigos). Situação pago/parcial/nada É NO PERÍODO (a pendência das
+    quinzenas do card Recebido segue aberta; se mudar lá, muda aqui junto).
+    `mesmoCliente` marca cliente com N fechamentos listados.
+  - PDF segue o payload (`funilResumo` opcional, tabela Canal/Leads/%,
+    subtabelas com Recebido/Situação, nota de metodologia). A aba Comercial
+    NÃO tem botão de e-mail/programar (o servidor aceita; sem UI).
+  Amarras: `relatorio-comercial-funil-canal-origem` (19) — 17 mutações
+  vermelhas (`scratchpad/mutar-relatorio-comercial.py`);
+  `relatorios-fechamentos-origem` e a fixture do PDF atualizadas.
+  **Pedido novo do dono, em proposta**: "opção para controlar os
+  cancelados" — `mockup-cancelados-contrato.html` (estado Cancelado com
+  data/motivo/quem no fechamento; hoje só existe Perdido — que mantém o
+  `fechadoEm` original — ou excluir; `contatos.situacaoServico=cancelado`
+  existe com data/motivo mas não fala com lead nem relatório; estorno Asaas
+  some do Recebido em silêncio). Aguarda o "pode fazer".
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
@@ -785,8 +833,8 @@ acusa lead fechado sem `fechadoEm`. Comissão NÃO aparece nessa tela (grep em
 `Relatorios.tsx` = zero) e é do Financeiro — não tocar. Achado solto: o "Funil
 de Vendas" da mesma tela conta por `leads.createdAt`, então a barra "Ganho"
 pode não bater com o card "Contratos fechados" (o comentário no código afirma
-que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
-cálculo. Não autorizado ainda.
+que batem — não batem). **Resolvido 09/09**: funil em dois blocos
+(Ganho/Perdido por `fechadoEm`), ver a entrega de 09/09 (noite).
 
 ### E. Comissão de gestão — ENTREGUE 01/09
 
@@ -826,9 +874,9 @@ escritório. O cron automático segue fechando SÓ a trilha de venda.
 Achados registrados e NÃO corrigidos (fora do pedido): `simular` e
 `diagnosticar` aceitam `atendenteId` de outro escritório (só enumeração —
 as cobranças continuam filtradas por escritorioId; `exportarPdf` valida);
-e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
-então a barra "Ganho" pode não bater com o card "Contratos fechados" da
-mesma tela (o comentário no código afirma que batem — não batem).
+e o "Funil de Vendas" do Relatório Comercial contava por `leads.createdAt`,
+então a barra "Ganho" podia não bater com o card "Contratos fechados" da
+mesma tela (**resolvido 09/09**, funil em dois blocos).
 
 ### F. Cofre por grau + Justiça Federal — ENTREGUE 01/09
 

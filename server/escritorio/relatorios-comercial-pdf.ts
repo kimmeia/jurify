@@ -40,17 +40,32 @@ export type ComercialDashboardData = {
   }>;
   cobrancasPorDia: Array<{ dia: string; faturado: number }>;
   etapas: Record<string, { total: number; valor: number }>;
-  contatosPorOrigem: Array<{ origem: string; total: number }>;
+  /** Dois blocos do funil: quem entrou (createdAt) × quem foi decidido (fechadoEm). */
+  funilResumo?: {
+    entraram: { total: number; emAberto: number; jaDecididos: number };
+    decididos: {
+      total: number;
+      fechado_ganho: { total: number; entraramNoPeriodo: number; entraramAntes: number };
+      fechado_perdido: { total: number; entraramNoPeriodo: number; entraramAntes: number };
+    };
+  };
+  leadsPorCanal: Array<{ canal: string; total: number }>;
   fechamentosPorOrigem: Array<{
     origem: string;
     total: number;
     valorTotal?: number;
+    recebidoTotal?: number;
+    pagaram?: number;
     fechamentos?: Array<{
       contatoId: number | null;
       cliente: string;
       fechadoEm: string | null;
-      valor: number;
+      valor: number | null;
+      recebido?: number;
+      situacao?: string;
       responsavel: string | null;
+      mesmoCliente?: number;
+      foraDoFiltro?: boolean;
     }>;
   }>;
   filtros: { setorId: number | null; atendenteId: number | null };
@@ -124,7 +139,10 @@ const ETAPA_COR: Record<string, string> = {
 };
 const ORIGEM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook",
-  telefone: "Telefone", manual: "Manual", site: "Site",
+  telefone: "Telefone", manual: "Manual", site: "Site", asaas: "Asaas",
+};
+const SITUACAO_FECHAMENTO_LABEL: Record<string, string> = {
+  pago: "Pago", parcial: "Parcial", nada: "Nada no período", fora_do_filtro: "Fora do filtro",
 };
 const STATUS_INFO: Record<string, { label: string; bg: string; fg: string }> = {
   pago: { label: "Pago integral", bg: "#d1fae5", fg: "#047857" },
@@ -464,12 +482,26 @@ export async function gerarComercialPdf(args: {
       }
 
       // ── 4) FUNIL DE VENDAS ───────────────────────────────────────────────────
-      ensure(165);
-      sectionHeader("Funil de Vendas", C.violet);
+      // Dois blocos: etapas abertas por quem ENTROU no período; Ganho/Perdido
+      // por quem foi DECIDIDO no período (a mesma data do card de fechados).
+      ensure(200);
       {
+        const fr = data.funilResumo;
+        sectionHeader(
+          "Funil de Vendas", C.violet,
+          fr
+            ? `${fr.entraram.total} entraram no período (${fr.entraram.emAberto} em aberto + ${fr.entraram.jaDecididos} já decididos) · ${fr.decididos.total} decididos no período`
+            : undefined,
+        );
         const maxTotal = Math.max(...ETAPAS_FUNIL.map((e) => data.etapas?.[e]?.total ?? 0), 1);
         const labW = 70, valW = 88, barX = L + labW + 6, barW = W - labW - valW - 12;
-        ETAPAS_FUNIL.forEach((e) => {
+        const grupo = (texto: string) => {
+          ensure(16);
+          doc.fillColor(C.faint).font("Helvetica-Bold").fontSize(6.5)
+            .text(texto.toUpperCase(), L, doc.y + 2, { width: W, lineBreak: false, characterSpacing: 0.4 });
+          doc.y += 12;
+        };
+        const barra = (e: string) => {
           ensure(22);
           const info = data.etapas?.[e] ?? { total: 0, valor: 0 };
           const yr = doc.y;
@@ -485,7 +517,22 @@ export async function gerarComercialPdf(args: {
           doc.fillColor(C.muted).font("Helvetica").fontSize(8)
             .text(formatBRL(info.valor), barX + barW + 6, yr + 4, { width: valW - 6, align: "right", lineBreak: false });
           doc.y = yr + 20;
-        });
+        };
+        const subLinha = (e: "fechado_ganho" | "fechado_perdido") => {
+          const d = fr?.decididos?.[e];
+          if (!d) return;
+          ensure(12);
+          doc.fillColor(C.muted).font("Helvetica").fontSize(6.5)
+            .text(`${d.entraramNoPeriodo} entraram no período · ${d.entraramAntes} entraram antes`, barX, doc.y - 3, { width: barW, lineBreak: false });
+          doc.y += 8;
+        };
+        grupo("Entraram no período · etapa em que estão hoje");
+        (["novo", "qualificado", "proposta", "negociacao"] as const).forEach(barra);
+        grupo("Decididos no período · pela data do fechamento");
+        barra("fechado_ganho");
+        subLinha("fechado_ganho");
+        barra("fechado_perdido");
+        subLinha("fechado_perdido");
         doc.y += 8;
       }
 
@@ -557,32 +604,63 @@ export async function gerarComercialPdf(args: {
         doc.y += 8;
       };
 
-      // ── 6) CONTATOS POR CANAL DE CAPTAÇÃO ────────────────────────────────────
+      // ── 6) LEADS POR CANAL DE CAPTAÇÃO ───────────────────────────────────────
+      // Os mesmos leads do bloco "Entraram no período", pelo canal da ficha.
       ensure(95);
-      sectionHeader(
-        "Contatos por canal de captação", C.blue,
-        "Por onde o contato chegou (WhatsApp, Instagram, Facebook, manual).",
-      );
-      if (data.contatosPorOrigem.length === 0) {
-        doc.fillColor(C.muted).font("Helvetica-Oblique").fontSize(9)
-          .text("Sem contatos no período.", L, doc.y);
-        doc.moveDown(0.8);
-      } else {
-        gridDeCaixas(
-          data.contatosPorOrigem.map((o) => ({ valor: o.total, label: ORIGEM_LABELS[o.origem] || o.origem })),
-          { cols: 4, corNumero: C.dark, corBorda: C.line },
+      {
+        const canais = data.leadsPorCanal || [];
+        const totalCanal = canais.reduce((s, c) => s + c.total, 0);
+        sectionHeader(
+          "Leads por canal de captação", C.blue,
+          `${totalCanal} leads que entraram no período, pelo canal da ficha. Manual = cadastrado à mão.`,
         );
+        if (canais.length === 0) {
+          doc.fillColor(C.muted).font("Helvetica-Oblique").fontSize(9)
+            .text("Sem leads no período.", L, doc.y);
+          doc.moveDown(0.8);
+        } else {
+          const xCanal = L + 4, wCanal = 220, xQtd = L + 230, wQtd = 80, xPct = L + 316, wPct = 80;
+          const yc = doc.y;
+          doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7);
+          doc.text("Canal", xCanal, yc, { width: wCanal });
+          doc.text("Leads", xQtd, yc, { width: wQtd, align: "right" });
+          doc.text("%", xPct, yc, { width: wPct, align: "right" });
+          doc.y = yc + 10;
+          hr(doc.y, C.line, 0.5);
+          doc.y += 3;
+          for (const c of canais) {
+            ensure(14);
+            const yr = doc.y;
+            doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+              .text(ORIGEM_LABELS[c.canal] || c.canal, xCanal, yr, { width: wCanal, lineBreak: false });
+            doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8)
+              .text(String(c.total), xQtd, yr, { width: wQtd, align: "right", lineBreak: false });
+            doc.fillColor(C.muted).font("Helvetica").fontSize(8)
+              .text(totalCanal > 0 ? pct1((c.total / totalCanal) * 100) : "—", xPct, yr, { width: wPct, align: "right", lineBreak: false });
+            doc.y = yr + 12;
+          }
+          doc.y += 8;
+        }
       }
 
       // ── 7) FECHAMENTOS POR ORIGEM ────────────────────────────────────────────
       ensure(95);
-      sectionHeader(
-        "Fechamentos por origem", C.emerald,
-        "Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).",
-      );
+      {
+        const grupos = data.fechamentosPorOrigem;
+        const totFech = grupos.reduce((s, o) => s + (o.total || 0), 0);
+        const totFechado = grupos.reduce((s, o) => s + (o.valorTotal || 0), 0);
+        const totRecebido = grupos.reduce((s, o) => s + (o.recebidoTotal || 0), 0);
+        sectionHeader(
+          "Fechamentos por origem", C.emerald,
+          grupos.length
+            ? `${totFech} fechamentos · ${formatBRL(totFechado)} fechado · ${formatBRL(totRecebido)} recebido no período. ` +
+              "Recebido = cobranças pagas no período dos clientes de cada origem (mesma conta do card Recebido)."
+            : "Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).",
+        );
+      }
       if (data.fechamentosPorOrigem.length === 0) {
         doc.fillColor(C.muted).font("Helvetica-Oblique").fontSize(9)
-          .text("Sem fechamentos com origem cadastrada no período.", L, doc.y);
+          .text("Sem fechamentos no período.", L, doc.y);
         doc.moveDown(0.8);
       } else {
         gridDeCaixas(
@@ -591,26 +669,29 @@ export async function gerarComercialPdf(args: {
         );
 
         // Subtabela por origem: clientes de cada fechamento (mesma ordem
-        // dos cards). Aprovado via mockup junto com o card clicável da tela.
+        // dos cards), com o recebido no período e a situação de cada um.
         for (const o of data.fechamentosPorOrigem) {
           if (!o.fechamentos || o.fechamentos.length === 0) continue;
           ensure(46);
           const yh = doc.y;
           rrect(L, yh, W, 18, 4, "#f6fdf9", C.emeraldBd, 0.8);
           doc.fillColor("#065f46").font("Helvetica-Bold").fontSize(8.5)
-            .text(fit(o.origem, W - 230), L + 8, yh + 5, { width: W - 230, lineBreak: false });
-          doc.fillColor("#047857").font("Helvetica-Bold").fontSize(8)
-            .text(`${o.total} fechamento(s) · ${formatBRL(o.valorTotal || 0)}`,
-              L + W - 218, yh + 5, { width: 210, align: "right", lineBreak: false });
+            .text(fit(o.origem, W - 300), L + 8, yh + 5, { width: W - 300, lineBreak: false });
+          doc.fillColor("#047857").font("Helvetica-Bold").fontSize(7.5)
+            .text(`${o.total} fechamento(s) · ${formatBRL(o.valorTotal || 0)} fechado · ${formatBRL(o.recebidoTotal || 0)} recebido no período`,
+              L + W - 288, yh + 5, { width: 280, align: "right", lineBreak: false });
           doc.y = yh + 24;
 
-          const xCli = L + 4, wCli = 232, xData = L + 244, wData = 70,
-            xVal = L + 318, wVal = 96, xResp = L + 424, wResp = 90;
+          const xCli = L + 4, wCli = 150, xData = L + 158, wData = 56,
+            xVal = L + 216, wVal = 72, xRec = L + 292, wRec = 72,
+            xSit = L + 368, wSit = 64, xResp = L + 436, wResp = W - 440;
           const yc = doc.y;
           doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7);
           doc.text("Cliente", xCli, yc, { width: wCli });
           doc.text("Fechado em", xData, yc, { width: wData });
           doc.text("Valor", xVal, yc, { width: wVal, align: "right" });
+          doc.text("Recebido", xRec, yc, { width: wRec, align: "right" });
+          doc.text("Situação", xSit, yc, { width: wSit });
           doc.text("Responsável", xResp, yc, { width: wResp });
           doc.y = yc + 10;
           hr(doc.y, C.line, 0.5);
@@ -619,13 +700,21 @@ export async function gerarComercialPdf(args: {
           for (const f of o.fechamentos) {
             ensure(14);
             const yr = doc.y;
+            const nomeCliente = f.mesmoCliente && f.mesmoCliente > 1
+              ? `${f.cliente} (mesmo cliente · ${f.mesmoCliente} fech.)`
+              : f.cliente;
             doc.fillColor(C.dark).font("Helvetica").fontSize(8)
-              .text(fit(f.cliente, wCli), xCli, yr, { width: wCli, lineBreak: false });
+              .text(fit(nomeCliente, wCli), xCli, yr, { width: wCli, lineBreak: false });
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
               .text(f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—",
                 xData, yr, { width: wData, lineBreak: false });
             doc.fillColor(C.emerald).font("Helvetica-Bold").fontSize(8)
-              .text(formatBRL(f.valor || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
+              .text(f.valor == null ? "—" : formatBRL(f.valor || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
+            const recebido = f.recebido || 0;
+            doc.fillColor(recebido > 0 ? C.emerald : C.muted).font(recebido > 0 ? "Helvetica-Bold" : "Helvetica").fontSize(8)
+              .text(formatBRL(recebido), xRec, yr, { width: wRec, align: "right", lineBreak: false });
+            doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
+              .text(SITUACAO_FECHAMENTO_LABEL[f.situacao || "nada"] || "—", xSit, yr, { width: wSit, lineBreak: false });
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
               .text(fit(f.responsavel || "—", wResp), xResp, yr, { width: wResp, lineBreak: false });
             doc.y = yr + 12;
@@ -635,14 +724,17 @@ export async function gerarComercialPdf(args: {
       }
 
       // ── Nota de metodologia ──────────────────────────────────────────────────
-      ensure(30);
+      ensure(40);
       hr(doc.y, C.line, 0.7);
       doc.y += 6;
       doc.fillColor(C.faint).font("Helvetica-Oblique").fontSize(7).text(
         "Recebido: cobranças pagas comissionáveis no período de clientes fechados no mesmo período. " +
           "Contratos fechados: oportunidades movidas para a etapa Ganho. Clientes que pagaram: clientes " +
           "distintos com cobrança paga no período — quantas cobranças ou parcelas cada um pagou " +
-          "não altera a contagem. Ticket médio fechado = total fechado ÷ contratos fechados.",
+          "não altera a contagem. Ticket médio fechado = total fechado ÷ contratos fechados. " +
+          "Funil: etapas abertas contam leads criados no período; Ganho e Perdido contam pela data da decisão. " +
+          "Recebido por origem: os mesmos pagamentos do card Recebido, cada um no fechamento mais recente do cliente " +
+          "antes da data do pagamento; o que não encaixa em origem nenhuma vai para \"Sem origem / fora do filtro\".",
         L, doc.y, { width: W, align: "left" },
       );
 

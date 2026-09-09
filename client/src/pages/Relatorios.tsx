@@ -88,7 +88,17 @@ const ORIGEM_LABELS: Record<string, string> = {
   telefone: "Telefone",
   manual: "Manual",
   site: "Site",
+  asaas: "Asaas",
 };
+const ETAPAS_ABERTAS = ["novo", "qualificado", "proposta", "negociacao"] as const;
+const SITUACAO_FECHAMENTO: Record<string, { label: string; className: string }> = {
+  pago: { label: "Pago", className: "bg-success-bg text-success-fg" },
+  parcial: { label: "Parcial", className: "bg-warning-bg text-warning-fg" },
+  nada: { label: "Nada no período", className: "bg-muted text-muted-foreground" },
+  fora_do_filtro: { label: "Fora do filtro", className: "bg-muted text-muted-foreground" },
+};
+const pct1 = (parte: number, total: number) =>
+  total > 0 ? `${((parte / total) * 100).toFixed(1).replace(".", ",")}%` : "—";
 const TIPO_CALC: Record<string, string> = {
   bancario: "Bancário",
   trabalhista: "Trabalhista",
@@ -1138,37 +1148,76 @@ function RankingPodioTabela({
 function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
   const [origemAberta, setOrigemAberta] = useState<string | null>(null);
   const aberta = itens.find((o: any) => o.origem === origemAberta);
+  const totalFechamentos = itens.reduce((s: number, o: any) => s + (o.total || 0), 0);
+  const totalFechado = itens.reduce((s: number, o: any) => s + (o.valorTotal || 0), 0);
+  // Soma dos cards = card Recebido do topo: cada pagamento entra numa origem
+  // só, e o que não encaixa vai pro balde "Sem origem / fora do filtro".
+  const totalRecebido = itens.reduce((s: number, o: any) => s + (o.recebidoTotal || 0), 0);
+  const pctEntrou = (recebido: number, fechado: number) =>
+    fechado > 0 ? `${((recebido / fechado) * 100).toFixed(1).replace(".", ",")}% do fechado entrou no período` : "sem valor fechado";
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-sm">Fechamentos por origem</CardTitle>
+          {itens.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              <strong className="text-foreground">{totalFechamentos}</strong> fechamentos ·{" "}
+              <strong className="text-foreground">{formatBRL(totalFechado)}</strong> fechado ·{" "}
+              <strong className="text-success-fg">{formatBRL(totalRecebido)}</strong> recebido no período
+            </p>
+          )}
+        </div>
         <p className="text-[10px] text-muted-foreground mt-0.5">
           Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.).
-          Clique num card para ver os clientes.
+          Recebido = o mesmo do card do topo: cobranças pagas no período, comissionáveis, do atendente/setor filtrado,
+          de cliente que fechou no período — distribuídas por origem. Clique num card para ver os clientes.
         </p>
       </CardHeader>
       <CardContent>
         {itens.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-4">
-            Sem fechamentos com origem cadastrada no período.
+            Sem fechamentos no período.
           </p>
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {itens.map((o: any) => (
-                <button
-                  key={o.origem}
-                  type="button"
-                  className={
-                    "rounded-lg border p-3 text-center transition-all hover:border-success/30 hover:shadow-sm " +
-                    (origemAberta === o.origem ? "border-success/30 bg-success-bg ring-1 ring-success" : "")
-                  }
-                  onClick={() => setOrigemAberta(origemAberta === o.origem ? null : o.origem)}
-                >
-                  <p className="text-xl font-bold text-success-fg">{o.total}</p>
-                  <p className="text-xs text-muted-foreground truncate" title={o.origem}>{o.origem}</p>
-                </button>
-              ))}
+              {itens.map((o: any) => {
+                const balde = o.total === 0;
+                const fatia = o.valorTotal > 0 ? Math.min(100, (o.recebidoTotal / o.valorTotal) * 100) : 0;
+                return (
+                  <button
+                    key={o.origem}
+                    type="button"
+                    className={
+                      "rounded-lg border p-3 text-center transition-all hover:border-success/30 hover:shadow-sm " +
+                      (origemAberta === o.origem ? "border-success/30 bg-success-bg ring-1 ring-success " : "") +
+                      (balde ? "border-dashed opacity-80" : "")
+                    }
+                    onClick={() => setOrigemAberta(origemAberta === o.origem ? null : o.origem)}
+                  >
+                    <p className="text-xl font-bold text-success-fg">{o.total}</p>
+                    <p className="text-xs text-muted-foreground truncate" title={o.origem}>{o.origem}</p>
+                    <div className="mt-2 pt-2 border-t border-dashed space-y-0.5 text-[10px]">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground/80">fechado</span>
+                        <span className="font-semibold tabular-nums">{formatBRL(o.valorTotal || 0)}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-muted-foreground/80 whitespace-nowrap">recebido no período</span>
+                        <span className={`font-semibold tabular-nums ${o.recebidoTotal > 0 ? "text-success-fg" : "text-muted-foreground/60"}`}>
+                          {formatBRL(o.recebidoTotal || 0)}
+                        </span>
+                      </div>
+                    </div>
+                    {!balde && (
+                      <div className="mt-1.5 h-1 rounded-full bg-muted/40 overflow-hidden">
+                        <div className="h-full rounded-full bg-success" style={{ width: `${fatia}%` }} />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             {aberta && (aberta.fechamentos?.length ?? 0) > 0 && (
               <div className="mt-3 rounded-xl border border-success/30 bg-success-bg/50 overflow-hidden">
@@ -1176,7 +1225,15 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                   <span>
                     <strong className="text-success-fg">{aberta.origem}</strong> · {aberta.total} fechamento(s) no período
                   </span>
-                  <span className="ml-auto font-bold text-success-fg">{formatBRL(aberta.valorTotal || 0)}</span>
+                  <span className="ml-auto flex items-center gap-3 flex-wrap">
+                    <span><span className="text-muted-foreground">fechado</span> <strong className="text-success-fg">{formatBRL(aberta.valorTotal || 0)}</strong></span>
+                    <span><span className="text-muted-foreground">recebido no período</span> <strong className="text-success-fg">{formatBRL(aberta.recebidoTotal || 0)}</strong></span>
+                    <span className="text-muted-foreground">
+                      · {aberta.pagaram > 0
+                        ? `${aberta.pagaram} de ${aberta.total} ${aberta.pagaram === 1 ? "pagou" : "pagaram"} no período`
+                        : "nada pago no período"}
+                    </span>
+                  </span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -1193,29 +1250,63 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                         <th className="text-left px-3.5 py-1.5 font-semibold">Cliente</th>
                         <th className="text-left px-3.5 py-1.5 font-semibold">Fechado em</th>
                         <th className="text-right px-3.5 py-1.5 font-semibold">Valor</th>
+                        <th className="text-right px-3.5 py-1.5 font-semibold">Recebido</th>
+                        <th className="text-left px-3.5 py-1.5 font-semibold">Situação (no período)</th>
                         <th className="text-left px-3.5 py-1.5 font-semibold">Responsável</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {aberta.fechamentos.map((f: any, i: number) => (
-                        <tr key={i} className="border-t">
-                          <td className="px-3.5 py-1.5">
-                            {f.contatoId ? (
-                              <a href={`/clientes?id=${f.contatoId}`} className="text-info-fg font-medium hover:underline">
-                                {f.cliente}
-                              </a>
-                            ) : (
-                              f.cliente
-                            )}
-                          </td>
-                          <td className="px-3.5 py-1.5 text-muted-foreground">
-                            {f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—"}
-                          </td>
-                          <td className="px-3.5 py-1.5 text-right font-semibold tabular-nums">{formatBRL(f.valor || 0)}</td>
-                          <td className="px-3.5 py-1.5 text-muted-foreground">{f.responsavel || "—"}</td>
-                        </tr>
-                      ))}
+                      {aberta.fechamentos.map((f: any, i: number) => {
+                        const situacao = SITUACAO_FECHAMENTO[f.situacao] || SITUACAO_FECHAMENTO.nada;
+                        return (
+                          <tr key={i} className="border-t">
+                            <td className="px-3.5 py-1.5">
+                              {f.contatoId ? (
+                                <a href={`/clientes?id=${f.contatoId}`} className="text-info-fg font-medium hover:underline">
+                                  {f.cliente}
+                                </a>
+                              ) : (
+                                f.cliente
+                              )}
+                              {f.mesmoCliente > 1 && (
+                                <span className="block text-[10px] text-muted-foreground">
+                                  mesmo cliente · {f.mesmoCliente} fechamentos
+                                </span>
+                              )}
+                              {f.foraDoFiltro && (
+                                <span className="block text-[10px] text-muted-foreground">
+                                  fechamento fora do atendente/setor filtrado
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3.5 py-1.5 text-muted-foreground">
+                              {f.fechadoEm ? new Date(f.fechadoEm).toLocaleDateString("pt-BR") : "—"}
+                            </td>
+                            <td className="px-3.5 py-1.5 text-right font-semibold tabular-nums">
+                              {f.valor == null ? "—" : formatBRL(f.valor || 0)}
+                            </td>
+                            <td className={`px-3.5 py-1.5 text-right tabular-nums ${f.recebido > 0 ? "font-semibold text-success-fg" : "text-muted-foreground"}`}>
+                              {formatBRL(f.recebido || 0)}
+                            </td>
+                            <td className="px-3.5 py-1.5">
+                              <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide whitespace-nowrap ${situacao.className}`}>
+                                {situacao.label}
+                              </span>
+                            </td>
+                            <td className="px-3.5 py-1.5 text-muted-foreground">{f.responsavel || "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
+                    <tfoot>
+                      <tr className="border-t bg-success-bg/60 text-success-fg font-semibold">
+                        <td className="px-3.5 py-1.5">Total</td>
+                        <td />
+                        <td className="px-3.5 py-1.5 text-right tabular-nums">{formatBRL(aberta.valorTotal || 0)}</td>
+                        <td className="px-3.5 py-1.5 text-right tabular-nums">{formatBRL(aberta.recebidoTotal || 0)}</td>
+                        <td className="px-3.5 py-1.5" colSpan={2}>{pctEntrou(aberta.recebidoTotal || 0, aberta.valorTotal || 0)}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </div>
@@ -1595,10 +1686,22 @@ function DashboardComercial() {
             </Card>
           )}
 
-          {/* Funil de Vendas — mesmas etapas em ordem fixa do funil */}
+          {/* Funil de Vendas — dois blocos: etapas abertas por quem ENTROU no
+              período (data de criação), Ganho/Perdido por quem foi DECIDIDO no
+              período (data do fechamento, a mesma do card Contratos fechados). */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Funil de Vendas</CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <CardTitle className="text-sm">Funil de Vendas</CardTitle>
+                {data.funilResumo && (
+                  <p className="text-[11px] text-muted-foreground">
+                    <strong className="text-foreground">{data.funilResumo.entraram.total}</strong> entraram
+                    {" "}({data.funilResumo.entraram.emAberto} em aberto + {data.funilResumo.entraram.jaDecididos} já decididos)
+                    {" · "}
+                    <strong className="text-foreground">{data.funilResumo.decididos.total}</strong> decididos
+                  </p>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -1607,7 +1710,13 @@ function DashboardComercial() {
                     ...ETAPAS_FUNIL.map((e) => data.etapas?.[e]?.total ?? 0),
                     1,
                   );
-                  return ETAPAS_FUNIL.map((e) => {
+                  const grupo = (texto: string, primeiro = false) => (
+                    <div className={`flex items-center gap-2 ${primeiro ? "" : "pt-1"}`}>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground whitespace-nowrap">{texto}</span>
+                      <span className="flex-1 h-px bg-border" />
+                    </div>
+                  );
+                  const linha = (e: string) => {
                     const info = data.etapas?.[e] ?? { total: 0, valor: 0 };
                     const pct = max > 0 ? (info.total / max) * 100 : 0;
                     return (
@@ -1626,44 +1735,87 @@ function DashboardComercial() {
                             {info.total}
                           </span>
                         </div>
-                        <span className="text-xs text-muted-foreground w-24 text-right">
+                        <span className={`text-xs w-24 text-right ${e === "fechado_ganho" ? "font-semibold text-success-fg" : "text-muted-foreground"}`}>
                           {formatBRL(info.valor)}
                         </span>
                       </div>
                     );
-                  });
+                  };
+                  const subLinha = (e: "fechado_ganho" | "fechado_perdido") => {
+                    const d = data.funilResumo?.decididos?.[e];
+                    if (!d) return null;
+                    return (
+                      <p key={`${e}-sub`} className="pl-[108px] -mt-1 text-[10px] text-muted-foreground">
+                        {d.entraramNoPeriodo} entraram no período ·{" "}
+                        <span className={d.entraramAntes > 0 ? "font-semibold text-success-fg" : ""}>
+                          {d.entraramAntes} entraram antes
+                        </span>
+                      </p>
+                    );
+                  };
+                  return (
+                    <>
+                      {grupo("Entraram no período · etapa em que estão hoje", true)}
+                      {ETAPAS_ABERTAS.map(linha)}
+                      {grupo("Decididos no período · pela data do fechamento")}
+                      {linha("fechado_ganho")}
+                      {subLinha("fechado_ganho")}
+                      {linha("fechado_perdido")}
+                      {subLinha("fechado_perdido")}
+                    </>
+                  );
                 })()}
               </div>
             </CardContent>
           </Card>
 
-          {/* Contatos por canal de captação — enum (whatsapp/instagram/...) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Contatos por canal de captação</CardTitle>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Por onde o contato chegou (WhatsApp, Instagram, Facebook, manual, telefone, site).
-              </p>
-            </CardHeader>
-            <CardContent>
-              {(!data.contatosPorOrigem || data.contatosPorOrigem.length === 0) ? (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  Sem contatos no período.
-                </p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {data.contatosPorOrigem.map((o: any) => (
-                    <div key={o.origem} className="rounded-lg border p-3 text-center">
-                      <p className="text-xl font-bold">{o.total}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ORIGEM_LABELS[o.origem] || o.origem}
-                      </p>
+          {/* Leads por canal de captação — os mesmos leads do bloco "Entraram
+              no período", agrupados pelo canal da ficha do contato. */}
+          {(() => {
+            const canais: Array<{ canal: string; total: number }> = data.leadsPorCanal || [];
+            const totalCanal = canais.reduce((s, c) => s + c.total, 0);
+            return (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <CardTitle className="text-sm">Leads por canal de captação</CardTitle>
+                    <p className="text-[11px] text-muted-foreground">
+                      <strong className="text-foreground">{totalCanal}</strong> leads · os mesmos do funil
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Canal da ficha de cada lead que entrou no período. "Manual" = cadastrado à mão
+                    (tela Clientes, Novo cliente do Financeiro, Novo lead do Atendimento ou importação).
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  {canais.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      Sem leads no período.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {canais.map((o) => (
+                        <div key={o.canal} className="rounded-lg border p-3 text-center">
+                          <p className="text-xl font-bold">{o.total}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ORIGEM_LABELS[o.canal] || o.canal}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground/80">{pct1(o.total, totalCanal)}</p>
+                          <div className="mt-1.5 h-1 rounded-full bg-muted/40 overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-foreground/80"
+                              style={{ width: totalCanal > 0 ? `${(o.total / totalCanal) * 100}%` : 0 }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Fechamentos por origem — texto livre do cadastro de fechamento */}
           <FechamentosPorOrigemCard itens={data.fechamentosPorOrigem || []} />

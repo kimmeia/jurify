@@ -53,13 +53,34 @@ function dadosCompletos(): ComercialDashboardData {
       fechado_ganho: { total: 18, valor: 133500 },
       fechado_perdido: { total: 11, valor: 71000 },
     },
-    contatosPorOrigem: [
-      { origem: "whatsapp", total: 48 }, { origem: "instagram", total: 22 },
-      { origem: "facebook", total: 9 }, { origem: "manual", total: 14 },
+    funilResumo: {
+      entraram: { total: 109, emAberto: 80, jaDecididos: 29 },
+      decididos: {
+        total: 29,
+        fechado_ganho: { total: 18, entraramNoPeriodo: 16, entraramAntes: 2 },
+        fechado_perdido: { total: 11, entraramNoPeriodo: 11, entraramAntes: 0 },
+      },
+    },
+    leadsPorCanal: [
+      { canal: "whatsapp", total: 48 }, { canal: "manual", total: 22 },
+      { canal: "telefone", total: 9 }, { canal: "asaas", total: 14 },
     ],
     fechamentosPorOrigem: [
-      { origem: "Google revisional", total: 6 }, { origem: "Meta leilão", total: 4 },
-      { origem: "BNI", total: 3 }, { origem: "Indicação", total: 5 },
+      {
+        origem: "Google revisional", total: 6, valorTotal: 41350, recebidoTotal: 12000, pagaram: 2,
+        fechamentos: [
+          { contatoId: 1, cliente: "Francisco Antonio", fechadoEm: "2026-05-09T12:00:00.000Z", valor: 7250, recebido: 7250, situacao: "pago", responsavel: "Mariana Lopes", mesmoCliente: 1, foraDoFiltro: false },
+          { contatoId: 2, cliente: "Marly Souza", fechadoEm: "2026-05-08T12:00:00.000Z", valor: 6000, recebido: 4750, situacao: "parcial", responsavel: "Carlos Eduardo Pinto", mesmoCliente: 2, foraDoFiltro: false },
+          { contatoId: 3, cliente: "Santiago Ribeiro", fechadoEm: "2026-05-08T12:00:00.000Z", valor: 4800, recebido: 0, situacao: "nada", responsavel: "Mariana Lopes", mesmoCliente: 1, foraDoFiltro: false },
+        ],
+      },
+      { origem: "Meta leilão", total: 4 }, { origem: "BNI", total: 3 }, { origem: "Indicação", total: 5 },
+      {
+        origem: "Sem origem / fora do filtro", total: 0, valorTotal: 0, recebidoTotal: 900, pagaram: 1,
+        fechamentos: [
+          { contatoId: 9, cliente: "Cliente de outro setor", fechadoEm: null, valor: null, recebido: 900, situacao: "fora_do_filtro", responsavel: null, mesmoCliente: 1, foraDoFiltro: true },
+        ],
+      },
     ],
     filtros: { setorId: null, atendenteId: null },
   };
@@ -112,9 +133,10 @@ describe("gerarComercialPdf", () => {
     const data = dadosCompletos();
     data.ranking = [];
     data.cobrancasPorDia = [];
-    data.contatosPorOrigem = [];
+    data.leadsPorCanal = [];
     data.fechamentosPorOrigem = [];
     data.etapas = {};
+    data.funilResumo = undefined;
     const buf = await gerarComercialPdf({ data, detalhes: [], nomeEscritorio: "Escritório Teste" });
     ehPdfValido(buf);
   });
