@@ -696,6 +696,18 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     "Tirzah" sem o 9 é o mesmo número escrito de dois jeitos). Fechado em
     03/09 (`buscarContatoPorTelefone` com REPLACE da máscara, com/sem 9 e
     55); hoje o mesmo diálogo reaproveita a ficha.
+  - **Ficha presa na anterior ao trocar na lista lateral (dono, 09/09:
+    "intermitente, vale olhar")** — print com cabeçalho "Tirza" e o
+    formulário com "Tirzah". Cabeçalho e `EditarForm` leem o MESMO
+    `clientes.detalhe`, o form já é recriado por `key={cliente.id}` desde
+    10/08, `main.tsx` não tem `placeholderData`, e não há `setData` na
+    chave — o mecanismo da corrida NÃO foi reproduzido. Blindagem em duas
+    camadas (`ficha-troca-na-lista.test.ts`): `ClienteDetalhe` só usa o
+    registro cujo `id === id` pedido (outro id = esqueleto,
+    `registroDeOutroId`), e `EditarForm` re-hidrata todos os campos em
+    `[cliente.id, cliente.updatedAt]` (`camposExtrasDe` extraído). Se
+    voltar a acontecer, o próximo passo é gravar no Sentry o par
+    (id pedido, id recebido) no momento do esqueleto.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do

@@ -101,7 +101,8 @@ describe("a ficha para de girar pra sempre", () => {
     // `detalhe` devolve null (não erro) em quatro situações distintas; tratar
     // isso como "ainda não chegou" era o spinner eterno.
     expect(tela).toContain("isLoading: detalheCarregando");
-    const ini = tela.indexOf("if (detalheCarregando)");
+    // "registroDeOutroId" entrou em 09/09: registro de outro id também vale esqueleto.
+    const ini = tela.indexOf("if (detalheCarregando || registroDeOutroId)");
     expect(ini).toBeGreaterThan(0);
     const trecho = tela.slice(ini, tela.indexOf("const isVip", ini));
     // O ramo do carregando mostra esqueleto (a forma da ficha) em vez de um
