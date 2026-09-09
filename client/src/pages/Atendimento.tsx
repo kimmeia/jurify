@@ -62,6 +62,7 @@ import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
+import { IconeTwilio } from "@/components/IconeTwilio";
 import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
@@ -2295,7 +2296,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <div className="flex items-center gap-1 shrink-0">
               {onWA && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Abrir conversa no WhatsApp" onClick={() => onWA(tel)}><PhoneCall className="h-3.5 w-3.5" /></Button>}
               {podeLigarWa && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-success-fg" title="Ligar via WhatsApp" onClick={() => onLigarWhatsApp!({ canalId: conv.canalId, telefone: tel.replace(/\D/g, ""), contatoId: conv.contatoId, contatoNome: conv.contatoNome, conversaId: conv.id })}><Phone className="h-3.5 w-3.5" /></Button>}
-              {onTel && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-info-fg" title="Ligar (Twilio)" onClick={() => onTel(tel)}><Phone className="h-3.5 w-3.5" /></Button>}
+              {/* Desligado até a ponte existir: o servidor recebe só o número do
+                * cliente, então cai no ramo sem atendente e toca "chamada de
+                * teste do sistema" pra quem atende. O botão continua na tela, e
+                * o popup e as procedures seguem intactos — é religar quando a
+                * ligação conectar as duas pontas de verdade. */}
+              {onTel && <Button variant="ghost" size="sm" disabled className="h-7 w-7 p-0 text-muted-foreground disabled:opacity-100" title="Ligação por telefone (Twilio) — em breve"><IconeTwilio className="h-3.5 w-3.5" /></Button>}
             </div>
           );
         })()}
