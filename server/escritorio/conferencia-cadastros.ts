@@ -356,11 +356,17 @@ export const COLUNAS_CSV = [
   "email", "responsavel", "conversas", "cobrancas", "processos", "sobrevive", "divergencias",
 ] as const;
 
+/**
+ * Com hora: quatro fichas iguais criadas no mesmo minuto contam uma história
+ * (clique repetido) e criadas em dias diferentes contam outra.
+ */
 function dataBR(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  return d.toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+  }).replace(",", "");
 }
 
 function celula(v: unknown): string {
