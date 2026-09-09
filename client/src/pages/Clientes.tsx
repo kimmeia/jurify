@@ -3397,7 +3397,13 @@ function ClienteDetalhe({
   const [gerarContratoOpen, setGerarContratoOpen] = useState(false);
   const [fechamentoOpen, setFechamentoOpen] = useState(false);
   const utilsTrpc = trpc.useUtils();
-  const { data: cliente, refetch, isLoading: detalheCarregando } = trpc.clientes.detalhe.useQuery({ id });
+  const { data: clienteCarregado, refetch, isLoading: detalheCarregando } = trpc.clientes.detalhe.useQuery({ id });
+  // Trocar de ficha na lista lateral chegou a deixar a tela com os dados da
+  // ficha anterior (intermitente, produção 09/09). O que quer que entregue um
+  // registro de outro id aqui, ele não pode ser renderizado como se fosse o
+  // pedido: fica no esqueleto até o certo chegar.
+  const cliente = clienteCarregado && clienteCarregado.id === id ? clienteCarregado : undefined;
+  const registroDeOutroId = !!clienteCarregado && clienteCarregado.id !== id;
   // Resumo financeiro do Asaas — separado de `clientes.detalhe` pra reaproveitar
   // a mesma chave dos demais consumidores (FinanceiroPopover, FinanceiroBadge,
   // FinanceiroClienteTab) e cair no cache do React Query sem refetch.
@@ -3507,7 +3513,7 @@ function ClienteDetalhe({
   // (não erro) quando falta permissão, quando o contato é de outro escritório
   // e quando ele não existe mais — tratar isso como "ainda não chegou" deixava
   // a tela girando pra sempre, sem dizer nada a quem abriu.
-  if (detalheCarregando) {
+  if (detalheCarregando || registroDeOutroId) {
     // Esqueleto com a FORMA da ficha, não um círculo girando: o layout já
     // nasce no lugar, então nada pula quando os dados chegam.
     return (

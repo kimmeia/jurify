@@ -41,6 +41,16 @@ function formatBRL(v: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+function camposExtrasDe(cliente: any): Record<string, any> {
+  if (!cliente.camposPersonalizados) return {};
+  if (typeof cliente.camposPersonalizados === "object") return cliente.camposPersonalizados;
+  try {
+    return JSON.parse(cliente.camposPersonalizados);
+  } catch {
+    return {};
+  }
+}
+
 export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: () => void }) {
   const [nome, setNome] = useState(cliente.nome || "");
   const [tel, setTel] = useState(cliente.telefone || "");
@@ -54,20 +64,31 @@ export function EditarForm({ cliente, onSuccess }: { cliente: any; onSuccess: ()
     extrairQualificacaoEndereco(cliente),
   );
   // Campos personalizados — valor inicial vem como string JSON do banco
-  const [camposExtras, setCamposExtras] = useState<Record<string, any>>(() => {
-    if (!cliente.camposPersonalizados) return {};
-    if (typeof cliente.camposPersonalizados === "object") return cliente.camposPersonalizados;
-    try {
-      return JSON.parse(cliente.camposPersonalizados);
-    } catch {
-      return {};
-    }
-  });
+  const [camposExtras, setCamposExtras] = useState<Record<string, any>>(() => camposExtrasDe(cliente));
   const { data: defsCampos } = (trpc as any).camposCliente.listar.useQuery(undefined, { retry: false });
   // responsavelId pode ser null (sem responsável) ou number; UI usa string
   const [responsavelId, setResponsavelId] = useState<string>(
     cliente.responsavelId ? String(cliente.responsavelId) : "",
   );
+
+  // Ao trocar de ficha na lista lateral, os campos chegaram a ficar com a
+  // ficha anterior (intermitente, produção 09/09). O key no pai já recria o
+  // form por id; isto cobre a mesma instância recebendo outro cadastro — ou
+  // o mesmo cadastro com dados novos depois de salvar. Só id e updatedAt
+  // nas dependências: refetch sem mudança não apaga o que está sendo digitado.
+  useEffect(() => {
+    setNome(cliente.nome || "");
+    setTel(cliente.telefone || "");
+    setEmail(cliente.email || "");
+    setCpf(cliente.cpfCnpj || "");
+    setObs(cliente.observacoes || "");
+    setTags(cliente.tags || "");
+    setDocPendente(!!cliente.documentacaoPendente);
+    setDocObs(cliente.documentacaoObservacoes || "");
+    setQualif(extrairQualificacaoEndereco(cliente));
+    setCamposExtras(camposExtrasDe(cliente));
+    setResponsavelId(cliente.responsavelId ? String(cliente.responsavelId) : "");
+  }, [cliente.id, cliente.updatedAt]);
 
   // Lista de colaboradores ativos pra mostrar no dropdown.
   // Backend só permite reatribuir pra dono/gestor; pra outros, a query
