@@ -525,19 +525,45 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   (antes cancelava primeiro — falha do Asaas deixava o cliente sem
   nenhuma); e `admin.criarCliente` exige WhatsApp (mesma regra e mensagem
   do cadastro público; campo "WhatsApp (com DDD) *" no
-  `CriarClienteDialog`). O seletor "Trocar plano" do painel continua
-  listando o `PLANS` estático (`admin.planosAtuais`) — mockup
-  `mockup-trocar-plano-catalogo.html` entregue 09/09, aguardando "pode
-  fazer" (3 decisões: antiga espera o pagamento da nova?; ocultos na
-  dobra?; trial que troca mantém os dias?).
+  `CriarClienteDialog`).
+- **Entregue 09/09, "Trocar plano" pelo catálogo — mockup
+  `mockup-trocar-plano-catalogo.html`, "pode fazer" do dono com as 3
+  decisões da proposta**: (1) a assinatura atual ESPERA o pagamento da
+  nova — `trocarPlanoAdmin` NÃO cancela mais nada (nem Asaas, nem banco;
+  o texto de 08/09 acima, "só cancela DEPOIS", ficou superado): pagante
+  ganha linha `incomplete` e o webhook de pagamento encerra a anterior
+  (`encerrarOutrasAssinaturas`), igual ao `changePlan` do cliente; (2)
+  `admin.planosAtuais` lê o catálogo (`getAllPlanos`, visíveis primeiro
+  por `ordem`, ocultos no fim; `PLANS` só com tabela vazia) e o diálogo
+  mostra os ocultos numa dobra "Fora da vitrine" com selo "oculto" —
+  escolhíveis, nada some; (3) cliente em teste que troca converte a
+  PRÓPRIA linha (planId novo, `trialing`, `trialExpiraEm` = max(atual,
+  +7d), `trialConvertido`) — teste em cortesia não é mexido (linha nova).
+  `trocarPlanoAdmin` aceita `cpfCnpj` (exigido ANTES do Asaas quando o
+  cliente não tem `asaasCustomerId`; o diálogo mostra o campo só nesse
+  caso) e devolve `invoiceUrl` (toast "Abrir link", mesmo padrão do
+  Ativar). Plano SOB CONSULTA escolhido no diálogo abre valor fechado +
+  CPF/CNPJ + ciclo e chama `ativarAssinaturaNegociada({..., planId})`
+  ("Fechar valor e trocar"): a procedure ganhou `planId` opcional
+  (`planoAlvoSlug`), deixa PAGANTE trocar de plano (linha nova
+  `incomplete` com `valorNegociadoCentavos`; mesmo plano continua
+  recusado → card Módulos & cobrança) e só cancela assinatura Asaas
+  pendurada de NÃO pagante; sem `planId` faz o que sempre fez. Plano
+  atual na lista = "(atual)" + botão travado com a dica dos dois
+  caminhos. Amarras: `trocar-plano-catalogo` (25 testes; 21 mutações
+  vermelhas em `scratchpad/mutar-trocar-plano.py`) + 3º teste do trio em
+  `meu-plano-vitrine-sob-consulta` reescrito pra "NÃO cancela" e o
+  literal do `externalReference` em `ativar-assinatura-negociada`
+  atualizado pra `planoAlvoSlug`.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
   `receitaMensal`: `COALESCE(valorNegociadoCentavos, planos.preco)`, só
   ativas sem cortesia. Ainda leem `PLANS` (não autorizado): `criarCupom`
   (valida `planosIds` contra a lista fixa → recusa slugs novos),
-  `planosAtuais`, `health.plansCount`, `db.ts` getPlanName/getPlanPrice e
-  o limite legado de créditos em `getUserCreditsInfo`.
+  `health.plansCount`, `db.ts` getPlanName/getPlanPrice e o limite legado
+  de créditos em `getUserCreditsInfo` (`planosAtuais` saiu da lista em
+  09/09 — lê o catálogo).
 - **Decisões do dono 09/09**: plano sob consulta é SÓ venda consultiva
   (cliente nunca escolhe); pediu um pacote NOVO de 3 planos com
   Atendimento em todos contra Advbox/Astrea — proposta
