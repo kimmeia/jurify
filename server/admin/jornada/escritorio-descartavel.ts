@@ -13,6 +13,7 @@
  */
 
 import { and, eq, like, lt } from "drizzle-orm";
+import { TERMOS_VERSAO } from "../../../shared/termos";
 import { getDb } from "../../db";
 import { hashPassword } from "../../_core/password";
 import {
@@ -82,6 +83,16 @@ export async function seedTestEscritorio(
       // spec próprio (`signup.spec.ts`). Mesma decisão do seed-staging.
       emailVerificado: true,
       emailVerificadoEm: new Date(),
+      // Mesma razão, um portão adiante: sem versão aceita o `TermosGate`
+      // abre modal bloqueante no primeiro acesso do dono, e o robô fica
+      // batendo em overlay. Medido: 48 ações de 4 rotas voltaram como
+      // falha, todas por não conseguir clicar atrás dele.
+      //
+      // A conta descartável não testa o fluxo de aceite — quem testa é
+      // `precisaAceitarTermos` em `shared/termos.ts`, com teste próprio.
+      // Aqui ela representa um escritório que já está usando o sistema.
+      aceitouTermosEm: new Date(),
+      termosVersaoAceita: TERMOS_VERSAO,
     });
     const id = (insertion as { insertId: number }).insertId;
     created[cargo] = { id, email, name, cargo };

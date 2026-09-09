@@ -1599,8 +1599,11 @@ export default function AgentesIA() {
 
       {/* Agente Jurídico — agente especializado (redige peças fundamentadas no
           cliente/processo real). Vive aqui em Agentes IA, com tela própria. */}
-      <Link href="/jurisia">
-        <a className="block group">
+      {/* Sem <a> aqui dentro: o `Link` do wouter v3 JÁ renderiza a
+          âncora, e envolver outra produz <a> dentro de <a> — HTML inválido
+          que o React acusa como erro de hidratação. O idioma com <a>
+          filho é do wouter v2. */}
+      <Link href="/jurisia" className="block group">
           <Card className="border-info/30 bg-gradient-to-br from-info-bg to-white dark:to-muted hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="flex items-center gap-4 py-4">
               <div className="h-11 w-11 rounded-xl bg-info text-info-on flex items-center justify-center shrink-0">
@@ -1618,7 +1621,6 @@ export default function AgentesIA() {
               <ArrowRight className="h-5 w-5 text-info-fg shrink-0 group-hover:translate-x-0.5 transition-transform" />
             </CardContent>
           </Card>
-        </a>
       </Link>
 
       {/* Tabs Templates · Escritório · Meus */}
