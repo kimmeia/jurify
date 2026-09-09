@@ -1340,6 +1340,8 @@ export default function Atendimento() {
                     return (
                       <button
                         key={p.v}
+                        data-testid="inbox-pill"
+                        data-ativa={ativo}
                         onClick={() => setFiltro(p.v)}
                         className={
                           "rounded-md px-1 py-1 text-center transition-colors " +
@@ -1355,6 +1357,7 @@ export default function Atendimento() {
                           {p.l}
                         </span>
                         <span
+                          data-testid="inbox-pill-contagem"
                           className={
                             "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
                             (ativo ? "text-info-fg" : "text-muted-foreground/70")
@@ -1450,6 +1453,7 @@ export default function Atendimento() {
                       // Radix) prende a linha na largura da coluna.
                       <div key={c.id} className="relative group/conv w-0 min-w-full">
                       <button
+                        data-testid="inbox-conversa"
                         className={
                           "w-full text-left px-3 py-3 border-b transition-colors relative " +
                           (selecionada

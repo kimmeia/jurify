@@ -30,7 +30,14 @@ WHERE teor IS NOT NULL
     OR teor LIKE 'wOFF%'
     OR teor LIKE 'OTTO%'
     OR teor LIKE '%PNG%IHDR%'
-    OR teor LIKE CONCAT('%', CONVERT(0xEFBFBD USING utf8mb4), '%')
+    -- O COLLATE não é enfeite: `CONVERT(... USING utf8mb4)` sai com o
+    -- collation PADRÃO DO BANCO, e as tabelas do projeto são
+    -- utf8mb4_unicode_ci. Em ambiente cujo default seja general_ci
+    -- (o default do MariaDB quando ninguém escolhe), a comparação morre
+    -- com "Illegal mix of collations" e a migration inteira nunca é
+    -- marcada como aplicada. Os LIKE acima escapam porque literal puro
+    -- se adapta à coluna; o CONVERT não.
+    OR teor LIKE CONCAT('%', CONVERT(0xEFBFBD USING utf8mb4) COLLATE utf8mb4_unicode_ci, '%')
   );
 
 -- Só as pendentes: prazo que o advogado já aprovou ou descartou é decisão
