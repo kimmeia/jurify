@@ -2428,13 +2428,25 @@ export const adminRouter = router({
       ? ultimos3.reduce((sum, m) => sum + m.churnRate, 0) / ultimos3.length
       : 0;
 
-    // LTV estimado = (MRR médio por cliente) / (churn rate mensal)
-    const subsAtivas = allSubs.filter((s) => s.status === "active");
-    const mrrTotal = subsAtivas.reduce((sum, s) => {
-      const plan = PLANS.find((p) => p.id === s.planId);
-      return sum + (plan?.priceMonthly || 0);
-    }, 0);
-    const arpu = subsAtivas.length > 0 ? mrrTotal / subsAtivas.length : 0;
+    // LTV estimado = (MRR médio por cliente) / (churn rate mensal). O preço
+    // de cada assinatura é o mesmo do receitaMensal: valor negociado, senão
+    // o de tabela do catálogo — a lista fixa PLANS somava R$ 497 pra cada
+    // "completo", que é sob consulta. Só pagantes contam (cortesia não é
+    // receita, e entrava no denominador puxando o ARPU pra baixo).
+    const [pagantes] = await db
+      .select({
+        total: sql<number>`COUNT(*)`,
+        mrr: sql<number>`SUM(COALESCE(${subscriptionsTable.valorNegociadoCentavos}, ${planosTable.precoMensalCentavos}, 0))`,
+      })
+      .from(subscriptionsTable)
+      .leftJoin(planosTable, eq(planosTable.slug, subscriptionsTable.planId))
+      .where(and(
+        eq(subscriptionsTable.status, "active"),
+        eq(subscriptionsTable.cortesia, false),
+      ));
+    const pagantesAtivos = Number(pagantes?.total ?? 0);
+    const mrrTotal = Number(pagantes?.mrr ?? 0);
+    const arpu = pagantesAtivos > 0 ? mrrTotal / pagantesAtivos : 0;
     const ltvEstimado = churnAtual > 0 ? arpu / (churnAtual / 100) : 0;
 
     // Retenção 12m: clientes que ainda estão ativos vs criados há 12+ meses
