@@ -80,7 +80,9 @@ const CONFIRM_CONHECIDOS: Readonly<Record<string, number>> = {
   "client/src/components/calculos/ParecerEditor.tsx": 1,
   "client/src/pages/Agendamento.tsx": 1,
   "client/src/pages/Configuracoes.tsx": 3,
-  "client/src/pages/Kanban.tsx": 3,
+  // "Excluir coluna" já virou AlertDialog na main — sobraram "Excluir
+  // funil" e "Arquivar todos os cards".
+  "client/src/pages/Kanban.tsx": 2,
   "client/src/pages/Plans.tsx": 1,
   "client/src/pages/Tarefas.tsx": 1,
   "client/src/pages/admin/AdminAgentesIA.tsx": 1,
