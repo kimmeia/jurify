@@ -541,12 +541,30 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
 - **Decisões do dono 09/09**: plano sob consulta é SÓ venda consultiva
   (cliente nunca escolhe); pediu um pacote NOVO de 3 planos com
   Atendimento em todos contra Advbox/Astrea — proposta
-  `mockup-pacote-3-planos.html` (Atende R$ 197 / Escritório R$ 397 /
-  Escala R$ 797, anual = 10×, 14d de teste, "Sob medida" = Completo
-  consultivo; sites dos concorrentes bloqueados daqui, números vieram de
-  buscas de 09/09 — conferir antes de publicar). Implementar = migration
-  no catálogo + esconder Monitoramento Essencial/Profissional; nada
-  hardcoded. Aguardando escolha dele.
+  `mockup-pacote-3-planos.html`, revisada a pedido dele ("vamos baratear
+  mais, aumente os processos, inicial em 147") e **aprovada ("pode
+  fazer") na v2**. Sites dos concorrentes bloqueados daqui: os números
+  deles vieram de buscas de 09/09 (Advbox Essencial R$ 220 + taxa, Banca
+  Jurídica R$ 800, Elite R$ 1.800; Astrea Up R$ 209/2 usuários/150
+  processos, Smart R$ 379/5/500, Company R$ 689, VIP R$ 1.249) — conferir
+  antes de publicar.
+- **Entregue 09/09, migration 0217 `pacote_3_planos`**: `atende`
+  (R$ 147, 2 usuários, 1 WhatsApp, 1 IA, 300 processos, 15 CPFs, 20
+  cálculos, 2 GB), `escritorio` (R$ 297, 5, 2, 3, 1.000, 50, 100, 10 GB,
+  + financeiro/contratos/smartflow/relatorios, ÚNICO `popular`), `escala`
+  (R$ 597, 15, 5, 10, 2.500, 150, 300, 50 GB, + comissoes/ponto/backups/
+  jurisia com 200 msgs). Anual = 10× (toggle da tela volta com economia
+  real), `trial_dias` 14, `preco_sob_consulta` FALSE → checkout
+  self-service funciona nos três. `monitoramento-essencial`/`profissional`
+  viram `oculto` (quem está em teste continua); `completo` vira "Sob
+  medida" (sob consulta + demonstração, ordem 4, preço mensal NÃO tocado).
+  Cartões citam "novas ações: TJCE por enquanto" (decisão 4). **Sem
+  mecanismo, ficou pendente**: extras avulsos (usuário R$ 29, +100
+  processos R$ 29, número extra R$ 49) — `max_usuarios` trava
+  colaboradores e não existe limite por escritório pra processos/números;
+  `atendentes_inclusos` ficou NULL de propósito (assento não cobra). LP:
+  o texto "Superlançamento" do Pricing.tsx não mudou (mockup próprio se
+  ele pedir). Amarra: `pacote-3-planos` (11 testes, 6 mutações vermelhas).
 Amarras: `meu-plano-vitrine-sob-consulta` (21) e
 `cadastro-whatsapp-obrigatorio` (20) — 44 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
