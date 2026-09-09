@@ -840,6 +840,31 @@ export const contatos = mysqlTable("contatos", {
 export type Contato = typeof contatos.$inferSelect;
 export type InsertContato = typeof contatos.$inferInsert;
 
+/**
+ * Cada unificação de fichas (automática, pela chegada de mensagem de um
+ * número que já tem cadastro completo; ou manual, pelo "Mesclar") guarda a
+ * ficha absorvida inteira e os ids movidos — é o que o "Desfazer" usa nos
+ * 7 dias seguintes.
+ */
+export const contatosUnificacoes = mysqlTable("contatos_unificacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdUnif").notNull(),
+  principalId: int("principalIdUnif").notNull(),
+  duplicadoId: int("duplicadoIdUnif").notNull(),
+  origem: mysqlEnum("origemUnif", ["automatica", "manual"]).default("manual").notNull(),
+  duplicadoSnapshot: json("duplicadoSnapshotUnif").notNull(),
+  principalAntes: json("principalAntesUnif").notNull(),
+  /** `{ [tabela]: number[] }` — ids das linhas que trocaram de dono. */
+  movidos: json("movidosUnif").notNull(),
+  executadoPor: int("executadoPorUnif"),
+  desfeitaEm: timestamp("desfeitaEmUnif"),
+  desfeitaPor: int("desfeitaPorUnif"),
+  createdAt: timestamp("createdAtUnif").defaultNow().notNull(),
+}, (t) => ({
+  idxPrincipal: index("idx_unif_principal").on(t.escritorioId, t.principalId),
+  idxEscData: index("idx_unif_esc_data").on(t.escritorioId, t.createdAt),
+}));
+
 export const conversas = mysqlTable("conversas", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdConv").notNull(),

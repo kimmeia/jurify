@@ -662,13 +662,52 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
   const [responsavelId, setResponsavelId] = useState<string>("none");
   const { data: equipeData } = trpc.configuracoes.listarColaboradores.useQuery();
   const colaboradoresAtivos = (equipeData && "colaboradores" in equipeData ? equipeData.colaboradores : []).filter((c) => c.ativo);
-  const reset = () => { setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); setResponsavelId("none"); };
+  // Um número, um cadastro: mesma conferência da tela Clientes — o telefone
+  // que já tem ficha (a que o WhatsApp criou) recebe o CPF e a cobrança em
+  // vez de ganhar uma irmã. Criar separado é clique consciente, por número.
+  const [telDebounced, setTelDebounced] = useState("");
+  const [telSeparadoAck, setTelSeparadoAck] = useState<string | null>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setTelDebounced(tel), 400);
+    return () => clearTimeout(t);
+  }, [tel]);
+  const telDigitos = telDebounced.replace(/\D/g, "");
+  const { data: telExistente } = (trpc as any).clientes.verificarTelefone.useQuery(
+    { telefone: telDebounced },
+    { enabled: open && telDigitos.length >= 10, retry: false },
+  );
+  const telReconhecido = telDigitos.length >= 10 && telExistente ? telExistente : null;
+  const telAguardandoEscolha = !!telReconhecido && telSeparadoAck !== telDigitos;
+  const reset = () => { setNome(""); setCpf(""); setEmail(""); setTel(""); setCep(""); setEndereco(""); setNumero(""); setBairro(""); setResponsavelId("none"); setTelDebounced(""); setTelSeparadoAck(null); };
   const criarMut = trpc.asaas.criarClienteAsaas.useMutation({ onSuccess: () => { toast.success("Cliente cadastrado"); reset(); onOpenChange(false); onSuccess(); }, onError: (err) => toast.error("Erro", { description: err.message }) });
+  const enviar = (extra?: { usarContatoId?: number; forcarSeparado?: boolean }) => {
+    const escolha = extra ?? (telSeparadoAck === telDigitos ? { forcarSeparado: true } : {});
+    criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined, responsavelId: responsavelId === "none" ? undefined : parseInt(responsavelId), ...escolha });
+  };
+  const prontoParaEnviar = !!nome && cpf.replace(/\D/g, "").length >= 11;
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Novo cliente</DialogTitle><DialogDescription>Cadastra no Asaas e vincula ao CRM.</DialogDescription></DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Novo cliente</DialogTitle><DialogDescription>Cadastra no Asaas e vincula ao CRM. O telefone é conferido enquanto você digita.</DialogDescription></DialogHeader>
       <div className="space-y-3 py-1">
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Nome *</Label><Input placeholder="Joao Silva" value={nome} onChange={(e) => setNome(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">CPF/CNPJ *</Label><Input placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(e.target.value)} className="mt-1" /></div></div>
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">Telefone</Label><Input value={tel} onChange={(e) => setTel(e.target.value)} className="mt-1" /></div></div>
+        {telReconhecido && (
+          <div className="rounded-lg border border-info/30 bg-info-bg/60 p-3 space-y-2" data-testid="telefone-reconhecido-asaas">
+            <p className="text-xs font-semibold text-info-fg">
+              ⚡ Já existe: <span className="font-medium">{telReconhecido.nome}</span>
+              {" "}({telReconhecido.origem === "whatsapp" ? "WhatsApp" : telReconhecido.origem === "asaas" ? "Asaas" : "Clientes"}
+              {telReconhecido.createdAt ? `, ${new Date(telReconhecido.createdAt).toLocaleDateString("pt-BR")}` : ""})
+            </p>
+            {telSeparadoAck === telDigitos ? (
+              <p className="text-[10.5px] text-muted-foreground">Vai criar um cadastro separado com o mesmo número.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button size="sm" className="h-7 text-xs" disabled={criarMut.isPending || !prontoParaEnviar} onClick={() => enviar({ usarContatoId: telReconhecido.id })}>Usar esse cadastro</Button>
+                <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={criarMut.isPending} onClick={() => setTelSeparadoAck(telDigitos)}>Criar separado</Button>
+              </div>
+            )}
+            <p className="text-[10.5px] text-info-fg/80 leading-snug">A cobrança nasce no cadastro que já tem a conversa. É o que faz o valor aparecer no atendimento certo.</p>
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-2"><div><Label className="text-xs">CEP</Label><Input value={cep} onChange={(e) => setCep(e.target.value)} className="mt-1" /></div><div className="col-span-2"><Label className="text-xs">Endereco</Label><Input value={endereco} onChange={(e) => setEndereco(e.target.value)} className="mt-1" /></div></div>
         <div className="grid grid-cols-2 gap-2"><div><Label className="text-xs">Numero</Label><Input value={numero} onChange={(e) => setNumero(e.target.value)} className="mt-1" /></div><div><Label className="text-xs">Bairro</Label><Input value={bairro} onChange={(e) => setBairro(e.target.value)} className="mt-1" /></div></div>
         <div>
@@ -685,7 +724,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
           <p className="text-[10px] text-muted-foreground mt-1">Quem cuida do cliente nas conversas e recebe comissão pelas cobranças. Visível como agrupamento no painel Asaas.</p>
         </div>
       </div>
-      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => criarMut.mutate({ nome, cpfCnpj: cpf, email: email || undefined, telefone: tel || undefined, cep: cep || undefined, endereco: endereco || undefined, numero: numero || undefined, bairro: bairro || undefined, responsavelId: responsavelId === "none" ? undefined : parseInt(responsavelId) })} disabled={criarMut.isPending || !nome || cpf.replace(/\D/g, "").length < 11}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button onClick={() => enviar()} disabled={criarMut.isPending || !prontoParaEnviar || telAguardandoEscolha} title={telAguardandoEscolha ? "Este telefone já tem cadastro — escolha usar ou criar separado" : undefined}>{criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}Cadastrar</Button></DialogFooter>
     </DialogContent></Dialog>
   );
 }

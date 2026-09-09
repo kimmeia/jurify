@@ -555,6 +555,69 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   `meu-plano-vitrine-sob-consulta` reescrito pra "NÃO cancela" e o
   literal do `externalReference` em `ativar-assinatura-negociada`
   atualizado pra `planoAlvoSlug`.
+- **Entregue 09/09 (noite), "Um número, um cadastro" — mockup
+  `mockup-reconhecer-cadastro.html`, "Gostei, pode fazer" do dono com as
+  4 decisões da proposta.** Origem: print do 131047/131049 do Francisco +
+  "salvo um número e quando esse cliente fala ele entra como novo contato".
+  Diagnóstico: a LEITURA do WhatsApp já casava com/sem 9/55/máscara
+  (03/09); duplicava pelo caminho inverso — `clientes.criar`, Financeiro
+  (`criarClienteAsaas`), webhook e adoção do Asaas conferiam só CPF — e a
+  conversa ficava presa à ficha magra porque `chatIdExterno` nunca era
+  atualizado e o Mesclar era manual. O que mudou:
+  - `db-crm`: `condicoesMesmoTelefone` + `buscarContatosPorTelefone`
+    (lista, `excetoId`; `buscarContatoPorTelefone` virou wrapper) e
+    `TABELAS_VINCULO_CONTATO` (11 pares tabela/coluna que `unificarContatos`
+    percorre — a MESMA lista que o Desfazer usa).
+  - `server/escritorio/reconhecer-cadastro.ts` (regras puras exportadas):
+    `ehFichaMagra` (sem CPF, sem e-mail, lead, sem processo — mesma régua
+    do "Vincular"), `escolherSobrevivente` (decisão 3: CPF, empate → mais
+    antiga, empate → menor id), `agruparPorTelefone` (`chaveTelefoneBR`),
+    `atualizarEnderecoDeResposta` (só JID telefone; @lid não),
+    `reconhecerCadastroNaEntrada` (chamado pelo handler via import dinâmico
+    em try/catch DEPOIS de resolver conversa/contato e ANTES de salvar a
+    mensagem — os testes antigos do handler mockam `db-crm` com objeto
+    fixo, por isso módulo à parte), `unificarComRegistro` (fotografa a
+    ficha absorvida + ids movidos por tabela + `principalAntes` em
+    `contatos_unificacoes`, migration 0218, e só então roda o
+    `unificarContatos` de sempre), `desfazerUnificacao` (7 dias =
+    `JANELA_DESFAZER_MS`; recria a ficha com o MESMO id, UPDATE por lista
+    de ids, restaura email/cpf/observações/secundários da sobrevivente) e
+    `unificacaoRecente` (alimenta o aviso da conversa).
+  - Procedures: `clientes.verificarTelefone` (≥10 dígitos; devolve a ficha
+    que sobreviveria + conversas abertas/atendente), `clientes.criar` com
+    `completarContatoId` (UPDATE na ficha existente, exige MESMO telefone,
+    responsável só entra se não tinha, vira `cliente`) / `forcarSeparado`
+    (sem ele, telefone existente = CONFLICT `[ID:n]`, mesmo formato do CPF
+    duplicado), `clientes.possiveisDuplicadosTelefone` +
+    `mesclarDuplicados` (permissão `clientes.excluir`, registro manual),
+    `crm.unificarContatos` passou a registrar (desfazível),
+    `crm.unificacaoRecente`/`crm.desfazerUnificacao`;
+    `asaas.criarClienteAsaas` com `usarContatoId`/`forcarSeparado` e
+    telefone como 2ª chave; webhook `CUSTOMER_CREATED` e
+    `asaas-adocao-orfas` caem no telefone quando o CPF não bate.
+    `enviarMensagem` (resposta manual) conta a janela de 24h por cliente ×
+    canal (`ultimaEntradaDoContatoNoCanal`), como o "Nova conversa".
+    `listarConversas` devolve `contatoCadastroCompleto` (booleano — nunca o
+    CPF) e `contatoOrigem`.
+  - Telas: `NovoClienteDialog` (Clientes) e o do Financeiro ganharam o card
+    "Este WhatsApp já está em um cadastro" (debounce 400ms) com "Completar
+    esse cadastro"/"Usar esse cadastro" × "Criar separado" (lembrado por
+    número; Cadastrar travado enquanto espera a escolha — decisão 1);
+    Atendimento: selo "✓ cadastro reconhecido"/"contato do WhatsApp",
+    aviso "Duas fichas com este número foram unificadas" com Abrir
+    cadastro/Desfazer (`crm.unificacaoRecente`), telefone via
+    `mascararTelefoneBR` (decisão 4 — só exibição; o gravado não muda);
+    Clientes: lista e ficha com `mascararTelefoneBR`, botão "Possíveis
+    duplicados (N)" (`clientes/possiveis-duplicados.tsx`, só aparece com
+    permissão e grupos).
+  - **Vincular a cliente NÃO mudou** (segue `unificarContatos` direto, sem
+    registro — o teste `crm-vincular-conversa` usa banco falso sem
+    `execute`). Importação de processos e "clientes essencial" não têm
+    telefone: ficam fora por natureza. Instagram/Facebook idem.
+  Amarras: `um-numero-um-cadastro` (33) + `um-numero-handler` (4) — 26
+  mutações vermelhas (`scratchpad/mutar-um-numero.py`; a de "@lid vira
+  endereço" é mutante equivalente: `isLidJid` e o regex de JID-telefone
+  barram os dois, de propósito).
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do

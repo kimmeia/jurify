@@ -146,6 +146,16 @@ export async function adotarCobrancasOrfas(
           .limit(1);
         contatoIdAlvo = contatoExistente?.id ?? null;
       }
+      // Um número, um cadastro: sem CPF batendo, o telefone reconhece a
+      // ficha que o WhatsApp já criou — senão nascia a segunda.
+      if (contatoIdAlvo === null) {
+        const telDigitos = String(cli.mobilePhone ?? cli.phone ?? "").replace(/\D/g, "");
+        if (telDigitos.length >= 10) {
+          const { buscarContatosPorTelefone } = await import("../escritorio/db-crm");
+          const [porTelefone] = await buscarContatosPorTelefone(escritorioId, telDigitos, { limite: 1 });
+          if (porTelefone) contatoIdAlvo = porTelefone.id;
+        }
+      }
 
       if (contatoIdAlvo === null) {
         const [novoContato] = await db

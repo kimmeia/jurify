@@ -44,9 +44,17 @@ export async function buscarContatoPorTelefone(
   escritorioId: number,
   telefoneNormalizado: string,
 ): Promise<{ id: number; nome: string; telefone: string | null } | null> {
-  const db = await getDb();
-  if (!db || !telefoneNormalizado) return null;
+  const [primeiro] = await buscarContatosPorTelefone(escritorioId, telefoneNormalizado, { limite: 1 });
+  return primeiro ? { id: primeiro.id, nome: primeiro.nome, telefone: primeiro.telefone } : null;
+}
 
+/**
+ * A régua única de "mesmo número": com ou sem o 9, com ou sem o 55, com ou
+ * sem máscara, nos telefones secundários e nos antigos. É a MESMA condição
+ * pra quem escreve no WhatsApp e pra quem cadastra à mão — dividir a régua
+ * é o que fazia a mesma pessoa virar duas fichas.
+ */
+async function condicoesMesmoTelefone(telefoneNormalizado: string) {
   // Considera todas as variantes BR (com/sem "9" antecipado) pra evitar
   // duplicação: se o cliente foi salvo como `5585999999999` e agora chega
   // via WhatsApp como `558599999999` (ou vice-versa), bate o mesmo registro.
@@ -72,15 +80,44 @@ export async function buscarContatoPorTelefone(
   for (const v of new Set([...candidatos, ...semDdi])) {
     conditions.push(eq(telSemMascara, v));
   }
+  return conditions;
+}
 
-  const rows = await db
-    .select({ id: contatos.id, nome: contatos.nome, telefone: contatos.telefone })
+export type ContatoMesmoTelefone = {
+  id: number;
+  nome: string;
+  telefone: string | null;
+  cpfCnpj: string | null;
+  email: string | null;
+  estagio: "lead" | "cliente";
+  origem: string;
+  createdAt: Date;
+};
+
+/** Todas as fichas do escritório que apontam pro mesmo número (mais recente primeiro). */
+export async function buscarContatosPorTelefone(
+  escritorioId: number,
+  telefoneNormalizado: string,
+  opts: { excetoId?: number; limite?: number } = {},
+): Promise<ContatoMesmoTelefone[]> {
+  const db = await getDb();
+  const digitos = (telefoneNormalizado || "").replace(/\D/g, "");
+  if (!db || !digitos) return [];
+
+  const conditions = await condicoesMesmoTelefone(digitos);
+  const where = [eq(contatos.escritorioId, escritorioId), or(...conditions)];
+  if (opts.excetoId != null) where.push(sql`${contatos.id} <> ${opts.excetoId}`);
+
+  return db
+    .select({
+      id: contatos.id, nome: contatos.nome, telefone: contatos.telefone,
+      cpfCnpj: contatos.cpfCnpj, email: contatos.email, estagio: contatos.estagio,
+      origem: contatos.origem, createdAt: contatos.createdAt,
+    })
     .from(contatos)
-    .where(and(eq(contatos.escritorioId, escritorioId), or(...conditions)))
+    .where(and(...where))
     .orderBy(desc(contatos.createdAt))
-    .limit(1);
-
-  return rows[0] ?? null;
+    .limit(Math.min(Math.max(opts.limite ?? 20, 1), 100));
 }
 
 /**
@@ -297,6 +334,24 @@ export async function atualizarContato(id: number, escritorioId: number, dados: 
  * clienteProcessos, assinaturasDigitais, tarefas, asaasClientes,
  * asaasCobrancas, smartflowExecucoes, agendamentos.
  */
+/**
+ * Tudo que aponta pra um contato e muda de dono numa unificação. A mesma
+ * lista alimenta o "Desfazer": os ids são fotografados ANTES do UPDATE.
+ */
+export const TABELAS_VINCULO_CONTATO: ReadonlyArray<{ tabela: string; coluna: string }> = [
+  { tabela: "conversas", coluna: "contatoIdConv" },
+  { tabela: "leads", coluna: "contatoIdLead" },
+  { tabela: "cliente_arquivos", coluna: "contatoId" },
+  { tabela: "cliente_anotacoes", coluna: "contatoId" },
+  { tabela: "cliente_processos", coluna: "contatoIdCliProc" },
+  { tabela: "assinaturas_digitais", coluna: "contatoId" },
+  { tabela: "tarefas", coluna: "contatoIdTarefa" },
+  { tabela: "asaas_clientes", coluna: "contatoIdAsaas" },
+  { tabela: "asaas_cobrancas", coluna: "contatoIdAsaasCob" },
+  { tabela: "smartflow_execucoes", coluna: "contatoIdExec" },
+  { tabela: "agendamentos", coluna: "contatoIdAgend" },
+];
+
 export async function unificarContatos(
   escritorioId: number,
   principalId: number,
@@ -319,25 +374,10 @@ export async function unificarContatos(
 
   const tabelasAtualizadas: string[] = [];
 
-  const tabelas = [
-    "conversas", "leads", "cliente_arquivos", "cliente_anotacoes",
-    "cliente_processos", "assinaturas_digitais", "tarefas",
-    "asaas_clientes", "asaas_cobrancas", "smartflow_execucoes",
-  ];
-
-  for (const tabela of tabelas) {
+  for (const { tabela, coluna } of TABELAS_VINCULO_CONTATO) {
     try {
-      const colName = tabela === "conversas" ? "contatoIdConv"
-        : tabela === "leads" ? "contatoIdLead"
-        : tabela === "cliente_processos" ? "contatoIdCliProc"
-        : tabela === "asaas_clientes" ? "contatoIdAsaas"
-        : tabela === "asaas_cobrancas" ? "contatoIdAsaasCob"
-        : tabela === "smartflow_execucoes" ? "contatoIdExec"
-        : tabela === "tarefas" ? "contatoIdTarefa"
-        : "contatoId";
-
       const result = await db.execute(
-        sql.raw(`UPDATE \`${tabela}\` SET \`${colName}\` = ${principalId} WHERE \`${colName}\` = ${duplicadoId}`),
+        sql.raw(`UPDATE \`${tabela}\` SET \`${coluna}\` = ${Number(principalId)} WHERE \`${coluna}\` = ${Number(duplicadoId)}`),
       );
       if ((result as any)?.[0]?.affectedRows > 0) {
         tabelasAtualizadas.push(tabela);
@@ -346,14 +386,6 @@ export async function unificarContatos(
       // Tabela pode não existir (migration pendente) — seguir
     }
   }
-
-  // Agendamentos tem campo diferente
-  try {
-    const r = await db.execute(
-      sql.raw(`UPDATE agendamentos SET contatoIdAgend = ${principalId} WHERE contatoIdAgend = ${duplicadoId}`),
-    );
-    if ((r as any)?.[0]?.affectedRows > 0) tabelasAtualizadas.push("agendamentos");
-  } catch { /* migration pode estar pendente */ }
 
   // Consolidar telefones: move telefone do duplicado pra secundários do principal
   const telefonesSecPrincipal: string[] = parseTagsTolerante(principal.telefonesSecundarios);
@@ -758,6 +790,10 @@ export async function listarConversas(escritorioId: number, filtros?: {
     .select({
       id: conversas.id, contatoId: conversas.contatoId,
       contatoNome: contatos.nome, contatoTelefone: contatos.telefone,
+      // Só viram booleano na saída: o cabeçalho precisa saber se é cadastro
+      // de verdade ou ficha magra do WhatsApp, não do CPF em si.
+      contatoCpfCnpj: contatos.cpfCnpj, contatoEmail: contatos.email,
+      contatoEstagio: contatos.estagio, contatoOrigem: contatos.origem,
       optOutWhatsapp: contatos.optOutWhatsapp, optOutWhatsappEm: contatos.optOutWhatsappEm,
       canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
       // Estado do canal na conversa: a UI trava o composer e sinaliza em
@@ -845,8 +881,9 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
-  return rows.map(({ marcadaNaoLidaEm, ...r }) => ({
+  return rows.map(({ marcadaNaoLidaEm, contatoCpfCnpj, contatoEmail, contatoEstagio, ...r }) => ({
     ...r,
+    contatoCadastroCompleto: !!(contatoCpfCnpj?.trim() || contatoEmail?.trim() || contatoEstagio === "cliente"),
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
     naoLidas: naoLidasPorConversa.get(r.id) ?? 0,
