@@ -17,5 +17,10 @@
 ALTER TABLE modelos_contrato
   ADD COLUMN ehParaAssinatura BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- A coluna física é `escritorioIdModCt` (ver `modelosContrato` em
+-- drizzle/schema.ts). Com `escritorioId` este CREATE INDEX falhava, a
+-- migration ficava sem ser marcada como aplicada, e o ADD COLUMN acima
+-- rodava de novo a cada boot — tolerado como "duplicate column", mas
+-- mantendo um erro fatal permanente no log de todo ambiente.
 CREATE INDEX idx_modct_eh_para_assinatura
-  ON modelos_contrato (escritorioId, ehParaAssinatura);
+  ON modelos_contrato (escritorioIdModCt, ehParaAssinatura);
