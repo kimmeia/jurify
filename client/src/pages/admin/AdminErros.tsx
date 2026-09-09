@@ -7,7 +7,7 @@
  */
 
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function AdminErros() {
+  const [, setLocation] = useLocation();
   const [status, setStatus] = useState<"unresolved" | "resolved" | "ignored" | "all">("unresolved");
   const [busca, setBusca] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -158,7 +159,7 @@ export default function AdminErros() {
                         <Button
                           size="sm"
                           onClick={() => {
-                            window.location.href = "/admin/integrations";
+                            setLocation("/admin/integrations");
                           }}
                         >
                           Reconfigurar Sentry
