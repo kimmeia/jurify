@@ -37,6 +37,7 @@ b,strong{font-weight:700}
 .veredito .tag{font-size:9.5px;font-weight:800;letter-spacing:.06em;border-radius:999px;padding:3px 9px;flex:0 0 auto;color:#fff;margin-top:2px}
 .v-hoje{background:var(--alerta-bg);border:1px solid var(--alerta-borda);color:#7f1d1d}.v-hoje .tag{background:var(--alerta)}
 .v-dep{background:var(--acento-bg);border:1px solid #ddd6fe;color:var(--acento-forte)}.v-dep .tag{background:var(--acento)}
+.v-gloss{background:#fff;border:1px solid var(--borda);color:var(--corpo)}.v-gloss .tag{background:var(--mudo)}
 .sec{font-family:'Poppins';font-weight:700;font-size:15px;margin:22px 0 4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .sec-sub{font-size:12.5px;color:var(--mudo);line-height:1.6;margin-bottom:11px;max-width:940px}
 .palco{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap}
@@ -58,24 +59,17 @@ b,strong{font-weight:700}
 .tab td:first-child{font-weight:700;color:var(--corpo);width:210px}
 .hj{color:#991b1b}.dp{color:var(--acento-forte)}.tab td.dp{background:#faf5ff80}
 .selo-novo{font-size:9px;font-weight:800;background:var(--acento);color:#fff;border-radius:999px;padding:2px 7px;letter-spacing:.05em;margin-left:6px;vertical-align:middle}
-.seg{display:inline-flex;border:1px solid var(--borda);border-radius:9px;overflow:hidden;background:#fff}
-.seg button{padding:6px 12px;font-size:11.5px;font-weight:600;color:var(--corpo)}
-.seg button.on{background:#0f172a;color:#fff}
 .rodape{margin-top:26px;font-size:11px;color:var(--fraco);line-height:1.6;border-top:1px solid var(--borda);padding-top:12px}
 .micro{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--fraco)}
 .num{font-variant-numeric:tabular-nums}
 
 /* ── réplica da tela (cards do relatório) ── */
 .app{background:var(--bg);border:1px solid var(--borda);border-radius:13px;padding:14px}
-.filtros{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:#fff;border:1px solid var(--borda);border-radius:11px;padding:11px 13px;margin-bottom:12px}
-.filtros .f{display:flex;flex-direction:column;gap:4px}
-.filtros .f label{font-size:10.5px;font-weight:600;color:var(--corpo)}
-.filtros .in{height:32px;border:1px solid var(--borda);border-radius:8px;padding:0 10px;display:flex;align-items:center;font-size:12px;color:var(--corpo);min-width:150px;background:#fff;gap:8px}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .kpi{background:#fff;border:2px solid var(--info-borda);border-radius:11px;padding:12px 13px}
 .kpi.verde{border-color:var(--ok-borda)}
 .kpi .t{font-size:11px;color:var(--mudo);display:flex;align-items:center;gap:6px}
-.kpi .v{font-family:'Inter';font-weight:800;font-size:22px;letter-spacing:-.01em;margin-top:3px;color:var(--info-forte)}
+.kpi .v{font-weight:800;font-size:22px;letter-spacing:-.01em;margin-top:3px;color:var(--info-forte)}
 .kpi.verde .v{color:var(--ok-forte)}
 .kpi .var{font-size:10px;color:var(--mudo);margin-top:3px}
 .kpi .var b{color:var(--ok);font-weight:700}
@@ -118,19 +112,21 @@ b,strong{font-weight:700}
 .caixa .barra-mini{height:4px;background:#f1f5f9;border-radius:999px;margin-top:7px;overflow:hidden}
 .caixa .barra-mini i{display:block;height:100%;background:var(--tinta);border-radius:999px}
 .caixa.ok{border-color:var(--ok);background:var(--ok-bg);box-shadow:0 0 0 1px var(--ok)}
+.caixa.apagada{opacity:.6;border-style:dashed;cursor:default}
 .caixa .dupla{margin-top:7px;padding-top:7px;border-top:1px dashed var(--borda);display:flex;flex-direction:column;gap:2px}
-.caixa .dupla .r{display:flex;justify-content:space-between;font-size:10.5px}
-.caixa .dupla .r span{color:var(--fraco)}
-.caixa .dupla .r b{font-weight:700;color:var(--corpo)}
+.caixa .dupla .r{display:flex;justify-content:space-between;font-size:10.5px;gap:6px}
+.caixa .dupla .r span{color:var(--fraco);white-space:nowrap}
+.caixa .dupla .r b{font-weight:700;color:var(--corpo);white-space:nowrap}
 .caixa .dupla .r b.verde{color:var(--ok-forte)}
 .caixa .dupla .r b.vazio{color:var(--fantasma);font-weight:600}
 .caixa .barra-mini.verde i{background:var(--ok)}
+.caixa .leg{font-size:9.5px;color:var(--fraco);margin-top:6px;line-height:1.4}
 
 /* painel expandido de origem */
 .detalhe{margin-top:12px;border:1px solid var(--ok-borda);border-radius:11px;background:var(--ok-bg);overflow:hidden}
 .detalhe .head{display:flex;align-items:center;gap:10px;padding:9px 13px;font-size:11.5px;flex-wrap:wrap}
 .detalhe .head b{color:#065f46}
-.detalhe .head .soma{margin-left:auto;font-weight:800;color:var(--ok-forte);display:flex;gap:14px}
+.detalhe .head .soma{margin-left:auto;font-weight:800;color:var(--ok-forte);display:flex;gap:12px;flex-wrap:wrap}
 .detalhe .head .soma span{font-weight:500;color:var(--mudo)}
 .detalhe .fechar{font-size:10px;color:var(--corpo);border:1px solid var(--borda);background:#fff;border-radius:6px;padding:2px 8px}
 .detalhe table{width:100%;border-collapse:collapse;font-size:11.5px;background:#fff}
@@ -139,6 +135,7 @@ b,strong{font-weight:700}
 .detalhe td .link{color:var(--info);font-weight:600}
 .detalhe td.dir,.detalhe th.dir{text-align:right}
 .detalhe td.mudo{color:var(--mudo)}
+.detalhe td.rec{color:var(--ok-forte);font-weight:700}
 .st{font-size:9.5px;font-weight:800;border-radius:999px;padding:2px 7px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
 .st-pago{background:#dcfce7;color:#14532d}.st-parc{background:#fef3c7;color:#92400e}.st-ag{background:var(--hairline);color:var(--corpo)}
 .detalhe tfoot td{background:#f6fdf9;font-weight:700;color:#065f46}
@@ -162,10 +159,8 @@ b,strong{font-weight:700}
 .pdf .fbar .v{width:70px;text-align:right;font-size:8px;color:var(--mudo)}
 .pdf .pmicro{font-size:7.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--fraco);margin:6px 0 2px}
 
-/* mini comparação dois cards */
 .duo{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
 .duo .caixas{grid-template-columns:repeat(2,1fr);margin-top:8px}
-.setinha{text-align:center;color:var(--fraco);font-size:18px;align-self:center}
 .lista{margin:8px 0 0 16px;font-size:12px;line-height:1.7;color:var(--corpo)}
 .lista li b{color:var(--tinta)}
 .contas{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12px}
@@ -182,7 +177,8 @@ b,strong{font-weight:700}
 <div class="wrap">
   <div class="h1">Relatório Comercial · funil, canal de captação e recebido por origem</div>
   <div class="sub">Três coisas que apareceram no seu print de 01 a 09/09. Em cada aba: como o número é calculado <b>hoje</b>, o que muda <b>depois</b>,
-    e a tela proposta ao lado da atual. Os números são os do seu print; os nomes de clientes e atendentes são fictícios. <b>Nada foi implementado ainda.</b></div>
+    e a tela proposta ao lado da atual. <b>Os números de "hoje" são os do seu print. Os de "depois" são exemplos montados só pra mostrar a conta</b> — o valor real
+    de cada canal e de cada origem só aparece depois de implementar. Nomes de clientes e atendentes são fictícios. <b>Nada foi implementado ainda.</b></div>
 
   <div class="barra" id="barra">
     <span class="cap0">Aba</span>
@@ -196,16 +192,16 @@ b,strong{font-weight:700}
   <!-- ═════════════════ 1 · FUNIL ═════════════════ -->
   <section class="tela on" data-tela="funil">
     <div class="veredito v-hoje"><span class="tag">HOJE</span><div>O card <b>Contratos fechados</b> conta pela <b>data em que o lead fechou</b>. O <b>Funil de Vendas</b> conta pela <b>data em que o lead foi criado</b>
-      e mostra em que etapa ele está agora. Dois leads que entraram em agosto e fecharam em setembro entram no card (20) mas não na barra Ganho (18).
-      O mesmo vale pro valor: R$ 77.785,25 no card contra R$ 70.285,25 na barra — os mesmos dois leads, R$ 7.500,00. Não é erro de conta: são duas réguas diferentes na mesma tela, e o código
-      até afirma que elas batem.</div></div>
-    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>O funil passa a ter dois blocos com a régua escrita no próprio card: <b>"Entraram no período"</b> (Novo, Qualificado, Proposta, Negociação — pela data de criação,
+      e mostra em que etapa ele está agora. Dois leads que entraram antes do período e fecharam em setembro entram no card (20) mas não na barra Ganho (18).
+      O mesmo vale pro valor: R$ 77.785,25 no card contra R$ 70.285,25 na barra — pelo que dá pra deduzir do print, são os mesmos dois leads, somando R$ 7.500,00 (confirmo na base quando implementar).
+      Não é erro de conta: são dois jeitos de contar diferentes na mesma tela.</div></div>
+    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>O funil passa a ter dois blocos com o jeito de contar escrito no próprio card: <b>"Entraram no período"</b> (Novo, Qualificado, Proposta, Negociação — pela data de criação,
       como hoje) e <b>"Decididos no período"</b> (Ganho e Perdido — pela data do fechamento, a mesma do card). A barra Ganho vira <b>20 · R$ 77.785,25</b>, igual ao card, sempre.
       Uma linha abaixo dela explica de onde vieram: 18 entraram no período, 2 entraram antes. O Dashboard e o Pipeline já contam Ganho e Perdido pela data do fechamento —
-      o funil do relatório é o único lugar que ainda não conta.</div></div>
+      o funil do relatório é o único lugar que ainda conta de outro jeito.</div></div>
 
     <div class="sec">Os cards do topo não mudam</div>
-    <div class="sec-sub">Ficam aqui só pra você comparar o 20 com o funil logo abaixo. O card Recebido continua como está (a regra das quinzenas é outra conversa, já anotada).</div>
+    <div class="sec-sub">Ficam aqui só pra você comparar o 20 com o funil logo abaixo. O card Recebido continua como está (a conta das quinzenas é outra conversa, já anotada).</div>
     <div class="app">
       <div class="kpis">
         <div class="kpi verde"><div class="t">$ Recebido</div><div class="v num">R$ 11.885,25</div><div class="var">vs anterior <b>↗ 39,8%</b></div>
@@ -235,8 +231,9 @@ b,strong{font-weight:700}
             </div>
           </div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><span class="balao">18 aqui, 20 no card</span><span class="balao">R$ 70.285,25 aqui, R$ 77.785,25 no card</span></div>
-          <div class="nota na-verm">⚠<div>Cada barra conta <b>leads criados entre 01 e 09/09</b>, na etapa em que estão hoje. Lead criado em agosto que fechou em setembro não aparece em barra nenhuma.
-            E lead criado em setembro que só fechar em outubro vai <b>sumir</b> da barra Ganho de setembro e aparecer na de outubro — mesmo sem ter entrado lá.</div></div>
+          <div class="nota na-verm">⚠<div>Cada barra conta <b>leads criados entre 01 e 09/09</b>, na etapa em que estão hoje. Lead que entrou antes do período e fechou agora não aparece em barra nenhuma.
+            E o contrário também acontece: lead criado em setembro que só fechar em outubro vai aparecer na barra Ganho de <b>setembro</b> (quando você olhar setembro mais tarde) e nunca na de outubro —
+            enquanto o card Contratos fechados o conta em outubro. Os dois números divergem nos dois sentidos.</div></div>
         </div></div>
       </div>
 
@@ -244,7 +241,7 @@ b,strong{font-weight:700}
         <div class="col-h dep">Depois <span class="selo-novo">NOVO</span></div>
         <div class="quadro"><div class="quadro-corpo">
           <div class="card" style="border:none;padding:0">
-            <div class="ct-linha"><div class="ct">Funil de Vendas</div><div class="ct-dir"><b>44</b> leads entraram · <b>20</b> decididos</div></div>
+            <div class="ct-linha"><div class="ct">Funil de Vendas</div><div class="ct-dir"><b>44</b> entraram (26 em aberto + 18 já ganhos) · <b>20</b> decididos</div></div>
             <div class="funil">
               <div class="fgrupo"><span class="micro">Entraram no período · etapa em que estão hoje</span><span class="linha"></span></div>
               <div class="frow"><div class="fl">Novo</div><div class="ft"><div class="fb f-novo" style="width:60%"></div><div class="fn">12</div></div><div class="fv num">R$ 38.500,00</div></div>
@@ -253,13 +250,15 @@ b,strong{font-weight:700}
               <div class="frow"><div class="fl">Negociação</div><div class="ft"><div class="fb f-amb" style="width:15%"></div><div class="fn">3</div></div><div class="fv num">R$ 10.500,00</div></div>
               <div class="fgrupo"><span class="micro">Decididos no período · pela data do fechamento</span><span class="linha"></span></div>
               <div class="frow"><div class="fl">Ganho</div><div class="ft"><div class="fb f-ok" style="width:100%"></div><div class="fn" style="color:#fff">20</div></div><div class="fv num forte">R$ 77.785,25</div></div>
-              <div class="fsub">18 entraram no período · <b>2 entraram antes</b> (agosto)</div>
+              <div class="fsub">18 entraram no período · <b>2 entraram antes</b></div>
               <div class="frow"><div class="fl">Perdido</div><div class="ft"><div class="fn">0</div></div><div class="fv num">R$ 0,00</div></div>
+              <div class="fsub">0 entraram no período · 0 entraram antes</div>
             </div>
           </div>
           <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><span class="balao vio">20 = card Contratos fechados</span><span class="balao vio">R$ 77.785,25 = total fechado do card</span></div>
           <div class="nota na-violeta">✓<div>Ganho e Perdido passam a usar a <b>data da decisão</b>, que é o que o card usa. As quatro etapas abertas continuam pela data de entrada — é o que faz sentido
-            pra elas ("quantos leads novos estão parados em Proposta?"). O PDF do relatório usa os mesmos números, então muda junto.</div></div>
+            pra elas ("quantos leads novos estão parados em Proposta?"). O "44 entraram" soma as quatro barras abertas (26) com os 18 do Ganho que também entraram no período.
+            O PDF do relatório usa os mesmos números, então muda junto.</div></div>
         </div></div>
       </div>
     </div>
@@ -270,25 +269,29 @@ b,strong{font-weight:700}
       <tbody>
         <tr><td>Novo · Qualificado · Proposta · Negociação</td><td>Leads <b>criados</b> no período, na etapa atual.</td><td class="dp">Igual a hoje. Ganham o rótulo "Entraram no período".</td></tr>
         <tr><td>Ganho</td><td class="hj">Leads criados no período que já fecharam. Ignora quem entrou antes e fechou agora.</td><td class="dp">Leads <b>fechados</b> no período, qualquer data de entrada. Bate com o card. Linha "18 entraram no período · 2 antes".</td></tr>
-        <tr><td>Perdido</td><td class="hj">Leads criados no período que já foram perdidos.</td><td class="dp">Leads <b>perdidos</b> no período (mesma data de decisão que o Ganho usa).</td></tr>
+        <tr><td>Perdido</td><td class="hj">Leads criados no período que já foram perdidos.</td><td class="dp">Leads <b>perdidos</b> no período (mesma data de decisão que o Ganho usa), com a mesma linha embaixo.</td></tr>
         <tr><td>Valor à direita</td><td>Soma do valor estimado dos leads da barra.</td><td class="dp">Igual — e na barra Ganho passa a ser o mesmo "total fechado" do card.</td></tr>
+        <tr><td>Ganho que depois vira Perdido (ou o contrário)</td><td colspan="2">Fica com a data da primeira decisão — hoje já é assim no card. Regravar a data nessa troca é um ajuste separado, se você quiser.</td></tr>
         <tr><td>PDF</td><td>Mesmos números da tela.</td><td class="dp">Mesmos números da tela, com os dois rótulos de grupo.</td></tr>
-        <tr><td>Meses antigos</td><td colspan="2">Fechamentos de antes de o sistema guardar a data de fechamento ficaram com a data de entrada. Em relatórios desses meses os dois blocos podem coincidir — não é erro, é falta do dado na época.</td></tr>
+        <tr><td>Meses antigos</td><td colspan="2">Fechamentos de antes de o sistema guardar a data de fechamento receberam a data de entrada. Em relatórios desses meses o Ganho aparece no mês em que o lead entrou (não no mês real do fechamento) e a linha "entraram antes" fica em 0 — é como o card já conta hoje, não é erro novo.</td></tr>
       </tbody>
     </table>
-    <div class="nota na-cinza">ℹ<div><b>Alternativa mais barata, se preferir:</b> deixar o funil como está e só escrever no card "leads criados no período" com a nota "o card conta fechamentos, o funil conta entradas".
+    <div class="nota na-cinza">ℹ<div><b>Alternativa mais barata, se preferir:</b> deixar o funil como está e só escrever embaixo do título "Funil de Vendas": "leads criados no período", com a nota "o card Contratos fechados conta fechamentos; o funil conta entradas".
       Resolve a dúvida, não resolve a diferença — os dois números continuam divergindo todo mês que tiver lead atravessando a virada.</div></div>
   </section>
 
   <!-- ═════════════════ 2 · CANAL ═════════════════ -->
   <section class="tela" data-tela="canal">
-    <div class="veredito v-hoje"><span class="tag">HOJE</span><div>"Contatos por canal de captação" conta <b>cadastros</b> (não leads) que passam por quatro peneiras ao mesmo tempo: o cadastro foi criado dentro do período;
-      esse cadastro tem um lead criado dentro do período por um atendente comercial; o canal é um destes quatro — WhatsApp, Instagram, Facebook, Manual; e Telefone e Site
-      ficam <b>de fora</b>, embora o subtítulo prometa contá-los. Resultado: 28 + 11 = 39, um número que não bate com os 44 leads do funil nem com nada mais na tela.
-      E <b>"Manual" é o valor padrão do cadastro</b>: todo cliente criado à mão na tela Clientes, pelo Financeiro, pelo "Novo lead" do Atendimento ou por importação cai ali — mesmo que a pessoa tenha chegado pelo WhatsApp — e o canal <b>nunca é corrigido depois</b>, nem quando ela manda mensagem.</div></div>
-    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>O card vira <b>"Leads por canal de captação"</b>: pega os <b>mesmos 44 leads do funil</b> (os que entraram no período) e agrupa pelo canal do cadastro
-      de cada um. Todos os canais aparecem, inclusive Telefone e Site; a soma dos cards é sempre o total do funil; e o subtítulo diz o que "Manual" significa.
-      Cliente antigo que abriu um lead novo passa a contar (hoje não conta, porque o cadastro é velho).</div></div>
+    <div class="veredito v-gloss"><span class="tag">LER ANTES</span><div><b>Cadastro</b> é a ficha do cliente na tela Clientes (uma por pessoa). <b>Lead</b> é cada oportunidade comercial aberta pra essa pessoa (uma pessoa pode ter vários).
+      <b>Canal</b> é por onde a pessoa chegou, gravado na ficha uma vez só. <b>Origem</b> (aba 3) é o que o atendente escolhe na hora de registrar o fechamento — outra coisa.</div></div>
+    <div class="veredito v-hoje"><span class="tag">HOJE</span><div>O card conta <b>cadastros</b> (fichas), não leads, e só entra na conta quem passa por três peneiras ao mesmo tempo: 1) a ficha foi criada dentro do período;
+      2) essa ficha tem um lead aberto dentro do período por alguém do setor comercial; 3) o canal da ficha é WhatsApp, Instagram, Facebook ou Manual — Telefone e Site ficam <b>de fora</b>,
+      embora o subtítulo da tela prometa contá-los. Resultado: 28 + 11 = 39, um número que não bate com os 44 leads do funil nem com nada mais na tela.
+      E <b>"Manual" é o canal padrão do cadastro</b>: todo cliente criado à mão na tela Clientes, no "Novo cliente" do Financeiro, no "Novo lead" do Atendimento ou por importação
+      cai ali — mesmo que a pessoa tenha chegado pelo WhatsApp — e o canal <b>nunca é corrigido depois</b>, nem quando ela manda mensagem.</div></div>
+    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>O card vira <b>"Leads por canal de captação"</b>: pega os <b>mesmos 44 leads do funil</b> (os que entraram no período) e agrupa pelo canal da ficha
+      de cada um. Qualquer canal entra (inclusive Telefone e Site); a soma dos cards é sempre o total do funil; e o subtítulo diz o que "Manual" significa.
+      Cliente antigo que abriu um lead novo passa a contar (hoje não conta, porque a ficha é velha).</div></div>
 
     <div class="sec">O card, hoje e depois</div>
     <div class="palco">
@@ -308,8 +311,8 @@ b,strong{font-weight:700}
             <span class="p"><b>44</b><span>leads no funil</span></span><span class="op">≠</span>
             <span class="p"><b>20</b><span>fechados</span></span>
           </div>
-          <div class="nota na-verm">⚠<div>Quem fica de fora hoje: cadastro antigo com lead novo; cadastro novo que ainda não virou lead; cadastro com canal Telefone ou Site.
-            Quem entra na conta errada: cliente cadastrado à mão aparece como "Manual" seja qual for o canal real.</div></div>
+          <div class="nota na-verm">⚠<div>Quem fica de fora hoje: ficha antiga com lead novo; ficha nova que ainda não virou lead; ficha com canal Telefone ou Site.
+            Ficha com dois leads no período conta 1 hoje e 2 depois — uma das razões de 39 ≠ 44. E quem entra na conta errada: cliente cadastrado à mão aparece como "Manual" seja qual for o canal real.</div></div>
         </div></div>
       </div>
       <div class="col">
@@ -317,21 +320,19 @@ b,strong{font-weight:700}
         <div class="quadro"><div class="quadro-corpo">
           <div class="card" style="border:none;padding:0">
             <div class="ct-linha"><div class="ct">Leads por canal de captação</div><div class="ct-dir"><b>44</b> leads · os mesmos do funil</div></div>
-            <div class="cs">Canal do cadastro do contato de cada lead que entrou no período. "Manual" = cadastrado à mão (tela Clientes, Financeiro ou importação).</div>
+            <div class="cs">Canal da ficha de cada lead que entrou no período. "Manual" = cadastrado à mão (tela Clientes, Novo cliente do Financeiro, Novo lead do Atendimento ou importação).</div>
             <div class="caixas" style="grid-template-columns:repeat(3,1fr)">
-              <div class="caixa"><div class="n">31</div><div class="l">WhatsApp</div><div class="pct">70,5%</div><div class="barra-mini"><i style="width:70.5%"></i></div></div>
-              <div class="caixa"><div class="n">9</div><div class="l">Manual</div><div class="pct">20,5%</div><div class="barra-mini"><i style="width:20.5%"></i></div></div>
-              <div class="caixa"><div class="n">2</div><div class="l">Instagram</div><div class="pct">4,5%</div><div class="barra-mini"><i style="width:4.5%"></i></div></div>
+              <div class="caixa"><div class="n">30</div><div class="l">WhatsApp</div><div class="pct">68,2%</div><div class="barra-mini"><i style="width:68.2%"></i></div></div>
+              <div class="caixa"><div class="n">13</div><div class="l">Manual</div><div class="pct">29,5%</div><div class="barra-mini"><i style="width:29.5%"></i></div></div>
               <div class="caixa"><div class="n">1</div><div class="l">Telefone</div><div class="pct">2,3%</div><div class="barra-mini"><i style="width:2.3%"></i></div></div>
-              <div class="caixa"><div class="n">1</div><div class="l">Site</div><div class="pct">2,3%</div><div class="barra-mini"><i style="width:2.3%"></i></div></div>
             </div>
           </div>
           <div class="contas">
             <span class="p bom"><b>44</b><span>soma dos cards</span></span><span class="op">=</span>
             <span class="p bom"><b>44</b><span>leads no funil</span></span>
           </div>
-          <div class="nota na-violeta">✓<div>Mesma régua do bloco "Entraram no período" do funil. Filtro de atendente e de setor valem igual (o lead tem responsável; o cadastro não tem).
-            Só aparecem canais com pelo menos um lead.</div></div>
+          <div class="nota na-violeta">✓<div>Mesmo jeito de contar do bloco "Entraram no período" do funil. Os filtros de atendente e de setor do topo continuam valendo (seguem pelo responsável do lead,
+            como o funil e o card já fazem). Lead sem responsável não entra em nenhum dos dois, como hoje. Canal com zero leads no período não aparece.</div></div>
         </div></div>
       </div>
     </div>
@@ -340,25 +341,26 @@ b,strong{font-weight:700}
     <table class="tab">
       <thead><tr><th>Detalhe</th><th>Hoje</th><th>Depois</th></tr></thead>
       <tbody>
-        <tr><td>O que é contado</td><td class="hj">Cadastros (contatos) criados no período, e só se tiverem lead no período.</td><td class="dp">Leads que entraram no período — os mesmos do funil. Um cliente com dois leads conta dois.</td></tr>
-        <tr><td>Canais</td><td class="hj">WhatsApp, Instagram, Facebook, Manual. Telefone, Site e cadastro vindo do Financeiro nunca aparecem.</td><td class="dp">Todos: WhatsApp, Instagram, Facebook, Telefone, Site, Manual e "Cadastro pelo Financeiro" (o que vem do Asaas).</td></tr>
+        <tr><td>O que é contado</td><td class="hj">Fichas criadas no período, e só se tiverem lead no período.</td><td class="dp">Leads que entraram no período — os mesmos do funil. Um cliente com dois leads conta dois.</td></tr>
+        <tr><td>Canais</td><td class="hj">WhatsApp, Instagram, Facebook, Manual. Telefone, Site e Asaas nunca aparecem.</td><td class="dp">Qualquer canal: WhatsApp, Instagram, Facebook, Telefone, Site, Manual e Asaas (cliente que nasceu pela cobrança ou adoção do Asaas — o "Novo cliente" do Financeiro é Manual). Canal com zero leads não aparece.</td></tr>
         <tr><td>Bate com o quê</td><td class="hj">Com nada visível na tela.</td><td class="dp">Com o total de leads que entraram no funil (44).</td></tr>
-        <tr><td>"Manual"</td><td class="hj">Aparece sem explicação. O campo "Origem" do Novo lead vai pro fechamento (aba 3), não pro canal do cadastro — lead marcado "WhatsApp" ali continua "Manual" aqui.</td><td class="dp">Subtítulo diz o que é. O canal real de quem foi cadastrado à mão continua desconhecido — ver "fica de fora".</td></tr>
-        <tr><td>PDF</td><td>Mesmo card.</td><td class="dp">Mesmo card, título e subtítulo novos.</td></tr>
+        <tr><td>"Manual"</td><td class="hj">Aparece sem explicação. O campo "Origem" do Novo lead vai pro fechamento (aba 3), não pro canal da ficha — lead marcado "WhatsApp" ali continua "Manual" aqui.</td><td class="dp">Subtítulo diz o que é. O canal real de quem foi cadastrado à mão continua desconhecido — ver "fica de fora".</td></tr>
+        <tr><td>PDF</td><td>Mesmo card; o subtítulo do PDF já não promete Telefone/Site.</td><td class="dp">Vira uma tabela Canal · Leads · %.</td></tr>
       </tbody>
     </table>
     <div class="nota na-amb">!<div><b>Fica de fora (outro mockup, se quiser):</b> registrar o canal verdadeiro quando o cliente é cadastrado à mão — um campo "por onde chegou?" no Novo cliente.
       Sem isso, "Manual" continua misturando indicação, ligação e WhatsApp anotado depois. Isso mexe no cadastro, não no relatório.
-      <br><b>Achado de passagem:</b> mensagem que chega por canal do Instagram ou Facebook é gravada como "WhatsApp" — Instagram/Facebook só aparecem no card quando alguém escolhe à mão no "Novo contato". Também é conserto no cadastro, não aqui.</div></div>
+      <br><b>Achado de passagem:</b> mensagem que chega por canal do Instagram ou Facebook é gravada como "WhatsApp". Instagram, Facebook e Site só entram no canal da ficha quando alguém escolhe à mão
+      no "Novo contato" do Atendimento — por isso o exemplo "depois" acima só tem WhatsApp, Manual e Telefone. Também é conserto no cadastro, não aqui.</div></div>
   </section>
 
   <!-- ═════════════════ 3 · ORIGEM ═════════════════ -->
   <section class="tela" data-tela="origem">
     <div class="veredito v-hoje"><span class="tag">HOJE</span><div>"Fechamentos por origem" mostra quantos contratos fecharam por origem e, ao clicar, a lista com o <b>valor fechado</b> de cada um.
       Não diz quanto desse valor já entrou. O pagamento no sistema é do <b>cliente</b>, não do contrato — a cobrança nunca soube de qual fechamento ela veio.</div></div>
-    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>Cada card de origem ganha duas linhas: <b>fechado</b> e <b>recebido</b>, com uma barrinha de quanto já entrou. A lista ganha as colunas
-      <b>Recebido</b> e <b>Situação</b> (Pago · Parcial · Aguardando), como já existe no detalhe por atendente. "Recebido" aqui é o <b>mesmo Recebido do card do topo</b>
-      (cobranças pagas no período, de cliente que fechou no período), só que distribuído por origem — por isso a soma dos cards dá os mesmos R$ 11.885,25.</div></div>
+    <div class="veredito v-dep"><span class="tag">DEPOIS</span><div>Cada card de origem ganha duas linhas: <b>fechado</b> e <b>recebido no período</b>, com uma barrinha de quanto já entrou. A lista ganha as colunas
+      <b>Recebido</b> e <b>Situação</b> (Pago · Parcial · Nada no período), parecido com o detalhe por atendente. "Recebido" aqui é o <b>mesmo Recebido do card do topo</b>
+      (cobranças pagas dentro do período, de cliente que fechou no período), só que distribuído por origem — por isso a soma dos cards dá os mesmos R$ 11.885,25.</div></div>
 
     <div class="sec">Hoje</div>
     <div class="quadro"><div class="quadro-corpo">
@@ -392,82 +394,88 @@ b,strong{font-weight:700}
     </div></div>
 
     <div class="sec">Depois <span class="selo-novo">NOVO</span></div>
-    <div class="sec-sub">Clique nos cards de origem: a lista abre embaixo, como na tela de verdade.</div>
+    <div class="sec-sub">Clique nos cards de origem: a lista abre embaixo, como na tela de verdade. Aqui "Google" e "google" ainda aparecem separados (R$ 3.500,00 + R$ 2.000,00);
+      se você aprovar o "de quebra" lá embaixo, viram um card só de R$ 5.500,00 e a grade fica com 7 origens.</div>
     <div class="quadro"><div class="quadro-corpo">
       <div class="card" style="border:none;padding:0">
-        <div class="ct-linha"><div class="ct">Fechamentos por origem</div><div class="ct-dir"><b>20</b> fechamentos · <b>R$ 77.785,25</b> fechado · <b class="dp">R$ 11.885,25</b> recebido</div></div>
-        <div class="cs">Origem registrada no cadastro do fechamento. Recebido = cobranças pagas no período dos clientes de cada origem (a mesma conta do card Recebido do topo). Clique num card para ver os clientes.</div>
+        <div class="ct-linha"><div class="ct">Fechamentos por origem</div><div class="ct-dir"><b>20</b> fechamentos · <b>R$ 77.785,25</b> fechado · <b class="dp">R$ 11.885,25</b> recebido no período</div></div>
+        <div class="cs">Origem registrada no cadastro do fechamento (Google revisional, Meta leilão, BNI, etc.). Recebido = o mesmo do card do topo: cobranças pagas no período, comissionáveis,
+          do atendente/setor filtrado, de cliente que fechou no período — distribuídas por origem. Clique num card para ver os clientes.</div>
         <div class="caixas" id="origens">
           <button class="caixa" data-o="google-rev"><div class="n verde">6</div><div class="l">Google (Revisional)</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 25.500,00</b></div><div class="r"><span>recebido</span><b class="verde num">R$ 2.885,25</b></div></div><div class="barra-mini verde"><i style="width:11.3%"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 25.500,00</b></div><div class="r"><span>recebido no período</span><b class="verde num">R$ 2.885,25</b></div></div><div class="barra-mini verde"><i style="width:11.3%"></i></div></button>
           <button class="caixa ok" data-o="outro"><div class="n verde">5</div><div class="l">Outro</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 23.850,00</b></div><div class="r"><span>recebido</span><b class="verde num">R$ 7.600,00</b></div></div><div class="barra-mini verde"><i style="width:31.9%"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 23.850,00</b></div><div class="r"><span>recebido no período</span><b class="verde num">R$ 7.600,00</b></div></div><div class="barra-mini verde"><i style="width:31.9%"></i></div></button>
           <button class="caixa" data-o="meta-rev"><div class="n verde">3</div><div class="l">Meta (Revisional)</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 10.435,25</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 10.435,25</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
           <button class="caixa" data-o="meta-leilao"><div class="n verde">2</div><div class="l">Meta (Leilão)</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 7.000,00</b></div><div class="r"><span>recebido</span><b class="verde num">R$ 1.400,00</b></div></div><div class="barra-mini verde"><i style="width:20%"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 7.000,00</b></div><div class="r"><span>recebido no período</span><b class="verde num">R$ 1.400,00</b></div></div><div class="barra-mini verde"><i style="width:20%"></i></div></button>
           <button class="caixa" data-o="google"><div class="n verde">1</div><div class="l">Google</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 3.500,00</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 3.500,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
           <button class="caixa" data-o="google2"><div class="n verde">1</div><div class="l">google</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 2.000,00</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 2.000,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
           <button class="caixa" data-o="evento"><div class="n verde">1</div><div class="l">Evento</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 3.000,00</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 3.000,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
           <button class="caixa" data-o="ligacao"><div class="n verde">1</div><div class="l">Ligação</div>
-            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 2.500,00</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 2.500,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div><div class="barra-mini verde"><i style="width:0"></i></div></button>
+          <div class="caixa apagada"><div class="n">0</div><div class="l">Sem origem / fora do filtro</div>
+            <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 0,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div>
+            <div class="leg">neste período não há; aparece só quando existir — é o que garante que a soma fecha</div></div>
         </div>
 
         <div class="detalhe" id="det-outro" data-det="outro">
           <div class="head"><span><b>Outro</b> · 5 fechamento(s) no período</span>
-            <span class="soma"><span>fechado</span>R$ 23.850,00 <span>recebido</span>R$ 7.600,00 <span>· 3 de 5 pagaram</span></span><span class="fechar">✕ Fechar</span></div>
+            <span class="soma"><span>fechado</span>R$ 23.850,00 <span>recebido no período</span>R$ 7.600,00 <span>· 3 de 5 pagaram no período</span></span><span class="fechar">✕ Fechar</span></div>
           <table>
-            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação</th><th>Responsável</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação (no período)</th><th>Responsável</th></tr></thead>
             <tbody>
-              <tr><td><span class="link">Rodrigo Albuquerque Maia</span></td><td class="mudo">09/09/2026</td><td class="dir num"><b>R$ 5.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Henrique Sales</td></tr>
-              <tr><td><span class="link">Tiago Vasconcelos Prado</span></td><td class="mudo">08/09/2026</td><td class="dir num"><b>R$ 2.850,00</b></td><td class="dir num" style="color:var(--ok-forte);font-weight:700">R$ 2.850,00</td><td><span class="st st-pago">Pago</span></td><td class="mudo">Marina Duarte</td></tr>
-              <tr><td><span class="link">Sueli Camargo Teixeira</span></td><td class="mudo">04/09/2026</td><td class="dir num"><b>R$ 10.000,00</b></td><td class="dir num" style="color:var(--ok-forte);font-weight:700">R$ 3.500,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Isadora Lins</td></tr>
-              <tr><td><span class="link">Priscila Nunes Barreto</span></td><td class="mudo">04/09/2026</td><td class="dir num"><b>R$ 3.500,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Henrique Sales</td></tr>
-              <tr><td><span class="link">Amâncio Peixoto Filho</span></td><td class="mudo">02/09/2026</td><td class="dir num"><b>R$ 2.500,00</b></td><td class="dir num" style="color:var(--ok-forte);font-weight:700">R$ 1.250,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Henrique Sales</td></tr>
+              <tr><td><span class="link">Rodrigo Albuquerque Maia</span></td><td class="mudo">09/09/2026</td><td class="dir num"><b>R$ 5.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Henrique Sales</td></tr>
+              <tr><td><span class="link">Tiago Vasconcelos Prado</span></td><td class="mudo">08/09/2026</td><td class="dir num"><b>R$ 2.850,00</b></td><td class="dir num rec">R$ 2.850,00</td><td><span class="st st-pago">Pago</span></td><td class="mudo">Marina Duarte</td></tr>
+              <tr><td><span class="link">Sueli Camargo Teixeira</span></td><td class="mudo">04/09/2026</td><td class="dir num"><b>R$ 10.000,00</b></td><td class="dir num rec">R$ 3.500,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Isadora Lins</td></tr>
+              <tr><td><span class="link">Priscila Nunes Barreto</span></td><td class="mudo">04/09/2026</td><td class="dir num"><b>R$ 3.500,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Henrique Sales</td></tr>
+              <tr><td><span class="link">Amâncio Peixoto Filho</span></td><td class="mudo">02/09/2026</td><td class="dir num"><b>R$ 2.500,00</b></td><td class="dir num rec">R$ 1.250,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Henrique Sales</td></tr>
             </tbody>
-            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 23.850,00</td><td class="dir num">R$ 7.600,00</td><td colspan="2">31,9% do fechado já entrou</td></tr></tfoot>
+            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 23.850,00</td><td class="dir num">R$ 7.600,00</td><td colspan="2">31,9% do fechado entrou no período</td></tr></tfoot>
           </table>
         </div>
 
         <div class="detalhe" id="det-google-rev" data-det="google-rev" style="display:none">
           <div class="head"><span><b>Google (Revisional)</b> · 6 fechamento(s) no período</span>
-            <span class="soma"><span>fechado</span>R$ 25.500,00 <span>recebido</span>R$ 2.885,25 <span>· 1 de 6 pagou</span></span><span class="fechar">✕ Fechar</span></div>
+            <span class="soma"><span>fechado</span>R$ 25.500,00 <span>recebido no período</span>R$ 2.885,25 <span>· 1 de 6 pagou no período</span></span><span class="fechar">✕ Fechar</span></div>
           <table>
-            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação</th><th>Responsável</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação (no período)</th><th>Responsável</th></tr></thead>
             <tbody>
-              <tr><td><span class="link">Rogério Tavares Pinto</span></td><td class="mudo">09/09/2026</td><td class="dir num"><b>R$ 4.500,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Marina Duarte</td></tr>
-              <tr><td><span class="link">Selma Andrade Cunha</span></td><td class="mudo">08/09/2026</td><td class="dir num"><b>R$ 6.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Henrique Sales</td></tr>
-              <tr><td><span class="link">Paulo César Monteiro</span></td><td class="mudo">07/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Isadora Lins</td></tr>
-              <tr><td><span class="link">Nádia Freitas Rocha</span></td><td class="mudo">03/09/2026</td><td class="dir num"><b>R$ 5.000,00</b></td><td class="dir num" style="color:var(--ok-forte);font-weight:700">R$ 2.885,25</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Marina Duarte</td></tr>
-              <tr><td><span class="link">Wilson Carvalho Neto</span></td><td class="mudo">02/09/2026</td><td class="dir num"><b>R$ 4.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Henrique Sales</td></tr>
-              <tr><td><span class="link">Beatriz Nogueira Sampaio</span></td><td class="mudo">01/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Isadora Lins</td></tr>
+              <tr><td><span class="link">Rogério Tavares Pinto</span></td><td class="mudo">09/09/2026</td><td class="dir num"><b>R$ 4.500,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Marina Duarte</td></tr>
+              <tr><td><span class="link">Selma Andrade Cunha</span></td><td class="mudo">08/09/2026</td><td class="dir num"><b>R$ 6.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Henrique Sales</td></tr>
+              <tr><td><span class="link">Paulo César Monteiro</span></td><td class="mudo">07/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Isadora Lins</td></tr>
+              <tr><td><span class="link">Nádia Freitas Coelho</span></td><td class="mudo">03/09/2026</td><td class="dir num"><b>R$ 5.000,00</b></td><td class="dir num rec">R$ 2.885,25</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Marina Duarte</td></tr>
+              <tr><td><span class="link">Wilson Carvalho Neto</span></td><td class="mudo">02/09/2026</td><td class="dir num"><b>R$ 4.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Henrique Sales</td></tr>
+              <tr><td><span class="link">Beatriz Nogueira Sampaio</span></td><td class="mudo">01/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Isadora Lins</td></tr>
             </tbody>
-            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 25.500,00</td><td class="dir num">R$ 2.885,25</td><td colspan="2">11,3% do fechado já entrou</td></tr></tfoot>
+            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 25.500,00</td><td class="dir num">R$ 2.885,25</td><td colspan="2">11,3% do fechado entrou no período</td></tr></tfoot>
           </table>
         </div>
 
         <div class="detalhe" id="det-meta-leilao" data-det="meta-leilao" style="display:none">
           <div class="head"><span><b>Meta (Leilão)</b> · 2 fechamento(s) no período</span>
-            <span class="soma"><span>fechado</span>R$ 7.000,00 <span>recebido</span>R$ 1.400,00 <span>· 1 de 2 pagou</span></span><span class="fechar">✕ Fechar</span></div>
+            <span class="soma"><span>fechado</span>R$ 7.000,00 <span>recebido no período</span>R$ 1.400,00 <span>· 1 de 2 pagou no período</span></span><span class="fechar">✕ Fechar</span></div>
           <table>
-            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação</th><th>Responsável</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação (no período)</th><th>Responsável</th></tr></thead>
             <tbody>
-              <tr><td><span class="link">Dilma Araújo Pontes</span></td><td class="mudo">06/09/2026</td><td class="dir num"><b>R$ 4.000,00</b></td><td class="dir num" style="color:var(--ok-forte);font-weight:700">R$ 1.400,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Marina Duarte</td></tr>
-              <tr><td><span class="link">Otávio Bezerra Lima</span></td><td class="mudo">03/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">Isadora Lins</td></tr>
+              <tr><td><span class="link">Denise Araújo Pontes</span></td><td class="mudo">06/09/2026</td><td class="dir num"><b>R$ 4.000,00</b></td><td class="dir num rec">R$ 1.400,00</td><td><span class="st st-parc">Parcial</span></td><td class="mudo">Marina Duarte</td></tr>
+              <tr><td><span class="link">Otávio Bezerra Lima</span></td><td class="mudo">03/09/2026</td><td class="dir num"><b>R$ 3.000,00</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">Isadora Lins</td></tr>
             </tbody>
-            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 7.000,00</td><td class="dir num">R$ 1.400,00</td><td colspan="2">20,0% do fechado já entrou</td></tr></tfoot>
+            <tfoot><tr><td>Total</td><td></td><td class="dir num">R$ 7.000,00</td><td class="dir num">R$ 1.400,00</td><td colspan="2">20,0% do fechado entrou no período</td></tr></tfoot>
           </table>
         </div>
 
         <div class="detalhe" id="det-generico" data-det="generico" style="display:none">
           <div class="head"><span><b id="gen-nome">Meta (Revisional)</b> · <span id="gen-qtd">3</span> fechamento(s) no período</span>
-            <span class="soma"><span>fechado</span><span id="gen-fech" style="font-weight:800;color:var(--ok-forte)">R$ 10.435,25</span> <span>recebido</span>R$ 0,00 <span>· ninguém pagou ainda</span></span><span class="fechar">✕ Fechar</span></div>
+            <span class="soma"><span>fechado</span><span id="gen-fech" style="font-weight:800;color:var(--ok-forte)">R$ 10.435,25</span> <span>recebido no período</span>R$ 0,00 <span>· nada pago no período</span></span><span class="fechar">✕ Fechar</span></div>
           <table>
-            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação</th><th>Responsável</th></tr></thead>
+            <thead><tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação (no período)</th><th>Responsável</th></tr></thead>
             <tbody id="gen-linhas"></tbody>
+            <tfoot><tr><td>Total</td><td></td><td class="dir num" id="gen-tot">R$ 10.435,25</td><td class="dir num">R$ 0,00</td><td colspan="2">0,0% do fechado entrou no período</td></tr></tfoot>
           </table>
         </div>
       </div>
@@ -483,25 +491,26 @@ b,strong{font-weight:700}
     <table class="tab">
       <thead><tr><th>Pergunta</th><th>Resposta</th></tr></thead>
       <tbody>
-        <tr><td>Que pagamento entra em "recebido"?</td><td class="dp">Exatamente o que entra no card Recebido do topo: cobrança paga (recebida ou confirmada) <b>com data de pagamento dentro do período</b>, comissionável, de um cliente que fechou no período. Nada a mais, nada a menos — a soma das origens é o card.</td></tr>
+        <tr><td>Que pagamento entra em "recebido"?</td><td class="dp">Exatamente o que entra no card Recebido do topo: cobrança paga (recebida ou confirmada) <b>com data de pagamento dentro do período</b>, comissionável, do atendente/setor filtrado, de um cliente que fechou no período. Nada a mais, nada a menos — a soma das origens é o card.</td></tr>
         <tr><td>Como o pagamento chega numa origem?</td><td class="dp">Pagamento → cliente → fechamento desse cliente no período → origem do fechamento. A cobrança não sabe de qual contrato veio; o cliente é a ponte. "Cliente" é quem se beneficia da cobrança (esposa paga pelo marido → conta no marido), igual ao card do topo.</td></tr>
-        <tr><td>E se o cliente tem dois fechamentos no período?</td><td class="dp">O pagamento dele entra <b>uma vez só</b>, no fechamento mais recente antes da data do pagamento (se pagou antes de todos, no primeiro). A linha recebe a marca "mesmo cliente · 2 fechamentos" pra ninguém procurar o valor na outra. Nunca conta nos dois.</td></tr>
-        <tr><td>Pagamento que não encaixa em origem nenhuma</td><td class="dp">Fechamento sem origem cadastrada (hoje some do card) ou feito por alguém fora do setor filtrado: vai pra um card <b>"Sem origem"</b>, com a lista de quem é. Assim a soma dos cards fecha sempre com o card do topo — nada some.</td></tr>
-        <tr><td>"Situação"</td><td class="dp">Pago = recebido ≥ valor fechado · Parcial = recebeu algo · Aguardando = nada ainda. Mesma régua do detalhe por atendente.</td></tr>
-        <tr><td>E a regra das quinzenas (pendência do card Recebido)?</td><td>Não muda aqui. Se um dia você escolher outra régua pro card do topo, esta coluna segue junto — é a mesma conta, só distribuída por origem.</td></tr>
-        <tr><td>PDF</td><td class="dp">Cada bloco de origem ganha "fechado · recebido" no cabeçalho e as colunas Recebido e Situação na tabela (abaixo).</td></tr>
+        <tr><td>E se o cliente tem dois fechamentos no período?</td><td class="dp">Cada cobrança paga entra <b>uma vez só</b>: compara a data do pagamento com a data de cada fechamento do cliente (dia civil, no fuso do escritório) e cai no fechamento que aconteceu por último antes do pagamento — fechamento no mesmo dia conta como antes; dois registros no mesmo dia, vale o que foi registrado primeiro; pagamento anterior a todos vai pro primeiro. A busca é entre <b>todos</b> os fechamentos do cliente no período, não só os do filtro. Parcelas entram uma a uma pela data de cada parcela — um parcelamento pode ficar dividido entre dois fechamentos. As linhas ganham a marca "mesmo cliente · 2 fechamentos". Nunca conta nos dois.</td></tr>
+        <tr><td>Pagamento que não encaixa em origem nenhuma</td><td class="dp">Dois casos, num card só, <b>"Sem origem / fora do filtro"</b>: (a) o fechamento não tem origem cadastrada (hoje nem aparece em "Fechamentos por origem") — a lista mostra o fechamento normalmente; (b) o fechamento foi registrado por alguém que não está no atendente/setor que você filtrou no topo — a lista mostra <b>só cliente e valor recebido</b>, sem origem, valor fechado nem responsável de terceiro (quem só vê os próprios não vê fechamento alheio). Assim a soma dos cards fecha sempre com o card Recebido — nada some.</td></tr>
+        <tr><td>"Situação (no período)"</td><td class="dp">Pago = recebeu dentro do período o valor fechado inteiro (ou mais) · Parcial = recebeu uma parte dentro do período · Nada no período = nenhuma cobrança que entre no card Recebido neste período. Não quer dizer que o cliente não pagou nada: custas e cobranças não comissionáveis ou sem atendente ficam fora, como no card.</td></tr>
+        <tr><td>E a conta das quinzenas (pendência do card Recebido)?</td><td>Não muda aqui. A coluna Situação herda a mesma limitação: quem pagou depois do período aparece como "nada no período". Se um dia você escolher outra conta pro card do topo, esta coluna e a barrinha seguem junto — é a mesma conta, só distribuída por origem.</td></tr>
+        <tr><td>PDF</td><td class="dp">Cada bloco de origem ganha "fechado · recebido no período" no cabeçalho e as colunas Recebido e Situação na tabela (abaixo).</td></tr>
       </tbody>
     </table>
 
     <div class="sec">De quebra: "Google" e "google" viram um card só</div>
-    <div class="sec-sub">No seu print tem os dois, porque alguém digitou a origem com letra minúscula uma vez. A proposta é agrupar sem diferenciar maiúscula/minúscula e acento, mostrando o nome como foi escrito na primeira vez. Não mexe no que está gravado — só na hora de somar.</div>
+    <div class="sec-sub">No seu print tem os dois, porque alguém digitou a origem com letra minúscula uma vez. A proposta é agrupar sem diferenciar maiúscula/minúscula e acento, mostrando o nome com a grafia do fechamento mais recente do grupo.
+      Não mexe no que está gravado — só na hora de somar.</div>
     <div class="duo">
       <div class="quadro"><div class="quadro-corpo"><div class="col-h hoje">Hoje</div>
         <div class="caixas"><div class="caixa"><div class="n verde">1</div><div class="l">Google</div></div><div class="caixa"><div class="n verde">1</div><div class="l">google</div></div></div></div></div>
       <div class="quadro"><div class="quadro-corpo"><div class="col-h dep">Depois</div>
         <div class="caixas" style="grid-template-columns:1fr 1fr"><div class="caixa"><div class="n verde">2</div><div class="l">Google</div>
-          <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 5.500,00</b></div><div class="r"><span>recebido</span><b class="vazio num">R$ 0,00</b></div></div></div>
-          <div class="nota na-cinza" style="margin-top:0;align-self:center">ℹ<div>O nome mostrado é o da primeira grafia encontrada. Quem quiser padronizar de vez edita o catálogo de origens, como hoje.</div></div></div></div></div>
+          <div class="dupla"><div class="r"><span>fechado</span><b class="num">R$ 5.500,00</b></div><div class="r"><span>recebido no período</span><b class="vazio num">R$ 0,00</b></div></div></div>
+          <div class="nota na-cinza" style="margin-top:0;align-self:center">ℹ<div>Corrigir a grafia em Configurações → Origens de lead só vale pros próximos fechamentos; os já gravados continuam com o texto da época — por isso o agrupamento é feito na hora de somar.</div></div></div></div></div>
     </div>
 
     <div class="sec">No PDF</div>
@@ -518,17 +527,17 @@ b,strong{font-weight:700}
       <div class="fbar"><span class="l">Perdido</span><span class="t"><span class="n">0</span></span><span class="v">R$ 0,00</span></div>
 
       <h3>Leads por canal de captação</h3>
-      <p class="psub">44 leads que entraram no período, pelo canal do cadastro. Manual = cadastrado à mão.</p>
+      <p class="psub">44 leads que entraram no período, pelo canal da ficha. Manual = cadastrado à mão.</p>
       <table><tr><th>Canal</th><th class="dir">Leads</th><th class="dir">%</th></tr>
-        <tr><td>WhatsApp</td><td class="dir">31</td><td class="dir">70,5%</td></tr><tr><td>Manual</td><td class="dir">9</td><td class="dir">20,5%</td></tr>
-        <tr><td>Instagram</td><td class="dir">2</td><td class="dir">4,5%</td></tr><tr><td>Telefone</td><td class="dir">1</td><td class="dir">2,3%</td></tr><tr><td>Site</td><td class="dir">1</td><td class="dir">2,3%</td></tr></table>
+        <tr><td>WhatsApp</td><td class="dir">30</td><td class="dir">68,2%</td></tr><tr><td>Manual</td><td class="dir">13</td><td class="dir">29,5%</td></tr>
+        <tr><td>Telefone</td><td class="dir">1</td><td class="dir">2,3%</td></tr></table>
 
       <h3>Fechamentos por origem</h3>
       <p class="psub">Recebido = cobranças pagas no período dos clientes de cada origem (mesma conta do card Recebido).</p>
-      <div class="origem-head"><span>Outro</span><span>5 fechamentos · R$ 23.850,00 fechado · R$ 7.600,00 recebido</span></div>
+      <div class="origem-head"><span>Outro</span><span>5 fechamentos · R$ 23.850,00 fechado · R$ 7.600,00 recebido no período</span></div>
       <table>
         <tr><th>Cliente</th><th>Fechado em</th><th class="dir">Valor</th><th class="dir">Recebido</th><th>Situação</th><th>Responsável</th></tr>
-        <tr><td>Rodrigo Albuquerque Maia</td><td>09/09/2026</td><td class="dir">R$ 5.000,00</td><td class="dir">R$ 0,00</td><td>Aguardando</td><td>Henrique Sales</td></tr>
+        <tr><td>Rodrigo Albuquerque Maia</td><td>09/09/2026</td><td class="dir">R$ 5.000,00</td><td class="dir">R$ 0,00</td><td>Nada no período</td><td>Henrique Sales</td></tr>
         <tr><td>Tiago Vasconcelos Prado</td><td>08/09/2026</td><td class="dir">R$ 2.850,00</td><td class="dir">R$ 2.850,00</td><td>Pago</td><td>Marina Duarte</td></tr>
         <tr><td>Sueli Camargo Teixeira</td><td>04/09/2026</td><td class="dir">R$ 10.000,00</td><td class="dir">R$ 3.500,00</td><td>Parcial</td><td>Isadora Lins</td></tr>
         <tr><td colspan="6" style="text-align:center;color:#94a3b8">… demais fechamentos da origem …</td></tr>
@@ -539,35 +548,39 @@ b,strong{font-weight:700}
   <!-- ═════════════════ RESUMO ═════════════════ -->
   <section class="tela" data-tela="resumo">
     <div class="sec" style="margin-top:4px">O que você está aprovando</div>
-    <div class="sec-sub">Três mudanças no Relatório Comercial (tela + PDF, que usam a mesma conta). Nada é removido; o card Recebido do topo não muda.</div>
+    <div class="sec-sub">Três mudanças no Relatório Comercial (tela + PDF, que usam a mesma conta). Nenhum card sai da tela, mas o item 2 <b>troca a conta de um card</b>:
+      a contagem de cadastros por canal (o 28 / 11 de hoje) deixa de aparecer — isso precisa do seu "pode" explícito. O card Recebido do topo não muda.</div>
     <table class="tab">
       <thead><tr><th>Item</th><th>O que muda</th><th>Por que</th></tr></thead>
       <tbody>
-        <tr><td>1 · Funil de Vendas</td><td class="dp">Ganho e Perdido contam pela data da decisão; dois rótulos de grupo no card; linha "18 entraram no período · 2 antes" sob o Ganho.</td><td>Ganho passa a ser sempre igual ao card Contratos fechados. Hoje divergem em todo mês com lead atravessando a virada.</td></tr>
-        <tr><td>2 · Leads por canal de captação</td><td class="dp">Substitui "Contatos por canal": os mesmos leads do funil, agrupados pelo canal do cadastro; todos os canais; subtítulo explica "Manual"; percentual por canal.</td><td>Hoje conta cadastros com quatro peneiras e exclui Telefone/Site; o 39 não bate com nada. Depois, a soma é o total do funil.</td></tr>
-        <tr><td>3 · Recebido por origem</td><td class="dp">Cards com fechado + recebido + barrinha; lista com colunas Recebido e Situação; card "Sem origem" pro que não encaixa; "Google"/"google" somam junto. PDF igual.</td><td>Responde "quanto cada origem já pagou" com a mesma régua do card Recebido — a soma bate.</td></tr>
+        <tr><td>1 · Funil de Vendas</td><td class="dp">Ganho e Perdido contam pela data da decisão; dois rótulos de grupo no card; cabeçalho "N entraram · N decididos"; linha "N entraram no período · N antes" sob Ganho e sob Perdido.</td><td>Ganho passa a ser sempre igual ao card Contratos fechados. Hoje divergem em todo mês com lead atravessando a virada.</td></tr>
+        <tr><td>2 · Leads por canal de captação</td><td class="dp">O card "Contatos por canal" continua no mesmo lugar, mas troca título e conta: vira "Leads por canal", com os mesmos leads do funil, qualquer canal, percentual por canal, cabeçalho "N leads · os mesmos do funil" e subtítulo explicando "Manual". No PDF vira tabela Canal · Leads · %. O número de hoje (cadastros novos no período) deixa de aparecer.</td><td>Hoje conta fichas com três peneiras e exclui Telefone/Site; o 39 não bate com nada. Depois, a soma é o total do funil.</td></tr>
+        <tr><td>3 · Recebido por origem</td><td class="dp">Cards com fechado + recebido no período + barrinha; cabeçalho "N fechamentos · fechado · recebido"; lista com colunas Recebido e Situação (no período) e "N de N pagaram no período"; card "Sem origem / fora do filtro" pro que não encaixa; cliente com mais de um fechamento: o pagamento entra uma vez só, no fechamento mais recente antes do pagamento; "Google"/"google" somam junto. PDF igual.</td><td>Responde "quanto cada origem já pagou" com a mesma conta do card Recebido — a soma bate.</td></tr>
       </tbody>
     </table>
 
     <div class="sec">Decisões que ficam com você</div>
     <ul class="lista">
-      <li><b>Funil:</b> a versão completa (data da decisão pro Ganho/Perdido) ou só o rótulo explicando a diferença? Recomendo a completa — é a única em que 20 = 20.</li>
-      <li><b>Canal:</b> aceita trocar "contatos" por "leads"? É o que faz a soma bater com o funil. Se preferir manter "contatos", dá pra fazer, mas o número nunca vai casar com o funil.</li>
-      <li><b>Recebido por origem:</b> a régua proposta é a do card Recebido (pago dentro do período). A outra leitura possível — "tudo que esse fechamento já pagou até hoje, mesmo depois do período" — é a mesma dúvida das quinzenas, que segue anotada e sem decisão. Se você escolher lá, sigo aqui.</li>
+      <li><b>Funil:</b> proposta A (recomendo) — Ganho e Perdido pela data da decisão, como no card; é a única em que 20 = 20. Proposta B — deixar como está e só escrever embaixo do título que o funil conta entradas. Qual das duas?</li>
+      <li><b>Canal:</b> proposta A (recomendo) — contar os mesmos leads do funil, agrupados pelo canal da ficha; a soma bate com o funil. Proposta B — manter a contagem de cadastros como está, só incluindo Telefone e Site e explicando o "Manual"; continua um número que não bate com nada da tela. Qual das duas?</li>
+      <li><b>Recebido por origem:</b> não precisa decidir nada agora sobre a conta — uso a mesma que o card Recebido já usa hoje (pagamento com data dentro do período). Se um dia você escolher outra conta pro card do topo (a pendência das quinzenas), este card muda junto, sozinho.</li>
+      <li><b>Cliente com dois fechamentos no período:</b> o pagamento cai no fechamento mais recente antes do pagamento (regra da aba 3). Aceita, ou prefere outra (por exemplo, dividir o valor entre os dois)?</li>
       <li><b>De quebra (pode dizer não):</b> juntar "Google" e "google".</li>
     </ul>
 
     <div class="sec">Fica de fora, de propósito</div>
     <ul class="lista">
       <li>Card Recebido do topo e a conta das quinzenas — pendência separada.</li>
-      <li>Registrar o canal verdadeiro no cadastro manual ("por onde chegou?") — mexe no cadastro de cliente; outro mockup se quiser.</li>
-      <li>Conversão por canal (de cada canal, quantos fecharam) — dá pra acrescentar depois, num card à parte, sem misturar as duas réguas.</li>
-      <li>Envio por e-mail / relatório programado da aba Comercial — não existe botão hoje; se um dia for ligado, já sai com as contas novas (é o mesmo PDF).</li>
+      <li>Registrar o canal verdadeiro no cadastro manual ("por onde chegou?") e gravar Instagram/Facebook quando a mensagem vem por esses canais — mexe no cadastro de cliente; outro mockup se quiser.</li>
+      <li>Conversão por canal (de cada canal, quantos fecharam) — dá pra acrescentar depois, num card à parte, sem misturar as duas contas.</li>
+      <li>Ganho que vira Perdido (ou o contrário) ganhar data nova — ajuste separado.</li>
+      <li>Envio por e-mail / relatório programado da aba Comercial — não existe hoje e não entra neste pedido.</li>
     </ul>
-    <div class="nota na-cinza">ℹ<div>Depois do "pode fazer": implemento servidor + tela + PDF, escrevo os testes de amarra de cada número (soma das origens = card Recebido; Ganho = Contratos fechados; soma dos canais = leads do funil) e confiro por mutação antes de pedir o merge.</div></div>
+    <div class="nota na-cinza">ℹ<div>Depois do "pode fazer": implemento servidor + tela + PDF e escrevo testes automáticos que travam cada soma (origens = card Recebido; Ganho = Contratos fechados; canais = leads do funil),
+      pra ela não desandar de novo. Só depois peço sua autorização pra publicar.</div></div>
   </section>
 
-  <div class="rodape">Mockup para aprovação · números do print de 01–09/09/2026 · nomes fictícios · nenhuma alteração feita no sistema.</div>
+  <div class="rodape">Mockup para aprovação · "hoje" = números do seu print de 01–09/09/2026 · "depois" = exemplos montados · nomes fictícios · nenhuma alteração feita no sistema.</div>
 </div>
 
 <script>
@@ -593,7 +606,7 @@ b,strong{font-weight:700}
     'evento': { nome:'Evento', qtd:1, fech:'R$ 3.000,00', linhas:[['Gustavo Pinheiro Alves','04/09/2026','R$ 3.000,00','Isadora Lins']]},
     'ligacao': { nome:'Ligação', qtd:1, fech:'R$ 2.500,00', linhas:[['Helena Queiroz Matos','02/09/2026','R$ 2.500,00','Henrique Sales']]}
   };
-  var cards = document.querySelectorAll('#origens .caixa');
+  var cards = document.querySelectorAll('#origens .caixa[data-o]');
   var dets = document.querySelectorAll('[data-det]');
   var aberta = 'outro';
   function mostrar(o){
@@ -608,14 +621,15 @@ b,strong{font-weight:700}
       document.getElementById('gen-nome').textContent = g.nome;
       document.getElementById('gen-qtd').textContent = g.qtd;
       document.getElementById('gen-fech').textContent = g.fech;
+      document.getElementById('gen-tot').textContent = g.fech;
       document.getElementById('gen-linhas').innerHTML = g.linhas.map(function(l){
-        return '<tr><td><span class="link">'+l[0]+'</span></td><td class="mudo">'+l[1]+'</td><td class="dir num"><b>'+l[2]+'</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Aguardando</span></td><td class="mudo">'+l[3]+'</td></tr>';
+        return '<tr><td><span class="link">'+l[0]+'</span></td><td class="mudo">'+l[1]+'</td><td class="dir num"><b>'+l[2]+'</b></td><td class="dir num mudo">R$ 0,00</td><td><span class="st st-ag">Nada no período</span></td><td class="mudo">'+l[3]+'</td></tr>';
       }).join('');
     }
     el.style.display = 'block';
   }
   cards.forEach(function(c){ c.addEventListener('click', function(){ mostrar(aberta === c.dataset.o ? null : c.dataset.o); }); });
-  document.querySelectorAll('#origens ~ .detalhe .fechar, .detalhe .fechar').forEach(function(f){
+  document.querySelectorAll('.detalhe .fechar').forEach(function(f){
     f.addEventListener('click', function(ev){ var d = f.closest('[data-det]'); if (d) { ev.stopPropagation(); mostrar(null); } });
   });
 })();
