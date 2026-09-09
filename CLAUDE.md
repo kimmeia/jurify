@@ -708,7 +708,10 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
   engano" fica gravado mas FORA de card/barra/lista — engano não é churn).
   Antes só existia Perdido (que mantém o `fechadoEm` original) ou excluir.
   - Modelo: o lead segue `fechado_ganho` (nenhuma contagem de "fechados"
-    muda) + 4 colunas aditivas em `leads` (migration 0219:
+    muda) + 4 colunas aditivas em `leads` (migration 0220 — nasceu 0219 e
+    foi renumerada no merge porque a conferência de cadastros já tinha
+    publicado a 0219; o executor distingue pelo nome do arquivo, então a
+    renumeração é só convenção:
     `canceladoEmLead`, `motivoCancelamentoLead`, `detalheCancelamentoLead`,
     `canceladoPorLead`; no schema `canceladoEm`/`motivoCancelamento`/
     `detalheCancelamento`/`canceladoPor`). `shared/cancelamento-contrato.ts`:

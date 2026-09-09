@@ -211,7 +211,7 @@ describe("amarras no código", () => {
   it("schema e migration: quatro colunas, etapa intacta", () => {
     for (const c of ["canceladoEmLead", "motivoCancelamentoLead", "detalheCancelamentoLead", "canceladoPorLead"]) {
       expect(schema).toContain(`"${c}"`);
-      expect(ler("drizzle/0219_lead_cancelamento.sql")).toContain(`ADD COLUMN ${c}`);
+      expect(ler("drizzle/0220_lead_cancelamento.sql")).toContain(`ADD COLUMN ${c}`);
     }
     expect(schema).toContain('mysqlEnum("etapaFunil", ["novo", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"])');
   });
