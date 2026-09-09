@@ -7,6 +7,7 @@ import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, 
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
+import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
 import { verificarLimite } from "../billing/plan-limits";
 import { dataHojeBR, inicioDoDiaNoFuso, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
@@ -225,6 +226,8 @@ export const clientesRouter = router({
     /** Data de cadastro do contato, inclusive nas duas pontas (YYYY-MM-DD). */
     cadastroDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     cadastroAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /** "Ver na lista" da Conferência de cadastros: só as fichas daquela falta. */
+    conferencia: z.enum(FALTA_TIPOS).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
@@ -370,6 +373,12 @@ export const clientesRouter = router({
     if (input?.cadastroAte) {
       // Inclusivo na ponta de cima: quem cadastrou às 15h do dia final entra.
       where = and(where, lte(contatos.createdAt, new Date(`${input.cadastroAte}T23:59:59.999`)));
+    }
+    if (input?.conferencia) {
+      // Os MESMOS ids que o relatório contou — a lista tem que bater com o card.
+      const { idsDaFaltaNoEscritorio } = await import("./conferencia-cadastros");
+      const idsFalta = await idsDaFaltaNoEscritorio(db, perm.escritorioId, input.conferencia);
+      where = and(where, idsFalta.length > 0 ? inArray(contatos.id, idsFalta) : sql`1 = 0`);
     }
 
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
@@ -1811,64 +1820,30 @@ export const clientesRouter = router({
     if (!perm.allowed) return { podeVer: false, grupos: [] as PossivelDuplicadoGrupo[] };
     const db = await getDb();
     if (!db) return { podeVer: true, grupos: [] as PossivelDuplicadoGrupo[] };
-    const { agruparPorTelefone, escolherSobrevivente } = await import("./reconhecer-cadastro");
-    const { clienteProcessos } = await import("../../drizzle/schema");
-
-    const todos = await db
-      .select({
-        id: contatos.id, nome: contatos.nome, telefone: contatos.telefone,
-        cpfCnpj: contatos.cpfCnpj, email: contatos.email, estagio: contatos.estagio,
-        origem: contatos.origem, createdAt: contatos.createdAt,
-      })
-      .from(contatos)
-      .where(and(
-        eq(contatos.escritorioId, perm.escritorioId),
-        sql`${contatos.telefone} IS NOT NULL`,
-        sql`${contatos.telefone} <> ''`,
-      ));
-    const grupos = agruparPorTelefone(todos);
-    if (grupos.length === 0) return { podeVer: true, grupos: [] as PossivelDuplicadoGrupo[] };
-
-    const ids = grupos.flatMap((g) => g.contatos.map((c) => c.id));
-    const contar = async (tabela: any, coluna: any): Promise<Map<number, number>> => {
-      const mapa = new Map<number, number>();
-      try {
-        const rows = await db
-          .select({ contatoId: coluna, n: sql<number>`COUNT(*)` })
-          .from(tabela)
-          .where(inArray(coluna, ids))
-          .groupBy(coluna);
-        for (const r of rows) if (r.contatoId != null) mapa.set(Number(r.contatoId), Number(r.n));
-      } catch { /* tabela pode não existir — conta zero */ }
-      return mapa;
-    };
-    const [nConversas, nCobrancas, nProcessos] = await Promise.all([
-      contar(conversas, conversas.contatoId),
-      contar(asaasCobrancas, asaasCobrancas.contatoId),
-      contar(clienteProcessos, clienteProcessos.contatoId),
-    ]);
-    const resumo = (c: (typeof todos)[number]): PossivelDuplicadoFicha => ({
-      id: c.id,
-      nome: c.nome,
-      origem: c.origem,
-      estagio: c.estagio,
-      temCpf: !!c.cpfCnpj?.trim(),
-      createdAt: toIsoString(c.createdAt) ?? null,
-      conversas: nConversas.get(c.id) ?? 0,
-      cobrancas: nCobrancas.get(c.id) ?? 0,
-      processos: nProcessos.get(c.id) ?? 0,
+    // A MESMA conferência da página: mesmos grupos, mesmos "não é duplicado"
+    // fora da conta — senão o "(341)" do botão e o card do relatório divergiriam.
+    const { carregarBaseConferencia, montarConferencia } = await import("./conferencia-cadastros");
+    const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+    const resumo = (f: (typeof conf.gruposTelefone)[number]["fichas"][number]): PossivelDuplicadoFicha => ({
+      id: f.id,
+      nome: f.nome,
+      origem: f.origem,
+      estagio: f.estagio,
+      temCpf: !!f.cpfCnpj?.trim(),
+      createdAt: f.createdAt,
+      conversas: f.conversas,
+      cobrancas: f.cobrancas,
+      processos: f.processos,
     });
     return {
       podeVer: true,
-      grupos: grupos.map((g) => {
-        const principal = g.contatos.reduce((m, c) => escolherSobrevivente(m, c).principal);
-        return {
-          chave: g.chave,
-          telefone: principal.telefone,
-          sobrevivente: resumo(principal),
-          mescladas: g.contatos.filter((c) => c.id !== principal.id).map(resumo),
-        };
-      }),
+      grupos: conf.gruposTelefone.map((g) => ({
+        chave: g.chave,
+        telefone: g.fichas[0]?.telefone ?? null,
+        sobrevivente: resumo(g.fichas[0]),
+        mescladas: g.fichas.slice(1).map(resumo),
+        cpfsDiferentes: g.classe === "cpfs_diferentes",
+      })),
     };
   }),
 
@@ -1878,6 +1853,8 @@ export const clientesRouter = router({
       pares: z.array(z.object({
         principalId: z.number().int().positive(),
         duplicadoId: z.number().int().positive(),
+        /** Decisão 1 (09/09): duas fichas com CPFs diferentes só mesclam com confirmação explícita na tela. */
+        confirmarCpfDiferente: z.boolean().optional(),
       })).min(1).max(50),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1892,6 +1869,19 @@ export const clientesRouter = router({
       const falhas: Array<{ duplicadoId: number; erro: string }> = [];
       for (const par of input.pares) {
         try {
+          if (!par.confirmarCpfDiferente) {
+            // Mesclar descarta o CPF da ficha absorvida: com dois CPFs preenchidos
+            // e diferentes pode ser duas pessoas (casal com o mesmo telefone).
+            const fichas: Array<{ id: number; cpfCnpj: string | null }> = await db
+              .select({ id: contatos.id, cpfCnpj: contatos.cpfCnpj })
+              .from(contatos)
+              .where(and(eq(contatos.escritorioId, perm.escritorioId), inArray(contatos.id, [par.principalId, par.duplicadoId])));
+            const cpfs = new Set(fichas.map((f) => (f.cpfCnpj ?? "").replace(/\D/g, "")).filter(Boolean));
+            if (cpfs.size > 1) {
+              falhas.push({ duplicadoId: par.duplicadoId, erro: MENSAGEM_CPFS_DIFERENTES });
+              continue;
+            }
+          }
           await unificarComRegistro(db, {
             escritorioId: perm.escritorioId,
             principalId: par.principalId,
@@ -1905,6 +1895,103 @@ export const clientesRouter = router({
         }
       }
       return { feitos, falhas };
+    }),
+
+  /**
+   * Conferência de cadastros — a página inteira num pedido: resumo, grupos por
+   * telefone e por CPF (fichas lado a lado, divergências marcadas), faltas e o
+   * que foi marcado como "não é duplicado". Mesma permissão do Mesclar
+   * (excluir clientes): o relatório conta o escritório inteiro.
+   */
+  conferenciaCadastros: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+    if (!perm.allowed) return { podeVer: false as const };
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const { carregarBaseConferencia, montarConferencia, conferenciaParaTela } = await import("./conferencia-cadastros");
+    const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+    return { podeVer: true as const, geradoEm: new Date().toISOString(), ...conferenciaParaTela(conf) };
+  }),
+
+  /**
+   * Decisão 2 (09/09): o grupo sai da conta em toda tela e volta com um clique.
+   * A tela aponta o grupo pela ficha sobrevivente — a chave (que no grupo de
+   * CPF é o próprio CPF) é resolvida aqui, escopada pelo escritório.
+   */
+  marcarNaoDuplicado: protectedProcedure
+    .input(z.object({ tipo: z.enum(["telefone", "cpf"]), contatoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes marca \"não é duplicado\"." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { chaveDoNaoDuplicado, marcarNaoDuplicado } = await import("./conferencia-cadastros");
+      const chave = await chaveDoNaoDuplicado(db, perm.escritorioId, input);
+      if (!chave) throw new TRPCError({ code: "NOT_FOUND", message: "Cadastro não encontrado ou sem o dado que agrupa." });
+      return marcarNaoDuplicado(db, { escritorioId: perm.escritorioId, tipo: input.tipo, chave, marcadoPor: perm.colaboradorId });
+    }),
+
+  desmarcarNaoDuplicado: protectedProcedure
+    .input(z.object({ tipo: z.enum(["telefone", "cpf"]), contatoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes desfaz o \"não é duplicado\"." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { chaveDoNaoDuplicado, desmarcarNaoDuplicado } = await import("./conferencia-cadastros");
+      const chave = await chaveDoNaoDuplicado(db, perm.escritorioId, input);
+      if (!chave) throw new TRPCError({ code: "NOT_FOUND", message: "Cadastro não encontrado ou sem o dado que agrupa." });
+      return desmarcarNaoDuplicado(db, { escritorioId: perm.escritorioId, tipo: input.tipo, chave });
+    }),
+
+  /** PDF e planilha saem do MESMO cálculo da tela, com o filtro marcado. */
+  exportarConferenciaPdf: protectedProcedure
+    .input(z.object({ filtro: z.enum(FILTROS_GRUPO).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes baixa a conferência." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado");
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { carregarBaseConferencia, montarConferencia } = await import("./conferencia-cadastros");
+      const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+      const { gerarConferenciaPDF } = await import("./conferencia-pdf");
+      const buffer = await gerarConferenciaPDF(conf, { nomeEscritorio: esc.escritorio.nome, filtro: input?.filtro ?? "todos", fuso });
+      return {
+        filename: `conferencia-cadastros_${dataHojeBR(fuso)}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  exportarConferenciaCsv: protectedProcedure
+    .input(z.object({ filtro: z.enum(FILTROS_GRUPO).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes baixa a conferência." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado");
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { carregarBaseConferencia, montarConferencia, gerarConferenciaCsv } = await import("./conferencia-cadastros");
+      const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+      const csv = gerarConferenciaCsv(conf, input?.filtro ?? "todos");
+      return {
+        filename: `conferencia-cadastros_${dataHojeBR(fuso)}.csv`,
+        base64: Buffer.from(csv, "utf8").toString("base64"),
+        mimeType: "text/csv;charset=utf-8",
+      };
     }),
 });
 
@@ -1923,6 +2010,7 @@ type PossivelDuplicadoFicha = {
 type PossivelDuplicadoGrupo = {
   chave: string;
   telefone: string | null;
+  cpfsDiferentes: boolean;
   sobrevivente: PossivelDuplicadoFicha;
   mescladas: PossivelDuplicadoFicha[];
 };
