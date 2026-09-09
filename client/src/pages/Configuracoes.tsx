@@ -47,6 +47,7 @@ import { MetaConnectDialog } from "./configuracoes/meta-connect-dialog";
 import { WhatsappManualDialog } from "./configuracoes/whatsapp-manual-dialog";
 import { FinanceiroTab } from "./configuracoes/financeiro-tab";
 import { LigacaoConfigCard } from "./atendimento/ligacao-config-card";
+import { IconeTwilio } from "@/components/IconeTwilio";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -2119,9 +2120,12 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       nome: "Twilio VoIP",
       descricao: "Ligações telefônicas pelo sistema",
       categoria: "Mensageria",
-      logo: "📞",
-      bgIcon: "bg-info-bg border-info/30",
+      logo: <IconeTwilio className="h-6 w-6 text-[#F22F46]" />,
+      bgIcon: "bg-danger-bg border-danger/30",
       conectado: twilioCanal?.status === "conectado",
+      // A ligação ainda não conecta as duas pontas: o servidor recebe só o
+      // número do cliente. O selo evita configurar SID e token à toa.
+      emBreve: true,
     },
   ];
 
@@ -2154,7 +2158,11 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="text-sm font-bold">{integ.nome}</p>
-                  {integ.conectado ? (
+                  {(integ as any).emBreve ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg text-[9px] font-bold">
+                      <span className="w-1 h-1 rounded-full bg-warning" /> Em breve
+                    </span>
+                  ) : integ.conectado ? (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg text-[9px] font-bold">
                       <span className="w-1 h-1 rounded-full bg-success" /> Conectada
                     </span>

@@ -26,6 +26,7 @@ import {
   History, RotateCcw, Receipt, Gauge,
 } from "lucide-react";
 import { toast } from "sonner";
+import { IconeTwilio } from "@/components/IconeTwilio";
 
 /**
  * Sub-seção do AsaasDialog: visibilidade da cota local do rate guard e
@@ -994,11 +995,22 @@ export function TwilioDialog({ open, onClose, canEdit }: { open: boolean; onClos
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-info flex items-center justify-center text-xl shadow">📞</div>
+            <div className="h-10 w-10 rounded-xl bg-danger-bg border border-danger/30 flex items-center justify-center shadow">
+              <IconeTwilio className="h-5 w-5 text-[#F22F46]" />
+            </div>
             Twilio VoIP — Ligações
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* O formulário grava normalmente; o que ainda não existe é a ponte
+            * com o número do escritório, e é isso que o aviso diz. */}
+          <div className="rounded-lg bg-warning-bg border border-warning/30 p-3">
+            <p className="text-xs font-medium text-warning-fg">A ligação ainda não conecta as duas pontas</p>
+            <p className="mt-1 text-[11px] text-warning-fg">
+              Você pode guardar as credenciais agora, mas o botão de ligar na conversa segue desativado
+              até a ponte com o número do escritório ficar pronta.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Account SID *</Label>
             <Input type="password" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" value={sid} onChange={(e) => setSid(e.target.value)} disabled={!canEdit} />
