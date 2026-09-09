@@ -5,9 +5,11 @@ teste fique vermelho. Restaura o arquivo ao final de cada mutação."""
 import subprocess, sys
 
 ARQ = "server/escritorio/router-relatorios.ts"
+ARQ_CANC = "server/escritorio/cancelar-contrato.ts"
 TESTES = [
     "server/__tests__/relatorio-comercial-funil-canal-origem.test.ts",
     "server/__tests__/relatorios-fechamentos-origem.test.ts",
+    "server/__tests__/cancelar-contrato.test.ts",
 ]
 
 MUTACOES = [
@@ -15,8 +17,8 @@ MUTACOES = [
      "          inArray(leads.etapaFunil, [...ETAPAS_DECIDIDAS]),\n          gte(leads.fechadoEm, dataInicio),",
      "          inArray(leads.etapaFunil, [...ETAPAS_DECIDIDAS]),\n          gte(leads.createdAt, dataInicio),"),
     ("funil: monta só pelo bloco 'entraram' (Ganho volta a ser 18)",
-     "montarEtapasFunil(entraramRows, decididosRows)",
-     "montarEtapasFunil(entraramRows, [])"),
+     "montarEtapasFunil(entraramRows, decididosRows, {",
+     "montarEtapasFunil(entraramRows, [], {"),
     ("funil: entraramNoPeriodo ignorado (entraramAntes sempre = total)",
      "    const entraramNoPeriodo = Number(r.entraramNoPeriodo || 0);",
      "    const entraramNoPeriodo = 0;"),
@@ -62,21 +64,70 @@ MUTACOES = [
     ("payload: leadsPorCanal some da resposta",
      "        funilResumo,\n        leadsPorCanal,\n        fechamentosPorOrigem,",
      "        funilResumo,\n        fechamentosPorOrigem,"),
+    # ── cancelados ──
+    ("cancelados: 'engano' passa a contar como churn",
+     "const cancelamentoConta = sql`(${leads.canceladoEm} IS NOT NULL AND (${leads.motivoCancelamento} IS NULL OR ${leads.motivoCancelamento} <> ${MOTIVO_CANCELAMENTO_ENGANO}))`;",
+     "const cancelamentoConta = sql`(${leads.canceladoEm} IS NOT NULL)`;"),
+    ("cancelados: card conta pela data do fechamento em vez do cancelamento",
+     "        cancelamentoConta,\n        gte(leads.canceladoEm, ini),\n        lte(leads.canceladoEm, fim),",
+     "        cancelamentoConta,\n        gte(leads.fechadoEm, ini),\n        lte(leads.fechadoEm, fim),"),
+    ("cancelados: contrato cancelado some de 'Contratos fechados'",
+     "          canceladosDepois: sql<number>`SUM(CASE WHEN ${cancelamentoConta} THEN 1 ELSE 0 END)`,",
+     "          canceladosDepois: sql<number>`SUM(CASE WHEN ${cancelamentoConta} THEN 1 ELSE 0 END)`,\n          soAbertos: sql<number>`SUM(CASE WHEN ${leads.canceladoEm} IS NULL THEN 1 ELSE 0 END)`,"),
+    ("cancelados: funil não recebe o bloco cancelado",
+     "      const { etapas, funilResumo } = montarEtapasFunil(entraramRows, decididosRows, {",
+     "      const { etapas, funilResumo } = montarEtapasFunil(entraramRows, decididosRows, null && {"),
+    ("cancelados: origem — 'engano' conta no grupo",
+     "    if (canceladoEm && contaComoCancelamento(r.motivoCancelamento)) g.cancelados++;",
+     "    if (canceladoEm) g.cancelados++;"),
+    ("cancelados: recebido antes ignora o dia do cancelamento",
+     "    (c) => c.contatoId === args.contatoId && (c.dataPagamento || \"\").slice(0, 10) <= args.diaCancelamento,",
+     "    (c) => c.contatoId === args.contatoId,"),
+    ("cancelados: resumo do funil perde 'fecharamAntes'",
+     "      fecharamAntes: Math.max(0, totalCancelados - fecharamNoPeriodo),",
+     "      fecharamAntes: 0,"),
 ]
 
-original = open(ARQ, encoding="utf-8").read()
+MUTACOES_CANC = [
+    ("cancelar: aceita lead que não é Ganho",
+     '  if (lead.etapaFunil !== "fechado_ganho") {',
+     '  if (false) {'),
+    ("cancelar: aceita cancelar duas vezes",
+     '  if (lead.canceladoEm) throw new Error("Este contrato já está cancelado.");',
+     '  if (false) throw new Error("Este contrato já está cancelado.");'),
+    ("cancelar: data no futuro passa",
+     '  if (args.data > args.hoje) return "A data do cancelamento não pode ser no futuro.";',
+     '  if (false) return "A data do cancelamento não pode ser no futuro.";'),
+    ("cancelar: data antes do fechamento passa",
+     "  if (args.diaFechamento && args.data < args.diaFechamento) {",
+     "  if (false) {"),
+    ("cancelar: encerrarServico ignorado",
+     "  if (args.encerrarServico) {",
+     "  if (false) {"),
+    ("cancelar: reativar não limpa o motivo",
+     "    .set({ canceladoEm: null, motivoCancelamento: null, detalheCancelamento: null, canceladoPor: null })",
+     "    .set({ canceladoEm: null, detalheCancelamento: null, canceladoPor: null })"),
+    ("cancelar: cancelarContratosDoContato pega também os já cancelados",
+     '      eq(leads.etapaFunil, "fechado_ganho"),\n      isNull(leads.canceladoEm),',
+     '      eq(leads.etapaFunil, "fechado_ganho"),'),
+]
+
 vermelhos = 0
-for nome, antes, depois in MUTACOES:
-    if antes not in original:
-        print(f"?? NÃO ACHOU o trecho da mutação: {nome}")
-        sys.exit(2)
-    open(ARQ, "w", encoding="utf-8").write(original.replace(antes, depois, 1))
-    try:
-        r = subprocess.run(["pnpm", "vitest", "run", *TESTES], capture_output=True, text=True, timeout=300)
-        falhou = r.returncode != 0
-    finally:
-        open(ARQ, "w", encoding="utf-8").write(original)
-    print(("VERMELHO ✓ " if falhou else "VERDE ✗  ") + nome)
-    vermelhos += 1 if falhou else 0
-print(f"\n{vermelhos}/{len(MUTACOES)} mutações ficaram vermelhas")
-sys.exit(0 if vermelhos == len(MUTACOES) else 1)
+total = 0
+for arq, lista in ((ARQ, MUTACOES), (ARQ_CANC, MUTACOES_CANC)):
+    original = open(arq, encoding="utf-8").read()
+    for nome, antes, depois in lista:
+        total += 1
+        if antes not in original:
+            print(f"?? NÃO ACHOU o trecho da mutação: {nome}")
+            sys.exit(2)
+        open(arq, "w", encoding="utf-8").write(original.replace(antes, depois, 1))
+        try:
+            r = subprocess.run(["pnpm", "vitest", "run", *TESTES], capture_output=True, text=True, timeout=300)
+            falhou = r.returncode != 0
+        finally:
+            open(arq, "w", encoding="utf-8").write(original)
+        print(("VERMELHO ✓ " if falhou else "VERDE ✗  ") + nome)
+        vermelhos += 1 if falhou else 0
+print(f"\n{vermelhos}/{total} mutações ficaram vermelhas")
+sys.exit(0 if vermelhos == total else 1)

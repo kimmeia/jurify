@@ -39,6 +39,7 @@ import {
   formatBRLShort, formatDiaCurto, formatDiaCompleto, baixarBlob, base64ToBlob,
 } from "./financeiro/helpers";
 import { TIPOS_CANAL_COMUNICACAO } from "@shared/canal-types";
+import { rotuloMotivoCancelamento } from "@shared/cancelamento-contrato";
 import {
   Avatar, BarrasDiarias, BarrasRotuladas, BarraFiltro, CardRel, FiltroMulti, FiltroSelect,
   KpiRel, PastilhaTaxa, ProvedorRelatorios, TituloSecao, calcularDelta,
@@ -72,6 +73,7 @@ const ETAPA_LABELS: Record<string, string> = {
   negociacao: "Negociação",
   fechado_ganho: "Ganho",
   fechado_perdido: "Perdido",
+  cancelado: "Cancelado",
 };
 const ETAPA_CORES: Record<string, string> = {
   novo: "bg-muted-foreground/50",
@@ -80,6 +82,7 @@ const ETAPA_CORES: Record<string, string> = {
   negociacao: "bg-warning",
   fechado_ganho: "bg-success",
   fechado_perdido: "bg-danger",
+  cancelado: "bg-warning",
 };
 const ORIGEM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp",
@@ -962,7 +965,8 @@ const CORES_CANAL = [
  */
 // ───────────────────── Dashboard Comercial (estilo Looker) ─────────────────────
 
-function VariacaoBadge({ pct }: { pct: number }) {
+/** `invertido`: subir é ruim (cancelados) — a cor acompanha o sentido, a seta não. */
+function VariacaoBadge({ pct, invertido }: { pct: number; invertido?: boolean }) {
   if (pct === 0) {
     return (
       <span className="inline-flex items-center text-[10px] text-muted-foreground">
@@ -971,7 +975,8 @@ function VariacaoBadge({ pct }: { pct: number }) {
     );
   }
   const up = pct > 0;
-  const cor = up ? "text-success-fg" : "text-danger-fg";
+  const bom = invertido ? !up : up;
+  const cor = bom ? "text-success-fg" : "text-danger-fg";
   return (
     <span className={`inline-flex items-center gap-0.5 text-[10px] font-medium ${cor}`}>
       {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
@@ -1224,6 +1229,9 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                 <div className="flex items-center gap-2 px-3.5 py-2 text-xs flex-wrap">
                   <span>
                     <strong className="text-success-fg">{aberta.origem}</strong> · {aberta.total} fechamento(s) no período
+                    {(aberta.cancelados || 0) > 0 && (
+                      <span className="text-danger-fg font-semibold"> · {aberta.cancelados} {aberta.cancelados === 1 ? "cancelado" : "cancelados"}</span>
+                    )}
                   </span>
                   <span className="ml-auto flex items-center gap-3 flex-wrap">
                     <span><span className="text-muted-foreground">fechado</span> <strong className="text-success-fg">{formatBRL(aberta.valorTotal || 0)}</strong></span>
@@ -1257,9 +1265,13 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                     </thead>
                     <tbody>
                       {aberta.fechamentos.map((f: any, i: number) => {
-                        const situacao = SITUACAO_FECHAMENTO[f.situacao] || SITUACAO_FECHAMENTO.nada;
+                        // Contrato cancelado continua na origem dele (fechou mesmo, e o
+                        // que pagou continua no recebido) — só ganha a marca vermelha.
+                        const situacao = f.canceladoEm
+                          ? { label: "Cancelado", className: "bg-danger-bg text-danger-fg" }
+                          : SITUACAO_FECHAMENTO[f.situacao] || SITUACAO_FECHAMENTO.nada;
                         return (
-                          <tr key={i} className="border-t">
+                          <tr key={i} className={`border-t ${f.canceladoEm ? "bg-danger-bg/30" : ""}`}>
                             <td className="px-3.5 py-1.5">
                               {f.contatoId ? (
                                 <a href={`/clientes?id=${f.contatoId}`} className="text-info-fg font-medium hover:underline">
@@ -1271,6 +1283,11 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
                               {f.mesmoCliente > 1 && (
                                 <span className="block text-[10px] text-muted-foreground">
                                   mesmo cliente · {f.mesmoCliente} fechamentos
+                                </span>
+                              )}
+                              {f.canceladoEm && (
+                                <span className="block text-[10px] text-danger-fg">
+                                  cancelado em {new Date(f.canceladoEm).toLocaleDateString("pt-BR")} · {rotuloMotivoCancelamento(f.motivoCancelamento)}
                                 </span>
                               )}
                               {f.foraDoFiltro && (
@@ -1312,6 +1329,87 @@ function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
               </div>
             )}
           </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Contratos fechados que o cliente desfez no período (pela data do
+ * cancelamento). O fechamento continua contando no mês em que fechou;
+ * "recebido antes" é o que o cliente pagou até o dia do cancelamento.
+ */
+function ContratosCanceladosCard({ itens }: { itens: any[] }) {
+  const totalValor = itens.reduce((s: number, c: any) => s + (c.valor || 0), 0);
+  const totalAntes = itens.reduce((s: number, c: any) => s + (c.recebidoAntes || 0), 0);
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-sm">Contratos cancelados no período</CardTitle>
+          {itens.length > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              <strong className="text-danger-fg">{itens.length}</strong> · valiam{" "}
+              <strong className="text-foreground">{formatBRL(totalValor)}</strong> · recebido antes de cancelar{" "}
+              <strong className="text-success-fg">{formatBRL(totalAntes)}</strong>
+            </p>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          Pela data do cancelamento. O fechamento continua contando no mês em que fechou e o que já foi recebido
+          não muda. "Lançado por engano" não entra aqui.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {itens.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            Nenhum contrato cancelado no período.
+          </p>
+        ) : (
+          <div className="rounded-xl border border-danger/30 bg-danger-bg/40 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs bg-card">
+                <thead>
+                  <tr className="text-[10px] uppercase tracking-wide text-danger-fg bg-danger-bg/80">
+                    <th className="text-left px-3.5 py-1.5 font-semibold">Cliente</th>
+                    <th className="text-left px-3.5 py-1.5 font-semibold">Fechado em</th>
+                    <th className="text-left px-3.5 py-1.5 font-semibold">Cancelado em</th>
+                    <th className="text-right px-3.5 py-1.5 font-semibold">Valor</th>
+                    <th className="text-right px-3.5 py-1.5 font-semibold">Recebido antes</th>
+                    <th className="text-left px-3.5 py-1.5 font-semibold">Motivo</th>
+                    <th className="text-left px-3.5 py-1.5 font-semibold">Responsável</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itens.map((c: any) => (
+                    <tr key={c.leadId} className="border-t">
+                      <td className="px-3.5 py-1.5">
+                        <a href={`/clientes?id=${c.contatoId}`} className="text-info-fg font-medium hover:underline">
+                          {c.cliente}
+                        </a>
+                      </td>
+                      <td className="px-3.5 py-1.5 text-muted-foreground">
+                        {c.fechadoEm ? new Date(c.fechadoEm).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                      <td className="px-3.5 py-1.5 text-danger-fg font-semibold">
+                        {c.canceladoEm ? new Date(c.canceladoEm).toLocaleDateString("pt-BR") : "—"}
+                      </td>
+                      <td className="px-3.5 py-1.5 text-right font-semibold tabular-nums">{formatBRL(c.valor || 0)}</td>
+                      <td className={`px-3.5 py-1.5 text-right tabular-nums ${c.recebidoAntes > 0 ? "font-semibold text-success-fg" : "text-muted-foreground"}`}>
+                        {formatBRL(c.recebidoAntes || 0)}
+                      </td>
+                      <td className="px-3.5 py-1.5">
+                        {rotuloMotivoCancelamento(c.motivo)}
+                        {c.detalhe && <span className="block text-[10px] text-muted-foreground">"{c.detalhe}"</span>}
+                      </td>
+                      <td className="px-3.5 py-1.5 text-muted-foreground">{c.responsavel || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -1499,8 +1597,10 @@ function DashboardComercial() {
               ? valorTotalFechado / contratosFechados
               : 0;
             const ticketMedioPago = data.kpis.ticketMedio || 0;
+            const cancelados = data.kpis.cancelados || 0;
+            const canceladosDepois = data.kpis.contratosFechadosCanceladosDepois || 0;
             return (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <Card className="border-2 border-success/30">
                   <CardContent className="pt-4 space-y-1.5">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1543,8 +1643,46 @@ function DashboardComercial() {
                       <span className="text-[10px] text-muted-foreground">vs anterior</span>
                       <VariacaoBadge pct={data.kpis.variacaoContratosFechados} />
                     </div>
+                    {canceladosDepois > 0 && (
+                      <div className="rounded bg-danger-bg border border-danger/30 px-1.5 py-1">
+                        <p className="text-[10px] text-danger-fg font-semibold">
+                          {canceladosDepois} {canceladosDepois === 1 ? "cancelado" : "cancelados"} depois
+                        </p>
+                        <p className="text-[9px] text-muted-foreground">
+                          {formatBRL(data.kpis.valorFechadosCanceladosDepois || 0)} · fechou e desistiu
+                        </p>
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground italic">
                       leads ganhos no período
+                    </p>
+                  </CardContent>
+                </Card>
+
+                {/* Contratos cancelados — pela data do cancelamento. O contrato
+                    continua fechado no mês em que fechou; "lançado por engano"
+                    fica fora (não é churn). */}
+                <Card className="border-2 border-danger/30">
+                  <CardContent className="pt-4 space-y-1.5">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <XCircle className="h-3.5 w-3.5 text-danger" />
+                      Cancelados
+                    </div>
+                    <p className="text-2xl font-bold text-danger-fg tabular-nums">{cancelados}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground">vs anterior</span>
+                      <VariacaoBadge pct={data.kpis.variacaoCancelados || 0} invertido />
+                    </div>
+                    <div className="rounded bg-danger-bg border border-danger/30 px-1.5 py-1">
+                      <p className="text-[10px] text-danger-fg font-semibold">
+                        {formatBRL(data.kpis.valorCancelados || 0)} cancelados
+                      </p>
+                      <p className="text-[9px] text-muted-foreground">
+                        {data.kpis.canceladosFecharamNoPeriodo || 0} fechou neste período, {Math.max(0, cancelados - (data.kpis.canceladosFecharamNoPeriodo || 0))} antes
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground italic">
+                      pela data do cancelamento
                     </p>
                   </CardContent>
                 </Card>
@@ -1699,6 +1837,12 @@ function DashboardComercial() {
                     {" "}({data.funilResumo.entraram.emAberto} em aberto + {data.funilResumo.entraram.jaDecididos} já decididos)
                     {" · "}
                     <strong className="text-foreground">{data.funilResumo.decididos.total}</strong> decididos
+                    {(data.funilResumo.cancelados?.total ?? 0) > 0 && (
+                      <>
+                        {" · "}
+                        <strong className="text-danger-fg">{data.funilResumo.cancelados.total}</strong> cancelados
+                      </>
+                    )}
                   </p>
                 )}
               </div>
@@ -1728,7 +1872,7 @@ function DashboardComercial() {
                           {info.total > 0 && (
                             <div
                               className={`h-full rounded-full ${ETAPA_CORES[e] || "bg-muted-foreground/50"}`}
-                              style={{ width: `${Math.max(pct, 3)}%` }}
+                              style={{ width: `${Math.min(100, Math.max(pct, 3))}%` }}
                             />
                           )}
                           <span className="absolute inset-0 flex items-center justify-center text-[11px] font-medium">
@@ -1762,6 +1906,15 @@ function DashboardComercial() {
                       {subLinha("fechado_ganho")}
                       {linha("fechado_perdido")}
                       {subLinha("fechado_perdido")}
+                      {(data.funilResumo?.cancelados?.total ?? 0) > 0 && (
+                        <>
+                          {grupo("Cancelados no período · pela data do cancelamento")}
+                          {linha("cancelado")}
+                          <p className="pl-[108px] -mt-1 text-[10px] text-muted-foreground">
+                            {data.funilResumo.cancelados.fecharamNoPeriodo} fechou neste período · {data.funilResumo.cancelados.fecharamAntes} fechou antes
+                          </p>
+                        </>
+                      )}
                     </>
                   );
                 })()}
@@ -1819,6 +1972,9 @@ function DashboardComercial() {
 
           {/* Fechamentos por origem — texto livre do cadastro de fechamento */}
           <FechamentosPorOrigemCard itens={data.fechamentosPorOrigem || []} />
+
+          {/* Contratos cancelados no período — pela data do cancelamento */}
+          <ContratosCanceladosCard itens={data.contratosCancelados || []} />
         </>
       )}
 

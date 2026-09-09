@@ -24,8 +24,9 @@ import {
   comissoesFechadas, users, canaisIntegrados, chamadas,
   relatoriosProgramados, atendimentos,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, or, inArray } from "drizzle-orm";
+import { eq, and, sql, gte, lte, or, inArray, desc } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
+import { MOTIVO_CANCELAMENTO_ENGANO, contaComoCancelamento } from "../../shared/cancelamento-contrato";
 import { createLogger } from "../_core/logger";
 import { STATUS_PAGO_ASAAS } from "../_core/asaas-status";
 import { buildFiltroComissaoSQL } from "./router-financeiro";
@@ -82,6 +83,8 @@ export type FechamentoOrigemRow = {
   responsavel: string | null;
   leadId?: number | null;
   recebido?: number;
+  canceladoEm?: Date | null;
+  motivoCancelamento?: string | null;
 };
 
 export type FechamentoOrigemItem = {
@@ -97,6 +100,9 @@ export type FechamentoOrigemItem = {
   /** Quantos fechamentos listados o mesmo cliente tem no período (>1 = marca na tela). */
   mesmoCliente: number;
   foraDoFiltro: boolean;
+  /** Contrato cancelado depois de fechar: continua na origem dele, só ganha a marca. */
+  canceladoEm: string | null;
+  motivoCancelamento: string | null;
 };
 
 export type GrupoFechamentosPorOrigem = {
@@ -106,10 +112,25 @@ export type GrupoFechamentosPorOrigem = {
   recebidoTotal: number;
   /** Linhas com algum recebido (inclui as "fora do filtro"). */
   pagaram: number;
+  /** Fechamentos do grupo cancelados depois (sem os "lançado por engano"). */
+  cancelados: number;
   fechamentos: FechamentoOrigemItem[];
 };
 
 const centavos = (n: number) => Math.round(n * 100) / 100;
+
+export type ContratoCanceladoItem = {
+  leadId: number;
+  contatoId: number;
+  cliente: string;
+  fechadoEm: string | null;
+  canceladoEm: string | null;
+  valor: number;
+  motivo: string | null;
+  detalhe: string | null;
+  responsavel: string | null;
+  recebidoAntes: number;
+};
 
 /**
  * Agrupa fechamentos detalhados (leads fechado_ganho) por origem do
@@ -136,7 +157,7 @@ export function agruparFechamentosPorOrigem(
   const grupo = (chave: string, rotulo: string, quando: string): Grupo => {
     let g = porOrigem.get(chave);
     if (!g) {
-      g = { chave, origem: rotulo, grafiaMaisRecente: rotulo, quandoMaisRecente: quando, total: 0, valorTotal: 0, recebidoTotal: 0, pagaram: 0, fechamentos: [] };
+      g = { chave, origem: rotulo, grafiaMaisRecente: rotulo, quandoMaisRecente: quando, total: 0, valorTotal: 0, recebidoTotal: 0, pagaram: 0, cancelados: 0, fechamentos: [] };
       porOrigem.set(chave, g);
     } else if (chave && quando > g.quandoMaisRecente) {
       g.quandoMaisRecente = quando;
@@ -157,6 +178,8 @@ export function agruparFechamentosPorOrigem(
     g.valorTotal = centavos(g.valorTotal + valor);
     g.recebidoTotal = centavos(g.recebidoTotal + recebido);
     if (recebido > 0) g.pagaram++;
+    const canceladoEm = r.canceladoEm ? new Date(r.canceladoEm).toISOString() : null;
+    if (canceladoEm && contaComoCancelamento(r.motivoCancelamento)) g.cancelados++;
     g.fechamentos.push({
       leadId: r.leadId ?? null,
       contatoId: r.contatoId,
@@ -168,6 +191,8 @@ export function agruparFechamentosPorOrigem(
       responsavel: r.responsavel,
       mesmoCliente: r.contatoId != null ? porContato.get(r.contatoId) || 1 : 1,
       foraDoFiltro: false,
+      canceladoEm,
+      motivoCancelamento: canceladoEm ? (r.motivoCancelamento ?? null) : null,
     });
   }
 
@@ -188,6 +213,8 @@ export function agruparFechamentosPorOrigem(
       responsavel: null,
       mesmoCliente: 1,
       foraDoFiltro: true,
+      canceladoEm: null,
+      motivoCancelamento: null,
     });
   }
 
@@ -249,6 +276,26 @@ export function atribuirRecebidoAosFechamentos(args: {
   return { porLead, foraDoFiltro };
 }
 
+/** Pagamentos do cliente até o dia do cancelamento, atribuídos ao contrato
+ *  cancelado pela mesma regra do recebido por origem (entre TODOS os
+ *  fechamentos do cliente). É o "recebido antes de cancelar" da lista. */
+export function recebidoAntesDeCancelar(args: {
+  leadId: number;
+  contatoId: number;
+  diaCancelamento: string;
+  cobrancas: Array<{ contatoId: number; valor: number | string | null; dataPagamento: string }>;
+  fechamentos: Array<{ leadId: number; contatoId: number; dia: string }>;
+}): number {
+  const cobrancas = args.cobrancas.filter(
+    (c) => c.contatoId === args.contatoId && (c.dataPagamento || "").slice(0, 10) <= args.diaCancelamento,
+  );
+  const fechamentos = args.fechamentos
+    .filter((f) => f.contatoId === args.contatoId)
+    .map((f) => ({ ...f, listado: f.leadId === args.leadId }));
+  const { porLead } = atribuirRecebidoAosFechamentos({ cobrancas, fechamentos });
+  return porLead.get(args.leadId) || 0;
+}
+
 export const ETAPAS_ABERTAS = ["novo", "qualificado", "proposta", "negociacao"] as const;
 export const ETAPAS_DECIDIDAS = ["fechado_ganho", "fechado_perdido"] as const;
 
@@ -259,19 +306,26 @@ export type FunilResumo = {
     fechado_ganho: { total: number; entraramNoPeriodo: number; entraramAntes: number };
     fechado_perdido: { total: number; entraramNoPeriodo: number; entraramAntes: number };
   };
+  /** Contratos cancelados no período (pela data do cancelamento) — bloco
+   *  próprio: é decisão sobre contrato já fechado, não sobre lead. */
+  cancelados: { total: number; valor: number; fecharamNoPeriodo: number; fecharamAntes: number };
 };
 
 /**
  * Monta o funil com dois blocos: etapas abertas por quem ENTROU no período
  * (`entraram`: createdAt no período, agrupado pela etapa atual) e Ganho/
  * Perdido por quem foi DECIDIDO no período (`decididos`: fechadoEm no
- * período, com quantos deles também entraram no período).
+ * período, com quantos deles também entraram no período). `cancelados`
+ * (pela data do cancelamento) vira a barra `cancelado`, num bloco à parte.
  */
 export function montarEtapasFunil(
   entraram: Array<{ etapa: string; total: number | string; valor: number | string | null }>,
   decididos: Array<{ etapa: string; total: number | string; valor: number | string | null; entraramNoPeriodo: number | string | null }>,
+  cancelados?: { total: number | string | null; valor: number | string | null; fecharamNoPeriodo: number | string | null } | null,
 ): { etapas: Record<string, { total: number; valor: number }>; funilResumo: FunilResumo } {
   const etapas: Record<string, { total: number; valor: number }> = {};
+  const totalCancelados = Number(cancelados?.total || 0);
+  const fecharamNoPeriodo = Number(cancelados?.fecharamNoPeriodo || 0);
   const resumo: FunilResumo = {
     entraram: { total: 0, emAberto: 0, jaDecididos: 0 },
     decididos: {
@@ -279,7 +333,14 @@ export function montarEtapasFunil(
       fechado_ganho: { total: 0, entraramNoPeriodo: 0, entraramAntes: 0 },
       fechado_perdido: { total: 0, entraramNoPeriodo: 0, entraramAntes: 0 },
     },
+    cancelados: {
+      total: totalCancelados,
+      valor: Number(cancelados?.valor || 0),
+      fecharamNoPeriodo,
+      fecharamAntes: Math.max(0, totalCancelados - fecharamNoPeriodo),
+    },
   };
+  etapas.cancelado = { total: totalCancelados, valor: Number(cancelados?.valor || 0) };
   for (const r of entraram) {
     const total = Number(r.total || 0);
     resumo.entraram.total += total;
@@ -1880,6 +1941,13 @@ export const relatoriosRouter = router({
             valorTotalFechado: 0,
             ticketMedio: 0,
             comissao: 0,
+            cancelados: 0,
+            valorCancelados: 0,
+            canceladosFecharamNoPeriodo: 0,
+            canceladosPeriodoAnterior: 0,
+            variacaoCancelados: 0,
+            contratosFechadosCanceladosDepois: 0,
+            valorFechadosCanceladosDepois: 0,
           },
           ranking: [],
           cobrancasPorDia: [],
@@ -1887,6 +1955,7 @@ export const relatoriosRouter = router({
           funilResumo: montarEtapasFunil([], []).funilResumo,
           leadsPorCanal: [] as Array<{ canal: string; total: number }>,
           fechamentosPorOrigem: [] as GrupoFechamentosPorOrigem[],
+          contratosCancelados: [] as ContratoCanceladoItem[],
           filtros: {
             setorId: input?.setorId ?? null,
             atendenteId: input?.atendenteId ?? null,
@@ -1978,6 +2047,9 @@ export const relatoriosRouter = router({
       // total do período atual é o mesmo de `etapas.fechado_ganho.total`
       // (bloco "Decididos" do funil); fica no kpis pra alinhar com faturado
       // (variação + payload anterior).
+      // Contrato cancelado depois de fechar. "Lançado por engano" não é
+      // churn: fica fora do card, da barra e da lista (segue marcado na linha).
+      const cancelamentoConta = sql`(${leads.canceladoEm} IS NOT NULL AND (${leads.motivoCancelamento} IS NULL OR ${leads.motivoCancelamento} <> ${MOTIVO_CANCELAMENTO_ENGANO}))`;
       const [contratosFechadosAtualAgg] = await db
         .select({
           total: sql<number>`COUNT(*)`,
@@ -1986,6 +2058,10 @@ export const relatoriosRouter = router({
           // mesma unidade do numerador, senão a razão compara coisas
           // diferentes e pode passar de 100%.
           clientes: sql<number>`COUNT(DISTINCT ${leads.contatoId})`,
+          // O contrato fechou neste período E foi cancelado depois (em
+          // qualquer data): continua contando como fechado, só ganha a linha.
+          canceladosDepois: sql<number>`SUM(CASE WHEN ${cancelamentoConta} THEN 1 ELSE 0 END)`,
+          valorCanceladosDepois: sql<number>`COALESCE(SUM(CASE WHEN ${cancelamentoConta} THEN CAST(${leads.valorEstimado} AS DECIMAL(14,2)) ELSE 0 END), 0)`,
         })
         .from(leads)
         .where(and(
@@ -2012,6 +2088,39 @@ export const relatoriosRouter = router({
       const variacaoContratosFechados = contratosFechadosPeriodoAnterior > 0
         ? +(((contratosFechados - contratosFechadosPeriodoAnterior) / contratosFechadosPeriodoAnterior) * 100).toFixed(1)
         : contratosFechados > 0 ? 100 : 0;
+      const contratosFechadosCanceladosDepois = Number(contratosFechadosAtualAgg?.canceladosDepois || 0);
+      const valorFechadosCanceladosDepois = Number(contratosFechadosAtualAgg?.valorCanceladosDepois || 0);
+
+      // ── Cancelados no período (pela data do CANCELAMENTO) ─────────────────
+      // Como o Recebido conta pela data do pagamento: contrato de agosto
+      // cancelado em setembro entra aqui em setembro e segue fechado em agosto.
+      const condCancelados = (ini: Date, fim: Date) => and(
+        eq(leads.escritorioId, eid),
+        eq(leads.etapaFunil, "fechado_ganho"),
+        inArray(leads.responsavelId, idsAtendentes),
+        cancelamentoConta,
+        gte(leads.canceladoEm, ini),
+        lte(leads.canceladoEm, fim),
+      );
+      const [canceladosAgg] = await db
+        .select({
+          total: sql<number>`COUNT(*)`,
+          valor: sql<number>`COALESCE(SUM(CAST(${leads.valorEstimado} AS DECIMAL(14,2))), 0)`,
+          fecharamNoPeriodo: sql<number>`SUM(CASE WHEN ${leads.fechadoEm} >= ${dataInicio} AND ${leads.fechadoEm} <= ${dataFim} THEN 1 ELSE 0 END)`,
+        })
+        .from(leads)
+        .where(condCancelados(dataInicio, dataFim));
+      const [canceladosAntAgg] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(leads)
+        .where(condCancelados(dataInicioAnterior, dataFimAnterior));
+      const cancelados = Number(canceladosAgg?.total || 0);
+      const valorCancelados = Number(canceladosAgg?.valor || 0);
+      const canceladosFecharamNoPeriodo = Number(canceladosAgg?.fecharamNoPeriodo || 0);
+      const canceladosPeriodoAnterior = Number(canceladosAntAgg?.total || 0);
+      const variacaoCancelados = canceladosPeriodoAnterior > 0
+        ? +(((cancelados - canceladosPeriodoAnterior) / canceladosPeriodoAnterior) * 100).toFixed(1)
+        : cancelados > 0 ? 100 : 0;
 
       // ── Comissão a receber (fechamentos no período) ───────────────────────
       // Overlap: período da comissão SE SOBREPÕE ao range do dashboard.
@@ -2205,7 +2314,11 @@ export const relatoriosRouter = router({
           lte(leads.fechadoEm, dataFim),
         ))
         .groupBy(leads.etapaFunil);
-      const { etapas, funilResumo } = montarEtapasFunil(entraramRows, decididosRows);
+      const { etapas, funilResumo } = montarEtapasFunil(entraramRows, decididosRows, {
+        total: cancelados,
+        valor: valorCancelados,
+        fecharamNoPeriodo: canceladosFecharamNoPeriodo,
+      });
 
       // ── Leads por canal de captação ───────────────────────────────────────
       // Os MESMOS leads do bloco "Entraram no período" do funil, agrupados
@@ -2242,6 +2355,8 @@ export const relatoriosRouter = router({
           criadoEm: leads.createdAt,
           valor: leads.valorEstimado,
           responsavel: users.name,
+          canceladoEm: leads.canceladoEm,
+          motivoCancelamento: leads.motivoCancelamento,
         })
         .from(leads)
         .innerJoin(contatos, eq(leads.contatoId, contatos.id))
@@ -2320,6 +2435,93 @@ export const relatoriosRouter = router({
         idsForaDoFiltro.map((id) => ({ contatoId: id, cliente: nomesForaDoFiltro.get(id) || null, recebido: foraDoFiltro.get(id) || 0 })),
       );
 
+      // ── Lista de contratos cancelados no período ──────────────────────────
+      const canceladosRows = await db
+        .select({
+          leadId: leads.id,
+          contatoId: leads.contatoId,
+          cliente: contatos.nome,
+          fechadoEm: leads.fechadoEm,
+          criadoEm: leads.createdAt,
+          canceladoEm: leads.canceladoEm,
+          valor: leads.valorEstimado,
+          motivo: leads.motivoCancelamento,
+          detalhe: leads.detalheCancelamento,
+          responsavel: users.name,
+        })
+        .from(leads)
+        .innerJoin(contatos, eq(leads.contatoId, contatos.id))
+        .leftJoin(colaboradores, eq(colaboradores.id, leads.responsavelId))
+        .leftJoin(users, eq(users.id, colaboradores.userId))
+        .where(condCancelados(dataInicio, dataFim))
+        .orderBy(desc(leads.canceladoEm));
+      // "Recebido antes de cancelar": pagamentos do cliente até o dia do
+      // cancelamento, atribuídos ao contrato pela mesma regra do recebido
+      // por origem — entre TODOS os fechamentos do cliente, sem período.
+      const contatosCancelados = [...new Set(canceladosRows.map((r) => Number(r.contatoId)))];
+      const ultimoDiaCancelamento = canceladosRows.reduce((m, r) => {
+        const d = r.canceladoEm ? dataHojeBR(tz, r.canceladoEm as Date) : "";
+        return d > m ? d : m;
+      }, "");
+      const [cobrancasDosCancelados, fechamentosDosCancelados] = contatosCancelados.length
+        ? await Promise.all([
+          db
+            .select({
+              contatoId: sql<number>`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId})`,
+              valor: asaasCobrancas.valor,
+              dataPagamento: asaasCobrancas.dataPagamento,
+            })
+            .from(asaasCobrancas)
+            .leftJoin(categoriasCobranca, eq(categoriasCobranca.id, asaasCobrancas.categoriaId))
+            .where(and(
+              eq(asaasCobrancas.escritorioId, eid),
+              inArray(asaasCobrancas.status, STATUS_PAGO_ASAAS as unknown as string[]),
+              lte(asaasCobrancas.dataPagamento, ultimoDiaCancelamento),
+              buildFiltroComissaoSQL(["sim"])!,
+              sql`COALESCE(${asaasCobrancas.contatoBeneficiarioId}, ${asaasCobrancas.contatoId}) IN (${sql.join(contatosCancelados.map((id) => sql`${id}`), sql`, `)})`,
+            )),
+          db
+            .select({ leadId: leads.id, contatoId: leads.contatoId, fechadoEm: leads.fechadoEm, criadoEm: leads.createdAt })
+            .from(leads)
+            .where(and(
+              eq(leads.escritorioId, eid),
+              eq(leads.etapaFunil, "fechado_ganho"),
+              inArray(leads.contatoId, contatosCancelados),
+            )),
+        ])
+        : [[], []];
+      const cobrancasCancelados = cobrancasDosCancelados.map((c) => ({
+        contatoId: Number(c.contatoId),
+        valor: c.valor,
+        dataPagamento: String(c.dataPagamento || ""),
+      }));
+      const fechamentosCancelados = fechamentosDosCancelados.map((f) => ({
+        leadId: Number(f.leadId),
+        contatoId: Number(f.contatoId),
+        dia: dataHojeBR(tz, (f.fechadoEm ?? f.criadoEm) as Date),
+      }));
+      const contratosCancelados = canceladosRows.map((r) => {
+        const leadId = Number(r.leadId);
+        const contatoId = Number(r.contatoId);
+        const diaCancelamento = r.canceladoEm ? dataHojeBR(tz, r.canceladoEm as Date) : "";
+        return {
+          leadId,
+          contatoId,
+          cliente: r.cliente || "Cliente",
+          fechadoEm: r.fechadoEm ? new Date(r.fechadoEm as Date).toISOString() : (r.criadoEm ? new Date(r.criadoEm as Date).toISOString() : null),
+          canceladoEm: r.canceladoEm ? new Date(r.canceladoEm as Date).toISOString() : null,
+          valor: Number(r.valor || 0),
+          motivo: r.motivo as string | null,
+          detalhe: r.detalhe as string | null,
+          responsavel: r.responsavel as string | null,
+          recebidoAntes: recebidoAntesDeCancelar({
+            leadId, contatoId, diaCancelamento,
+            cobrancas: cobrancasCancelados,
+            fechamentos: fechamentosCancelados,
+          }),
+        };
+      });
+
       return {
         periodo: {
           dataInicio: dataInicioStr,
@@ -2343,6 +2545,13 @@ export const relatoriosRouter = router({
           valorTotalFechado,
           ticketMedio,
           comissao: comissaoTotal,
+          cancelados,
+          valorCancelados,
+          canceladosFecharamNoPeriodo,
+          canceladosPeriodoAnterior,
+          variacaoCancelados,
+          contratosFechadosCanceladosDepois,
+          valorFechadosCanceladosDepois,
         },
         ranking,
         cobrancasPorDia: porDiaRows.map((r) => ({
@@ -2353,6 +2562,7 @@ export const relatoriosRouter = router({
         funilResumo,
         leadsPorCanal,
         fechamentosPorOrigem,
+        contratosCancelados,
         filtros: {
           setorId: input?.setorId ?? null,
           atendenteId: input?.atendenteId ?? null,

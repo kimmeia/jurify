@@ -25,6 +25,13 @@ export type ComercialDashboardData = {
     variacaoContratosFechados: number;
     valorTotalFechado: number;
     ticketMedio: number;
+    /** Contratos cancelados no período (pela data do cancelamento). */
+    cancelados?: number;
+    valorCancelados?: number;
+    canceladosFecharamNoPeriodo?: number;
+    variacaoCancelados?: number;
+    contratosFechadosCanceladosDepois?: number;
+    valorFechadosCanceladosDepois?: number;
   };
   ranking: Array<{
     atendenteId: number;
@@ -48,7 +55,20 @@ export type ComercialDashboardData = {
       fechado_ganho: { total: number; entraramNoPeriodo: number; entraramAntes: number };
       fechado_perdido: { total: number; entraramNoPeriodo: number; entraramAntes: number };
     };
+    cancelados?: { total: number; valor: number; fecharamNoPeriodo: number; fecharamAntes: number };
   };
+  contratosCancelados?: Array<{
+    leadId: number;
+    contatoId: number;
+    cliente: string;
+    fechadoEm: string | null;
+    canceladoEm: string | null;
+    valor: number;
+    motivo: string | null;
+    detalhe: string | null;
+    responsavel: string | null;
+    recebidoAntes: number;
+  }>;
   leadsPorCanal: Array<{ canal: string; total: number }>;
   fechamentosPorOrigem: Array<{
     origem: string;
@@ -66,6 +86,8 @@ export type ComercialDashboardData = {
       responsavel: string | null;
       mesmoCliente?: number;
       foraDoFiltro?: boolean;
+      canceladoEm?: string | null;
+      motivoCancelamento?: string | null;
     }>;
   }>;
   filtros: { setorId: number | null; atendenteId: number | null };
@@ -132,10 +154,12 @@ const ETAPAS_FUNIL = [
 const ETAPA_LABELS: Record<string, string> = {
   novo: "Novo", qualificado: "Qualificado", proposta: "Proposta",
   negociacao: "Negociação", fechado_ganho: "Ganho", fechado_perdido: "Perdido",
+  cancelado: "Cancelado",
 };
 const ETAPA_COR: Record<string, string> = {
   novo: "#64748b", qualificado: "#3b82f6", proposta: "#8b5cf6",
   negociacao: "#f59e0b", fechado_ganho: "#10b981", fechado_perdido: "#ef4444",
+  cancelado: "#b45309",
 };
 const ORIGEM_LABELS: Record<string, string> = {
   whatsapp: "WhatsApp", instagram: "Instagram", facebook: "Facebook",
@@ -143,6 +167,10 @@ const ORIGEM_LABELS: Record<string, string> = {
 };
 const SITUACAO_FECHAMENTO_LABEL: Record<string, string> = {
   pago: "Pago", parcial: "Parcial", nada: "Nada no período", fora_do_filtro: "Fora do filtro",
+};
+const MOTIVO_CANCELAMENTO_LABEL: Record<string, string> = {
+  desistencia: "Desistência do cliente", inadimplencia: "Inadimplência", outro_escritorio: "Fechou com outro escritório",
+  sem_retorno: "Sem retorno do cliente", engano: "Lançado por engano", outro: "Outro",
 };
 const STATUS_INFO: Record<string, { label: string; bg: string; fg: string }> = {
   pago: { label: "Pago integral", bg: "#d1fae5", fg: "#047857" },
@@ -252,7 +280,10 @@ export async function gerarComercialPdf(args: {
       const emitido = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 
       let y = doc.y + 6;
-      rrect(L, y, W, 34, 5, "#f8fafc", C.line, 0.8);
+      // Duas linhas de rótulo (7.5pt) + valor (9pt): cada linha ocupa ~20pt,
+      // então a segunda começa em +26 — antes começava em +17 e o rótulo
+      // caía em cima do valor da primeira.
+      rrect(L, y, W, 48, 5, "#f8fafc", C.line, 0.8);
       const colMeta = W / 2;
       const meta = (label: string, val: string, x: number, yy: number) => {
         doc.fillColor(C.faint).font("Helvetica").fontSize(7.5).text(label.toUpperCase(), x, yy);
@@ -261,9 +292,9 @@ export async function gerarComercialPdf(args: {
       };
       meta("Período", `${formatData(data.periodo.dataInicio)} a ${formatData(data.periodo.dataFim)}`, L + 10, y + 6);
       meta("Setor comercial", setorNome, L + colMeta, y + 6);
-      meta("Atendente", atendenteNome, L + 10, y + 21 - 4);
-      meta("Emitido em", emitido, L + colMeta, y + 21 - 4);
-      doc.y = y + 44;
+      meta("Atendente", atendenteNome, L + 10, y + 26);
+      meta("Emitido em", emitido, L + colMeta, y + 26);
+      doc.y = y + 58;
 
       // ── 1) FECHAMENTO TOTAL (KPIs) ───────────────────────────────────────────
       sectionHeader("Fechamento total", C.emerald, "Resumo consolidado do período.");
@@ -277,80 +308,139 @@ export async function gerarComercialPdf(args: {
           ? k.valorTotalFechado / k.contratosFechados : 0;
 
         const gap = 8;
-        const cw = (W - gap * 3) / 4;
-        const ch = 92;
-        const y0 = doc.y;
-        ensure(ch + 14);
+        // Card "Cancelados" só entra quando o payload traz o número (5 colunas).
+        const temCancelados = k.cancelados != null;
+        const nCards = temCancelados ? 5 : 4;
+        const cw = (W - gap * (nCards - 1)) / nCards;
 
         const deltaStr = (p: number) =>
           p === 0 ? "sem mudança" : `${p > 0 ? "+" : ""}${pct1(p)} vs anterior`;
 
-        const kpi = (
-          i: number,
-          o: {
-            label: string; value: string; color: string; bd: string;
-            delta?: number; sub1?: string; sub2?: string;
-            subBg?: string; subBd?: string; subFg?: string; foot?: string;
-          },
-        ) => {
+        // Com 5 cartões cada um tem ~97pt: "R$ 84.350,00" a 14pt não cabe e
+        // o pdfkit quebra a linha mesmo com lineBreak:false (o texto invade a
+        // linha de baixo). Cada texto encolhe a fonte até `min`; as linhas
+        // explicativas (sub2, rodapé) ainda podem quebrar em 2 linhas — a
+        // altura do cartão é medida ANTES de desenhar, pra caber tudo; só no
+        // limite corta com reticências.
+        type Linha = { texto: string; tam: number; altura: number; quebra: boolean };
+        const medir = (
+          texto: string, larguraMax: number, base: number, min: number, fonte: string, maxLinhas: 1 | 2,
+        ): Linha => {
+          doc.font(fonte);
+          let tam = base;
+          doc.fontSize(tam);
+          while (tam > min && doc.widthOfString(texto) > larguraMax) {
+            tam = Math.max(min, tam - 0.5);
+            doc.fontSize(tam);
+          }
+          // heightOfString conta o lineGap por linha — comparar com a mesma régua.
+          const umaLinha = doc.currentLineHeight(true);
+          if (doc.widthOfString(texto) <= larguraMax) return { texto, tam, altura: umaLinha, quebra: false };
+          if (maxLinhas > 1) {
+            const h = doc.heightOfString(texto, { width: larguraMax });
+            if (h <= umaLinha * maxLinhas + 0.5) return { texto, tam, altura: h, quebra: true };
+          }
+          return { texto: fit(texto, larguraMax), tam, altura: umaLinha, quebra: false };
+        };
+        const escrever = (l: Linha, fonte: string, cor: string, x: number, y: number, larguraMax: number) => {
+          doc.fillColor(cor).font(fonte).fontSize(l.tam)
+            .text(l.texto, x, y, { width: larguraMax, lineBreak: l.quebra });
+        };
+
+        type Kpi = {
+          label: string; value: string; color: string; bd: string;
+          delta?: number; sub1?: string; sub2?: string;
+          subBg?: string; subBd?: string; subFg?: string; foot?: string;
+        };
+        const medirCard = (o: Kpi) => {
+          const label = medir(o.label, cw - 24, 7.5, 6, "Helvetica", 1);
+          const value = medir(o.value, cw - 14, 14, 9.5, "Helvetica-Bold", 1);
+          const delta = o.delta != null ? medir(deltaStr(o.delta), cw - 14, 7.5, 6, "Helvetica-Bold", 1) : null;
+          const sub1 = o.sub1 ? medir(o.sub1, cw - 24, 7, 5.5, "Helvetica-Bold", 1) : null;
+          const sub2 = o.sub1 && o.sub2 ? medir(o.sub2, cw - 24, 6.5, 5.5, "Helvetica", 2) : null;
+          const foot = o.foot ? medir(o.foot, cw - 14, 6.3, 5.5, "Helvetica-Oblique", 2) : null;
+          const subH = sub1 ? 3.5 + 9 + (sub2 ? sub2.altura + 1.5 : 0) + 2.5 : 0;
+          // 8 (topo) + 14 (rótulo) + 19 (valor) + delta + caixa + rodapé + 7
+          const altura = 8 + 14 + 19 + (delta ? 11 : 0) + subH + (foot ? foot.altura + 6 : 0) + 7;
+          return { label, value, delta, sub1, sub2, foot, subH, altura };
+        };
+        const desenharCard = (i: number, o: Kpi, m: ReturnType<typeof medirCard>, y0: number, ch: number) => {
           const x = L + i * (cw + gap);
           rrect(x, y0, cw, ch, 5, "#ffffff", o.bd, 1.2);
           let yy = y0 + 8;
           doc.save().circle(x + 11, yy + 4, 2.4).fill(o.color).restore();
-          doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
-            .text(o.label, x + 18, yy + 0.5, { width: cw - 24, lineBreak: false });
+          escrever(m.label, "Helvetica", C.muted, x + 18, yy + 0.5, cw - 24);
           yy += 14;
-          doc.fillColor(o.color).font("Helvetica-Bold").fontSize(14)
-            .text(o.value, x + 8, yy, { width: cw - 14, lineBreak: false });
+          escrever(m.value, "Helvetica-Bold", o.color, x + 8, yy, cw - 14);
           yy += 19;
-          if (o.delta != null) {
+          if (m.delta && o.delta != null) {
             const cor = o.delta === 0 ? C.muted : o.delta > 0 ? C.pos : C.neg;
-            doc.fillColor(cor).font("Helvetica-Bold").fontSize(7.5)
-              .text(deltaStr(o.delta), x + 8, yy, { width: cw - 14, lineBreak: false });
+            escrever(m.delta, "Helvetica-Bold", cor, x + 8, yy, cw - 14);
             yy += 11;
           }
-          if (o.sub1) {
-            const sh = o.sub2 ? 22 : 14;
-            rrect(x + 8, yy, cw - 16, sh, 3, o.subBg, o.subBd, 0.8);
-            doc.fillColor(o.subFg || C.dark).font("Helvetica-Bold").fontSize(7)
-              .text(o.sub1, x + 12, yy + 3.5, { width: cw - 24, lineBreak: false });
-            if (o.sub2) {
-              doc.fillColor(C.muted).font("Helvetica").fontSize(6.5)
-                .text(o.sub2, x + 12, yy + 12.5, { width: cw - 24, lineBreak: false });
-            }
+          if (m.sub1) {
+            rrect(x + 8, yy, cw - 16, m.subH, 3, o.subBg, o.subBd, 0.8);
+            escrever(m.sub1, "Helvetica-Bold", o.subFg || C.dark, x + 12, yy + 3.5, cw - 24);
+            if (m.sub2) escrever(m.sub2, "Helvetica", C.muted, x + 12, yy + 12.5, cw - 24);
           }
-          if (o.foot) {
-            doc.fillColor(C.faint).font("Helvetica-Oblique").fontSize(6.3)
-              .text(o.foot, x + 8, y0 + ch - 11, { width: cw - 14, lineBreak: false });
+          if (m.foot) {
+            escrever(m.foot, "Helvetica-Oblique", C.faint, x + 8, y0 + ch - 6 - m.foot.altura, cw - 14);
           }
         };
 
-        kpi(0, {
-          label: "Recebido", value: formatBRL(k.faturado), color: C.emerald, bd: C.emeraldBd,
-          delta: k.variacaoFaturado,
-          sub1: pctRecebidoFechado != null ? `${pct1(pctRecebidoFechado)} do total fechado` : "sem fechado no período",
-          sub2: pctRecebidoFechado != null ? `de ${formatBRL(k.valorTotalFechado)}` : undefined,
-          subBg: C.emeraldBg, subBd: C.emeraldBd, subFg: "#047857",
-          foot: "cobranças pagas no período",
-        });
-        kpi(1, {
-          label: "Contratos fechados", value: String(k.contratosFechados), color: C.blue, bd: C.blueBd,
-          delta: k.variacaoContratosFechados, foot: "oportunidades ganhas no período",
-        });
-        kpi(2, {
-          label: "Clientes que pagaram", value: String(k.clientesPagantes), color: C.indigo, bd: C.indigoBd,
-          delta: k.variacaoClientesPagantes,
-          sub1: pctPagosFechados != null ? `${pct1(pctPagosFechados)} dos que fecharam` : "sem fechado no período",
-          sub2: pctPagosFechados != null ? `${k.clientesPagantes} de ${k.clientesFechados} clientes` : undefined,
-          subBg: C.indigoBg, subBd: C.indigoBd, subFg: "#4338ca",
-          foot: "quantas cobranças ele pagou não muda",
-        });
-        kpi(3, {
-          label: "Ticket médio", value: formatBRL(ticketFechado), color: C.violet, bd: C.violetBd,
-          sub1: `${formatBRL(k.ticketMedio)} recebido`, sub2: "recebido ÷ clientes que pagaram",
-          subBg: C.violetBg, subBd: C.violetBd, subFg: "#6d28d9",
-          foot: "fechado ÷ contratos fechados",
-        });
+        const canceladosDepois = k.contratosFechadosCanceladosDepois || 0;
+        const cards: Kpi[] = [
+          {
+            label: "Recebido", value: formatBRL(k.faturado), color: C.emerald, bd: C.emeraldBd,
+            delta: k.variacaoFaturado,
+            sub1: pctRecebidoFechado != null ? `${pct1(pctRecebidoFechado)} do total fechado` : "sem fechado no período",
+            sub2: pctRecebidoFechado != null ? `de ${formatBRL(k.valorTotalFechado)}` : undefined,
+            subBg: C.emeraldBg, subBd: C.emeraldBd, subFg: "#047857",
+            foot: "cobranças pagas no período",
+          },
+          {
+            label: "Contratos fechados", value: String(k.contratosFechados), color: C.blue, bd: C.blueBd,
+            delta: k.variacaoContratosFechados, foot: "oportunidades ganhas no período",
+            ...(temCancelados && canceladosDepois > 0
+              ? {
+                sub1: `${canceladosDepois} cancelado(s) depois`,
+                sub2: `${formatBRL(k.valorFechadosCanceladosDepois || 0)} cancelados`,
+                subBg: "#fef2f2", subBd: "#fecaca", subFg: "#991b1b",
+              }
+              : {}),
+          },
+        ];
+        if (temCancelados) {
+          cards.push({
+            label: "Cancelados", value: String(k.cancelados || 0), color: C.neg, bd: "#fecaca",
+            delta: k.variacaoCancelados,
+            sub1: `${formatBRL(k.valorCancelados || 0)} cancelados`,
+            sub2: `${k.canceladosFecharamNoPeriodo || 0} fechou no período · ${Math.max(0, (k.cancelados || 0) - (k.canceladosFecharamNoPeriodo || 0))} antes`,
+            subBg: "#fef2f2", subBd: "#fecaca", subFg: "#991b1b",
+            foot: "pela data do cancelamento",
+          });
+        }
+        cards.push(
+          {
+            label: "Clientes que pagaram", value: String(k.clientesPagantes), color: C.indigo, bd: C.indigoBd,
+            delta: k.variacaoClientesPagantes,
+            sub1: pctPagosFechados != null ? `${pct1(pctPagosFechados)} dos que fecharam` : "sem fechado no período",
+            sub2: pctPagosFechados != null ? `${k.clientesPagantes} de ${k.clientesFechados} clientes` : undefined,
+            subBg: C.indigoBg, subBd: C.indigoBd, subFg: "#4338ca",
+            foot: "quantas cobranças ele pagou não muda",
+          },
+          {
+            label: "Ticket médio", value: formatBRL(ticketFechado), color: C.violet, bd: C.violetBd,
+            sub1: `${formatBRL(k.ticketMedio)} recebido`, sub2: "recebido ÷ clientes que pagaram",
+            subBg: C.violetBg, subBd: C.violetBd, subFg: "#6d28d9",
+            foot: "fechado ÷ contratos fechados",
+          },
+        );
+        const medidas = cards.map(medirCard);
+        const ch = Math.max(92, ...medidas.map((m) => m.altura));
+        ensure(ch + 14);
+        const y0 = doc.y;
+        cards.forEach((o, i) => desenharCard(i, o, medidas[i], y0, ch));
         doc.y = y0 + ch + 14;
       }
 
@@ -533,6 +623,14 @@ export async function gerarComercialPdf(args: {
         subLinha("fechado_ganho");
         barra("fechado_perdido");
         subLinha("fechado_perdido");
+        if (fr?.cancelados) {
+          grupo("Cancelados no período · pela data do cancelamento");
+          barra("cancelado");
+          ensure(12);
+          doc.fillColor(C.muted).font("Helvetica").fontSize(6.5)
+            .text(`${fr.cancelados.fecharamNoPeriodo} fechou neste período · ${fr.cancelados.fecharamAntes} fechou antes`, barX, doc.y - 3, { width: barW, lineBreak: false });
+          doc.y += 8;
+        }
         doc.y += 8;
       }
 
@@ -713,14 +811,64 @@ export async function gerarComercialPdf(args: {
             const recebido = f.recebido || 0;
             doc.fillColor(recebido > 0 ? C.emerald : C.muted).font(recebido > 0 ? "Helvetica-Bold" : "Helvetica").fontSize(8)
               .text(formatBRL(recebido), xRec, yr, { width: wRec, align: "right", lineBreak: false });
-            doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
-              .text(SITUACAO_FECHAMENTO_LABEL[f.situacao || "nada"] || "—", xSit, yr, { width: wSit, lineBreak: false });
+            if (f.canceladoEm) {
+              doc.fillColor(C.neg).font("Helvetica-Bold").fontSize(7.5)
+                .text("Cancelado", xSit, yr, { width: wSit, lineBreak: false });
+            } else {
+              doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
+                .text(SITUACAO_FECHAMENTO_LABEL[f.situacao || "nada"] || "—", xSit, yr, { width: wSit, lineBreak: false });
+            }
             doc.fillColor(C.muted).font("Helvetica").fontSize(8)
               .text(fit(f.responsavel || "—", wResp), xResp, yr, { width: wResp, lineBreak: false });
             doc.y = yr + 12;
           }
           doc.y += 8;
         }
+      }
+
+      // ── 8) CONTRATOS CANCELADOS NO PERÍODO ───────────────────────────────────
+      if (data.contratosCancelados && data.contratosCancelados.length > 0) {
+        const lista = data.contratosCancelados;
+        const totValor = lista.reduce((s, c) => s + (c.valor || 0), 0);
+        const totAntes = lista.reduce((s, c) => s + (c.recebidoAntes || 0), 0);
+        ensure(70);
+        sectionHeader(
+          "Contratos cancelados no período", C.neg,
+          `${lista.length} contrato(s) · valiam ${formatBRL(totValor)} · ${formatBRL(totAntes)} recebido antes de cancelar. ` +
+            "Pela data do cancelamento; o fechamento continua contando no mês em que fechou.",
+        );
+        const xCli = L + 4, wCli = 130, xFech = L + 138, wFech = 54, xCanc = L + 196, wCanc = 54,
+          xVal = L + 254, wVal = 66, xAntes = L + 324, wAntes = 66, xMot = L + 394, wMot = W - 398;
+        const yc = doc.y;
+        doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7);
+        doc.text("Cliente", xCli, yc, { width: wCli });
+        doc.text("Fechado em", xFech, yc, { width: wFech });
+        doc.text("Cancelado em", xCanc, yc, { width: wCanc });
+        doc.text("Valor", xVal, yc, { width: wVal, align: "right" });
+        doc.text("Recebido antes", xAntes, yc, { width: wAntes, align: "right" });
+        doc.text("Motivo · responsável", xMot, yc, { width: wMot });
+        doc.y = yc + 10;
+        hr(doc.y, C.line, 0.5);
+        doc.y += 3;
+        for (const c of lista) {
+          ensure(14);
+          const yr = doc.y;
+          doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+            .text(fit(c.cliente, wCli), xCli, yr, { width: wCli, lineBreak: false });
+          doc.fillColor(C.muted).font("Helvetica").fontSize(8)
+            .text(c.fechadoEm ? new Date(c.fechadoEm).toLocaleDateString("pt-BR") : "—", xFech, yr, { width: wFech, lineBreak: false });
+          doc.fillColor(C.neg).font("Helvetica-Bold").fontSize(8)
+            .text(c.canceladoEm ? new Date(c.canceladoEm).toLocaleDateString("pt-BR") : "—", xCanc, yr, { width: wCanc, lineBreak: false });
+          doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8)
+            .text(formatBRL(c.valor || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
+          doc.fillColor(c.recebidoAntes > 0 ? C.emerald : C.muted).font("Helvetica").fontSize(8)
+            .text(formatBRL(c.recebidoAntes || 0), xAntes, yr, { width: wAntes, align: "right", lineBreak: false });
+          const motivo = (MOTIVO_CANCELAMENTO_LABEL[c.motivo || ""] || c.motivo || "—") + (c.detalhe ? ` — ${c.detalhe}` : "") + (c.responsavel ? ` · ${c.responsavel}` : "");
+          doc.fillColor(C.muted).font("Helvetica").fontSize(7.5)
+            .text(fit(motivo, wMot), xMot, yr, { width: wMot, lineBreak: false });
+          doc.y = yr + 12;
+        }
+        doc.y += 8;
       }
 
       // ── Nota de metodologia ──────────────────────────────────────────────────
@@ -734,7 +882,9 @@ export async function gerarComercialPdf(args: {
           "não altera a contagem. Ticket médio fechado = total fechado ÷ contratos fechados. " +
           "Funil: etapas abertas contam leads criados no período; Ganho e Perdido contam pela data da decisão. " +
           "Recebido por origem: os mesmos pagamentos do card Recebido, cada um no fechamento mais recente do cliente " +
-          "antes da data do pagamento; o que não encaixa em origem nenhuma vai para \"Sem origem / fora do filtro\".",
+          "antes da data do pagamento; o que não encaixa em origem nenhuma vai para \"Sem origem / fora do filtro\". " +
+          "Cancelados: contratos fechados que o cliente desfez, pela data do cancelamento; o fechamento continua " +
+          "contando no mês em que fechou e o que já foi recebido não muda. \"Lançado por engano\" não entra na conta.",
         L, doc.y, { width: W, align: "left" },
       );
 

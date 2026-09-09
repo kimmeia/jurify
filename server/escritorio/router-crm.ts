@@ -22,6 +22,10 @@ import {
 import { conversas, contatos, leads, canaisIntegrados } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { toIsoString } from "../_core/dates";
+import { registrarAuditoria } from "../_core/audit";
+import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
+import { MOTIVO_CANCELAMENTO_IDS } from "../../shared/cancelamento-contrato";
+import { cancelarContrato, reativarContrato } from "./cancelar-contrato";
 import { estadoDoNumero } from "../../shared/conversa-existente";
 import { excluirClienteEmCascata } from "./excluir-cliente";
 import { mensagemTransferencia, nomeCurto } from "./transferencia-conversa";
@@ -1091,6 +1095,55 @@ export const crmRouter = router({
       const perm = await checkPermission(ctx.user.id, "pipeline", "excluir", { fallbackModulo: "kanban" });
       if (!perm.allowed) throw new Error("Sem permissão para excluir leads.");
       await excluirLead(input.id, perm.escritorioId);
+      return { success: true };
+    }),
+
+  /** Contrato fechado que o cliente desfez: guarda data, motivo e quem
+   *  cancelou sem mexer no fechamento (continua Ganho, no mês em que fechou).
+   *  Mesma permissão de mover o lead pra Perdido. */
+  cancelarContrato: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      motivo: z.enum(MOTIVO_CANCELAMENTO_IDS),
+      detalhe: z.string().max(500).optional(),
+      encerrarServico: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "pipeline", "editar", { fallbackModulo: "kanban" });
+      if (!perm.allowed) throw new Error("Sem permissão para editar leads.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      const r = await cancelarContrato(db, {
+        escritorioId: perm.escritorioId,
+        leadId: input.id,
+        data: input.data,
+        motivo: input.motivo,
+        detalhe: input.detalhe,
+        canceladoPor: perm.colaboradorId ?? null,
+        encerrarServico: !!input.encerrarServico,
+        tz: esc?.escritorio.fusoHorario || FUSO_HORARIO_PADRAO,
+      });
+      await registrarAuditoria({
+        ctx,
+        acao: "lead.cancelar_contrato",
+        alvoTipo: "lead",
+        alvoId: input.id,
+        detalhes: { data: input.data, motivo: input.motivo, encerrarServico: !!input.encerrarServico, contatoId: r.contatoId },
+      });
+      return { success: true, contatoId: r.contatoId };
+    }),
+
+  reativarContrato: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "pipeline", "editar", { fallbackModulo: "kanban" });
+      if (!perm.allowed) throw new Error("Sem permissão para editar leads.");
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      await reativarContrato(db, { escritorioId: perm.escritorioId, leadId: input.id });
+      await registrarAuditoria({ ctx, acao: "lead.reativar_contrato", alvoTipo: "lead", alvoId: input.id });
       return { success: true };
     }),
 

@@ -699,12 +699,70 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
   Amarras: `relatorio-comercial-funil-canal-origem` (19) — 17 mutações
   vermelhas (`scratchpad/mutar-relatorio-comercial.py`);
   `relatorios-fechamentos-origem` e a fixture do PDF atualizadas.
-  **Pedido novo do dono, em proposta**: "opção para controlar os
-  cancelados" — `mockup-cancelados-contrato.html` (estado Cancelado com
-  data/motivo/quem no fechamento; hoje só existe Perdido — que mantém o
-  `fechadoEm` original — ou excluir; `contatos.situacaoServico=cancelado`
-  existe com data/motivo mas não fala com lead nem relatório; estorno Asaas
-  some do Recebido em silêncio). Aguarda o "pode fazer".
+- **Entregue 09/09 (noite), controle de contratos cancelados — mockup
+  `mockup-cancelados-contrato.html`, "pode fazer" do dono com as 5 decisões
+  da proposta** (cancelado CONTINUA em "Contratos fechados" do mês em que
+  fechou, com linha "N cancelado(s) depois"; lista fixa de motivos;
+  diálogo oferece "encerrar também o serviço" marcado; arrastar Ganho →
+  Perdido no Pipeline pergunta "cancelado ou perdido?"; "Lançado por
+  engano" fica gravado mas FORA de card/barra/lista — engano não é churn).
+  Antes só existia Perdido (que mantém o `fechadoEm` original) ou excluir.
+  - Modelo: o lead segue `fechado_ganho` (nenhuma contagem de "fechados"
+    muda) + 4 colunas aditivas em `leads` (migration 0219:
+    `canceladoEmLead`, `motivoCancelamentoLead`, `detalheCancelamentoLead`,
+    `canceladoPorLead`; no schema `canceladoEm`/`motivoCancelamento`/
+    `detalheCancelamento`/`canceladoPor`). `shared/cancelamento-contrato.ts`:
+    `MOTIVOS_CANCELAMENTO` (desistencia · inadimplencia · outro_escritorio ·
+    sem_retorno · engano · outro), `contaComoCancelamento`,
+    `contratoCancelado`, `descricaoCancelamento`, `motivoServicoAoCancelar`.
+  - `server/escritorio/cancelar-contrato.ts`: `cancelarContrato` (só Ganho
+    do escritório, não cancelado; data ≤ hoje e ≥ dia do fechamento, gravada
+    como MEIO-DIA local — mesmo idioma das datas-só; `encerrarServico` grava
+    `contatos.situacaoServico=cancelado` com a MESMA data e motivo
+    "Contrato cancelado: <motivo>"), `reativarContrato` (limpa os 4
+    campos), `cancelarContratosDoContato` (Ganho ainda abertos do contato —
+    `isNull(canceladoEm)`, senão sobrescreveria cancelamento antigo).
+    Procedures `crm.cancelarContrato`/`crm.reativarContrato` (permissão
+    `pipeline.editar` com fallback kanban, auditoria `lead.cancelar_contrato`
+    / `lead.reativar_contrato`); `clientes.encerrarServico` aceita
+    `cancelarContratos` (só tipo cancelado/rescindido) e devolve quantos
+    cancelou; `listarLeads` (crm e clientes) devolve os campos +
+    `canceladoPorNome`.
+  - Relatório (`comercialDashboard`): `cancelamentoConta` = canceladoEm
+    preenchido E motivo ≠ engano; card Cancelados por `canceladoEm` no
+    período (+ período anterior/variação, `canceladosFecharamNoPeriodo`),
+    card Contratos fechados ganha `contratosFechadosCanceladosDepois`/
+    `valorFechadosCanceladosDepois` (sem tirar do total); funil ganha o 3º
+    bloco `cancelado` (`montarEtapasFunil(entraram, decididos, cancelados)`
+    → `funilResumo.cancelados` {total, valor, fecharamNoPeriodo,
+    fecharamAntes}); origem: fechamento cancelado fica na origem dele com a
+    marca (`cancelados` do grupo não conta engano); `contratosCancelados`
+    (lista) com `recebidoAntes` = `recebidoAntesDeCancelar` (cobranças até
+    o dia do cancelamento, atribuídas entre TODOS os fechamentos do cliente
+    com a mesma regra do recebido por origem). Dashboard geral: `cancelados`
+    no `desempenhoComercial`. PDF: 5º cartão, 3º bloco do funil, "Cancelado"
+    na Situação, seção "Contratos cancelados no período", nota de método.
+    Os cartões do PDF passaram a MEDIR antes de desenhar (fonte encolhe até
+    caber, sub2/rodapé quebram em 2 linhas, altura = maior cartão) — com 5
+    colunas o texto invadia a linha de baixo; e o cabeçalho do PDF tinha
+    a 2ª linha (Atendente/Emitido em) desenhada em cima da 1ª desde sempre
+    (`y + 21 - 4`) — corrigido de passagem (caixa 48pt, 2ª linha em +26).
+  - Telas: `atendimento/cancelar-contrato-dialog.tsx`
+    (`CancelarContratoDialog` data/motivo/detalhe/encerrar serviço;
+    `CanceladoOuPerdidoDialog`); Pipeline: coluna recolhida "Cancelados"
+    (mês atual), card com faixa, gaveta com "Cancelar contrato" ×
+    "Reativar contrato", etapa travada quando cancelado, `moverLeadPara`
+    pergunta no Ganho → Perdido; Clientes: linha do fechamento com selo
+    CANCELADO + motivo/quem, botões Cancelar/Reativar, "Situação do
+    serviço" com checkbox "Cancelar também os N contratos fechados";
+    Relatórios: 5 KPIs, funil 3 blocos, `FechamentosPorOrigemCard` com a
+    marca, `ContratosCanceladosCard`.
+  Amarras: `cancelar-contrato` (17; `makeDb` do teste captura o WHERE e
+  renderiza com `MySqlDialect` — foi o que pegou a mutação do
+  `isNull(canceladoEm)`, invisível pro banco falso) + 7 mutações novas no
+  `mutar-relatorio-comercial.py` (31 no total, todas vermelhas). Fora do
+  pedido, anotado: estorno do Asaas continua sumindo do Recebido em
+  silêncio (não fala com o cancelamento).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em

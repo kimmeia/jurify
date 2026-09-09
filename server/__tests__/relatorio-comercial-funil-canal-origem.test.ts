@@ -64,7 +64,11 @@ describe("montarEtapasFunil — dois blocos, duas datas", () => {
 
   it("vazio devolve zeros (é o que a resposta sem atendentes usa)", () => {
     const { etapas, funilResumo } = montarEtapasFunil([], []);
-    expect(etapas).toEqual({ fechado_ganho: { total: 0, valor: 0 }, fechado_perdido: { total: 0, valor: 0 } });
+    expect(etapas).toEqual({
+      fechado_ganho: { total: 0, valor: 0 },
+      fechado_perdido: { total: 0, valor: 0 },
+      cancelado: { total: 0, valor: 0 },
+    });
     expect(funilResumo.entraram.total).toBe(0);
     expect(funilResumo.decididos.total).toBe(0);
   });
@@ -255,7 +259,7 @@ describe("comercialDashboard — as consultas usam as datas combinadas", () => {
     expect(trechoDec).toContain("gte(leads.fechadoEm, dataInicio)");
     expect(trechoDec).toContain("lte(leads.fechadoEm, dataFim)");
     expect(trechoDec).toMatch(/entraramNoPeriodo: sql<number>`SUM\(CASE WHEN \$\{leads\.createdAt\}/);
-    expect(bloco).toContain("montarEtapasFunil(entraramRows, decididosRows)");
+    expect(bloco).toContain("montarEtapasFunil(entraramRows, decididosRows, {");
     const iEnt = bloco.indexOf("const entraramRows");
     const trechoEnt = bloco.slice(iEnt, iDec);
     expect(trechoEnt).toContain("gte(leads.createdAt, dataInicio)");
