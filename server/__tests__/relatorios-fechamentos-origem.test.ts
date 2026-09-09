@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { agruparFechamentosPorOrigem } from "../escritorio/router-relatorios";
+import { agruparFechamentosPorOrigem, ORIGEM_SEM_OU_FORA_DO_FILTRO } from "../escritorio/router-relatorios";
 
 const D1 = new Date("2026-06-01T12:00:00Z");
 const D2 = new Date("2026-06-05T12:00:00Z");
@@ -40,13 +40,13 @@ describe("agruparFechamentosPorOrigem", () => {
     expect(out[0].fechamentos[0].fechadoEm).toBe(D2.toISOString());
   });
 
-  it("origem vazia/whitespace vira 'Sem origem'; valor string/nulo é tolerado", () => {
+  it("origem vazia/whitespace vira o balde 'Sem origem / fora do filtro'; valor string/nulo é tolerado", () => {
     const out = agruparFechamentosPorOrigem([
       { origem: "  ", contatoId: 1, cliente: "A", fechadoEm: D1, criadoEm: D1, valor: "1500" as any, responsavel: null },
       { origem: null, contatoId: 2, cliente: "B", fechadoEm: D1, criadoEm: D1, valor: null, responsavel: null },
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ origem: "Sem origem", total: 2, valorTotal: 1500 });
+    expect(out[0]).toMatchObject({ origem: ORIGEM_SEM_OU_FORA_DO_FILTRO, total: 2, valorTotal: 1500 });
   });
 
   it("lista vazia → []", () => {

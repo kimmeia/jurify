@@ -684,6 +684,12 @@ function CardFunil() {
               style={{ width: `${Math.round((perdidos / decididos) * 100)}%` }}
             />
           </span>
+          {(data?.cancelados ?? 0) > 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              <span className="font-semibold text-danger-fg">{data?.cancelados}</span>{" "}
+              {data?.cancelados === 1 ? "contrato cancelado" : "contratos cancelados"} no mês (pela data do cancelamento)
+            </p>
+          )}
         </div>
       )}
     </ListaCard>

@@ -735,6 +735,115 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
 Amarras: `meu-plano-vitrine-sob-consulta` (21) e
 `cadastro-whatsapp-obrigatorio` (20) — 44 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
+- **Entregue 09/09 (noite), Relatório Comercial: funil 20 × 18, leads por
+  canal e recebido por origem — mockup navegável
+  `mockup-relatorio-comercial-funil-origem.html` (revisado por 5 céticos do
+  diagnóstico + 4 críticos do HTML), "tudo no mockup aprovado" do dono.**
+  Origem: print dele (card Contratos fechados 20 × barra Ganho 18; "Contatos
+  por canal" 28+11 que não batia com nada; pediu o pago por origem).
+  - Funil em dois blocos (`montarEtapasFunil`): etapas abertas por
+    `createdAt` (quem ENTROU), Ganho/Perdido por `fechadoEm` (quem foi
+    DECIDIDO — a data do card) + `funilResumo` (entraram total/emAberto/
+    jaDecididos; por decisão "N entraram no período · N antes"). Os dois
+    comentários que afirmavam que card e funil batiam foram corrigidos.
+  - "Contatos por canal" (cadastros com whitelist `ORIGENS_LEAD` + lead no
+    período) virou `leadsPorCanal`: os MESMOS leads do funil pelo
+    `contatos.origem`, qualquer canal (`asaas` ganhou rótulo). A soma é o
+    total do funil. `ORIGENS_LEAD` só sobrevive na procedure `comercial`,
+    que não tem consumidor no client. Por que "Manual" engorda: Novo
+    Cliente, Novo cliente do Financeiro, Novo lead do Atendimento,
+    importação e Clientes essencial gravam `manual`, e o canal nunca é
+    corrigido depois; mensagem de canal Instagram/Facebook grava
+    `whatsapp` — conserto é no cadastro (não pedido).
+  - Fechamentos por origem com recebido: `atribuirRecebidoAosFechamentos`
+    distribui as MESMAS cobranças do card Recebido (filtros idênticos ao
+    `agg`) pelo fechamento do cliente — dia civil no fuso (`dataHojeBR`),
+    o mais recente ≤ dia do pagamento, mesmo dia conta, empate → menor id,
+    antes de todos → o primeiro, busca entre TODOS os fechamentos do
+    cliente no período (não só os do filtro — senão a atribuição mudaria
+    com o filtro). Cada cobrança entra UMA vez: Σ origens = card Recebido.
+    Balde `ORIGEM_SEM_OU_FORA_DO_FILTRO` junta fechamento sem origem (antes
+    sumia do card) e pagamento cujo fechamento está fora do setor/atendente
+    filtrado — este só com cliente e recebido (verProprios não vê
+    fechamento alheio). `chaveOrigem` junta "Google"/"google" (rótulo = a
+    grafia do fechamento mais recente; `origemLead` é texto no lead, o
+    catálogo só alimenta a lista — renomear no catálogo não mexe nos
+    antigos). Situação pago/parcial/nada É NO PERÍODO (a pendência das
+    quinzenas do card Recebido segue aberta; se mudar lá, muda aqui junto).
+    `mesmoCliente` marca cliente com N fechamentos listados.
+  - PDF segue o payload (`funilResumo` opcional, tabela Canal/Leads/%,
+    subtabelas com Recebido/Situação, nota de metodologia). A aba Comercial
+    NÃO tem botão de e-mail/programar (o servidor aceita; sem UI).
+  Amarras: `relatorio-comercial-funil-canal-origem` (19) — 17 mutações
+  vermelhas (`scratchpad/mutar-relatorio-comercial.py`);
+  `relatorios-fechamentos-origem` e a fixture do PDF atualizadas.
+- **Entregue 09/09 (noite), controle de contratos cancelados — mockup
+  `mockup-cancelados-contrato.html`, "pode fazer" do dono com as 5 decisões
+  da proposta** (cancelado CONTINUA em "Contratos fechados" do mês em que
+  fechou, com linha "N cancelado(s) depois"; lista fixa de motivos;
+  diálogo oferece "encerrar também o serviço" marcado; arrastar Ganho →
+  Perdido no Pipeline pergunta "cancelado ou perdido?"; "Lançado por
+  engano" fica gravado mas FORA de card/barra/lista — engano não é churn).
+  Antes só existia Perdido (que mantém o `fechadoEm` original) ou excluir.
+  - Modelo: o lead segue `fechado_ganho` (nenhuma contagem de "fechados"
+    muda) + 4 colunas aditivas em `leads` (migration 0220 — nasceu 0219 e
+    foi renumerada no merge porque a conferência de cadastros já tinha
+    publicado a 0219; o executor distingue pelo nome do arquivo, então a
+    renumeração é só convenção:
+    `canceladoEmLead`, `motivoCancelamentoLead`, `detalheCancelamentoLead`,
+    `canceladoPorLead`; no schema `canceladoEm`/`motivoCancelamento`/
+    `detalheCancelamento`/`canceladoPor`). `shared/cancelamento-contrato.ts`:
+    `MOTIVOS_CANCELAMENTO` (desistencia · inadimplencia · outro_escritorio ·
+    sem_retorno · engano · outro), `contaComoCancelamento`,
+    `contratoCancelado`, `descricaoCancelamento`, `motivoServicoAoCancelar`.
+  - `server/escritorio/cancelar-contrato.ts`: `cancelarContrato` (só Ganho
+    do escritório, não cancelado; data ≤ hoje e ≥ dia do fechamento, gravada
+    como MEIO-DIA local — mesmo idioma das datas-só; `encerrarServico` grava
+    `contatos.situacaoServico=cancelado` com a MESMA data e motivo
+    "Contrato cancelado: <motivo>"), `reativarContrato` (limpa os 4
+    campos), `cancelarContratosDoContato` (Ganho ainda abertos do contato —
+    `isNull(canceladoEm)`, senão sobrescreveria cancelamento antigo).
+    Procedures `crm.cancelarContrato`/`crm.reativarContrato` (permissão
+    `pipeline.editar` com fallback kanban, auditoria `lead.cancelar_contrato`
+    / `lead.reativar_contrato`); `clientes.encerrarServico` aceita
+    `cancelarContratos` (só tipo cancelado/rescindido) e devolve quantos
+    cancelou; `listarLeads` (crm e clientes) devolve os campos +
+    `canceladoPorNome`.
+  - Relatório (`comercialDashboard`): `cancelamentoConta` = canceladoEm
+    preenchido E motivo ≠ engano; card Cancelados por `canceladoEm` no
+    período (+ período anterior/variação, `canceladosFecharamNoPeriodo`),
+    card Contratos fechados ganha `contratosFechadosCanceladosDepois`/
+    `valorFechadosCanceladosDepois` (sem tirar do total); funil ganha o 3º
+    bloco `cancelado` (`montarEtapasFunil(entraram, decididos, cancelados)`
+    → `funilResumo.cancelados` {total, valor, fecharamNoPeriodo,
+    fecharamAntes}); origem: fechamento cancelado fica na origem dele com a
+    marca (`cancelados` do grupo não conta engano); `contratosCancelados`
+    (lista) com `recebidoAntes` = `recebidoAntesDeCancelar` (cobranças até
+    o dia do cancelamento, atribuídas entre TODOS os fechamentos do cliente
+    com a mesma regra do recebido por origem). Dashboard geral: `cancelados`
+    no `desempenhoComercial`. PDF: 5º cartão, 3º bloco do funil, "Cancelado"
+    na Situação, seção "Contratos cancelados no período", nota de método.
+    Os cartões do PDF passaram a MEDIR antes de desenhar (fonte encolhe até
+    caber, sub2/rodapé quebram em 2 linhas, altura = maior cartão) — com 5
+    colunas o texto invadia a linha de baixo; e o cabeçalho do PDF tinha
+    a 2ª linha (Atendente/Emitido em) desenhada em cima da 1ª desde sempre
+    (`y + 21 - 4`) — corrigido de passagem (caixa 48pt, 2ª linha em +26).
+  - Telas: `atendimento/cancelar-contrato-dialog.tsx`
+    (`CancelarContratoDialog` data/motivo/detalhe/encerrar serviço;
+    `CanceladoOuPerdidoDialog`); Pipeline: coluna recolhida "Cancelados"
+    (mês atual), card com faixa, gaveta com "Cancelar contrato" ×
+    "Reativar contrato", etapa travada quando cancelado, `moverLeadPara`
+    pergunta no Ganho → Perdido; Clientes: linha do fechamento com selo
+    CANCELADO + motivo/quem, botões Cancelar/Reativar, "Situação do
+    serviço" com checkbox "Cancelar também os N contratos fechados";
+    Relatórios: 5 KPIs, funil 3 blocos, `FechamentosPorOrigemCard` com a
+    marca, `ContratosCanceladosCard`.
+  Amarras: `cancelar-contrato` (17; `makeDb` do teste captura o WHERE e
+  renderiza com `MySqlDialect` — foi o que pegou a mutação do
+  `isNull(canceladoEm)`, invisível pro banco falso) + 7 mutações novas no
+  `mutar-relatorio-comercial.py` (31 no total, todas vermelhas). Fora do
+  pedido, anotado: estorno do Asaas continua sumindo do Recebido em
+  silêncio (não fala com o cancelamento).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
@@ -863,8 +972,8 @@ acusa lead fechado sem `fechadoEm`. Comissão NÃO aparece nessa tela (grep em
 `Relatorios.tsx` = zero) e é do Financeiro — não tocar. Achado solto: o "Funil
 de Vendas" da mesma tela conta por `leads.createdAt`, então a barra "Ganho"
 pode não bater com o card "Contratos fechados" (o comentário no código afirma
-que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
-cálculo. Não autorizado ainda.
+que batem — não batem). **Resolvido 09/09**: funil em dois blocos
+(Ganho/Perdido por `fechadoEm`), ver a entrega de 09/09 (noite).
 
 ### E. Comissão de gestão — ENTREGUE 01/09
 
@@ -904,9 +1013,9 @@ escritório. O cron automático segue fechando SÓ a trilha de venda.
 Achados registrados e NÃO corrigidos (fora do pedido): `simular` e
 `diagnosticar` aceitam `atendenteId` de outro escritório (só enumeração —
 as cobranças continuam filtradas por escritorioId; `exportarPdf` valida);
-e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
-então a barra "Ganho" pode não bater com o card "Contratos fechados" da
-mesma tela (o comentário no código afirma que batem — não batem).
+e o "Funil de Vendas" do Relatório Comercial contava por `leads.createdAt`,
+então a barra "Ganho" podia não bater com o card "Contratos fechados" da
+mesma tela (**resolvido 09/09**, funil em dois blocos).
 
 ### F. Cofre por grau + Justiça Federal — ENTREGUE 01/09
 

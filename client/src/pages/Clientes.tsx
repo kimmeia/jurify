@@ -35,6 +35,8 @@ import {
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
   MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown, ClipboardCheck,
 } from "lucide-react";
+import { CancelarContratoDialog, type AlvoCancelamento } from "./atendimento/cancelar-contrato-dialog";
+import { descricaoCancelamento } from "@shared/cancelamento-contrato";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
@@ -3407,6 +3409,16 @@ function ClienteDetalhe({
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
   const { data: convsData } = trpc.clientes.listarConversas.useQuery({ contatoId: id });
   const { data: leadsData, refetch: refetchLeads } = trpc.clientes.listarLeads.useQuery({ contatoId: id });
+  // Contrato cancelado: diálogo compartilhado com o Pipeline; reativar limpa
+  // data e motivo. Ao encerrar o serviço como cancelado/rescindido, a ficha
+  // oferece cancelar junto os contratos fechados em aberto.
+  const [cancelarAlvo, setCancelarAlvo] = useState<AlvoCancelamento | null>(null);
+  const [encerrarCancelarContratos, setEncerrarCancelarContratos] = useState(true);
+  const contratosAbertos = ((leadsData as any[]) || []).filter((l) => l.etapaFunil === "fechado_ganho" && !l.canceladoEm).length;
+  const reativarContratoMut = (trpc as any).crm.reativarContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato reativado"); refetchLeads(); },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao reativar"),
+  });
   const fechamentosExistentes = ((leadsData as any[]) || [])
     .filter((l) => l.etapaFunil === "fechado_ganho")
     .map((l) => ({
@@ -3446,6 +3458,7 @@ function ClienteDetalhe({
       setEncerrarOpen(false);
       setEncerrarMotivo("");
       refetch();
+      refetchLeads();
       onUpdate();
       utilsTrpc.clientes.estatisticas.invalidate();
     },
@@ -3921,18 +3934,34 @@ function ClienteDetalhe({
                   {(leadsData || []).map((l: any) => (
                     <div
                       key={l.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg border group"
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border group ${l.canceladoEm ? "border-danger/30 bg-danger-bg/30" : ""}`}
                     >
-                      <TrendingUp className="h-4 w-4 text-info shrink-0" />
+                      <TrendingUp className={`h-4 w-4 shrink-0 ${l.canceladoEm ? "text-danger" : "text-info"}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">
+                          {l.canceladoEm ? (
+                            <span className="inline-flex items-center rounded-full bg-danger-bg text-danger-fg border border-danger/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">
+                              Cancelado
+                            </span>
+                          ) : null}
                           {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
                           {l.origemLead && (
                             <span className="ml-2 text-[10px] text-muted-foreground font-normal">
                               · {l.origemLead}
                             </span>
                           )}
+                          {l.fechadoEm && l.etapaFunil === "fechado_ganho" && (
+                            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                              · fechado em {new Date(l.fechadoEm).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
                         </p>
+                        {l.canceladoEm && (
+                          <p className="text-[10px] text-danger-fg">
+                            cancelado em {new Date(l.canceladoEm).toLocaleDateString("pt-BR")} · {descricaoCancelamento(l.motivoCancelamento, l.detalheCancelamento)}
+                            {l.canceladoPorNome ? ` · por ${l.canceladoPorNome}` : ""}
+                          </p>
+                        )}
                         <LeadAtendenteInline
                           leadId={l.id}
                           responsavelAtualId={l.responsavelId ?? null}
@@ -3949,6 +3978,35 @@ function ClienteDetalhe({
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
+                      {l.etapaFunil === "fechado_ganho" && !l.canceladoEm && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] text-danger-fg border-danger/30 hover:bg-danger-bg"
+                          title="Cancelar contrato (o fechamento continua contando no mês em que fechou)"
+                          onClick={() => setCancelarAlvo({
+                            id: l.id,
+                            nome: cliente?.nome || "Cliente",
+                            valorEstimado: l.valorEstimado,
+                            fechadoEm: l.fechadoEm,
+                            origemLead: l.origemLead,
+                          })}
+                        >
+                          <Ban className="h-3 w-3 mr-1" /> Cancelar contrato
+                        </Button>
+                      )}
+                      {l.canceladoEm && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          title="Volta pra Ganho e apaga data e motivo do cancelamento"
+                          disabled={reativarContratoMut.isPending}
+                          onClick={() => reativarContratoMut.mutate({ id: l.id })}
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" /> Reativar
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -4001,6 +4059,17 @@ function ClienteDetalhe({
           }}
         />
       )}
+      <CancelarContratoDialog
+        alvo={cancelarAlvo}
+        onClose={() => setCancelarAlvo(null)}
+        onDone={() => {
+          refetchLeads();
+          // "encerrar também o serviço" muda a situação mostrada no cabeçalho
+          refetch();
+          utilsTrpc.clientes.detalhe.invalidate({ id });
+          utilsTrpc.clientes.estatisticas.invalidate();
+        }}
+      />
 
       <RegistrarFechamentoDialog
         open={fechamentoOpen}
@@ -4064,6 +4133,19 @@ function ClienteDetalhe({
                 maxLength={500}
               />
             </div>
+            {(encerrarTipo === "cancelado" || encerrarTipo === "rescindido") && contratosAbertos > 0 && (
+              <label className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-bg/40 px-2.5 py-2 text-[12px] leading-snug cursor-pointer">
+                <Checkbox
+                  checked={encerrarCancelarContratos}
+                  onCheckedChange={(v) => setEncerrarCancelarContratos(v === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Cancelar também {contratosAbertos === 1 ? "o contrato fechado" : `os ${contratosAbertos} contratos fechados`} deste
+                  cliente, com a mesma data e motivo. O fechamento continua contando no mês em que fechou.
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEncerrarOpen(false)}>
@@ -4078,6 +4160,10 @@ function ClienteDetalhe({
                   tipo: encerrarTipo,
                   motivo: encerrarMotivo.trim() || undefined,
                   data: encerrarData || undefined,
+                  cancelarContratos:
+                    (encerrarTipo === "cancelado" || encerrarTipo === "rescindido") && contratosAbertos > 0
+                      ? encerrarCancelarContratos
+                      : undefined,
                 })
               }
             >
