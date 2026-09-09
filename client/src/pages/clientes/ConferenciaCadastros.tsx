@@ -88,8 +88,10 @@ type Confirmacao =
 
 const POR_PAGINA = 20;
 
+// "Cadastro manual", não "Clientes": a coluna diz de onde a ficha veio, e
+// "Clientes" ao lado de "Lead" lia como se a pessoa fosse cliente.
 const ORIGEM: Record<string, string> = {
-  whatsapp: "WhatsApp", manual: "Clientes", asaas: "Asaas", site: "Site",
+  whatsapp: "WhatsApp", manual: "Cadastro manual", asaas: "Asaas", site: "Site",
   instagram: "Instagram", facebook: "Facebook", telefone: "Telefone",
 };
 

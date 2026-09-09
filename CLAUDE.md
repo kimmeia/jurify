@@ -675,6 +675,27 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   Amarras: `conferencia-cadastros` (37 testes) — 28 mutações vermelhas
   (`scratchpad/mutar-conferencia.py`); `um-numero-um-cadastro` ajustado
   (a trava consulta os CPFs antes de cada par).
+  - **Ajustes de 09/09 à noite, depois de o dono testar em produção
+    ("pode fazer" + "vamos consertar")**: origem `manual` virou rótulo
+    "Cadastro manual" na página, no diálogo Possíveis duplicados e no PDF
+    ("Clientes" ao lado de "Lead" lia como se a pessoa fosse cliente); o PDF
+    quebrava nome/e-mail/origem em 2 linhas dentro da coluna mas avançava
+    altura fixa — agora a linha da tabela mede `heightOfString` de cada
+    célula (máx. 3 linhas, `ellipsis`) e avança pela maior; a planilha leva
+    a HORA em `cadastrado_em` (fuso de Brasília) — quatro fichas iguais no
+    mesmo minuto = clique repetido. Conferência visual do PDF: renderizado
+    com pdfjs no Playwright (`scratchpad/pdfview/`: `gerar.mts` via tsx +
+    `python3 -m http.server` + `shot.mjs`), não a olho.
+    **Caso Tirzah (4 fichas iguais, lead, manual, sem responsável, mesmo
+    dia)**: o único caminho que cria lead + origem manual + sem
+    responsável é o "Novo Lead"/"Novo Contato" do Atendimento
+    (`crm.criarContato` → `criarOuReutilizarContato`). Em junho a
+    reutilização por telefone comparava só a forma canônica com `eq`, e
+    esses diálogos gravam o número COMO DIGITADO ("(85) 8811-1508") —
+    nunca casava, cada "Adicionar" criava ficha nova ("Tirza" com o 9 e
+    "Tirzah" sem o 9 é o mesmo número escrito de dois jeitos). Fechado em
+    03/09 (`buscarContatoPorTelefone` com REPLACE da máscara, com/sem 9 e
+    55); hoje o mesmo diálogo reaproveita a ficha.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do

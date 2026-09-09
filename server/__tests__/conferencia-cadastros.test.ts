@@ -452,6 +452,8 @@ describe("planilha e PDF — mesma conta, com o filtro marcado", () => {
     const ana = linhas.find((l) => l.startsWith("falta;sem_telefone;410;"))!;
     expect(ana).toContain("Ana Beatriz Fontes");
     expect(ana).toContain(`;${CPF_ANA};`);
+    // Data COM hora (fuso de Brasília): quatro fichas iguais no mesmo minuto é clique repetido.
+    expect(ana).toContain(";12/03/2026 09:00;");
     // Telefone como está gravado, sem máscara padronizada.
     expect(linhas.find((l) => l.startsWith(`telefone;${CHAVE_MARIA};1201;`))).toContain(";5585981234567;");
   });
@@ -463,6 +465,26 @@ describe("planilha e PDF — mesma conta, com o filtro marcado", () => {
     const c2 = montarConferencia({ ...base(), fichas: [...FICHAS, F({ id: 999, nome: 'Fulano; "o" Tal', telefone: "(85) 99876-5432" })] });
     const csv2 = gerarConferenciaCsv(c2, "todos");
     expect(csv2).toContain('"Fulano; ""o"" Tal"');
+  });
+
+  it("origem 'manual' é 'Cadastro manual' na tela, no diálogo e no PDF — 'Clientes' ao lado de 'Lead' lia como se fosse cliente", () => {
+    for (const arq of [
+      "client/src/pages/clientes/ConferenciaCadastros.tsx",
+      "client/src/pages/clientes/possiveis-duplicados.tsx",
+      "server/escritorio/conferencia-pdf.ts",
+    ]) {
+      const texto = ler(arq);
+      expect(texto).toContain('manual: "Cadastro manual"');
+      expect(texto).not.toContain('manual: "Clientes"');
+    }
+  });
+
+  it("PDF: a linha da tabela cresce com o texto (nome longo quebra sem cair em cima da ficha seguinte)", () => {
+    const pdf = ler("server/escritorio/conferencia-pdf.ts");
+    expect(pdf).toContain("doc.heightOfString(texto, { width: largura - 4 })");
+    expect(pdf).toContain("Math.max(ALTURA_LINHA, ...valores.map((v, i) => alturaCelula(v, colunas[i].largura)))");
+    expect(pdf).toContain("height: altura - ESPACO_LINHA, ellipsis: true");
+    expect(pdf).not.toContain("lineBreak: false");
   });
 
   it("PDF sai como PDF, com título do escritório", async () => {
