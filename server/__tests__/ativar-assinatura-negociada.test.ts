@@ -56,7 +56,9 @@ describe("amarras do fluxo de fechar venda", () => {
     // O acesso não pode cair enquanto o boleto/Pix não compensa.
     expect(trecho).toContain("trialExpiraEm");
     // O webhook resolve a conversão por este formato — mudar quebra a ativação.
-    expect(trecho).toContain("externalReference: `${input.userId}:${ultima.planId}`");
+    expect(trecho).toContain("externalReference: `${input.userId}:${planoAlvoSlug}`");
+    // Sem plano de destino, o alvo é o plano que o cliente já tem.
+    expect(trecho).toContain("const planoAlvoSlug = input.planId ?? ultima?.planId ?? null;");
     expect(trecho).toContain("invoiceUrl");
   });
 

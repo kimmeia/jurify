@@ -2581,6 +2581,8 @@ export const adminRouter = router({
       userId: z.number(),
       newPlanId: z.string().min(1),
       interval: z.enum(["monthly", "yearly"]).default("monthly"),
+      /** Só é usado se o cliente ainda não tem cadastro de cobrança no Asaas. */
+      cpfCnpj: z.string().max(24).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -2603,9 +2605,9 @@ export const adminRouter = router({
       // preço cru do plano viraria assinatura de R$ 0 no Asaas.
       await exigirPlanoContratavel(input.newPlanId, input.interval);
 
-      if (!u.asaasCustomerId) {
+      if (!u.asaasCustomerId && !input.cpfCnpj?.trim()) {
         throw new Error(
-          "Cliente não tem cadastro de cobrança no Asaas — não é possível trocar o plano por aqui. Use cortesia para liberar acesso.",
+          "Cliente não tem cadastro de cobrança no Asaas — informe o CPF/CNPJ pra emitir a cobrança, ou use cortesia para liberar acesso.",
         );
       }
 
@@ -2614,7 +2616,7 @@ export const adminRouter = router({
 
       const currentSub = await getActiveSubscription(input.userId);
 
-      const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, "");
+      const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, input.cpfCnpj ?? "");
       const value = input.interval === "monthly" ? newPlan.priceMonthly : newPlan.priceYearly;
 
       const sub = await criarAssinaturaComFallback(client, {
@@ -2627,45 +2629,71 @@ export const adminRouter = router({
         externalReference: `${input.userId}:${input.newPlanId}`,
       });
 
-      const existingLocal = await db
-        .select()
-        .from(subscriptionsTable)
-        .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
-        .limit(1);
-      if (existingLocal.length === 0) {
-        await db.insert(subscriptionsTable).values({
-          userId: input.userId,
-          asaasSubscriptionId: sub.id,
-          asaasCustomerId: customerId,
-          planId: input.newPlanId,
-          status: "incomplete",
-        });
+      // Mesma regra do checkout do próprio cliente: o que ele tem hoje
+      // continua até o pagamento novo cair. Em teste, a linha do teste vira
+      // a assinatura (plano novo, 7 dias pra pagar); pagante ganha uma linha
+      // nova aguardando pagamento e o webhook encerra a anterior ao receber.
+      // Cancelar aqui deixava o cliente sem nada até o boleto compensar.
+      let subLocalId: number | null = null;
+      if (currentSub?.status === "trialing" && !currentSub.cortesia) {
+        const prazoPagamento = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        const trialAte = Math.max(currentSub.trialExpiraEm ?? 0, prazoPagamento);
+        await db
+          .update(subscriptionsTable)
+          .set({
+            asaasSubscriptionId: sub.id,
+            asaasCustomerId: customerId,
+            planId: input.newPlanId,
+            status: "trialing",
+            trialExpiraEm: trialAte,
+            currentPeriodEnd: trialAte,
+            trialConvertido: true,
+          })
+          .where(eq(subscriptionsTable.id, currentSub.id));
+        subLocalId = currentSub.id;
+      } else {
+        const existingLocal = await db
+          .select()
+          .from(subscriptionsTable)
+          .where(eq(subscriptionsTable.asaasSubscriptionId, sub.id))
+          .limit(1);
+        if (existingLocal.length === 0) {
+          await db.insert(subscriptionsTable).values({
+            userId: input.userId,
+            asaasSubscriptionId: sub.id,
+            asaasCustomerId: customerId,
+            planId: input.newPlanId,
+            status: "incomplete",
+          });
+        }
       }
 
-      // A antiga só sai com a nova de pé no Asaas (best-effort). Cancelar
-      // antes deixava o cliente sem assinatura nenhuma quando o Asaas falhava.
-      if (currentSub?.asaasSubscriptionId) {
-        try {
-          await client.cancelarAssinatura(currentSub.asaasSubscriptionId);
-          await db
-            .update(subscriptionsTable)
-            .set({ status: "canceled" })
-            .where(eq(subscriptionsTable.id, currentSub.id));
-        } catch (err: any) {
-          console.warn("Asaas cancel (trocarPlanoAdmin) falhou:", err.message);
-        }
+      let invoiceUrl = "";
+      try {
+        const cobrancas = await client.listarCobrancas({ customer: customerId, limit: 5 });
+        invoiceUrl =
+          cobrancas.data.find(
+            (c) => c.externalReference === `${input.userId}:${input.newPlanId}` && !c.deleted,
+          )?.invoiceUrl || "";
+      } catch (err: any) {
+        log.warn({ err: err?.message }, "não achei o link da 1ª cobrança da troca (segue sem)");
       }
 
       await registrarAuditoria({
         ctx,
         acao: "subscription.trocarPlanoAdmin",
         alvoTipo: "subscription",
-        alvoId: currentSub?.id ?? input.userId,
+        alvoId: subLocalId ?? currentSub?.id ?? input.userId,
         alvoNome: u.name || u.email || undefined,
-        detalhes: { newPlanId: input.newPlanId, interval: input.interval },
+        detalhes: { newPlanId: input.newPlanId, interval: input.interval, asaasSubscriptionId: sub.id },
       });
 
-      return { success: true, mensagem: `Plano alterado para ${newPlan.name}` };
+      return {
+        success: true,
+        invoiceUrl,
+        asaasSubscriptionId: sub.id,
+        mensagem: `Assinatura do ${newPlan.name} criada — a atual continua até o pagamento cair`,
+      };
     }),
 
   /**
@@ -2685,6 +2713,12 @@ export const adminRouter = router({
       valorCentavos: z.number().int().min(100).max(100_000_000),
       cpfCnpj: z.string().max(24).optional(),
       interval: z.enum(["monthly", "yearly"]).default("monthly"),
+      /**
+       * Plano de destino quando o valor fechado vem junto com uma TROCA
+       * ("Trocar plano" escolhendo um plano sob consulta). Ausente = fecha o
+       * valor do plano que o cliente já tem, como sempre.
+       */
+      planId: z.string().max(64).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -2705,29 +2739,37 @@ export const adminRouter = router({
         .where(eq(subscriptionsTable.userId, input.userId))
         .orderBy(desc(subscriptionsTable.id))
         .limit(1);
-      if (!ultima?.planId) {
+      const planoAlvoSlug = input.planId ?? ultima?.planId ?? null;
+      if (!planoAlvoSlug) {
         throw new Error("Cliente sem plano definido — use 'Trocar plano' ou cortesia primeiro.");
       }
-      if (ultima.cortesia) {
+      if (ultima?.cortesia) {
         throw new Error("Cliente em cortesia — remova a cortesia antes de ativar cobrança.");
       }
-      if (ultima.asaasSubscriptionId && ultima.status === "active") {
+      // Pagante que só quer renegociar o MESMO plano ajusta pelo card; pagante
+      // que está TROCANDO de plano ganha uma assinatura nova aguardando
+      // pagamento — a atual continua até o webhook encerrar.
+      const trocaDePlano = !!ultima && planoAlvoSlug !== ultima.planId;
+      const pagante = !!ultima?.asaasSubscriptionId && ultima.status === "active";
+      if (pagante && !trocaDePlano) {
         throw new Error(
           "Cliente já tem assinatura Asaas ativa — ajuste o valor pelo card Módulos & cobrança.",
         );
       }
 
       const { getPlanoBySlug } = await import("../billing/planos-repo");
-      const plano = await getPlanoBySlug(ultima.planId);
-      const planoNome = plano?.nome ?? ultima.planId;
+      const plano = await getPlanoBySlug(planoAlvoSlug);
+      if (input.planId && !plano) throw new Error("Plano não encontrado no catálogo.");
+      const planoNome = plano?.nome ?? planoAlvoSlug;
 
       const { getAdminAsaasClient } = await import("../billing/asaas-billing-client");
       const { criarAssinaturaComFallback, garantirAsaasCustomer, dataVencimentoPadrao } = await import("./subscription");
       const client = await getAdminAsaasClient();
       const customerId = await garantirAsaasCustomer(input.userId, u.email, u.name, input.cpfCnpj || "");
 
-      // Assinatura Asaas antiga pendurada (retry incompleto) sai da frente.
-      if (ultima.asaasSubscriptionId) {
+      // Assinatura Asaas antiga pendurada (retry incompleto) sai da frente —
+      // nunca a de um pagante em dia, que fica até o pagamento da nova.
+      if (ultima?.asaasSubscriptionId && !pagante) {
         try {
           await client.cancelarAssinatura(ultima.asaasSubscriptionId);
         } catch (err: any) {
@@ -2742,7 +2784,7 @@ export const adminRouter = router({
         nextDueDate: dataVencimentoPadrao(),
         cycle: input.interval === "monthly" ? "MONTHLY" : "YEARLY",
         description: `${planoNome} — JuridFlow (valor fechado)`,
-        externalReference: `${input.userId}:${ultima.planId}`,
+        externalReference: `${input.userId}:${planoAlvoSlug}`,
       });
 
       // A fatura composta trabalha em base mensal.
@@ -2750,17 +2792,35 @@ export const adminRouter = router({
         input.interval === "monthly" ? input.valorCentavos : Math.round(input.valorCentavos / 12);
 
       const prazoPagamento = Date.now() + 7 * 24 * 60 * 60 * 1000;
-      await db
-        .update(subscriptionsTable)
-        .set({
+      let subLocalId: number;
+      if (!ultima || pagante) {
+        // Linha nova aguardando pagamento; quem já paga continua na atual.
+        const [ins] = await db.insert(subscriptionsTable).values({
+          userId: input.userId,
+          planId: planoAlvoSlug,
           asaasSubscriptionId: sub.id,
           asaasCustomerId: customerId,
-          status: "trialing",
-          trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
-          trialConvertido: true,
+          status: "incomplete",
           valorNegociadoCentavos: valorMensalCentavos,
-        })
-        .where(eq(subscriptionsTable.id, ultima.id));
+        });
+        subLocalId = Number((ins as any)?.insertId ?? 0);
+      } else {
+        // Em teste (ou teste vencido): a própria linha vira a assinatura, no
+        // plano de destino, com 7 dias pra pagar sem perder o acesso.
+        await db
+          .update(subscriptionsTable)
+          .set({
+            asaasSubscriptionId: sub.id,
+            asaasCustomerId: customerId,
+            planId: planoAlvoSlug,
+            status: "trialing",
+            trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
+            trialConvertido: true,
+            valorNegociadoCentavos: valorMensalCentavos,
+          })
+          .where(eq(subscriptionsTable.id, ultima.id));
+        subLocalId = ultima.id;
+      }
 
       // Link da 1ª cobrança — o dono manda na mesma conversa do WhatsApp.
       let invoiceUrl = "";
@@ -2768,7 +2828,7 @@ export const adminRouter = router({
         const cobrancas = await client.listarCobrancas({ customer: customerId, limit: 5 });
         invoiceUrl =
           cobrancas.data.find(
-            (c) => c.externalReference === `${input.userId}:${ultima.planId}` && !c.deleted,
+            (c) => c.externalReference === `${input.userId}:${planoAlvoSlug}` && !c.deleted,
           )?.invoiceUrl || "";
       } catch (err: any) {
         log.warn({ err: err?.message }, "não achei o link da 1ª cobrança (segue sem)");
@@ -2780,10 +2840,11 @@ export const adminRouter = router({
         ctx,
         acao: "assinatura.ativarNegociada",
         alvoTipo: "subscription",
-        alvoId: ultima.id,
+        alvoId: subLocalId,
         alvoNome: u.name || u.email || undefined,
         detalhes: {
-          planId: ultima.planId,
+          planId: planoAlvoSlug,
+          trocaDePlano,
           valorCentavos: input.valorCentavos,
           interval: input.interval,
           asaasSubscriptionId: sub.id,
@@ -3240,16 +3301,48 @@ export const adminRouter = router({
   // ═══════════════════════════════════════════════════════════════════════
 
   /** Retorna os planos atuais do sistema (somente leitura) */
-  planosAtuais: adminProcedure.query(() => {
-    return PLANS.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      priceMonthly: p.priceMonthly,
-      priceYearly: p.priceYearly,
-      creditsPerMonth: p.creditsPerMonth,
-      features: p.features,
-    }));
+  /**
+   * Planos pro seletor "Trocar plano" da ficha: o catálogo do painel, na
+   * ordem da vitrine, com os ocultos no fim (o diálogo dobra esses numa
+   * seção à parte — nada some). A lista fixa `PLANS` só entra como
+   * fallback de tabela vazia, e por muito tempo foi a ÚNICA fonte: os
+   * planos do lançamento nem apareciam e o Completo saía com preço velho.
+   */
+  planosAtuais: adminProcedure.query(async () => {
+    const { getAllPlanos } = await import("../billing/planos-repo");
+    const planos = await getAllPlanos();
+    if (planos.length === 0) {
+      return PLANS.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        priceMonthly: p.priceMonthly,
+        priceYearly: p.priceYearly,
+        creditsPerMonth: p.creditsPerMonth,
+        features: p.features,
+        precoSobConsulta: false,
+        ctaDemonstracao: false,
+        popular: !!p.popular,
+        oculto: false,
+        ordem: 0,
+      }));
+    }
+    return [...planos]
+      .sort((a, b) => Number(a.oculto) - Number(b.oculto) || a.ordem - b.ordem)
+      .map((p) => ({
+        id: p.slug,
+        name: p.nome,
+        description: p.descricao ?? "",
+        priceMonthly: p.precoMensalCentavos,
+        priceYearly: p.precoAnualCentavos ?? p.precoMensalCentavos * 12,
+        creditsPerMonth: p.limites.creditosCalculosMes,
+        features: p.features,
+        precoSobConsulta: p.precoSobConsulta,
+        ctaDemonstracao: p.ctaDemonstracao,
+        popular: p.popular,
+        oculto: p.oculto,
+        ordem: p.ordem,
+      }));
   }),
 
   /** Saúde do sistema: verifica DB, gateway de pagamento, variáveis essenciais */
