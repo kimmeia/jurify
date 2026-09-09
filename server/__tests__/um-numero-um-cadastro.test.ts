@@ -448,7 +448,8 @@ describe("clientes.possiveisDuplicadosTelefone / mesclarDuplicados — a faxina"
   });
 
   it("mesclar registra cada par como manual, assinado por quem clicou, e não para no primeiro erro", async () => {
-    filas["contatos"] = [[COMPLETA], [MAGRA], [COMPLETA], []];
+    // Cada par consulta os CPFs antes (trava dos CPFs diferentes) e depois principal + duplicado.
+    filas["contatos"] = [[COMPLETA, MAGRA], [COMPLETA], [MAGRA], [COMPLETA], [COMPLETA], []];
     const r = await caller().clientes.mesclarDuplicados({ pares: [{ principalId: 41, duplicadoId: 40 }, { principalId: 41, duplicadoId: 77 }] });
     expect(r.feitos).toEqual([40]);
     expect(r.falhas).toEqual([{ duplicadoId: 77, erro: "Contato duplicado não encontrado" }]);

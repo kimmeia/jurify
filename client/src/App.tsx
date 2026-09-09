@@ -45,6 +45,7 @@ import Automacoes from "./pages/Automacoes";
 import Kanban from "./pages/Kanban";
 import RestaurarCards from "@/pages/kanban/RestaurarCards";
 import Clientes from "./pages/Clientes";
+import ConferenciaCadastros from "./pages/clientes/ConferenciaCadastros";
 import ClientesEssencial from "./pages/ClientesEssencial";
 import Prazos from "./pages/Prazos";
 import { useModulosContratados } from "./components/ModuloGuard";
@@ -397,6 +398,11 @@ function Router() {
       <Route path="/kanban/restaurar">
         <ClientArea>
           <RestaurarCards />
+        </ClientArea>
+      </Route>
+      <Route path="/clientes/conferencia">
+        <ClientArea>
+          <ConferenciaCadastros />
         </ClientArea>
       </Route>
       <Route path="/clientes">

@@ -37,6 +37,7 @@ export const TABELAS_INCLUIR: TabelaBackup[] = [
   { nomeBanco: "convites_colaborador", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "motor_monitoramentos", colunaEscritorio: "escritorio_id", categoria: "dados" },
   { nomeBanco: "contatos", colunaEscritorio: "escritorioIdContato", categoria: "dados" },
+  { nomeBanco: "contatos_nao_duplicados", colunaEscritorio: "escritorioIdNaoDup", categoria: "dados" },
   { nomeBanco: "cliente_anotacoes", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "cliente_arquivos", colunaEscritorio: "escritorioId", categoria: "dados" },
   { nomeBanco: "cliente_pastas", colunaEscritorio: "escritorioIdPasta", categoria: "dados" },
@@ -208,6 +209,7 @@ export const TABELAS_SATELITE: TabelaBackupSatelite[] = [
 export const ORDEM_TOPOLOGICA: ReadonlyArray<string> = [
   // RAÍZES — sem FK pra dentro do escopo:
   "contatos",
+  "contatos_nao_duplicados",
   "cargos_personalizados",
   "kanban_funis",
   "kanban_tags",

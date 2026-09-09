@@ -6,12 +6,22 @@
  *
  * Só aparece pra quem pode excluir clientes — a permissão do "Mesclar" que
  * já existe na ficha — e nada roda sozinho aqui: é quem clica que manda.
+ *
+ * Grupo com dois CPFs preenchidos e diferentes (decisão do dono, 09/09):
+ * "Mesclar todos" pula, e o Mesclar da linha vira "Mesclar mesmo assim" com
+ * confirmação — mesclar descarta o CPF da ficha absorvida, e pode ser um
+ * casal com o mesmo telefone. A conferência completa fica na página
+ * "Conferência de cadastros".
  */
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { mascararTelefoneBR } from "@shared/telefone";
@@ -33,6 +43,7 @@ type Grupo = {
   telefone: string | null;
   sobrevivente: Ficha;
   mescladas: Ficha[];
+  cpfsDiferentes: boolean;
 };
 
 const ORIGEM: Record<string, string> = {
@@ -60,8 +71,17 @@ function descreve(f: Ficha): string {
   ].filter(Boolean).join(" · ");
 }
 
+function paresDoGrupo(g: Grupo, confirmarCpfDiferente = false) {
+  return g.mescladas.map((m) => ({
+    principalId: g.sobrevivente.id,
+    duplicadoId: m.id,
+    ...(confirmarCpfDiferente ? { confirmarCpfDiferente: true } : {}),
+  }));
+}
+
 export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => void }) {
   const [open, setOpen] = useState(false);
+  const [confirmar, setConfirmar] = useState<Grupo | null>(null);
   const { data, refetch } = (trpc as any).clientes.possiveisDuplicadosTelefone.useQuery(undefined, {
     retry: false,
     staleTime: 60_000,
@@ -69,11 +89,15 @@ export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => vo
   const mesclar = (trpc as any).clientes.mesclarDuplicados.useMutation({
     onSuccess: (r: { feitos: number[]; falhas: Array<{ duplicadoId: number; erro: string }> }) => {
       const n = r.feitos.length;
-      toast.success(n === 1 ? "Cadastros mesclados" : `${n} cadastros mesclados`, {
-        description: r.falhas.length > 0
-          ? `${r.falhas.length} não deu: ${r.falhas[0].erro}`
-          : "Dá pra desfazer por 7 dias, na conversa do cliente.",
-      });
+      if (n > 0) {
+        toast.success(n === 1 ? "Cadastros mesclados" : `${n} cadastros mesclados`, {
+          description: r.falhas.length > 0
+            ? `${r.falhas.length} não deu: ${r.falhas[0].erro}`
+            : "Dá pra desfazer por 7 dias, na conversa do cliente.",
+        });
+      } else if (r.falhas.length > 0) {
+        toast.error("Não deu pra mesclar", { description: r.falhas[0].erro });
+      }
       refetch();
       onMesclado();
     },
@@ -82,9 +106,9 @@ export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => vo
 
   const grupos: Grupo[] = data?.podeVer ? (data.grupos ?? []) : [];
   if (grupos.length === 0) return null;
-  const todosPares = grupos.flatMap((g) =>
-    g.mescladas.map((m) => ({ principalId: g.sobrevivente.id, duplicadoId: m.id })),
-  );
+  // "Mesclar todos" pula quem tem CPFs diferentes — esses só com confirmação, linha a linha.
+  const todosPares = grupos.filter((g) => !g.cpfsDiferentes).flatMap((g) => paresDoGrupo(g));
+  const comCpfDiferente = grupos.filter((g) => g.cpfsDiferentes).length;
 
   return (
     <>
@@ -105,16 +129,20 @@ export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => vo
             <DialogDescription>
               Fichas com o mesmo telefone. Sobrevive a que tem CPF (em empate, a mais antiga); a outra
               entra nela com conversas, cobranças, processos e histórico, e o número dela vira telefone
-              secundário. Dá pra desfazer por 7 dias.
+              secundário. Dá pra desfazer por 7 dias. Grupo com dois CPFs diferentes só mescla com
+              confirmação — pode ser duas pessoas.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{grupos.length} {grupos.length === 1 ? "número" : "números"}</span>
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span>
+              {grupos.length} {grupos.length === 1 ? "número" : "números"}
+              {comCpfDiferente > 0 ? ` · "Mesclar todos" pula ${comCpfDiferente} com CPFs diferentes` : ""}
+            </span>
             <Button
               size="sm"
               variant="outline"
               className="h-7 text-xs"
-              disabled={mesclar.isPending}
+              disabled={mesclar.isPending || todosPares.length === 0}
               onClick={() => mesclar.mutate({ pares: todosPares.slice(0, 50) })}
             >
               Mesclar todos
@@ -128,7 +156,7 @@ export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => vo
               <span />
             </div>
             {grupos.map((g) => (
-              <div key={g.chave} className="grid grid-cols-[1.1fr_1.1fr_auto_auto] gap-3 items-center px-3 py-2 border-t text-xs">
+              <div key={g.chave} className={`grid grid-cols-[1.1fr_1.1fr_auto_auto] gap-3 items-center px-3 py-2 border-t text-xs ${g.cpfsDiferentes ? "bg-warning-bg/40" : ""}`}>
                 <div className="min-w-0">
                   <p className="font-semibold truncate">{g.sobrevivente.nome}</p>
                   <p className="text-[10px] text-muted-foreground">{descreve(g.sobrevivente)}</p>
@@ -141,23 +169,52 @@ export function PossiveisDuplicadosButton({ onMesclado }: { onMesclado: () => vo
                     </div>
                   ))}
                 </div>
-                <div className="tabular-nums whitespace-nowrap">{mascararTelefoneBR(g.telefone)}</div>
-                <Button
-                  size="sm"
-                  className="h-7 text-xs"
-                  disabled={mesclar.isPending}
-                  onClick={() => mesclar.mutate({
-                    pares: g.mescladas.map((m) => ({ principalId: g.sobrevivente.id, duplicadoId: m.id })),
-                  })}
-                >
-                  {mesclar.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
-                  Mesclar
-                </Button>
+                <div className="tabular-nums whitespace-nowrap">
+                  {mascararTelefoneBR(g.telefone)}
+                  {g.cpfsDiferentes && (
+                    <div className="mt-0.5 rounded-full bg-danger-bg px-1.5 py-px text-center text-[9px] font-bold text-danger-fg">CPFs diferentes</div>
+                  )}
+                </div>
+                {g.cpfsDiferentes ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled={mesclar.isPending} onClick={() => setConfirmar(g)}>
+                    Mesclar mesmo assim
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs"
+                    disabled={mesclar.isPending}
+                    onClick={() => mesclar.mutate({ pares: paresDoGrupo(g) })}
+                  >
+                    {mesclar.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : null}
+                    Mesclar
+                  </Button>
+                )}
               </div>
             ))}
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={!!confirmar} onOpenChange={(o) => { if (!o) setConfirmar(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Mesclar fichas com CPFs diferentes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O CPF/CNPJ de <b>{confirmar?.mescladas.map((m) => m.nome).join(", ")}</b> será descartado: a ficha
+              sobrevivente ({confirmar?.sobrevivente.nome}) fica com o dela. Se forem duas pessoas com o mesmo
+              telefone, marque "Não é duplicado" na Conferência de cadastros. Dá pra desfazer por 7 dias.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (confirmar) mesclar.mutate({ pares: paresDoGrupo(confirmar, true) }); setConfirmar(null); }}
+            >
+              Mesclar mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
