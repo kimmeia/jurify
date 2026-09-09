@@ -1490,85 +1490,72 @@ export async function runMigrations(): Promise<void> {
     const applied = new Set((rows as { filename: string }[]).map((r) => r.filename));
 
     let aplicadas = 0;
-    let puladas = 0;
-    let comErro = 0;
+    let pendentes = files.filter((f) => !applied.has(f));
+    const puladas = files.length - pendentes.length;
 
-    for (const file of files) {
-      if (applied.has(file)) {
-        puladas++;
-        continue;
+    // Ordem alfabética não é ordem de dependência.
+    //
+    // Em banco novo isso morde: `0022_telefones_secundarios` faz
+    // `ADD COLUMN ... AFTER telefonesAnteriores`, e quem cria
+    // `telefonesAnteriores` roda depois dele. Numa passada só a 0022
+    // falha, não é marcada como aplicada, e o banco termina o boot sem
+    // `contatos.telefonesSecundarios` — com o app respondendo health
+    // check normalmente e todo INSERT de contato morrendo com "Unknown
+    // column". Só se corrigia no restart seguinte, quando a dependência
+    // já existia.
+    //
+    // Medido em banco criado do zero: 5 migrations falhavam na primeira
+    // passada e passavam na segunda. Repetir aqui dentro é o mesmo
+    // conserto, sem depender de alguém reiniciar o serviço.
+    //
+    // Para quando não houver mais progresso: se uma passada inteira não
+    // aplicou nada, a próxima também não aplicaria — o que sobrou está
+    // quebrado de verdade, não fora de ordem.
+    for (
+      let passada = 1;
+      passada <= MAX_PASSADAS_MIGRATION && pendentes.length > 0;
+      passada++
+    ) {
+      const falharam: string[] = [];
+      let aplicadasNaPassada = 0;
+
+      for (const file of pendentes) {
+        const resultado = await aplicarArquivo(connection, dir, file);
+        if (resultado === "aplicada") aplicadasNaPassada++;
+        else if (resultado === "falhou") falharam.push(file);
       }
 
-      const fullPath = path.join(dir, file);
-      let sql: string;
-      try {
-        sql = fs.readFileSync(fullPath, "utf8");
-      } catch (err) {
-        log.warn({ file, err: String(err) }, "Não consegui ler arquivo, pulando");
-        comErro++;
-        continue;
-      }
+      aplicadas += aplicadasNaPassada;
+      pendentes = falharam;
 
-      const statements = splitStatements(sql);
-
-      if (statements.length === 0) {
-        log.warn({ file }, "Sem statements executáveis, pulando sem marcar");
-        continue;
-      }
-
-      log.info({ file, statements: statements.length }, "Aplicando migration");
-
-      let warnings = 0;
-      let fileFailed = false;
-      for (const stmt of statements) {
-        try {
-          // Pré-processa IF NOT EXISTS em ALTER TABLE ADD COLUMN /
-          // CREATE INDEX (MySQL 8 não suporta — só MariaDB). Reescreve
-          // sem IF NOT EXISTS ou skip se já existe.
-          const prep = await prepararStatement(connection, stmt);
-          if (prep.skip) {
-            warnings++;
-            continue;
-          }
-          await connection.query(prep.sql);
-        } catch (err: any) {
-          const msg = err.message || String(err);
-          if (isHarmlessError(msg)) {
-            warnings++;
-          } else {
-            log.warn({ file, err: msg, stmt: stmt.slice(0, 150) }, "Statement falhou");
-            fileFailed = true;
-            // NÃO faz throw — continua tentando os próximos statements e o próximo arquivo
-          }
-        }
-      }
-
-      if (fileFailed) {
-        comErro++;
-        // Erro fatal de schema — log alto E reporte ao Sentry, em vez
-        // de só log warn. Esses erros geralmente significam que o
-        // servidor vai começar a gerar 5xx por coluna inexistente
-        // (foi exatamente o que aconteceu com 0030_auth_extras v1).
-        log.error(
-          { file, warnings },
-          "Migration teve falhas FATAIS — não marcando como aplicada. Esquema do banco pode estar inconsistente com o código.",
+      if (aplicadasNaPassada === 0) break;
+      if (pendentes.length > 0) {
+        log.info(
+          { passada, restantes: pendentes.length },
+          "Repassando migrations que falharam — podem depender de arquivo posterior",
         );
-        try {
-          const { captureError } = await import("./sentry");
-          captureError(new Error(`Migration falhou: ${file}`), {
-            kind: "migration-failed",
-            file,
-            warnings,
-          });
-        } catch {
-          // Sentry pode não estar disponível em dev local — sem problema.
-        }
-      } else {
-        await connection.execute("INSERT INTO __migrations (filename) VALUES (?)", [file]);
-        aplicadas++;
-        log.info({ file, warnings }, "Migration aplicada com sucesso");
       }
     }
+
+    // Só agora é erro: o que falhou nas passadas anteriores pode ter sido
+    // apenas dependência fora de ordem, e alertar ali encheria o Sentry
+    // de incidente que se resolve sozinho segundos depois.
+    for (const file of pendentes) {
+      log.error(
+        { file },
+        "Migration teve falhas FATAIS — não marcando como aplicada. Esquema do banco pode estar inconsistente com o código.",
+      );
+      try {
+        const { captureError } = await import("./sentry");
+        captureError(new Error(`Migration falhou: ${file}`), {
+          kind: "migration-failed",
+          file,
+        });
+      } catch {
+        // Sentry pode não estar disponível em dev local — sem problema.
+      }
+    }
+    const comErro = pendentes.length;
 
     // Segunda passada: em banco novo, `users` e companhia só passaram a
     // existir agora. Sem isto o banco fica sem as colunas que só o bloco
@@ -1586,4 +1573,63 @@ export async function runMigrations(): Promise<void> {
       /* ignore */
     });
   }
+}
+
+/** Quantas vezes reprocessar o que falhou antes de considerar quebrado. */
+const MAX_PASSADAS_MIGRATION = 3;
+
+type ResultadoArquivo = "aplicada" | "falhou" | "ignorada";
+
+async function aplicarArquivo(
+  connection: mysql.Connection,
+  dir: string,
+  file: string,
+): Promise<ResultadoArquivo> {
+  const fullPath = path.join(dir, file);
+  let sql: string;
+  try {
+    sql = fs.readFileSync(fullPath, "utf8");
+  } catch (err) {
+    log.warn({ file, err: String(err) }, "Não consegui ler arquivo, pulando");
+    return "falhou";
+  }
+
+  const statements = splitStatements(sql);
+  if (statements.length === 0) {
+    log.warn({ file }, "Sem statements executáveis, pulando sem marcar");
+    return "ignorada";
+  }
+
+  log.info({ file, statements: statements.length }, "Aplicando migration");
+
+  let warnings = 0;
+  let fileFailed = false;
+  for (const stmt of statements) {
+    try {
+      // Pré-processa IF NOT EXISTS em ALTER TABLE ADD COLUMN /
+      // CREATE INDEX (MySQL 8 não suporta — só MariaDB). Reescreve
+      // sem IF NOT EXISTS ou skip se já existe.
+      const prep = await prepararStatement(connection, stmt);
+      if (prep.skip) {
+        warnings++;
+        continue;
+      }
+      await connection.query(prep.sql);
+    } catch (err: any) {
+      const msg = err.message || String(err);
+      if (isHarmlessError(msg)) {
+        warnings++;
+      } else {
+        log.warn({ file, err: msg, stmt: stmt.slice(0, 150) }, "Statement falhou");
+        fileFailed = true;
+        // NÃO faz throw — continua tentando os próximos statements.
+      }
+    }
+  }
+
+  if (fileFailed) return "falhou";
+
+  await connection.execute("INSERT INTO __migrations (filename) VALUES (?)", [file]);
+  log.info({ file, warnings }, "Migration aplicada com sucesso");
+  return "aplicada";
 }

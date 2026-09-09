@@ -28,33 +28,7 @@ import {
   watchConsoleErrors,
   watchNetwork5xx,
 } from "./lib";
-
-/**
- * Rotas do app logado, sem parâmetro. As com `:id` ficam de fora porque
- * exigem um registro específico — elas entram quando o robô ganhar a
- * etapa de criar dado antes de navegar.
- */
-const ROTAS = [
-  "/dashboard",
-  "/clientes",
-  "/processos",
-  "/movimentacoes",
-  "/atendimento",
-  "/agenda",
-  "/tarefas",
-  "/kanban",
-  "/financeiro",
-  "/relatorios",
-  "/acordos",
-  "/modelos-contrato",
-  "/automacoes",
-  "/smartflow",
-  "/agentes-ia",
-  "/jurisia",
-  "/ponto",
-  "/calculos",
-  "/configuracoes",
-] as const;
+import { ROTAS_APP as ROTAS } from "./robo/rotas";
 
 test.describe("Robô de jornada — todas as rotas do app logado", () => {
   /**
