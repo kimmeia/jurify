@@ -1284,6 +1284,9 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
       createdAt: leads.createdAt,
       updatedAt: leads.updatedAt,
       fechadoEm: leads.fechadoEm,
+      canceladoEm: leads.canceladoEm,
+      motivoCancelamento: leads.motivoCancelamento,
+      detalheCancelamento: leads.detalheCancelamento,
     })
     .from(leads)
     .innerJoin(contatos, eq(leads.contatoId, contatos.id))
@@ -1300,6 +1303,7 @@ export async function listarLeads(escritorioId: number, etapa?: string) {
     createdAt: toIsoString(r.createdAt) ?? "",
     updatedAt: toIsoString(r.updatedAt) ?? "",
     fechadoEm: toIsoString(r.fechadoEm),
+    canceladoEm: toIsoString(r.canceladoEm),
   }));
 }
 

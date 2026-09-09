@@ -576,6 +576,8 @@ export const dashboardRouter = router({
       perdidos: 0,
       taxaGanho: null as number | null,
       valorGanho: 0,
+      /** Contratos cancelados no mês, pela data do cancelamento (sem "engano"). */
+      cancelados: 0,
     };
 
     const db = await getDb();
@@ -637,6 +639,22 @@ export const dashboardRouter = router({
         .sort((a, b) => b.fechamentos - a.fechamentos || b.valor - a.valor)
         .slice(0, 3);
 
+      // Cancelados pela data do cancelamento — o contrato segue "ganho" no
+      // mês em que fechou; "lançado por engano" não é churn e fica fora.
+      const [canc] = await db
+        .select({ total: sql<number>`COUNT(*)` })
+        .from(leads)
+        .where(
+          and(
+            eq(leads.escritorioId, esc.escritorio.id),
+            eq(leads.etapaFunil, "fechado_ganho"),
+            gte(leads.canceladoEm, periodo.dataInicio),
+            lte(leads.canceladoEm, periodo.dataFim),
+            sql`(${leads.motivoCancelamento} IS NULL OR ${leads.motivoCancelamento} <> 'engano')`,
+            ...(soProprios ? [eq(leads.responsavelId, esc.colaborador.id)] : []),
+          ),
+        );
+
       const decididos = ganhos + perdidos;
       return {
         campanhas,
@@ -644,6 +662,7 @@ export const dashboardRouter = router({
         perdidos,
         taxaGanho: decididos > 0 ? +((ganhos / decididos) * 100).toFixed(1) : null,
         valorGanho,
+        cancelados: Number(canc?.total || 0),
       };
     } catch (err) {
       log.warn({ err: String(err) }, "Falha ao montar desempenho comercial");

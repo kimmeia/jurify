@@ -5,7 +5,9 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { checkPermission } from "./check-permission";
+import { cancelarContratosDoContato } from "./cancelar-contrato";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
 import { verificarLimite } from "../billing/plan-limits";
@@ -768,6 +770,9 @@ export const clientesRouter = router({
       motivo: z.string().max(500).optional(),
       // Data do encerramento/suspensão (o usuário escolhe). Default = hoje.
       data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      /** Cancelado/rescindido: cancela também os contratos fechados do
+       *  cliente (mesma data; motivo "desistência" ou "outro"). */
+      cancelarContratos: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
@@ -787,7 +792,21 @@ export const clientesRouter = router({
           servicoEncerradoPor: perm.colaboradorId,
         })
         .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
-      return { success: true, situacaoServico: input.tipo };
+
+      let contratosCancelados = 0;
+      if (input.cancelarContratos && (input.tipo === "cancelado" || input.tipo === "rescindido")) {
+        const esc = await getEscritorioPorUsuario(ctx.user.id);
+        const tz = esc?.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+        contratosCancelados = await cancelarContratosDoContato(db, {
+          escritorioId: perm.escritorioId,
+          contatoId: input.contatoId,
+          data: input.data || dataHojeBR(tz),
+          motivo: input.tipo === "cancelado" ? "desistencia" : "outro",
+          detalhe: input.motivo?.trim() || (input.tipo === "rescindido" ? "Rescindido pelo escritório" : null),
+          canceladoPor: perm.colaboradorId ?? null,
+        });
+      }
+      return { success: true, situacaoServico: input.tipo, contratosCancelados };
     }),
 
   /** Reativa o serviço (desfaz encerramento/cancelamento). */
@@ -1476,19 +1495,28 @@ export const clientesRouter = router({
     if (!db) return [];
     const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
     if (!ok) return [];
+    const colabCancelou = alias(colaboradores, "colab_cancelou");
+    const userCancelou = alias(users, "user_cancelou");
     const rows = await db
       .select({
         id: leads.id,
         etapaFunil: leads.etapaFunil,
         valorEstimado: leads.valorEstimado,
         createdAt: leads.createdAt,
+        fechadoEm: leads.fechadoEm,
         responsavelId: leads.responsavelId,
         responsavelNome: users.name,
         origemLead: leads.origemLead,
+        canceladoEm: leads.canceladoEm,
+        motivoCancelamento: leads.motivoCancelamento,
+        detalheCancelamento: leads.detalheCancelamento,
+        canceladoPorNome: userCancelou.name,
       })
       .from(leads)
       .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
       .leftJoin(users, eq(colaboradores.userId, users.id))
+      .leftJoin(colabCancelou, eq(leads.canceladoPor, colabCancelou.id))
+      .leftJoin(userCancelou, eq(colabCancelou.userId, userCancelou.id))
       .where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, perm.escritorioId)))
       .orderBy(desc(leads.createdAt));
     return rows.map(r => ({
@@ -1496,9 +1524,14 @@ export const clientesRouter = router({
       etapaFunil: r.etapaFunil,
       valorEstimado: r.valorEstimado,
       createdAt: toIsoString(r.createdAt) ?? "",
+      fechadoEm: toIsoString(r.fechadoEm),
       responsavelId: r.responsavelId,
       responsavelNome: r.responsavelNome,
       origemLead: r.origemLead,
+      canceladoEm: toIsoString(r.canceladoEm),
+      motivoCancelamento: r.motivoCancelamento,
+      detalheCancelamento: r.detalheCancelamento,
+      canceladoPorNome: r.canceladoPorNome,
     }));
   }),
 

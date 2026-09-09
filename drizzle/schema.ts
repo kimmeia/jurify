@@ -1051,6 +1051,13 @@ export const leads = mysqlTable("leads", {
   // Pra relatórios "deste mês" não dá pra usar updatedAt (muda em qualquer
   // edição) — esse campo só muda quando o status passa pra fechado.
   fechadoEm: timestamp("fechadoEmLead"),
+  // Contrato fechado que foi cancelado depois. A etapa continua
+  // fechado_ganho (o fechamento aconteceu); o cancelamento é outro evento,
+  // com data própria. NULL = não cancelado.
+  canceladoEm: timestamp("canceladoEmLead"),
+  motivoCancelamento: varchar("motivoCancelamentoLead", { length: 64 }),
+  detalheCancelamento: varchar("detalheCancelamentoLead", { length: 500 }),
+  canceladoPor: int("canceladoPorLead"),
   createdAt: timestamp("createdAtLead").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtLead").defaultNow().onUpdateNow().notNull(),
 });
