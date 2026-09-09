@@ -10,6 +10,8 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { mascararTelefoneBR } from "@shared/telefone";
+import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -697,6 +699,7 @@ export default function Clientes() {
                     <Download className="h-3.5 w-3.5 mr-1" />
                     {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
                   </Button>
+                  <PossiveisDuplicadosButton onMesclado={() => { refetch(); refetchStats(); }} />
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
@@ -1525,7 +1528,7 @@ function LinhaCliente({
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           {c.telefone && (
             <span className="flex items-center gap-1">
-              <Phone className="h-3 w-3" /> {c.telefone}
+              <Phone className="h-3 w-3" /> {mascararTelefoneBR(c.telefone)}
             </span>
           )}
           {c.email && (
@@ -3578,7 +3581,7 @@ function ClienteDetalhe({
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-hero-fg/80">
                 {cliente.telefone && (
-                  <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{cliente.telefone}</span>
+                  <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{mascararTelefoneBR(cliente.telefone)}</span>
                 )}
                 {(cliente as any).telefonesSecundarios?.length > 0 && (
                   <span>+{(cliente as any).telefonesSecundarios.length} tel</span>

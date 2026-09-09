@@ -220,7 +220,43 @@ export const crmRouter = router({
       if (!perm.allowed) {
         throw new Error("Apenas dono, gestor ou cargo com permissão de excluir clientes pode unificar contatos.");
       }
-      return unificarContatos(perm.escritorioId, input.principalId, input.duplicadoId);
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      // Com registro: o "Mesclar" manual também fica desfazível por 7 dias.
+      const { unificarComRegistro } = await import("./reconhecer-cadastro");
+      const r = await unificarComRegistro(db, {
+        escritorioId: perm.escritorioId,
+        principalId: input.principalId,
+        duplicadoId: input.duplicadoId,
+        origem: "manual",
+        executadoPor: perm.colaboradorId,
+      });
+      return { tabelasAtualizadas: r.tabelasAtualizadas, unificacaoId: r.id };
+    }),
+
+  /** A unificação mais recente (ainda desfazível) que deixou este contato como sobrevivente — alimenta o aviso na conversa. */
+  unificacaoRecente: protectedProcedure
+    .input(z.object({ contatoId: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
+      if (!perm.allowed) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const { unificacaoRecente } = await import("./reconhecer-cadastro");
+      return unificacaoRecente(db, { escritorioId: perm.escritorioId, contatoId: input.contatoId });
+    }),
+
+  desfazerUnificacao: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new Error("Apenas dono, gestor ou cargo com permissão de excluir clientes pode desfazer uma unificação.");
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { desfazerUnificacao } = await import("./reconhecer-cadastro");
+      return desfazerUnificacao(db, { escritorioId: perm.escritorioId, id: input.id, executadoPor: perm.colaboradorId });
     }),
 
   excluirContato: protectedProcedure
@@ -657,6 +693,7 @@ export const crmRouter = router({
           // Buscar conversa + contato + canal
           const [convData] = await db.select({
             canalId: conversas.canalId,
+            contatoId: conversas.contatoId,
             telefone: contatos.telefone,
             canalTipo: canaisIntegrados.tipo,
             chatIdExterno: conversas.chatIdExterno,
@@ -721,9 +758,12 @@ export const crmRouter = router({
                       // Janela de 24h: fora dela a Meta REJEITA texto/mídia
                       // livre (131047) — a bolha aparecia "enviada" e morria no
                       // vácuo. Bloqueia na origem com instrução clara: fora da
-                      // janela, só template sai.
-                      const { ultimaEntradaDaConversa, janela24hAberta } = await import("../integracoes/whatsapp-optout");
-                      const ultimaEntrada = await ultimaEntradaDaConversa(db, input.conversaId);
+                      // janela, só template sai. Contada por PAR (cliente ×
+                      // canal), como a Meta mede — só a conversa atual dava
+                      // "fechada" falsa quando a última mensagem do cliente
+                      // ficou numa conversa anterior do mesmo número.
+                      const { ultimaEntradaDoContatoNoCanal, janela24hAberta } = await import("../integracoes/whatsapp-optout");
+                      const ultimaEntrada = await ultimaEntradaDoContatoNoCanal(db, convData.contatoId, convData.canalId);
                       if (!janela24hAberta(ultimaEntrada, Date.now())) {
                         const erroJanela =
                           "Janela de 24h fechada: o WhatsApp só aceita mensagem livre até 24h após a última mensagem DO CLIENTE. Use um template (botão Templates) pra reabrir a conversa.";

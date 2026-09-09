@@ -65,6 +65,18 @@ import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { IconeTwilio } from "@/components/IconeTwilio";
 import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
 
+/** "2 conversas, 1 cobrança" — o que a unificação levou junto, em palavras. */
+function resumoContagens(c: { conversas: number; cobrancas: number; processos: number; leads: number; arquivos: number }): string {
+  const partes: string[] = [];
+  const add = (n: number, um: string, varios: string) => { if (n > 0) partes.push(`${n} ${n === 1 ? um : varios}`); };
+  add(c.conversas, "conversa", "conversas");
+  add(c.cobrancas, "cobrança", "cobranças");
+  add(c.processos, "processo", "processos");
+  add(c.leads, "lead", "leads");
+  add(c.arquivos, "arquivo", "arquivos");
+  return partes.length > 0 ? partes.join(", ") : "o histórico";
+}
+
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
 function initials(n: string) { return n.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase(); }
@@ -1866,6 +1878,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const conv = convEncontrada
     ?? (convAvulsa && (convAvulsa as any).id === cid ? convAvulsa : undefined)
     ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // Um número, um cadastro: aviso (desfazível por 7 dias) quando uma ficha
+  // magra deste número acabou de ser absorvida pelo cadastro completo.
+  const { data: unificacao, refetch: refetchUnificacao } = (trpc as any).crm.unificacaoRecente.useQuery(
+    { contatoId: conv?.contatoId ?? 0 },
+    { enabled: !!conv?.contatoId, retry: false, staleTime: 60_000 },
+  );
+  const desfazerUnificacaoMut = (trpc as any).crm.desfazerUnificacao.useMutation({
+    onSuccess: () => { toast.success("Unificação desfeita — a ficha voltou como estava."); refetchUnificacao(); onUpdate(); },
+    onError: (e: any) => toast.error("Não deu pra desfazer", { description: e.message }),
+  });
   // Está aberta mas fora do recorte atual do Inbox: a lista ao lado não a
   // mostra, e sem dizer isso a tela parece quebrada.
   const foraDoFiltro = !!conv && !convEncontrada;
@@ -2216,6 +2238,24 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            {/* Um número, um cadastro: o nome vem do cadastro. Enquanto só existe a
+                ficha magra do WhatsApp, o selo diz isso — e o "Vincular" do menu
+                continua sendo o caminho manual. */}
+            {conv?.contatoId && ((conv as any)?.contatoCadastroCompleto ? (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-success-bg text-success-fg border-success/30 dark:text-success"
+                title="Este número foi reconhecido no cadastro do cliente (CPF, e-mail ou contrato)"
+              >
+                ✓ cadastro reconhecido
+              </span>
+            ) : (conv as any)?.contatoOrigem === "whatsapp" ? (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-muted text-muted-foreground"
+                title="Ficha criada pela primeira mensagem, sem CPF nem e-mail. Cadastre em Clientes com este telefone e ela é completada — ou use Vincular no menu."
+              >
+                contato do WhatsApp
+              </span>
+            ) : null)}
             {canalInoperante && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
@@ -2287,7 +2327,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             {(conv?.contatoTelefone || conv?.chatIdExterno) && (
               <span className="inline-flex items-center gap-1">
                 <span className="text-muted-foreground/40">·</span>
-                {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
+                {mascararTelefoneBR(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "")}
               </span>
             )}
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
@@ -2359,6 +2399,36 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             Mostrar na lista
           </Button>
         )}
+      </div>
+    )}
+    {/* Um número, um cadastro: a ficha magra deste número acabou de ser
+        absorvida pelo cadastro completo (ou alguém mesclou à mão). Avisa na
+        conversa e deixa desfazer por 7 dias. */}
+    {unificacao && (
+      <div className="mx-3 mt-2 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-[11px] text-info-fg leading-snug" data-testid="aviso-unificacao">
+        <p>
+          <strong>Duas fichas com este número foram unificadas{unificacao.origem === "automatica" ? " agora" : ""}.</strong>{" "}
+          "{unificacao.duplicadoNome}" ({unificacao.duplicadoOrigem === "whatsapp" ? "contato do WhatsApp" : "cadastro"}
+          {unificacao.duplicadoCriadoEm ? `, ${new Date(unificacao.duplicadoCriadoEm).toLocaleDateString("pt-BR")}` : ""}) entrou em{" "}
+          <strong>{unificacao.principalNome}</strong>: {resumoContagens(unificacao.contagens)} estão juntos aqui.
+          {unificacao.duplicadoTelefone ? ` O número ${mascararTelefoneBR(unificacao.duplicadoTelefone)} ficou como telefone secundário.` : ""}
+        </p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {conv?.contatoId && (
+            <Button size="sm" variant="outline" className="h-6 text-[10.5px] border-info/30" onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}>
+              Abrir cadastro
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10.5px]"
+            disabled={desfazerUnificacaoMut.isPending}
+            onClick={() => desfazerUnificacaoMut.mutate({ id: unificacao.id })}
+          >
+            {desfazerUnificacaoMut.isPending ? "Desfazendo…" : "Desfazer"}
+          </Button>
+        </div>
       </div>
     )}
     {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só

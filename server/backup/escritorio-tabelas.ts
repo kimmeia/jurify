@@ -112,6 +112,7 @@ export const EXCLUIR_NAO_RELEVANTE: ReadonlyArray<{ nomeBanco: string; motivo: s
   { nomeBanco: "escritorio_creditos", motivo: "Saldo único de créditos do escritório — financeiro JuridFlow" },
   { nomeBanco: "escritorio_transacoes", motivo: "Histórico de uso de créditos — financeiro JuridFlow" },
   { nomeBanco: "fontes_juridicas", motivo: "Base de conhecimento jurídico (súmulas/leis) — global e regenerável via seed/ingestão, não é dado do escritório" },
+  { nomeBanco: "contatos_unificacoes", motivo: "Memória do Desfazer da unificação de fichas (7 dias) — ids internos que um restore não saberia recolar" },
 ];
 
 /**
