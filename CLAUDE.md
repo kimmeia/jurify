@@ -526,9 +526,29 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   nenhuma); e `admin.criarCliente` exige WhatsApp (mesma regra e mensagem
   do cadastro público; campo "WhatsApp (com DDD) *" no
   `CriarClienteDialog`). O seletor "Trocar plano" do painel continua
-  listando o `PLANS` estático (`admin.planosAtuais`) — não foi pedido.
-Amarras: `meu-plano-vitrine-sob-consulta` (19) e
-`cadastro-whatsapp-obrigatorio` (20) — 42 mutações conferidas, todas
+  listando o `PLANS` estático (`admin.planosAtuais`) — mockup
+  `mockup-trocar-plano-catalogo.html` entregue 09/09, aguardando "pode
+  fazer" (3 decisões: antiga espera o pagamento da nova?; ocultos na
+  dobra?; trial que troca mantém os dias?).
+- **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
+  ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
+  "completo" sob consulta) — agrega no banco com a MESMA regra do
+  `receitaMensal`: `COALESCE(valorNegociadoCentavos, planos.preco)`, só
+  ativas sem cortesia. Ainda leem `PLANS` (não autorizado): `criarCupom`
+  (valida `planosIds` contra a lista fixa → recusa slugs novos),
+  `planosAtuais`, `health.plansCount`, `db.ts` getPlanName/getPlanPrice e
+  o limite legado de créditos em `getUserCreditsInfo`.
+- **Decisões do dono 09/09**: plano sob consulta é SÓ venda consultiva
+  (cliente nunca escolhe); pediu um pacote NOVO de 3 planos com
+  Atendimento em todos contra Advbox/Astrea — proposta
+  `mockup-pacote-3-planos.html` (Atende R$ 197 / Escritório R$ 397 /
+  Escala R$ 797, anual = 10×, 14d de teste, "Sob medida" = Completo
+  consultivo; sites dos concorrentes bloqueados daqui, números vieram de
+  buscas de 09/09 — conferir antes de publicar). Implementar = migration
+  no catálogo + esconder Monitoramento Essencial/Profissional; nada
+  hardcoded. Aguardando escolha dele.
+Amarras: `meu-plano-vitrine-sob-consulta` (21) e
+`cadastro-whatsapp-obrigatorio` (20) — 44 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
