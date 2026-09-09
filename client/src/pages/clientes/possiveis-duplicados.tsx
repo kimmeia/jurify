@@ -48,7 +48,7 @@ type Grupo = {
 
 const ORIGEM: Record<string, string> = {
   whatsapp: "WhatsApp",
-  manual: "Clientes",
+  manual: "Cadastro manual",
   asaas: "Asaas",
   site: "Site",
   instagram: "Instagram",

@@ -17,7 +17,7 @@ import {
 } from "../../shared/conferencia-cadastros";
 
 const ORIGEM: Record<string, string> = {
-  whatsapp: "WhatsApp", manual: "Clientes", asaas: "Asaas", site: "Site",
+  whatsapp: "WhatsApp", manual: "Cadastro manual", asaas: "Asaas", site: "Site",
   instagram: "Instagram", facebook: "Facebook", telefone: "Telefone",
 };
 
@@ -108,9 +108,17 @@ export async function gerarConferenciaPDF(
         { titulo: "Vínculos", largura: 43, valor: (f) => vinculos(f) },
       ];
       const ALTURA_LINHA = 11;
+      // Nome longo, e-mail e "Cadastro manual + data" quebram em 2 linhas
+      // dentro da coluna; a linha da tabela tem que crescer junto, senão a
+      // segunda linha cai em cima da ficha seguinte. Máximo de 3 linhas por
+      // célula, o resto vira reticências.
+      const MAX_LINHAS_CELULA = 3;
+      const ESPACO_LINHA = 2;
+      const alturaCelula = (texto: string, largura: number) =>
+        Math.min(doc.heightOfString(texto, { width: largura - 4 }), ALTURA_LINHA * MAX_LINHAS_CELULA);
 
       const blocoGrupo = (g: GrupoConf) => {
-        garantir(30 + ALTURA_LINHA * (g.fichas.length + 2));
+        garantir(30 + ALTURA_LINHA * 2 * (g.fichas.length + 1));
         const divs = g.divergencias.map((d) => ROTULO_DIVERGENCIA[d]).join(", ");
         const titulo = `${g.tipo === "telefone" ? "Mesmo telefone" : "Mesmo CPF/CNPJ"} · ${g.rotulo} · ${g.fichas.length} fichas · ${
           g.classe === "cpfs_diferentes" ? `ATENÇÃO: ${divs}` : divs || "só falta preencher"
@@ -123,27 +131,29 @@ export async function gerarConferenciaPDF(
         const yCab = doc.y;
         doc.fillColor(COR_MUDO).font("Helvetica-Bold").fontSize(7);
         for (const c of colunas) {
-          doc.text(c.titulo, x + 2, yCab, { width: c.largura - 4, lineBreak: false, ellipsis: true });
+          doc.text(c.titulo, x + 2, yCab, { width: c.largura - 4, height: ALTURA_LINHA, ellipsis: true });
           x += c.largura;
         }
         doc.y = yCab + ALTURA_LINHA;
 
         doc.font("Helvetica").fontSize(7.5);
         for (const f of g.fichas) {
-          if (doc.y + ALTURA_LINHA > fimPagina()) doc.addPage();
+          const valores = colunas.map((c) => c.valor(f, g));
+          const altura = Math.max(ALTURA_LINHA, ...valores.map((v, i) => alturaCelula(v, colunas[i].largura))) + ESPACO_LINHA;
+          if (doc.y + altura > fimPagina()) doc.addPage();
           const y = doc.y;
           x = left;
-          for (const c of colunas) {
+          colunas.forEach((c, i) => {
             const sombreia = c.divergencia && g.divergencias.includes(c.divergencia);
             if (sombreia) {
               doc.save();
-              doc.rect(x, y - 1, c.largura, ALTURA_LINHA).fill(c.divergencia === "cpf" ? COR_VERMELHO : COR_AMBAR);
+              doc.rect(x, y - 1, c.largura, altura).fill(c.divergencia === "cpf" ? COR_VERMELHO : COR_AMBAR);
               doc.restore();
             }
-            doc.fillColor(COR_TEXTO).text(c.valor(f, g), x + 2, y, { width: c.largura - 4, lineBreak: false, ellipsis: true });
+            doc.fillColor(COR_TEXTO).text(valores[i], x + 2, y, { width: c.largura - 4, height: altura - ESPACO_LINHA, ellipsis: true });
             x += c.largura;
-          }
-          doc.y = y + ALTURA_LINHA;
+          });
+          doc.y = y + altura;
         }
         doc.moveDown(0.7);
       };
@@ -178,7 +188,7 @@ export async function gerarConferenciaPDF(
       let xf = left;
       const yf = doc.y;
       doc.fillColor(COR_MUDO).font("Helvetica-Bold").fontSize(7);
-      for (const c of colFaltas) { doc.text(c.titulo, xf + 2, yf, { width: c.largura - 4, lineBreak: false }); xf += c.largura; }
+      for (const c of colFaltas) { doc.text(c.titulo, xf + 2, yf, { width: c.largura - 4, height: ALTURA_LINHA, ellipsis: true }); xf += c.largura; }
       doc.y = yf + ALTURA_LINHA;
       doc.font("Helvetica").fontSize(7.5).fillColor(COR_TEXTO);
       for (const tipo of FALTA_TIPOS) {
@@ -190,7 +200,7 @@ export async function gerarConferenciaPDF(
         xf = left;
         const valores = [ROTULO_FALTA[tipo], String(f.ids.length), String(f.clientes), String(f.leads), como];
         colFaltas.forEach((c, i) => {
-          doc.text(valores[i], xf + 2, y, { width: c.largura - 4, lineBreak: i === 4 });
+          doc.text(valores[i], xf + 2, y, { width: c.largura - 4, height: Math.max(ALTURA_LINHA, alturaComo), ellipsis: true });
           xf += c.largura;
         });
         doc.y = y + Math.max(ALTURA_LINHA, alturaComo);
