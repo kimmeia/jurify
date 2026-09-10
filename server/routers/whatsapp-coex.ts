@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
@@ -108,6 +109,18 @@ export const whatsappCoexRouter = router({
           ),
         )
         .limit(1);
+
+      // Um número só pode estar NO AR em um escritório: o webhook da Meta
+      // chega sem inquilino e é o phoneNumberId que decide o destino da
+      // conversa. Com duas linhas conectadas não existe resposta certa.
+      if (!existente) {
+        const { canalConectadoEmOutroEscritorio, MENSAGEM_NUMERO_EM_OUTRA_CONTA } =
+          await import("../integracoes/numero-whatsapp-unico");
+        const idNumero = String(config.phoneNumberId || "");
+        if (idNumero && (await canalConectadoEmOutroEscritorio(db, esc.escritorio.id, idNumero))) {
+          throw new TRPCError({ code: "CONFLICT", message: MENSAGEM_NUMERO_EM_OUTRA_CONTA });
+        }
+      }
 
       if (existente) {
         await db

@@ -4,6 +4,7 @@
  */
 
 import { eq, and, desc } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "../db";
 import { canaisIntegrados, integracaoAuditLog } from "../../drizzle/schema";
 import { encryptConfig, decryptConfig, maskToken, generateWebhookSecret } from "./crypto-utils";
@@ -96,6 +97,23 @@ export async function criarCanal(dados: {
 }) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
+
+  // Mesma trava dos caminhos da Meta, aqui pra conexão manual: o número não
+  // pode ficar NO AR em dois escritórios, senão o webhook não tem como
+  // saber pra qual banca entregar a conversa.
+  if (dados.tipo === "whatsapp_api" && dados.config?.phoneNumberId) {
+    const { canalConectadoEmOutroEscritorio, MENSAGEM_NUMERO_EM_OUTRA_CONTA } = await import(
+      "../integracoes/numero-whatsapp-unico"
+    );
+    const dono = await canalConectadoEmOutroEscritorio(
+      db,
+      dados.escritorioId,
+      String(dados.config.phoneNumberId),
+    );
+    if (dono) {
+      throw new TRPCError({ code: "CONFLICT", message: MENSAGEM_NUMERO_EM_OUTRA_CONTA });
+    }
+  }
 
   let configEncrypted: string | null = null;
   let configIv: string | null = null;

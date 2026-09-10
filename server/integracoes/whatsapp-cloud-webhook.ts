@@ -109,6 +109,8 @@ interface CanalInfo {
   canalId: number;
   escritorioId: number;
   accessToken: string;
+  /** Só usado pra desempatar número cadastrado em mais de um escritório. */
+  status?: string | null;
 }
 
 /** Busca canal CoEx pelo phoneNumberId ou wabaId */
@@ -120,6 +122,11 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
     const canais = await db.select().from(canaisIntegrados)
       .where(eq(canaisIntegrados.tipo, "whatsapp_api"));
 
+    // Junta TODOS os candidatos antes de escolher. Devolver o primeiro que
+    // casasse era entregar a conversa ao escritório de menor id quando o
+    // mesmo número estivesse conectado em dois — e a vítima não teria como
+    // perceber: a mensagem simplesmente chega na caixa de outra banca.
+    const candidatos: CanalInfo[] = [];
     for (const canal of canais) {
       if (!canal.configEncrypted || !canal.configIv || !canal.configTag) continue;
       try {
@@ -129,14 +136,51 @@ async function findCanalByPhoneNumberId(phoneNumberId: string): Promise<CanalInf
         // dava match liberal e podia rotear mensagem do número A pro
         // canal do número B no mesmo (ou em outro) escritório.
         if (config.phoneNumberId === phoneNumberId) {
-          return {
+          candidatos.push({
             canalId: canal.id,
             escritorioId: canal.escritorioId,
             accessToken: typeof config.accessToken === "string" ? config.accessToken : "",
-          };
+            status: canal.status,
+          });
         }
       } catch { continue; }
     }
+
+    if (candidatos.length === 0) return null;
+    if (candidatos.length === 1) return candidatos[0]!;
+
+    // Empate entre escritórios diferentes: o número só pode pertencer a um.
+    // Canal fora do ar não recebe — normalmente sobra exatamente um.
+    const vivos = candidatos.filter((c) => c.status === "conectado");
+    const escritoriosVivos = new Set(vivos.map((c) => c.escritorioId));
+
+    if (vivos.length === 1) {
+      log.warn(
+        { phoneNumberId, escritorios: candidatos.map((c) => c.escritorioId) },
+        "[Webhook] Número cadastrado em mais de um escritório — roteando pro único conectado",
+      );
+      return vivos[0]!;
+    }
+
+    // Dois conectados (ou nenhum): adivinhar é entregar conversa de cliente
+    // à banca errada, e isso não se desfaz. Melhor a mensagem não chegar e
+    // alguém ser avisado do que chegar no lugar errado em silêncio.
+    log.error(
+      {
+        phoneNumberId,
+        escritorios: candidatos.map((c) => ({ id: c.escritorioId, status: c.status })),
+      },
+      "[Webhook] Número ambíguo entre escritórios — mensagem NÃO roteada",
+    );
+    try {
+      const { captureError } = await import("../_core/sentry");
+      captureError(new Error("Número WhatsApp ambíguo entre escritórios"), {
+        kind: "whatsapp-numero-ambiguo",
+        phoneNumberId,
+        escritorios: [...escritoriosVivos].join(","),
+      });
+    } catch { /* Sentry pode não estar configurado */ }
+    return null;
   } catch {}
   return null;
 }
