@@ -238,12 +238,14 @@ describe("o diálogo mostra o CPF que seria descartado", () => {
   });
 
   it("o botão que avança muda de nome quando há conflito", () => {
-    expect(dlg).toContain('{conflito ? "Mesclar mesmo assim" : "Continuar"}');
+    // O passo do meio entrou em 10/09 e o rótulo passou a olhar o passo também;
+    // o que a amarra protege continua sendo a troca do texto no conflito.
+    expect(dlg).toContain('"Mesclar mesmo assim" : "Continuar"');
   });
 
   it("a confirmação manda o aval pro servidor — sem isso a procedure recusa", () => {
-    expect(dlg).toContain("onConfirmar(selecionado.id, conflito || undefined)");
-    expect(tela).toContain("mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente })");
+    expect(dlg).toContain("onConfirmar(selecionado.id, conflito || undefined");
+    expect(tela).toContain("mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente");
   });
 
   it("o conflito sai da MESMA função do servidor", () => {

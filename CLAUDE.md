@@ -737,8 +737,39 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     `mesclar-cpf-diferente` (25 testes) — 27 mutações vermelhas
     (`scratchpad/mutar-mesclar-cpf.py`; uma delas MOVE o hook para depois
     do `return` antecipado, o React #310 que o remendo de hooks não pega).
-  - **Escolher campo a campo o que fica ao mesclar — proposta entregue
-    10/09 (`mockup-mesclar-escolher-campos.html`), AGUARDANDO decisão.**
+  - **Entregue 10/09, escolher campo a campo o que fica ao mesclar — mockups
+    `mockup-mesclar-escolher-campos.html` + `mockup-mesclar-decisoes.html`,
+    com as duas decisões do dono: 1 = A (a escolha aparece nos DOIS lugares
+    que mesclam um par por vez: o Mesclar da ficha e o Mesclar da linha na
+    Conferência; o lote "Mesclar todos" NÃO pergunta) e 2 = B (o responsável
+    ENTRA na lista de campos escolhíveis).** Regras puras em
+    `shared/mesclar-campos.ts` (`linhasDaMesclagem` monta as linhas —
+    `escolha` quando os dois lados têm valor e discordam, `um_lado` quando só
+    um tem, `somam` pra telefone e tags; campo igual ou vazio dos dois lados
+    não vira linha). O padrão de cada linha é o que a mesclagem faria sozinha
+    — e-mail/CPF/observações preenchem buraco vazio, nome e responsável NÃO —,
+    então quem não mexer termina com o resultado de antes; a tela manda só
+    `escolhasQueMudam`. `crm.unificarContatos` e `clientes.mesclarDuplicados`
+    aceitam `escolhas`; `clientes.camposParaMesclar` (permissão
+    `clientes.excluir`, escopada, nome do responsável por join em `users`)
+    serve as duas telas. Aplicação em `unificarComRegistro`, DEPOIS do
+    `unificarContatos` de sempre (antes, a mesclagem sobrescreveria a
+    decisão). **Tags passaram a SOMAR** (`unirTags`) em toda mesclagem
+    registrada, inclusive a automática — é aditivo e o Desfazer devolve as
+    originais; se o dono não quiser, é aqui que se tira.
+    **O ponto sensível**: `principalAntes` passou a fotografar nome, tags e
+    responsável além dos quatro de sempre, e `desfazerUnificacao` restaura o
+    que estiver fotografado (`"campo" in antes`) — registro antigo não tem
+    essas chaves e escrever `?? null` neles apagaria o que ninguém tocou.
+    Client: `clientes/mesclar-escolher-campos.tsx` (hook + tabela, usado pelas
+    duas telas); a ficha ganhou o passo do meio (`passo` substituiu o booleano
+    `confirmacao`, com Voltar) e a Conferência abre `MesclarComEscolhaDialog`,
+    que caminha par a par quando o grupo tem 3+ fichas e pula sozinho o par
+    sem divergência. Amarra: `mesclar-escolher-campos` (23 testes) — 28
+    mutações vermelhas (`scratchpad/mutar-mesclar-campos.py`; uma só morreu
+    depois de a amarra olhar a CHAMADA em vez do import).
+  - **Proposta original (superada pela entrega acima)
+    `mockup-mesclar-escolher-campos.html`:**
     Ideia do dono ("quando dados divergentes, poder escolher quais serão
     mesclados"). O estudo mapeou a regra silenciosa de hoje: telefone do
     absorvido vira secundário (não perde); e-mail/CPF/observações só

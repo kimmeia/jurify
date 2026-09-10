@@ -13,6 +13,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { mascararTelefoneBR } from "@shared/telefone";
 import { FALTA_TIPOS, ROTULO_FALTA, cpfsConflitam, type FaltaTipo } from "@shared/conferencia-cadastros";
 import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
+import { useEscolhasMesclagem, TabelaEscolhaCampos, EsqueletoEscolhaCampos } from "./clientes/mesclar-escolher-campos";
+import type { EscolhasMesclagem } from "@shared/mesclar-campos";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -3784,8 +3786,8 @@ function ClienteDetalhe({
         open={mesclarOpen}
         onOpenChange={setMesclarOpen}
         clienteAtual={cliente}
-        onConfirmar={(principalId, confirmarCpfDiferente) =>
-          mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente })
+        onConfirmar={(principalId, confirmarCpfDiferente, escolhas) =>
+          mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente, escolhas })
         }
         isPending={mesclarMut.isPending}
       />
@@ -4199,14 +4201,21 @@ function MesclarClienteDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   clienteAtual: { id: number; nome: string; cpfCnpj?: string | null };
-  onConfirmar: (principalId: number, confirmarCpfDiferente?: boolean) => void;
+  onConfirmar: (principalId: number, confirmarCpfDiferente?: boolean, escolhas?: EscolhasMesclagem) => void;
   isPending: boolean;
 }) {
   const [busca, setBusca] = useState("");
   const [selecionado, setSelecionado] = useState<{ id: number; nome: string; cpfCnpj?: string | null } | null>(
     null,
   );
-  const [confirmacao, setConfirmacao] = useState(false);
+  // "escolher" é o passo do meio: só aparece quando as duas fichas discordam
+  // em algum campo. Sem divergência, mesclar continua com dois cliques.
+  const [passo, setPasso] = useState<"escolher-ficha" | "campos" | "confirmar">("escolher-ficha");
+  const confirmacao = passo === "confirmar";
+  const campos = useEscolhasMesclagem(selecionado?.id, clienteAtual.id, open && !!selecionado);
+  // Fechar e reabrir tem que voltar pro começo: sem isso o diálogo reabria no
+  // passo da confirmação do cliente anterior.
+  useEffect(() => { if (!open) setPasso("escolher-ficha"); }, [open]);
   const { data: contatos = [] } = (trpc as any).crm?.listarContatos?.useQuery?.(
     { busca: busca || undefined },
     { staleTime: 30_000, enabled: open },
@@ -4232,7 +4241,7 @@ function MesclarClienteDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {!confirmacao ? (
+        {passo === "escolher-ficha" ? (
           <div className="space-y-3 py-2">
             <Label className="text-xs">Cliente principal (vai receber os dados)</Label>
             <Input
@@ -4288,6 +4297,23 @@ function MesclarClienteDialog({
               </div>
             )}
           </div>
+        ) : passo === "campos" ? (
+          <div className="py-1">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Os dois cadastros têm <b>valor diferente</b> em alguns campos. Escolha o que fica em cada um.
+            </p>
+            {campos.carregando || !campos.principal || !campos.duplicado ? (
+              <EsqueletoEscolhaCampos />
+            ) : (
+              <TabelaEscolhaCampos
+                linhas={campos.linhas}
+                escolhas={campos.escolhas}
+                setEscolha={campos.setEscolha}
+                nomePrincipal={campos.principal.nome}
+                nomeDuplicado={campos.duplicado.nome}
+              />
+            )}
+          </div>
         ) : (
           <div className="rounded-lg border-2 border-danger/30 bg-danger-bg p-3 text-xs space-y-2">
             <p className="font-semibold text-danger-fg flex items-center gap-1">
@@ -4312,15 +4338,26 @@ function MesclarClienteDialog({
         )}
 
         <AlertDialogFooter>
+          {passo !== "escolher-ficha" && (
+            <Button
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => setPasso(passo === "confirmar" && campos.precisaEscolher ? "campos" : "escolher-ficha")}
+            >
+              Voltar
+            </Button>
+          )}
           <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
           {!confirmacao ? (
             <Button
-              variant={conflito ? "outline" : "default"}
-              className={conflito ? "border-danger/40 bg-danger-bg text-danger-fg hover:bg-danger-bg" : undefined}
-              disabled={!selecionado}
-              onClick={() => setConfirmacao(true)}
+              variant={conflito && passo === "escolher-ficha" ? "outline" : "default"}
+              className={conflito && passo === "escolher-ficha" ? "border-danger/40 bg-danger-bg text-danger-fg hover:bg-danger-bg" : undefined}
+              disabled={!selecionado || campos.carregando}
+              onClick={() =>
+                setPasso(passo === "escolher-ficha" && campos.precisaEscolher ? "campos" : "confirmar")
+              }
             >
-              {conflito ? "Mesclar mesmo assim" : "Continuar"}
+              {conflito && passo === "escolher-ficha" ? "Mesclar mesmo assim" : "Continuar"}
             </Button>
           ) : (
             <AlertDialogAction
@@ -4328,7 +4365,7 @@ function MesclarClienteDialog({
               disabled={isPending || !selecionado}
               onClick={(e) => {
                 e.preventDefault();
-                if (selecionado) onConfirmar(selecionado.id, conflito || undefined);
+                if (selecionado) onConfirmar(selecionado.id, conflito || undefined, campos.mudancas);
               }}
             >
               {isPending ? (

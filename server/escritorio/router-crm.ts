@@ -23,6 +23,7 @@ import {
 import { conversas, contatos, leads, canaisIntegrados } from "../../drizzle/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { cpfsConflitam, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
+import { CAMPOS_ESCOLHIVEIS } from "../../shared/mesclar-campos";
 import { toIsoString } from "../_core/dates";
 import { estadoDoNumero } from "../../shared/conversa-existente";
 import { excluirClienteEmCascata } from "./excluir-cliente";
@@ -218,6 +219,8 @@ export const crmRouter = router({
       duplicadoId: z.number(),
       /** A tela mostrou os dois CPFs e a pessoa escolheu seguir mesmo assim. */
       confirmarCpfDiferente: z.boolean().optional(),
+      /** Só o que a pessoa mudou no passo "o que fica na ficha final". */
+      escolhas: z.record(z.enum(CAMPOS_ESCOLHIVEIS), z.enum(["principal", "duplicado"])).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "clientes", "excluir");
@@ -247,6 +250,7 @@ export const crmRouter = router({
         duplicadoId: input.duplicadoId,
         origem: "manual",
         executadoPor: perm.colaboradorId,
+        escolhas: input.escolhas,
       });
       return { tabelasAtualizadas: r.tabelasAtualizadas, unificacaoId: r.id };
     }),
