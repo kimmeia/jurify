@@ -754,6 +754,41 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     sem migration). Duas decisões pendentes: a escolha vale também no
     Mesclar um-a-um da Conferência? e o responsável entra na lista (mexe
     no padrão de comissão e no rodízio do atendimento)?
+- **Entregue 10/09 (URGENTE do dono): o robô falava por cima do atendente.**
+  Print dele: mensagens do atendente às 10:12 e uma do bot às 10:15, com a
+  conversa marcada "Em atendimento · Bot pausado". "Bot pausado" não é flag
+  próprio — é `conversas.status === "em_atendimento"`. Havia duas portas
+  conferindo isso, e **as duas são movidas por mensagem do cliente**:
+  `dispararMensagemCanal` no topo e o laço de envio do whatsapp-handler
+  (que re-checa antes de cada resposta). A terceira porta é movida pelo
+  RELÓGIO e não conferia nada: `retomarExecucao` (scheduler, timeout do
+  `whatsapp_aguardar_resposta` ou `esperar` vencido). Nessa retomada o
+  engine marca `__retomadaPorTimeout`, o que zera `temCanal` e faz o texto
+  sair DIRETO pelo canal (`exec.enviarWhatsApp`, proativo) em vez de voltar
+  como `resposta` pro handler — pulando as duas travas. Era esse o caminho
+  do print. Fix: `retomarExecucao` lê a conversa da execução (escopada por
+  escritório) e, se estiver `em_atendimento`, **cancela a execução**
+  (`status: "cancelado"`, erro "Atendente assumiu a conversa") sem rodar
+  cenário nenhum. A conferência fica DEPOIS do claim atômico de propósito:
+  antes dele a execução ficaria com `retomarEm` no passado e o ciclo
+  tentaria de novo pra sempre; cancelada, ela sai da fila (o scheduler só
+  busca `rodando`). Execução SEM conversa (lembrete de cobrança,
+  agendamento) não é afetada. Amarra: `bot-pausado-retomada` (9 testes) —
+  9 mutações vermelhas (`scratchpad/mutar-bot-pausado.py`; duas delas só
+  ficaram vermelhas depois de ancorar a busca, porque o trecho aparece
+  mais de uma vez no dispatcher e o mutante caía no guard vizinho).
+  **Achados NÃO corrigidos (fora do pedido, decisão do dono)**: (a)
+  `enviarWhatsApp` do executor não confere conversa nenhuma — disparo
+  proativo de verdade (pagamento vencido, lembrete de agendamento) ainda
+  entra numa conversa que o atendente está tocando; (b) dentro de
+  `enviarResposta` as bolhas da mesma resposta não re-checam o status
+  entre si (janela de segundos); (c) conversa `resolvido`/`fechado` NÃO
+  barra a retomada — só `em_atendimento`, que é o que o dono relatou.
+  E fica registrado que a correção **encerra** o fluxo: reativar o bot
+  depois não retoma de onde parou.
+  Conferido de passagem: `retomarExecucao` só é chamada pelo scheduler, e
+  execução com `conversaId` só nasce em `dispararMensagemCanal` (os fluxos
+  de cobrança não passam por lá) — a trava não alcança lembrete nenhum.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
