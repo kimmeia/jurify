@@ -9,10 +9,13 @@ nada de migration. "não mecha no backend, vamos apenas desenvolver as telas."
 2. Mockups entregues (seção 8) e aprovados: **"pode fazer"**.
 3. Fatia 1 implementada na mesma sessão (seção 9).
 
+4. **"pode mergear"** — Fatia 1 mergeada em `develop` e `main` no mesmo dia,
+   com `--no-ff`, na ordem da regra do CLAUDE.md. Staging e produção
+   receberam a mudança em 10/09.
+
 O "pode fazer" veio depois de ele ver os mockups, e no vocabulário do projeto
-é a autorização para virar código. **Ele NÃO autorizou merge** — o combinado
-foi "deixar pronta para aplicar quando você der o sinal", então a Fatia 1
-está na branch, verde, aguardando o sinal dele para entrar em `develop`/`main`.
+é a autorização para virar código; o "pode mergear" veio depois de ler o
+relatório da Fatia 1, com a ressalva de QA visual explícita na mensagem.
 
 Este arquivo é a fonte de verdade do assunto "sistema visual" para qualquer
 agente que entrar depois. Atualize-o a cada entrega, stand-by ou correção.
@@ -255,15 +258,21 @@ Convertidos de OKLCH com `scratchpad/ok2hex.mjs`. Tema claro:
   migrados nas 6 telas do dia a dia + amarra `escala-tipografica.test.ts`.
 
 ### Aguardando o dono
-- **O sinal para mergear** a Fatia 1 em `develop`/`main`. Está verde na
-  branch `claude/legal-system-frontend-hkcits`. Ele autorizou fazer, não
-  autorizou aplicar — e 10/09 é o dia do lançamento comercial.
 - **Conferência visual no app rodando.** Ver a ressalva na seção 9: daqui
   não dá para subir o app (precisa de banco), então build + testes provam
   que compila e que a regra vale, mas não provam que nenhuma tela ficou
-  apertada. É o único risco aberto desta entrega.
+  apertada. **É o único risco aberto desta entrega, e ela já está em
+  produção** — foi mergeada com essa ressalva dita na mensagem. Olhar
+  primeiro: lista de Processos, cartões do Kanban, painel do cliente no
+  Atendimento.
 - **Escolher a próxima fatia** (2 · cara de produto único, 3 · celular,
   4 · resto do sistema).
+- **O selo "CPF diferente"** (Clientes, "Vincular a cliente") continua em
+  caixa alta. Veio de `develop` durante o merge da Fatia 1 e tem o MESMO
+  papel dos dois selos da lista de Processos que viraram caixa normal.
+  Deixei como estava porque virar caixa normal é mudança visível e ele só
+  aprovou aquela troca para os dois selos do mockup. Pergunta de uma linha
+  quando ele voltar ao assunto.
 
 ### Stand-by explícito (não reabrir sozinho)
 - **`text-xs` e `text-sm`.** Ficaram fora da Fatia 1 de propósito — motivo
@@ -367,6 +376,20 @@ os selos não crescem, e o `line-height` não foi tocado, o que limita muito o
 risco — mas limitar não é eliminar. **Quem abrir o app deve olhar primeiro
 as linhas mais densas**: lista de Processos, cartões do Kanban e o painel do
 cliente no Atendimento.
+
+### O merge com `develop` (mesmo dia)
+
+`develop` tinha andado 5 commits enquanto a Fatia 1 era feita, e um deles
+mexia em `Clientes.tsx` — uma das 6 telas migradas. Conflito em um bloco:
+develop reescreveu a linha de "Vincular a cliente" e acrescentou o selo
+**"CPF diferente"**. Resolução: ficou a versão de develop **inteira** (nada
+do que ele ganhou foi descartado), com a escala aplicada por cima. Os três
+tamanhos soltos que vieram junto no aviso de unificação (11 · 10,5 · 10px)
+viraram `apoio`/`micro` pela mesma regra — sem isso a amarra ficaria
+vermelha, que é exatamente o trabalho dela.
+
+**Lição:** a amarra pegou tamanho solto chegando por merge, não só por
+código novo. Era o objetivo.
 
 ### Efeito colateral corrigido
 
