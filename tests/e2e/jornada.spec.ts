@@ -28,6 +28,7 @@ import {
   watchConsoleErrors,
   watchNetwork5xx,
 } from "./lib";
+import { SELETOR_CARREGANDO } from "./lib/page-helpers";
 import { ROTAS_APP as ROTAS } from "./robo/rotas";
 
 test.describe("Robô de jornada — todas as rotas do app logado", () => {
@@ -95,8 +96,8 @@ test.describe("Robô de jornada — todas as rotas do app logado", () => {
         // nunca fica ocioso — esperar por ele daria timeout em tudo.
         const carregou = await page
           .waitForFunction(
-            () => !document.querySelector('[role="progressbar"], .animate-spin'),
-            null,
+            (carregando) => !document.querySelector(carregando),
+            SELETOR_CARREGANDO,
             { timeout: 15_000 },
           )
           .then(() => true)

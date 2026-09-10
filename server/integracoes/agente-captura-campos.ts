@@ -190,7 +190,7 @@ export async function extrairECaptarCampos(opts: {
     const [contato] = await db
       .select({ camposPersonalizados: contatos.camposPersonalizados })
       .from(contatos)
-      .where(eq(contatos.id, opts.contatoId))
+      .where(and(eq(contatos.id, opts.contatoId), eq(contatos.escritorioId, opts.escritorioId)))
       .limit(1);
     const jaCapturados: Record<string, any> = (() => {
       try { return contato?.camposPersonalizados ? JSON.parse(contato.camposPersonalizados) : {}; }
@@ -346,7 +346,13 @@ export async function listarCamposCapturadosDoContato(
   const [contato] = await db
     .select({ camposPersonalizados: contatos.camposPersonalizados })
     .from(contatos)
-    .where(eq(contatos.id, contatoId))
+    // O `escritorioId` não é enfeite: `agentesIa.listarCapturadosDoContato`
+    // é `protectedProcedure` (só checa login) e recebe o `contatoId` cru do
+    // client. Sem esta linha, qualquer usuário logado lê os campos
+    // capturados de QUALQUER contato da plataforma — o filtro por
+    // definições do próprio escritório, logo abaixo, não protege nada:
+    // chave que os dois escritórios definem passa direto.
+    .where(and(eq(contatos.id, contatoId), eq(contatos.escritorioId, escritorioId)))
     .limit(1);
   if (!contato?.camposPersonalizados) return [];
 

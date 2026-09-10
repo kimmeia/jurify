@@ -27,6 +27,7 @@ export type Motivo =
   | "cerca_credencial_tribunal"
   | "cerca_admin"
   | "cerca_encerra_sessao"
+  | "rota_bloqueada"
   | "dialogo_nativo"
   | "sem_prova_registrada"
   | "efeito_nao_observavel";
@@ -40,6 +41,8 @@ export const MOTIVO_TEXTO: Record<Motivo, string> = {
     "fora do alcance por regra: mexe em escritório de terceiros e o robô nunca é admin",
   cerca_encerra_sessao:
     "não clicou de propósito: encerraria a sessão e abortaria a varredura",
+  rota_bloqueada:
+    "a rota está atrás de um modal que o robô não abriu e não sabe fechar",
   dialogo_nativo:
     "abriu confirm() nativo do navegador — o robô dispensa e a ação não acontece",
   sem_prova_registrada:

@@ -19,7 +19,7 @@ import type { Page } from "@playwright/test";
 import { provaPara } from "./catalogo";
 import { cercaQueBarra } from "./cercas";
 import { descobrirAcoes, SELETOR_ALVOS } from "./descoberta";
-import type { ConsoleErrorMonitor, NetworkMonitor } from "../lib/page-helpers";
+import { SELETOR_CARREGANDO, type ConsoleErrorMonitor, type NetworkMonitor } from "../lib/page-helpers";
 import { MOTIVO_TEXTO, type AcaoDescoberta, type ResultadoAcao, type Veredito } from "./tipos";
 
 const ESPERA_SPINNER = 8_000;
@@ -126,14 +126,38 @@ async function esperarSuperficieEstavel(page: Page): Promise<void> {
 function esperarTelaPronta(page: Page, timeout: number): Promise<boolean> {
   return page
     .waitForFunction(
-      () =>
+      (carregando) =>
         document.querySelector('button, [role="button"]') !== null &&
-        document.querySelector('[role="progressbar"], .animate-spin') === null,
-      null,
+        document.querySelector(carregando) === null,
+      SELETOR_CARREGANDO,
       { timeout },
     )
     .then(() => true)
     .catch(() => false);
+}
+
+/**
+ * Modal aberto que o robô não abriu — portão de produto (re-aceite de
+ * termos, onboarding, paywall) que fica na frente de tudo.
+ */
+async function modalBloqueante(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    for (const d of document.querySelectorAll('[role="dialog"], [role="alertdialog"]')) {
+      const r = d.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const cs = getComputedStyle(d);
+      if (cs.visibility === "hidden" || cs.display === "none") continue;
+      const titulo = (
+        d.querySelector("h1, h2, h3, [role=heading]")?.textContent ??
+        d.textContent ??
+        ""
+      )
+        .replace(/\s+/g, " ")
+        .trim();
+      return titulo.slice(0, 80) || "(modal sem título)";
+    }
+    return null;
+  });
 }
 
 /** Varre uma rota inteira: descobre a superfície e exercita cada ação. */
@@ -154,6 +178,29 @@ export async function exercitarRota(
         veredito: {
           estado: "falhou",
           evidencia: `a rota não ficou utilizável em ${ESPERA_ROTA / 1000}s`,
+        },
+      },
+    ];
+  }
+
+  // Um portão que cobre a tela bloqueia TODA ação da rota. Sem esta
+  // checagem o robô tenta clicar atrás dele e devolve uma falha por
+  // controle: medido, o modal de re-aceite dos Termos virou 48 achados
+  // em 4 rotas, todos a mesma coisa. Relatório que multiplica um
+  // problema por quarenta e oito é relatório em que ninguém confia.
+  const bloqueio = await modalBloqueante(page);
+  if (bloqueio) {
+    return [
+      {
+        id: `${rota}::<bloqueio>::0`,
+        rota,
+        nome: "<rota bloqueada>",
+        ocorrencia: 0,
+        ocorrenciaDom: 0,
+        veredito: {
+          estado: "nao_verificada",
+          motivo: "rota_bloqueada",
+          evidencia: `${MOTIVO_TEXTO.rota_bloqueada} — "${bloqueio}"`,
         },
       },
     ];
@@ -238,16 +285,19 @@ async function exercitar(sonda: Sonda, acao: AcaoDescoberta): Promise<Veredito> 
   const falhasAntes = sonda.rede.failures.length;
   const dialogosAntes = sonda.dialogos.length;
 
-  const clicou = await page
+  // O motivo do Playwright vai junto: "não aceitou o clique" sozinho não
+  // distingue overlay na frente, elemento se movendo e handler travado —
+  // e é a diferença entre uma linha acionável e uma linha inútil.
+  const erroClique = await page
     .locator(`[data-robo-acao="${alvo.ocorrenciaDom}"]`)
     .click({ timeout: 5_000 })
-    .then(() => true)
-    .catch(() => false);
+    .then(() => null)
+    .catch((e: unknown) => String((e as Error).message).replace(/\s+/g, " ").slice(0, 420));
 
-  if (!clicou) {
+  if (erroClique) {
     return {
       estado: "falhou",
-      evidencia: "o controle está visível e habilitado mas não aceitou o clique em 5s",
+      evidencia: `o controle está visível e habilitado mas o clique não completou em 5s — ${erroClique}`,
     };
   }
 

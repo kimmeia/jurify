@@ -17,9 +17,21 @@ export async function getEscritorioPorUsuario(userId: number) {
   if (!db) return null;
 
   // Primeiro: verifica se é colaborador de algum escritório
+  //
+  // A ordenação não é cosmética. Esta função decide o escritório da sessão
+  // INTEIRA — toda leitura e toda escrita saem daqui. `criarEscritorio`
+  // recusa quem já tem vínculo ativo, mas a remoção é soft-delete: quem foi
+  // removido de um escritório, abriu o próprio, e depois foi restaurado no
+  // primeiro fica com DUAS linhas ativas. Sem `ORDER BY`, qual delas o banco
+  // devolve é indefinido — a mesma pessoa podia cair num escritório hoje e
+  // no outro amanhã, levando junto tudo o que cadastrasse.
+  //
+  // O vínculo mais recente ganha: é o escritório em que a pessoa entrou por
+  // último, e é o que ela espera ver ao abrir o sistema.
   const [colab] = await db.select()
     .from(colaboradores)
     .where(and(eq(colaboradores.userId, userId), eq(colaboradores.ativo, true)))
+    .orderBy(desc(colaboradores.id))
     .limit(1);
 
   if (colab) {
