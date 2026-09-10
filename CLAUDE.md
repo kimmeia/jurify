@@ -525,19 +525,198 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   (antes cancelava primeiro — falha do Asaas deixava o cliente sem
   nenhuma); e `admin.criarCliente` exige WhatsApp (mesma regra e mensagem
   do cadastro público; campo "WhatsApp (com DDD) *" no
-  `CriarClienteDialog`). O seletor "Trocar plano" do painel continua
-  listando o `PLANS` estático (`admin.planosAtuais`) — mockup
-  `mockup-trocar-plano-catalogo.html` entregue 09/09, aguardando "pode
-  fazer" (3 decisões: antiga espera o pagamento da nova?; ocultos na
-  dobra?; trial que troca mantém os dias?).
+  `CriarClienteDialog`).
+- **Entregue 09/09, "Trocar plano" pelo catálogo — mockup
+  `mockup-trocar-plano-catalogo.html`, "pode fazer" do dono com as 3
+  decisões da proposta**: (1) a assinatura atual ESPERA o pagamento da
+  nova — `trocarPlanoAdmin` NÃO cancela mais nada (nem Asaas, nem banco;
+  o texto de 08/09 acima, "só cancela DEPOIS", ficou superado): pagante
+  ganha linha `incomplete` e o webhook de pagamento encerra a anterior
+  (`encerrarOutrasAssinaturas`), igual ao `changePlan` do cliente; (2)
+  `admin.planosAtuais` lê o catálogo (`getAllPlanos`, visíveis primeiro
+  por `ordem`, ocultos no fim; `PLANS` só com tabela vazia) e o diálogo
+  mostra os ocultos numa dobra "Fora da vitrine" com selo "oculto" —
+  escolhíveis, nada some; (3) cliente em teste que troca converte a
+  PRÓPRIA linha (planId novo, `trialing`, `trialExpiraEm` = max(atual,
+  +7d), `trialConvertido`) — teste em cortesia não é mexido (linha nova).
+  `trocarPlanoAdmin` aceita `cpfCnpj` (exigido ANTES do Asaas quando o
+  cliente não tem `asaasCustomerId`; o diálogo mostra o campo só nesse
+  caso) e devolve `invoiceUrl` (toast "Abrir link", mesmo padrão do
+  Ativar). Plano SOB CONSULTA escolhido no diálogo abre valor fechado +
+  CPF/CNPJ + ciclo e chama `ativarAssinaturaNegociada({..., planId})`
+  ("Fechar valor e trocar"): a procedure ganhou `planId` opcional
+  (`planoAlvoSlug`), deixa PAGANTE trocar de plano (linha nova
+  `incomplete` com `valorNegociadoCentavos`; mesmo plano continua
+  recusado → card Módulos & cobrança) e só cancela assinatura Asaas
+  pendurada de NÃO pagante; sem `planId` faz o que sempre fez. Plano
+  atual na lista = "(atual)" + botão travado com a dica dos dois
+  caminhos. Amarras: `trocar-plano-catalogo` (25 testes; 21 mutações
+  vermelhas em `scratchpad/mutar-trocar-plano.py`) + 3º teste do trio em
+  `meu-plano-vitrine-sob-consulta` reescrito pra "NÃO cancela" e o
+  literal do `externalReference` em `ativar-assinatura-negociada`
+  atualizado pra `planoAlvoSlug`.
+- **Entregue 09/09 (noite), "Um número, um cadastro" — mockup
+  `mockup-reconhecer-cadastro.html`, "Gostei, pode fazer" do dono com as
+  4 decisões da proposta.** Origem: print do 131047/131049 do Francisco +
+  "salvo um número e quando esse cliente fala ele entra como novo contato".
+  Diagnóstico: a LEITURA do WhatsApp já casava com/sem 9/55/máscara
+  (03/09); duplicava pelo caminho inverso — `clientes.criar`, Financeiro
+  (`criarClienteAsaas`), webhook e adoção do Asaas conferiam só CPF — e a
+  conversa ficava presa à ficha magra porque `chatIdExterno` nunca era
+  atualizado e o Mesclar era manual. O que mudou:
+  - `db-crm`: `condicoesMesmoTelefone` + `buscarContatosPorTelefone`
+    (lista, `excetoId`; `buscarContatoPorTelefone` virou wrapper) e
+    `TABELAS_VINCULO_CONTATO` (11 pares tabela/coluna que `unificarContatos`
+    percorre — a MESMA lista que o Desfazer usa).
+  - `server/escritorio/reconhecer-cadastro.ts` (regras puras exportadas):
+    `ehFichaMagra` (sem CPF, sem e-mail, lead, sem processo — mesma régua
+    do "Vincular"), `escolherSobrevivente` (decisão 3: CPF, empate → mais
+    antiga, empate → menor id), `agruparPorTelefone` (`chaveTelefoneBR`),
+    `atualizarEnderecoDeResposta` (só JID telefone; @lid não),
+    `reconhecerCadastroNaEntrada` (chamado pelo handler via import dinâmico
+    em try/catch DEPOIS de resolver conversa/contato e ANTES de salvar a
+    mensagem — os testes antigos do handler mockam `db-crm` com objeto
+    fixo, por isso módulo à parte), `unificarComRegistro` (fotografa a
+    ficha absorvida + ids movidos por tabela + `principalAntes` em
+    `contatos_unificacoes`, migration 0218, e só então roda o
+    `unificarContatos` de sempre), `desfazerUnificacao` (7 dias =
+    `JANELA_DESFAZER_MS`; recria a ficha com o MESMO id, UPDATE por lista
+    de ids, restaura email/cpf/observações/secundários da sobrevivente) e
+    `unificacaoRecente` (alimenta o aviso da conversa).
+  - Procedures: `clientes.verificarTelefone` (≥10 dígitos; devolve a ficha
+    que sobreviveria + conversas abertas/atendente), `clientes.criar` com
+    `completarContatoId` (UPDATE na ficha existente, exige MESMO telefone,
+    responsável só entra se não tinha, vira `cliente`) / `forcarSeparado`
+    (sem ele, telefone existente = CONFLICT `[ID:n]`, mesmo formato do CPF
+    duplicado), `clientes.possiveisDuplicadosTelefone` +
+    `mesclarDuplicados` (permissão `clientes.excluir`, registro manual),
+    `crm.unificarContatos` passou a registrar (desfazível),
+    `crm.unificacaoRecente`/`crm.desfazerUnificacao`;
+    `asaas.criarClienteAsaas` com `usarContatoId`/`forcarSeparado` e
+    telefone como 2ª chave; webhook `CUSTOMER_CREATED` e
+    `asaas-adocao-orfas` caem no telefone quando o CPF não bate.
+    `enviarMensagem` (resposta manual) conta a janela de 24h por cliente ×
+    canal (`ultimaEntradaDoContatoNoCanal`), como o "Nova conversa".
+    `listarConversas` devolve `contatoCadastroCompleto` (booleano — nunca o
+    CPF) e `contatoOrigem`.
+  - Telas: `NovoClienteDialog` (Clientes) e o do Financeiro ganharam o card
+    "Este WhatsApp já está em um cadastro" (debounce 400ms) com "Completar
+    esse cadastro"/"Usar esse cadastro" × "Criar separado" (lembrado por
+    número; Cadastrar travado enquanto espera a escolha — decisão 1);
+    Atendimento: selo "✓ cadastro reconhecido"/"contato do WhatsApp",
+    aviso "Duas fichas com este número foram unificadas" com Abrir
+    cadastro/Desfazer (`crm.unificacaoRecente`), telefone via
+    `mascararTelefoneBR` (decisão 4 — só exibição; o gravado não muda);
+    Clientes: lista e ficha com `mascararTelefoneBR`, botão "Possíveis
+    duplicados (N)" (`clientes/possiveis-duplicados.tsx`, só aparece com
+    permissão e grupos).
+  - **Vincular a cliente NÃO mudou** (segue `unificarContatos` direto, sem
+    registro — o teste `crm-vincular-conversa` usa banco falso sem
+    `execute`). Importação de processos e "clientes essencial" não têm
+    telefone: ficam fora por natureza. Instagram/Facebook idem.
+  Amarras: `um-numero-um-cadastro` (33) + `um-numero-handler` (4) — 26
+  mutações vermelhas (`scratchpad/mutar-um-numero.py`; a de "@lid vira
+  endereço" é mutante equivalente: `isLidJid` e o regex de JID-telefone
+  barram os dois, de propósito).
+- **Entregue 09/09 (madrugada), Conferência de cadastros — mockup
+  `mockup-conferencia-cadastros.html`, "aprovado, pode fazer" do dono com
+  as 4 decisões da proposta** (CPFs diferentes travam; "Não é duplicado"
+  existe e é reversível; página própria em Clientes; planilha com CPF
+  inteiro). Origem: "quero verificar quantos contatos duplicados, dados
+  divergentes e etc. — o botão possíveis duplicados não gera o relatório
+  para conferência". Achado do estudo: o `unificarContatos` nunca teve
+  trava pra duas fichas com CPFs diferentes (descartava o CPF da absorvida
+  em silêncio) e não existia jeito de dizer "são pessoas diferentes".
+  - **Um cálculo, três saídas**: `server/escritorio/conferencia-cadastros.ts`
+    — `carregarBaseConferencia` (fichas + contagens por ESCRITÓRIO + nomes
+    dos responsáveis + ignorados) e `montarConferencia` PURA (grupos por
+    telefone via `agruparPorTelefone`, por CPF pelos dígitos, cruzamento
+    `tambemNoTelefone`, divergências, `faltasDasFichas`, resumo).
+    `conferenciaParaTela` mascara o CPF e troca a chave do grupo de CPF por
+    `cpf-<sobrevivente>` (a chave É o CPF — nunca sobe pro client; por isso
+    `marcarNaoDuplicado`/`desmarcarNaoDuplicado` recebem `contatoId` e
+    `chaveDoNaoDuplicado` resolve no servidor, escopado). Planilha
+    `gerarConferenciaCsv` (`;` + BOM, 16 colunas, telefone e CPF como
+    gravados, divergências separadas por VÍRGULA dentro da célula — o
+    mockup escrevia "17 colunas" e "ponto-e-vírgula": contagem errada e
+    conflito com o separador, ajustados); PDF em `conferencia-pdf.ts` (só
+    Helvetica: sem emoji/seta, o pdfkit imprime lixo).
+  - Regras em `shared/conferencia-cadastros.ts`: divergência = campo
+    PREENCHIDO nos dois lados com valores diferentes (cpf, nome, email,
+    responsavel; `telefone` só no grupo de CPF); `nomesCompativeis` = o
+    nome curto cabe no longo, na ordem, por prefixo ("Maria C." em "Maria
+    Clara", "Fran" em "Francisco"); `nomeIncompleto` é chip cinza, não
+    divergência; `telefoneInvalido` (DDD da lista `DDDS_BR`, 11 dígitos
+    exige o 9, DDI estrangeiro = inválido, vazio NÃO é inválido);
+    `mascararCpfCnpj`; `classeDoGrupo` (cpfs_diferentes > com_divergencia >
+    so_falta) e `grupoPassaNoFiltro`.
+  - `possiveisDuplicadosTelefone` passou a ler a MESMA conferência (mesmos
+    grupos, mesmos ignorados — o "(N)" do botão é o N do card; teste trava)
+    e devolve `cpfsDiferentes`; `mesclarDuplicados` ganhou a trava: par com
+    dois CPFs preenchidos e diferentes vira falha `MENSAGEM_CPFS_DIFERENTES`
+    sem mesclar, salvo `confirmarCpfDiferente: true` (a tela pede
+    confirmação nomeando o CPF descartado; "Mesclar todos" pula esses — no
+    diálogo antigo E na página). `crm.unificarContatos` (Mesclar da
+    ficha/Vincular) NÃO ganhou a trava: não foi pedido.
+  - `contatos_nao_duplicados` (migration 0219, UNIQUE escritório+tipo+chave,
+    entra no backup). `listar` ganhou `conferencia: <falta>` (mesmos ids de
+    `faltasDasFichas`; categoria vazia = `1 = 0`, não a base inteira);
+    Clientes lê `?conferencia=` da URL, mostra chip "Conferência: …" e o
+    "limpar tudo" apaga junto.
+  - Tela `client/src/pages/clientes/ConferenciaCadastros.tsx` em
+    `/clientes/conferencia` (rota ANTES de `/clientes` no App.tsx; cai no
+    módulo clientes por prefixo). Botão "Conferência de cadastros" no
+    cabeçalho de Clientes só com `podeExcluirCliente`; a página, o Mesclar,
+    o "Não é duplicado" e os arquivos exigem `clientes.excluir`. 6 cards, 4
+    abas (Mesmo telefone · Mesmo CPF · Faltando ou inválido · Não é
+    duplicado), filtros, 20 por página, célula divergente em amarelo (CPF
+    em vermelho), "Mesclar todos os 'só falta preencher'" em lotes de 50
+    com AlertDialog. "Duplicatas (PDF)" e "Possíveis duplicados" continuam.
+  Amarras: `conferencia-cadastros` (37 testes) — 28 mutações vermelhas
+  (`scratchpad/mutar-conferencia.py`); `um-numero-um-cadastro` ajustado
+  (a trava consulta os CPFs antes de cada par).
+  - **Ajustes de 09/09 à noite, depois de o dono testar em produção
+    ("pode fazer" + "vamos consertar")**: origem `manual` virou rótulo
+    "Cadastro manual" na página, no diálogo Possíveis duplicados e no PDF
+    ("Clientes" ao lado de "Lead" lia como se a pessoa fosse cliente); o PDF
+    quebrava nome/e-mail/origem em 2 linhas dentro da coluna mas avançava
+    altura fixa — agora a linha da tabela mede `heightOfString` de cada
+    célula (máx. 3 linhas, `ellipsis`) e avança pela maior; a planilha leva
+    a HORA em `cadastrado_em` (fuso de Brasília) — quatro fichas iguais no
+    mesmo minuto = clique repetido. Conferência visual do PDF: renderizado
+    com pdfjs no Playwright (`scratchpad/pdfview/`: `gerar.mts` via tsx +
+    `python3 -m http.server` + `shot.mjs`), não a olho.
+    **Caso Tirzah (4 fichas iguais, lead, manual, sem responsável, mesmo
+    dia)**: o único caminho que cria lead + origem manual + sem
+    responsável é o "Novo Lead"/"Novo Contato" do Atendimento
+    (`crm.criarContato` → `criarOuReutilizarContato`). Em junho a
+    reutilização por telefone comparava só a forma canônica com `eq`, e
+    esses diálogos gravam o número COMO DIGITADO ("(85) 8811-1508") —
+    nunca casava, cada "Adicionar" criava ficha nova ("Tirza" com o 9 e
+    "Tirzah" sem o 9 é o mesmo número escrito de dois jeitos). Fechado em
+    03/09 (`buscarContatoPorTelefone` com REPLACE da máscara, com/sem 9 e
+    55); hoje o mesmo diálogo reaproveita a ficha.
+  - **Ficha presa na anterior ao trocar na lista lateral (dono, 09/09:
+    "intermitente, vale olhar")** — print com cabeçalho "Tirza" e o
+    formulário com "Tirzah". Cabeçalho e `EditarForm` leem o MESMO
+    `clientes.detalhe`, o form já é recriado por `key={cliente.id}` desde
+    10/08, `main.tsx` não tem `placeholderData`, e não há `setData` na
+    chave — o mecanismo da corrida NÃO foi reproduzido. Blindagem em duas
+    camadas (`ficha-troca-na-lista.test.ts`): `ClienteDetalhe` só usa o
+    registro cujo `id === id` pedido (outro id = esqueleto,
+    `registroDeOutroId`), e `EditarForm` re-hidrata todos os campos em
+    `[cliente.id, cliente.updatedAt]` (`camposExtrasDe` extraído). Se
+    voltar a acontecer, o próximo passo é gravar no Sentry o par
+    (id pedido, id recebido) no momento do esqueleto.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
   `receitaMensal`: `COALESCE(valorNegociadoCentavos, planos.preco)`, só
   ativas sem cortesia. Ainda leem `PLANS` (não autorizado): `criarCupom`
   (valida `planosIds` contra a lista fixa → recusa slugs novos),
-  `planosAtuais`, `health.plansCount`, `db.ts` getPlanName/getPlanPrice e
-  o limite legado de créditos em `getUserCreditsInfo`.
+  `health.plansCount`, `db.ts` getPlanName/getPlanPrice e o limite legado
+  de créditos em `getUserCreditsInfo` (`planosAtuais` saiu da lista em
+  09/09 — lê o catálogo).
 - **Decisões do dono 09/09**: plano sob consulta é SÓ venda consultiva
   (cliente nunca escolhe); pediu um pacote NOVO de 3 planos com
   Atendimento em todos contra Advbox/Astrea — proposta
@@ -568,6 +747,115 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
 Amarras: `meu-plano-vitrine-sob-consulta` (21) e
 `cadastro-whatsapp-obrigatorio` (20) — 44 mutações conferidas, todas
 vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
+- **Entregue 09/09 (noite), Relatório Comercial: funil 20 × 18, leads por
+  canal e recebido por origem — mockup navegável
+  `mockup-relatorio-comercial-funil-origem.html` (revisado por 5 céticos do
+  diagnóstico + 4 críticos do HTML), "tudo no mockup aprovado" do dono.**
+  Origem: print dele (card Contratos fechados 20 × barra Ganho 18; "Contatos
+  por canal" 28+11 que não batia com nada; pediu o pago por origem).
+  - Funil em dois blocos (`montarEtapasFunil`): etapas abertas por
+    `createdAt` (quem ENTROU), Ganho/Perdido por `fechadoEm` (quem foi
+    DECIDIDO — a data do card) + `funilResumo` (entraram total/emAberto/
+    jaDecididos; por decisão "N entraram no período · N antes"). Os dois
+    comentários que afirmavam que card e funil batiam foram corrigidos.
+  - "Contatos por canal" (cadastros com whitelist `ORIGENS_LEAD` + lead no
+    período) virou `leadsPorCanal`: os MESMOS leads do funil pelo
+    `contatos.origem`, qualquer canal (`asaas` ganhou rótulo). A soma é o
+    total do funil. `ORIGENS_LEAD` só sobrevive na procedure `comercial`,
+    que não tem consumidor no client. Por que "Manual" engorda: Novo
+    Cliente, Novo cliente do Financeiro, Novo lead do Atendimento,
+    importação e Clientes essencial gravam `manual`, e o canal nunca é
+    corrigido depois; mensagem de canal Instagram/Facebook grava
+    `whatsapp` — conserto é no cadastro (não pedido).
+  - Fechamentos por origem com recebido: `atribuirRecebidoAosFechamentos`
+    distribui as MESMAS cobranças do card Recebido (filtros idênticos ao
+    `agg`) pelo fechamento do cliente — dia civil no fuso (`dataHojeBR`),
+    o mais recente ≤ dia do pagamento, mesmo dia conta, empate → menor id,
+    antes de todos → o primeiro, busca entre TODOS os fechamentos do
+    cliente no período (não só os do filtro — senão a atribuição mudaria
+    com o filtro). Cada cobrança entra UMA vez: Σ origens = card Recebido.
+    Balde `ORIGEM_SEM_OU_FORA_DO_FILTRO` junta fechamento sem origem (antes
+    sumia do card) e pagamento cujo fechamento está fora do setor/atendente
+    filtrado — este só com cliente e recebido (verProprios não vê
+    fechamento alheio). `chaveOrigem` junta "Google"/"google" (rótulo = a
+    grafia do fechamento mais recente; `origemLead` é texto no lead, o
+    catálogo só alimenta a lista — renomear no catálogo não mexe nos
+    antigos). Situação pago/parcial/nada É NO PERÍODO (a pendência das
+    quinzenas do card Recebido segue aberta; se mudar lá, muda aqui junto).
+    `mesmoCliente` marca cliente com N fechamentos listados.
+  - PDF segue o payload (`funilResumo` opcional, tabela Canal/Leads/%,
+    subtabelas com Recebido/Situação, nota de metodologia). A aba Comercial
+    NÃO tem botão de e-mail/programar (o servidor aceita; sem UI).
+  Amarras: `relatorio-comercial-funil-canal-origem` (19) — 17 mutações
+  vermelhas (`scratchpad/mutar-relatorio-comercial.py`);
+  `relatorios-fechamentos-origem` e a fixture do PDF atualizadas.
+- **Entregue 09/09 (noite), controle de contratos cancelados — mockup
+  `mockup-cancelados-contrato.html`, "pode fazer" do dono com as 5 decisões
+  da proposta** (cancelado CONTINUA em "Contratos fechados" do mês em que
+  fechou, com linha "N cancelado(s) depois"; lista fixa de motivos;
+  diálogo oferece "encerrar também o serviço" marcado; arrastar Ganho →
+  Perdido no Pipeline pergunta "cancelado ou perdido?"; "Lançado por
+  engano" fica gravado mas FORA de card/barra/lista — engano não é churn).
+  Antes só existia Perdido (que mantém o `fechadoEm` original) ou excluir.
+  - Modelo: o lead segue `fechado_ganho` (nenhuma contagem de "fechados"
+    muda) + 4 colunas aditivas em `leads` (migration 0220 — nasceu 0219 e
+    foi renumerada no merge porque a conferência de cadastros já tinha
+    publicado a 0219; o executor distingue pelo nome do arquivo, então a
+    renumeração é só convenção:
+    `canceladoEmLead`, `motivoCancelamentoLead`, `detalheCancelamentoLead`,
+    `canceladoPorLead`; no schema `canceladoEm`/`motivoCancelamento`/
+    `detalheCancelamento`/`canceladoPor`). `shared/cancelamento-contrato.ts`:
+    `MOTIVOS_CANCELAMENTO` (desistencia · inadimplencia · outro_escritorio ·
+    sem_retorno · engano · outro), `contaComoCancelamento`,
+    `contratoCancelado`, `descricaoCancelamento`, `motivoServicoAoCancelar`.
+  - `server/escritorio/cancelar-contrato.ts`: `cancelarContrato` (só Ganho
+    do escritório, não cancelado; data ≤ hoje e ≥ dia do fechamento, gravada
+    como MEIO-DIA local — mesmo idioma das datas-só; `encerrarServico` grava
+    `contatos.situacaoServico=cancelado` com a MESMA data e motivo
+    "Contrato cancelado: <motivo>"), `reativarContrato` (limpa os 4
+    campos), `cancelarContratosDoContato` (Ganho ainda abertos do contato —
+    `isNull(canceladoEm)`, senão sobrescreveria cancelamento antigo).
+    Procedures `crm.cancelarContrato`/`crm.reativarContrato` (permissão
+    `pipeline.editar` com fallback kanban, auditoria `lead.cancelar_contrato`
+    / `lead.reativar_contrato`); `clientes.encerrarServico` aceita
+    `cancelarContratos` (só tipo cancelado/rescindido) e devolve quantos
+    cancelou; `listarLeads` (crm e clientes) devolve os campos +
+    `canceladoPorNome`.
+  - Relatório (`comercialDashboard`): `cancelamentoConta` = canceladoEm
+    preenchido E motivo ≠ engano; card Cancelados por `canceladoEm` no
+    período (+ período anterior/variação, `canceladosFecharamNoPeriodo`),
+    card Contratos fechados ganha `contratosFechadosCanceladosDepois`/
+    `valorFechadosCanceladosDepois` (sem tirar do total); funil ganha o 3º
+    bloco `cancelado` (`montarEtapasFunil(entraram, decididos, cancelados)`
+    → `funilResumo.cancelados` {total, valor, fecharamNoPeriodo,
+    fecharamAntes}); origem: fechamento cancelado fica na origem dele com a
+    marca (`cancelados` do grupo não conta engano); `contratosCancelados`
+    (lista) com `recebidoAntes` = `recebidoAntesDeCancelar` (cobranças até
+    o dia do cancelamento, atribuídas entre TODOS os fechamentos do cliente
+    com a mesma regra do recebido por origem). Dashboard geral: `cancelados`
+    no `desempenhoComercial`. PDF: 5º cartão, 3º bloco do funil, "Cancelado"
+    na Situação, seção "Contratos cancelados no período", nota de método.
+    Os cartões do PDF passaram a MEDIR antes de desenhar (fonte encolhe até
+    caber, sub2/rodapé quebram em 2 linhas, altura = maior cartão) — com 5
+    colunas o texto invadia a linha de baixo; e o cabeçalho do PDF tinha
+    a 2ª linha (Atendente/Emitido em) desenhada em cima da 1ª desde sempre
+    (`y + 21 - 4`) — corrigido de passagem (caixa 48pt, 2ª linha em +26).
+  - Telas: `atendimento/cancelar-contrato-dialog.tsx`
+    (`CancelarContratoDialog` data/motivo/detalhe/encerrar serviço;
+    `CanceladoOuPerdidoDialog`); Pipeline: coluna recolhida "Cancelados"
+    (mês atual), card com faixa, gaveta com "Cancelar contrato" ×
+    "Reativar contrato", etapa travada quando cancelado, `moverLeadPara`
+    pergunta no Ganho → Perdido; Clientes: linha do fechamento com selo
+    CANCELADO + motivo/quem, botões Cancelar/Reativar, "Situação do
+    serviço" com checkbox "Cancelar também os N contratos fechados";
+    Relatórios: 5 KPIs, funil 3 blocos, `FechamentosPorOrigemCard` com a
+    marca, `ContratosCanceladosCard`.
+  Amarras: `cancelar-contrato` (17; `makeDb` do teste captura o WHERE e
+  renderiza com `MySqlDialect` — foi o que pegou a mutação do
+  `isNull(canceladoEm)`, invisível pro banco falso) + 7 mutações novas no
+  `mutar-relatorio-comercial.py` (31 no total, todas vermelhas). Fora do
+  pedido, anotado: estorno do Asaas continua sumindo do Recebido em
+  silêncio (não fala com o cancelamento).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
@@ -696,8 +984,8 @@ acusa lead fechado sem `fechadoEm`. Comissão NÃO aparece nessa tela (grep em
 `Relatorios.tsx` = zero) e é do Financeiro — não tocar. Achado solto: o "Funil
 de Vendas" da mesma tela conta por `leads.createdAt`, então a barra "Ganho"
 pode não bater com o card "Contratos fechados" (o comentário no código afirma
-que batem — não batem). Sugestão barata: só rotular a seção, sem mexer no
-cálculo. Não autorizado ainda.
+que batem — não batem). **Resolvido 09/09**: funil em dois blocos
+(Ganho/Perdido por `fechadoEm`), ver a entrega de 09/09 (noite).
 
 ### E. Comissão de gestão — ENTREGUE 01/09
 
@@ -737,9 +1025,9 @@ escritório. O cron automático segue fechando SÓ a trilha de venda.
 Achados registrados e NÃO corrigidos (fora do pedido): `simular` e
 `diagnosticar` aceitam `atendenteId` de outro escritório (só enumeração —
 as cobranças continuam filtradas por escritorioId; `exportarPdf` valida);
-e o "Funil de Vendas" do Relatório Comercial conta por `leads.createdAt`,
-então a barra "Ganho" pode não bater com o card "Contratos fechados" da
-mesma tela (o comentário no código afirma que batem — não batem).
+e o "Funil de Vendas" do Relatório Comercial contava por `leads.createdAt`,
+então a barra "Ganho" podia não bater com o card "Contratos fechados" da
+mesma tela (**resolvido 09/09**, funil em dois blocos).
 
 ### F. Cofre por grau + Justiça Federal — ENTREGUE 01/09
 

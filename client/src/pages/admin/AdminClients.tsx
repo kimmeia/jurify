@@ -775,6 +775,18 @@ function ClienteDetalheDialog({
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [trocarOpen, setTrocarOpen] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
+  // Campos do caminho "plano sob consulta": o valor é fechado no mesmo diálogo.
+  const [trocaValor, setTrocaValor] = useState("");
+  const [trocaCpf, setTrocaCpf] = useState("");
+  const [trocaCiclo, setTrocaCiclo] = useState<"monthly" | "yearly">("monthly");
+
+  const fecharTrocar = () => {
+    setTrocarOpen(false);
+    setPlanoSelecionado(null);
+    setTrocaValor("");
+    setTrocaCpf("");
+    setTrocaCiclo("monthly");
+  };
 
   const { data: cobrancasData } = trpc.admin.cobrancasDoCliente.useQuery(
     { userId: current! },
@@ -793,15 +805,44 @@ function ClienteDetalheDialog({
     onError: (err) => toast.error("Erro ao cancelar", { description: err.message }),
   });
 
+  /** Assinatura nova no Asaas: o dono manda o link da 1ª cobrança na mesma conversa. */
+  const avisarAssinaturaCriada = (res: { mensagem: string; invoiceUrl?: string }) => {
+    if (res.invoiceUrl) {
+      toast.success(res.mensagem, {
+        description: "Manda o link de pagamento pro cliente na mesma conversa.",
+        action: {
+          label: "Abrir link",
+          onClick: () => window.open(res.invoiceUrl, "_blank", "noopener,noreferrer"),
+        },
+        duration: 15000,
+      });
+    } else {
+      toast.success(res.mensagem);
+    }
+  };
+
+  const centavosDe = (texto: string) =>
+    Math.round(parseFloat(texto.replace(/\./g, "").replace(",", ".")) * 100);
+
   const trocarPlanoMut = trpc.admin.trocarPlanoAdmin.useMutation({
     onSuccess: (res) => {
-      toast.success(res.mensagem);
-      setTrocarOpen(false);
-      setPlanoSelecionado(null);
+      fecharTrocar();
       utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
+      avisarAssinaturaCriada(res);
     },
     onError: (err) => toast.error("Erro ao trocar plano", { description: err.message }),
+  });
+
+  // Plano sob consulta escolhido no "Trocar plano": troca + valor fechado numa ação só.
+  const fecharValorTrocaMut = (trpc as any).admin.ativarAssinaturaNegociada.useMutation({
+    onSuccess: (res: any) => {
+      fecharTrocar();
+      utils.admin.clienteDetalhes.invalidate({ userId: current! });
+      onRefresh();
+      avisarAssinaturaCriada(res);
+    },
+    onError: (err: any) => toast.error("Erro ao fechar valor e trocar", { description: err.message }),
   });
 
   // ─── Ativar assinatura com valor fechado (planos sob consulta) ───
@@ -817,24 +858,13 @@ function ClienteDetalheDialog({
       setAtivarCpf("");
       utils.admin.clienteDetalhes.invalidate({ userId: current! });
       onRefresh();
-      if (res.invoiceUrl) {
-        toast.success(res.mensagem, {
-          description: "Manda o link de pagamento pro cliente na mesma conversa.",
-          action: {
-            label: "Abrir link",
-            onClick: () => window.open(res.invoiceUrl, "_blank", "noopener,noreferrer"),
-          },
-          duration: 15000,
-        });
-      } else {
-        toast.success(res.mensagem);
-      }
+      avisarAssinaturaCriada(res);
     },
     onError: (err: any) => toast.error("Erro ao ativar assinatura", { description: err.message }),
   });
 
   const confirmarAtivacao = () => {
-    const centavos = Math.round(parseFloat(ativarValor.replace(/\./g, "").replace(",", ".")) * 100);
+    const centavos = centavosDe(ativarValor);
     if (isNaN(centavos) || centavos < 100) {
       toast.error("Informe o valor fechado (mínimo R$ 1,00)");
       return;
@@ -863,6 +893,85 @@ function ClienteDetalheDialog({
     .map((p: string) => p.charAt(0))
     .join("")
     .toUpperCase() || "?";
+
+  // ─── "Trocar plano": o catálogo do painel, e o que cada escolha faz ───
+  const planosVitrine = (planosAtuais ?? []).filter((p) => !p.oculto);
+  const planosForaVitrine = (planosAtuais ?? []).filter((p) => p.oculto);
+  const planoAtualNome = planosAtuais?.find((p) => p.id === sub?.planId)?.name ?? sub?.planId ?? "sem plano";
+  const diasDeTeste =
+    sub?.status === "trialing" && sub.trialExpiraEm
+      ? Math.max(0, Math.ceil((sub.trialExpiraEm - Date.now()) / DIA_MS))
+      : null;
+  const situacaoAtual = sub?.cortesia
+    ? "cortesia"
+    : sub?.status === "trialing"
+      ? `teste${diasDeTeste != null ? `, ${diasDeTeste} dia${diasDeTeste === 1 ? "" : "s"}` : ""}`
+      : sub?.status === "active"
+        ? "pagante"
+        : (sub?.status ?? "");
+  const planoEscolhido = planosAtuais?.find((p) => p.id === planoSelecionado) ?? null;
+  const caminhoTroca: "vazio" | "atual" | "sob" | "preco" = !planoEscolhido
+    ? "vazio"
+    : planoEscolhido.id === sub?.planId
+      ? "atual"
+      : planoEscolhido.precoSobConsulta
+        ? "sob"
+        : "preco";
+  // Sem cadastro no Asaas o servidor exige CPF/CNPJ pra emitir a cobrança.
+  const trocaPrecisaCpf = !user?.asaasCustomerId;
+  const trocaPendente = trocarPlanoMut.isPending || fecharValorTrocaMut.isPending;
+  const valorTrocaCentavos = centavosDe(trocaValor);
+
+  const confirmarTrocaPreco = () => {
+    if (!planoEscolhido || caminhoTroca !== "preco") return;
+    trocarPlanoMut.mutate({
+      userId: current!,
+      newPlanId: planoEscolhido.id,
+      interval: "monthly",
+      cpfCnpj: trocaCpf.trim() || undefined,
+    });
+  };
+  const confirmarTrocaSobConsulta = () => {
+    if (!planoEscolhido || caminhoTroca !== "sob") return;
+    if (isNaN(valorTrocaCentavos) || valorTrocaCentavos < 100) {
+      toast.error("Informe o valor fechado (mínimo R$ 1,00)");
+      return;
+    }
+    fecharValorTrocaMut.mutate({
+      userId: current!,
+      valorCentavos: valorTrocaCentavos,
+      cpfCnpj: trocaCpf.trim() || undefined,
+      interval: trocaCiclo,
+      planId: planoEscolhido.id,
+    });
+  };
+
+  const opcaoPlano = (p: NonNullable<typeof planosAtuais>[number]) => {
+    const ativo = planoSelecionado === p.id;
+    const ehAtual = sub?.planId === p.id;
+    return (
+      <button
+        key={p.id}
+        type="button"
+        onClick={() => setPlanoSelecionado(p.id)}
+        className={`w-full flex items-center justify-between gap-2 rounded-lg border p-3 text-left transition-colors ${ativo ? "border-primary bg-primary/5" : "hover:bg-accent/50"} ${p.oculto ? "opacity-80" : ""}`}
+      >
+        <span className="text-sm font-medium flex items-center gap-1.5 flex-wrap">
+          {p.name}
+          {ehAtual && <span className="text-[10px] text-muted-foreground">(atual)</span>}
+          {p.popular && (
+            <Badge className="bg-warning/15 text-warning-fg border-warning/30 hover:bg-warning/15 text-[10px] font-semibold">
+              🏆 mais popular
+            </Badge>
+          )}
+          {p.oculto && <Badge variant="outline" className="text-[10px] text-muted-foreground font-medium">oculto</Badge>}
+        </span>
+        <span className={`text-sm font-medium tabular-nums shrink-0 ${p.precoSobConsulta ? "text-info-fg" : "text-muted-foreground"}`}>
+          {p.precoSobConsulta ? "Sob consulta" : `${fmtBRLAdmin(p.priceMonthly / 100)}/mês`}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1075,7 +1184,7 @@ function ClienteDetalheDialog({
                           <DollarSign className="h-3.5 w-3.5 mr-1.5" /> Ativar assinatura paga
                         </Button>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => { setPlanoSelecionado(sub.planId || null); setTrocarOpen(true); }}>
+                      <Button size="sm" variant="outline" onClick={() => { setPlanoSelecionado(null); setTrocarOpen(true); }}>
                         <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Trocar plano
                       </Button>
                       {!sub.cortesia && (
@@ -1899,42 +2008,113 @@ function ClienteDetalheDialog({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Trocar plano (admin) */}
-      <Dialog open={trocarOpen} onOpenChange={(o) => { if (!o) { setTrocarOpen(false); setPlanoSelecionado(null); } }}>
-        <DialogContent className="max-w-md">
+      {/* Trocar plano (admin) — lista o catálogo do painel; plano sob consulta fecha o valor aqui mesmo */}
+      <Dialog open={trocarOpen} onOpenChange={(o) => { if (!o) fecharTrocar(); }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Trocar plano</DialogTitle>
             <DialogDescription>
-              Cancela a assinatura atual no Asaas e cria uma nova com o plano escolhido.
+              {user?.name || user?.email} · plano atual: <b>{planoAtualNome}</b>
+              {situacaoAtual ? ` (${situacaoAtual})` : ""}. A assinatura atual continua valendo até o
+              pagamento da nova ser confirmado.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 py-1">
-            {(planosAtuais ?? []).map((p) => {
-              const ativo = planoSelecionado === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setPlanoSelecionado(p.id)}
-                  className={`w-full flex items-center justify-between rounded-lg border p-3 text-left transition-colors ${ativo ? "border-primary bg-primary/5" : "hover:bg-accent/50"}`}
-                >
-                  <span className="text-sm font-medium">
-                    {p.name}
-                    {sub?.planId === p.id && <span className="text-[10px] text-muted-foreground ml-1">(atual)</span>}
-                  </span>
-                  <span className="text-sm font-medium tabular-nums text-muted-foreground">{fmtBRLAdmin(p.priceMonthly / 100)}/mês</span>
-                </button>
-              );
-            })}
+            {planosVitrine.map(opcaoPlano)}
+            {planosForaVitrine.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 pt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  Fora da vitrine
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                {planosForaVitrine.map(opcaoPlano)}
+              </>
+            )}
+            {planosAtuais && planosAtuais.length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhum plano no catálogo — cadastre em Financeiro → Planos.</p>
+            )}
           </div>
+
+          {caminhoTroca === "sob" && planoEscolhido && (
+            <div className="space-y-4 border-t pt-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide">Valor fechado (R$ / {trocaCiclo === "monthly" ? "mês" : "ano"})</Label>
+                <Input
+                  value={trocaValor}
+                  onChange={(e) => setTrocaValor(e.target.value)}
+                  inputMode="decimal"
+                  placeholder="149,00"
+                  className="h-11 text-lg font-bold"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide">CPF/CNPJ de cobrança</Label>
+                <Input value={trocaCpf} onChange={(e) => setTrocaCpf(e.target.value)} placeholder="12.345.678/0001-90" />
+                <p className="text-[10px] text-muted-foreground">
+                  Obrigatório pro Asaas emitir a cobrança se o cliente ainda não tem cadastro lá.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wide">Ciclo</Label>
+                <div className="inline-flex gap-1 rounded-lg bg-muted p-1">
+                  <Button size="sm" variant={trocaCiclo === "monthly" ? "default" : "ghost"} className="h-7 text-xs" onClick={() => setTrocaCiclo("monthly")}>Mensal</Button>
+                  <Button size="sm" variant={trocaCiclo === "yearly" ? "default" : "ghost"} className="h-7 text-xs" onClick={() => setTrocaCiclo("yearly")}>Anual</Button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-info/30 bg-info-bg/70 p-3 text-xs text-info-fg leading-relaxed">
+                <b>O que acontece ao confirmar:</b> cria a assinatura do <b>{planoEscolhido.name}</b> no Asaas
+                {!isNaN(valorTrocaCentavos) && valorTrocaCentavos >= 100
+                  ? ` com ${fmtBRLAdmin(valorTrocaCentavos / 100)}/${trocaCiclo === "monthly" ? "mês" : "ano"}`
+                  : " com o valor fechado"}{" "}
+                e manda o link da 1ª cobrança. O cliente tem 7 dias pra pagar sem perder o acesso;{" "}
+                <b>a assinatura atual continua valendo até o pagamento cair</b> — aí a troca acontece
+                sozinha. O valor fica gravado como o preço <b>deste</b> cliente.
+              </div>
+            </div>
+          )}
+
+          {caminhoTroca === "preco" && planoEscolhido && (
+            <div className="space-y-4 border-t pt-4">
+              {trocaPrecisaCpf && (
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wide">CPF/CNPJ de cobrança</Label>
+                  <Input value={trocaCpf} onChange={(e) => setTrocaCpf(e.target.value)} placeholder="12.345.678/0001-90" autoFocus />
+                  <p className="text-[10px] text-muted-foreground">
+                    Este cliente ainda não tem cadastro no Asaas — sem CPF/CNPJ a cobrança não sai.
+                  </p>
+                </div>
+              )}
+              <div className="rounded-lg border border-info/30 bg-info-bg/70 p-3 text-xs text-info-fg leading-relaxed">
+                <b>O que acontece ao confirmar:</b> cria a assinatura do <b>{planoEscolhido.name}</b> no Asaas
+                com o preço de tabela (<b>{fmtBRLAdmin(planoEscolhido.priceMonthly / 100)}</b>/mês) e manda o
+                link da 1ª cobrança. A assinatura atual continua valendo até o pagamento cair.
+              </div>
+            </div>
+          )}
+
+          {caminhoTroca === "atual" && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-xs text-muted-foreground leading-relaxed">
+              Este já é o plano atual. Pra fechar o valor dele: cliente em teste usa{" "}
+              <b>Ativar assinatura paga</b> na ficha; cliente que já paga ajusta o valor no card{" "}
+              <b>Módulos &amp; cobrança</b>.
+            </div>
+          )}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setTrocarOpen(false); setPlanoSelecionado(null); }} disabled={trocarPlanoMut.isPending}>Cancelar</Button>
-            <Button
-              disabled={trocarPlanoMut.isPending || !planoSelecionado || planoSelecionado === sub?.planId}
-              onClick={() => { if (planoSelecionado) trocarPlanoMut.mutate({ userId: current!, newPlanId: planoSelecionado, interval: "monthly" }); }}
-            >
-              {trocarPlanoMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
-              Trocar plano
-            </Button>
+            <Button variant="outline" onClick={fecharTrocar} disabled={trocaPendente}>Cancelar</Button>
+            {caminhoTroca === "sob" ? (
+              <Button onClick={confirmarTrocaSobConsulta} disabled={trocaPendente || !trocaValor.trim()}>
+                {fecharValorTrocaMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <DollarSign className="h-3.5 w-3.5 mr-1.5" />}
+                Fechar valor e trocar
+              </Button>
+            ) : (
+              <Button onClick={confirmarTrocaPreco} disabled={trocaPendente || caminhoTroca !== "preco"}>
+                {trocarPlanoMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5 mr-1.5" />}
+                Trocar plano
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

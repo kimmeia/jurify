@@ -840,6 +840,48 @@ export const contatos = mysqlTable("contatos", {
 export type Contato = typeof contatos.$inferSelect;
 export type InsertContato = typeof contatos.$inferInsert;
 
+/**
+ * Cada unificação de fichas (automática, pela chegada de mensagem de um
+ * número que já tem cadastro completo; ou manual, pelo "Mesclar") guarda a
+ * ficha absorvida inteira e os ids movidos — é o que o "Desfazer" usa nos
+ * 7 dias seguintes.
+ */
+export const contatosUnificacoes = mysqlTable("contatos_unificacoes", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdUnif").notNull(),
+  principalId: int("principalIdUnif").notNull(),
+  duplicadoId: int("duplicadoIdUnif").notNull(),
+  origem: mysqlEnum("origemUnif", ["automatica", "manual"]).default("manual").notNull(),
+  duplicadoSnapshot: json("duplicadoSnapshotUnif").notNull(),
+  principalAntes: json("principalAntesUnif").notNull(),
+  /** `{ [tabela]: number[] }` — ids das linhas que trocaram de dono. */
+  movidos: json("movidosUnif").notNull(),
+  executadoPor: int("executadoPorUnif"),
+  desfeitaEm: timestamp("desfeitaEmUnif"),
+  desfeitaPor: int("desfeitaPorUnif"),
+  createdAt: timestamp("createdAtUnif").defaultNow().notNull(),
+}, (t) => ({
+  idxPrincipal: index("idx_unif_principal").on(t.escritorioId, t.principalId),
+  idxEscData: index("idx_unif_esc_data").on(t.escritorioId, t.createdAt),
+}));
+
+/**
+ * "Não é duplicado": grupo de fichas com o mesmo telefone ou CPF que o dono
+ * conferiu e declarou serem pessoas diferentes (casal com o mesmo número).
+ * Sai da conta em toda tela e volta com um clique.
+ */
+export const contatosNaoDuplicados = mysqlTable("contatos_nao_duplicados", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioIdNaoDup").notNull(),
+  tipo: mysqlEnum("tipoNaoDup", ["telefone", "cpf"]).notNull(),
+  /** DDD + 8 dígitos (telefone) ou só dígitos (CPF/CNPJ) — a chave do agrupamento. */
+  chave: varchar("chaveNaoDup", { length: 32 }).notNull(),
+  marcadoPor: int("marcadoPorNaoDup"),
+  createdAt: timestamp("createdAtNaoDup").defaultNow().notNull(),
+}, (t) => ({
+  uq: uniqueIndex("uq_nao_dup").on(t.escritorioId, t.tipo, t.chave),
+}));
+
 export const conversas = mysqlTable("conversas", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioIdConv").notNull(),
@@ -1009,6 +1051,13 @@ export const leads = mysqlTable("leads", {
   // Pra relatórios "deste mês" não dá pra usar updatedAt (muda em qualquer
   // edição) — esse campo só muda quando o status passa pra fechado.
   fechadoEm: timestamp("fechadoEmLead"),
+  // Contrato fechado que foi cancelado depois. A etapa continua
+  // fechado_ganho (o fechamento aconteceu); o cancelamento é outro evento,
+  // com data própria. NULL = não cancelado.
+  canceladoEm: timestamp("canceladoEmLead"),
+  motivoCancelamento: varchar("motivoCancelamentoLead", { length: 64 }),
+  detalheCancelamento: varchar("detalheCancelamentoLead", { length: 500 }),
+  canceladoPor: int("canceladoPorLead"),
   createdAt: timestamp("createdAtLead").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtLead").defaultNow().onUpdateNow().notNull(),
 });

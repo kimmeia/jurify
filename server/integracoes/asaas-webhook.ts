@@ -464,6 +464,21 @@ export function registerAsaasWebhook(app: Express) {
                 )).limit(1);
               contatoExistente = contato ?? null;
             }
+            // Um número, um cadastro: sem CPF batendo, o telefone reconhece a
+            // ficha que o WhatsApp já criou — senão nascia a segunda.
+            if (!contatoExistente) {
+              const telDigitos = String(customer.mobilePhone || customer.phone || "").replace(/\D/g, "");
+              if (telDigitos.length >= 10) {
+                const { buscarContatosPorTelefone } = await import("../escritorio/db-crm");
+                const [porTelefone] = await buscarContatosPorTelefone(escritorioId, telDigitos, { limite: 1 });
+                if (porTelefone) {
+                  const [contato] = await db.select().from(contatos)
+                    .where(and(eq(contatos.id, porTelefone.id), eq(contatos.escritorioId, escritorioId)))
+                    .limit(1);
+                  contatoExistente = contato ?? null;
+                }
+              }
+            }
             let contatoId: number | null = contatoExistente?.id ?? null;
 
             if (contatoExistente && contatoId) {

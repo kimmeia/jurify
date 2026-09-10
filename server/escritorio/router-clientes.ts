@@ -5,8 +5,11 @@ import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
+import { alias } from "drizzle-orm/mysql-core";
 import { checkPermission } from "./check-permission";
+import { cancelarContratosDoContato } from "./cancelar-contrato";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
+import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
 import { verificarLimite } from "../billing/plan-limits";
 import { dataHojeBR, inicioDoDiaNoFuso, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
@@ -225,6 +228,8 @@ export const clientesRouter = router({
     /** Data de cadastro do contato, inclusive nas duas pontas (YYYY-MM-DD). */
     cadastroDe: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     cadastroAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /** "Ver na lista" da Conferência de cadastros: só as fichas daquela falta. */
+    conferencia: z.enum(FALTA_TIPOS).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
@@ -371,6 +376,12 @@ export const clientesRouter = router({
       // Inclusivo na ponta de cima: quem cadastrou às 15h do dia final entra.
       where = and(where, lte(contatos.createdAt, new Date(`${input.cadastroAte}T23:59:59.999`)));
     }
+    if (input?.conferencia) {
+      // Os MESMOS ids que o relatório contou — a lista tem que bater com o card.
+      const { idsDaFaltaNoEscritorio } = await import("./conferencia-cadastros");
+      const idsFalta = await idsDaFaltaNoEscritorio(db, perm.escritorioId, input.conferencia);
+      where = and(where, idsFalta.length > 0 ? inArray(contatos.id, idsFalta) : sql`1 = 0`);
+    }
 
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
@@ -469,6 +480,13 @@ export const clientesRouter = router({
     valorFechamento: z.string().max(20).optional(),
     /** Origem da indicação ("indicacao", "ligacao", "evento", etc). */
     origemFechamento: z.string().max(128).optional(),
+    /**
+     * Um número, um cadastro: o telefone já tem ficha (a que o WhatsApp
+     * criou). "Completar" preenche essa ficha em vez de abrir a segunda;
+     * "forcarSeparado" é o clique consciente de quem quer duas mesmo.
+     */
+    completarContatoId: z.number().int().positive().optional(),
+    forcarSeparado: z.boolean().optional(),
   }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "criar");
@@ -484,7 +502,7 @@ export const clientesRouter = router({
       // com cadastros antigos com formatação variada). Operador recebe
       // nome+ID do cliente existente pra clicar e abrir a ficha.
       if (input.cpfCnpj) {
-        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj);
+        const dup = await buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.completarContatoId);
         if (dup) {
           // ID embutido na mensagem `[ID:n]` pra o frontend extrair via regex
           // e oferecer link "Abrir cliente existente" (TRPCError.cause não
@@ -504,8 +522,64 @@ export const clientesRouter = router({
       // Campos personalizados — só persiste o que tiver chave válida (string)
       // e pelo menos um valor não-vazio.
       const camposJson = sanitizarCamposPersonalizados(input.camposPersonalizados);
-      const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
-      const contatoId = (r as { insertId: number }).insertId;
+
+      // Um número, um cadastro. A mesma régua que reconhece quem escreve no
+      // WhatsApp vale pra quem cadastra à mão: telefone que já tem ficha não
+      // vira segunda ficha em silêncio.
+      const { buscarContatosPorTelefone } = await import("./db-crm");
+      const { mesmoTelefone } = await import("../../shared/telefone");
+      const telDigitos = (input.telefone || "").replace(/\D/g, "");
+      let contatoId: number;
+      if (input.completarContatoId) {
+        const [alvo] = await db
+          .select()
+          .from(contatos)
+          .where(and(eq(contatos.id, input.completarContatoId), eq(contatos.escritorioId, perm.escritorioId)))
+          .limit(1);
+        if (!alvo) throw new TRPCError({ code: "NOT_FOUND", message: "O cadastro pra completar não foi encontrado." });
+        if (alvo.telefone && input.telefone && !mesmoTelefone(alvo.telefone, input.telefone)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "O cadastro escolhido tem outro telefone — confira o número." });
+        }
+        // Preenche o que faltava e corrige o nome (era o nome do perfil do
+        // WhatsApp). Conversa, histórico e atendente ficam onde estão: o
+        // responsável só entra quando a ficha não tinha nenhum.
+        await db.update(contatos).set({
+          nome: input.nome,
+          telefone: alvo.telefone || input.telefone || null,
+          email: input.email || alvo.email || null,
+          cpfCnpj: input.cpfCnpj || alvo.cpfCnpj || null,
+          observacoes: input.observacoes || alvo.observacoes || null,
+          tags: input.tags || alvo.tags || null,
+          responsavelId: alvo.responsavelId ?? respId,
+          documentacaoPendente: input.documentacaoPendente ?? alvo.documentacaoPendente,
+          documentacaoObservacoes: input.documentacaoObservacoes || alvo.documentacaoObservacoes || null,
+          camposPersonalizados: camposJson ?? alvo.camposPersonalizados,
+          profissao: input.profissao || alvo.profissao || null,
+          estadoCivil: input.estadoCivil || alvo.estadoCivil || null,
+          nacionalidade: input.nacionalidade || alvo.nacionalidade || null,
+          cep: input.cep || alvo.cep || null,
+          logradouro: input.logradouro || alvo.logradouro || null,
+          numeroEndereco: input.numeroEndereco || alvo.numeroEndereco || null,
+          complemento: input.complemento || alvo.complemento || null,
+          bairro: input.bairro || alvo.bairro || null,
+          cidade: input.cidade || alvo.cidade || null,
+          uf: input.uf || alvo.uf || null,
+          estagio: "cliente",
+        }).where(and(eq(contatos.id, alvo.id), eq(contatos.escritorioId, perm.escritorioId)));
+        contatoId = alvo.id;
+      } else {
+        if (telDigitos.length >= 10 && !input.forcarSeparado) {
+          const [existente] = await buscarContatosPorTelefone(perm.escritorioId, telDigitos, { limite: 1 });
+          if (existente) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Telefone já cadastrado para "${existente.nome}" [ID:${existente.id}]`,
+            });
+          }
+        }
+        const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
+        contatoId = (r as { insertId: number }).insertId;
+      }
 
       // Se marcado "já fechado", cria lead com etapa fechado_ganho — entra
       // no relatório comercial como conversão. Não-fatal: se falhar, o
@@ -696,6 +770,9 @@ export const clientesRouter = router({
       motivo: z.string().max(500).optional(),
       // Data do encerramento/suspensão (o usuário escolhe). Default = hoje.
       data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      /** Cancelado/rescindido: cancela também os contratos fechados do
+       *  cliente (mesma data; motivo "desistência" ou "outro"). */
+      cancelarContratos: z.boolean().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
@@ -715,7 +792,21 @@ export const clientesRouter = router({
           servicoEncerradoPor: perm.colaboradorId,
         })
         .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
-      return { success: true, situacaoServico: input.tipo };
+
+      let contratosCancelados = 0;
+      if (input.cancelarContratos && (input.tipo === "cancelado" || input.tipo === "rescindido")) {
+        const esc = await getEscritorioPorUsuario(ctx.user.id);
+        const tz = esc?.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+        contratosCancelados = await cancelarContratosDoContato(db, {
+          escritorioId: perm.escritorioId,
+          contatoId: input.contatoId,
+          data: input.data || dataHojeBR(tz),
+          motivo: input.tipo === "cancelado" ? "desistencia" : "outro",
+          detalhe: input.motivo?.trim() || (input.tipo === "rescindido" ? "Rescindido pelo escritório" : null),
+          canceladoPor: perm.colaboradorId ?? null,
+        });
+      }
+      return { success: true, situacaoServico: input.tipo, contratosCancelados };
     }),
 
   /** Reativa o serviço (desfaz encerramento/cancelamento). */
@@ -1404,19 +1495,28 @@ export const clientesRouter = router({
     if (!db) return [];
     const ok = await podeVerCliente(db, input.contatoId, perm.escritorioId, perm.colaboradorId, perm.verTodos);
     if (!ok) return [];
+    const colabCancelou = alias(colaboradores, "colab_cancelou");
+    const userCancelou = alias(users, "user_cancelou");
     const rows = await db
       .select({
         id: leads.id,
         etapaFunil: leads.etapaFunil,
         valorEstimado: leads.valorEstimado,
         createdAt: leads.createdAt,
+        fechadoEm: leads.fechadoEm,
         responsavelId: leads.responsavelId,
         responsavelNome: users.name,
         origemLead: leads.origemLead,
+        canceladoEm: leads.canceladoEm,
+        motivoCancelamento: leads.motivoCancelamento,
+        detalheCancelamento: leads.detalheCancelamento,
+        canceladoPorNome: userCancelou.name,
       })
       .from(leads)
       .leftJoin(colaboradores, eq(leads.responsavelId, colaboradores.id))
       .leftJoin(users, eq(colaboradores.userId, users.id))
+      .leftJoin(colabCancelou, eq(leads.canceladoPor, colabCancelou.id))
+      .leftJoin(userCancelou, eq(colabCancelou.userId, userCancelou.id))
       .where(and(eq(leads.contatoId, input.contatoId), eq(leads.escritorioId, perm.escritorioId)))
       .orderBy(desc(leads.createdAt));
     return rows.map(r => ({
@@ -1424,9 +1524,14 @@ export const clientesRouter = router({
       etapaFunil: r.etapaFunil,
       valorEstimado: r.valorEstimado,
       createdAt: toIsoString(r.createdAt) ?? "",
+      fechadoEm: toIsoString(r.fechadoEm),
       responsavelId: r.responsavelId,
       responsavelNome: r.responsavelNome,
       origemLead: r.origemLead,
+      canceladoEm: toIsoString(r.canceladoEm),
+      motivoCancelamento: r.motivoCancelamento,
+      detalheCancelamento: r.detalheCancelamento,
+      canceladoPorNome: r.canceladoPorNome,
     }));
   }),
 
@@ -1674,4 +1779,271 @@ export const clientesRouter = router({
       if (cpfLimpo.length !== 11 && cpfLimpo.length !== 14) return null;
       return buscarClienteDuplicadoCpf(db, perm.escritorioId, input.cpfCnpj, input.excluirId);
     }),
+
+  /**
+   * Um número, um cadastro: enquanto o operador digita o telefone, a tela
+   * pergunta se aquele número já tem ficha — com a MESMA régua que reconhece
+   * quem escreve no WhatsApp (com/sem 9, com/sem 55, com/sem máscara).
+   * Devolve a ficha que sobreviveria numa unificação (com CPF; senão, a mais
+   * antiga) e o bastante pra tela explicar o que "Completar" faz.
+   */
+  verificarTelefone: protectedProcedure
+    .input(z.object({
+      telefone: z.string().max(32),
+      excluirId: z.number().int().positive().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+      if (!perm.allowed) return null;
+      const digitos = input.telefone.replace(/\D/g, "");
+      if (digitos.length < 10) return null;
+      const { buscarContatosPorTelefone } = await import("./db-crm");
+      const { escolherSobrevivente } = await import("./reconhecer-cadastro");
+      const achados = await buscarContatosPorTelefone(perm.escritorioId, digitos, { excetoId: input.excluirId });
+      if (achados.length === 0) return null;
+      const melhor = achados.reduce((m, c) => escolherSobrevivente(m, c).principal);
+
+      let conversasAbertas = 0;
+      let atendenteNome: string | null = null;
+      const db = await getDb();
+      if (db) {
+        const abertas = await db
+          .select({ id: conversas.id, atendenteId: conversas.atendenteId })
+          .from(conversas)
+          .where(and(
+            eq(conversas.contatoId, melhor.id),
+            eq(conversas.escritorioId, perm.escritorioId),
+            inArray(conversas.status, ["aguardando", "em_atendimento"]),
+          ));
+        conversasAbertas = abertas.length;
+        const atendenteId = abertas.find((a) => a.atendenteId)?.atendenteId;
+        if (atendenteId) {
+          const [u] = await db
+            .select({ nome: users.name })
+            .from(colaboradores)
+            .innerJoin(users, eq(colaboradores.userId, users.id))
+            .where(eq(colaboradores.id, atendenteId))
+            .limit(1);
+          atendenteNome = u?.nome ?? null;
+        }
+      }
+      return {
+        id: melhor.id,
+        nome: melhor.nome,
+        telefone: melhor.telefone,
+        origem: melhor.origem,
+        estagio: melhor.estagio,
+        temCpf: !!melhor.cpfCnpj?.trim(),
+        temEmail: !!melhor.email?.trim(),
+        createdAt: toIsoString(melhor.createdAt) ?? null,
+        conversasAbertas,
+        atendenteNome,
+        outros: achados.length - 1,
+      };
+    }),
+
+  /**
+   * Faxina do que já duplicou: fichas do escritório agrupadas pelo telefone
+   * (DDD + 8 dígitos). Em cada grupo, quem sobrevive é a ficha com CPF (em
+   * empate, a mais antiga) — a mesma regra da unificação automática. Só quem
+   * pode excluir clientes vê a lista, que é a permissão do "Mesclar".
+   */
+  possiveisDuplicadosTelefone: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+    if (!perm.allowed) return { podeVer: false, grupos: [] as PossivelDuplicadoGrupo[] };
+    const db = await getDb();
+    if (!db) return { podeVer: true, grupos: [] as PossivelDuplicadoGrupo[] };
+    // A MESMA conferência da página: mesmos grupos, mesmos "não é duplicado"
+    // fora da conta — senão o "(341)" do botão e o card do relatório divergiriam.
+    const { carregarBaseConferencia, montarConferencia } = await import("./conferencia-cadastros");
+    const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+    const resumo = (f: (typeof conf.gruposTelefone)[number]["fichas"][number]): PossivelDuplicadoFicha => ({
+      id: f.id,
+      nome: f.nome,
+      origem: f.origem,
+      estagio: f.estagio,
+      temCpf: !!f.cpfCnpj?.trim(),
+      createdAt: f.createdAt,
+      conversas: f.conversas,
+      cobrancas: f.cobrancas,
+      processos: f.processos,
+    });
+    return {
+      podeVer: true,
+      grupos: conf.gruposTelefone.map((g) => ({
+        chave: g.chave,
+        telefone: g.fichas[0]?.telefone ?? null,
+        sobrevivente: resumo(g.fichas[0]),
+        mescladas: g.fichas.slice(1).map(resumo),
+        cpfsDiferentes: g.classe === "cpfs_diferentes",
+      })),
+    };
+  }),
+
+  /** Mescla os pares escolhidos na lista de duplicados — cada um com registro pra "Desfazer". */
+  mesclarDuplicados: protectedProcedure
+    .input(z.object({
+      pares: z.array(z.object({
+        principalId: z.number().int().positive(),
+        duplicadoId: z.number().int().positive(),
+        /** Decisão 1 (09/09): duas fichas com CPFs diferentes só mesclam com confirmação explícita na tela. */
+        confirmarCpfDiferente: z.boolean().optional(),
+      })).min(1).max(50),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes mescla cadastros." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { unificarComRegistro } = await import("./reconhecer-cadastro");
+      const feitos: number[] = [];
+      const falhas: Array<{ duplicadoId: number; erro: string }> = [];
+      for (const par of input.pares) {
+        try {
+          if (!par.confirmarCpfDiferente) {
+            // Mesclar descarta o CPF da ficha absorvida: com dois CPFs preenchidos
+            // e diferentes pode ser duas pessoas (casal com o mesmo telefone).
+            const fichas: Array<{ id: number; cpfCnpj: string | null }> = await db
+              .select({ id: contatos.id, cpfCnpj: contatos.cpfCnpj })
+              .from(contatos)
+              .where(and(eq(contatos.escritorioId, perm.escritorioId), inArray(contatos.id, [par.principalId, par.duplicadoId])));
+            const cpfs = new Set(fichas.map((f) => (f.cpfCnpj ?? "").replace(/\D/g, "")).filter(Boolean));
+            if (cpfs.size > 1) {
+              falhas.push({ duplicadoId: par.duplicadoId, erro: MENSAGEM_CPFS_DIFERENTES });
+              continue;
+            }
+          }
+          await unificarComRegistro(db, {
+            escritorioId: perm.escritorioId,
+            principalId: par.principalId,
+            duplicadoId: par.duplicadoId,
+            origem: "manual",
+            executadoPor: perm.colaboradorId,
+          });
+          feitos.push(par.duplicadoId);
+        } catch (err: any) {
+          falhas.push({ duplicadoId: par.duplicadoId, erro: err?.message || "falhou" });
+        }
+      }
+      return { feitos, falhas };
+    }),
+
+  /**
+   * Conferência de cadastros — a página inteira num pedido: resumo, grupos por
+   * telefone e por CPF (fichas lado a lado, divergências marcadas), faltas e o
+   * que foi marcado como "não é duplicado". Mesma permissão do Mesclar
+   * (excluir clientes): o relatório conta o escritório inteiro.
+   */
+  conferenciaCadastros: protectedProcedure.query(async ({ ctx }) => {
+    const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+    if (!perm.allowed) return { podeVer: false as const };
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+    const { carregarBaseConferencia, montarConferencia, conferenciaParaTela } = await import("./conferencia-cadastros");
+    const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+    return { podeVer: true as const, geradoEm: new Date().toISOString(), ...conferenciaParaTela(conf) };
+  }),
+
+  /**
+   * Decisão 2 (09/09): o grupo sai da conta em toda tela e volta com um clique.
+   * A tela aponta o grupo pela ficha sobrevivente — a chave (que no grupo de
+   * CPF é o próprio CPF) é resolvida aqui, escopada pelo escritório.
+   */
+  marcarNaoDuplicado: protectedProcedure
+    .input(z.object({ tipo: z.enum(["telefone", "cpf"]), contatoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes marca \"não é duplicado\"." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { chaveDoNaoDuplicado, marcarNaoDuplicado } = await import("./conferencia-cadastros");
+      const chave = await chaveDoNaoDuplicado(db, perm.escritorioId, input);
+      if (!chave) throw new TRPCError({ code: "NOT_FOUND", message: "Cadastro não encontrado ou sem o dado que agrupa." });
+      return marcarNaoDuplicado(db, { escritorioId: perm.escritorioId, tipo: input.tipo, chave, marcadoPor: perm.colaboradorId });
+    }),
+
+  desmarcarNaoDuplicado: protectedProcedure
+    .input(z.object({ tipo: z.enum(["telefone", "cpf"]), contatoId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes desfaz o \"não é duplicado\"." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const { chaveDoNaoDuplicado, desmarcarNaoDuplicado } = await import("./conferencia-cadastros");
+      const chave = await chaveDoNaoDuplicado(db, perm.escritorioId, input);
+      if (!chave) throw new TRPCError({ code: "NOT_FOUND", message: "Cadastro não encontrado ou sem o dado que agrupa." });
+      return desmarcarNaoDuplicado(db, { escritorioId: perm.escritorioId, tipo: input.tipo, chave });
+    }),
+
+  /** PDF e planilha saem do MESMO cálculo da tela, com o filtro marcado. */
+  exportarConferenciaPdf: protectedProcedure
+    .input(z.object({ filtro: z.enum(FILTROS_GRUPO).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes baixa a conferência." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado");
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { carregarBaseConferencia, montarConferencia } = await import("./conferencia-cadastros");
+      const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+      const { gerarConferenciaPDF } = await import("./conferencia-pdf");
+      const buffer = await gerarConferenciaPDF(conf, { nomeEscritorio: esc.escritorio.nome, filtro: input?.filtro ?? "todos", fuso });
+      return {
+        filename: `conferencia-cadastros_${dataHojeBR(fuso)}.pdf`,
+        base64: buffer.toString("base64"),
+        mimeType: "application/pdf",
+      };
+    }),
+
+  exportarConferenciaCsv: protectedProcedure
+    .input(z.object({ filtro: z.enum(FILTROS_GRUPO).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes baixa a conferência." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new Error("Escritório não encontrado");
+      const fuso = esc.escritorio.fusoHorario || FUSO_HORARIO_PADRAO;
+      const { carregarBaseConferencia, montarConferencia, gerarConferenciaCsv } = await import("./conferencia-cadastros");
+      const conf = montarConferencia(await carregarBaseConferencia(db, perm.escritorioId));
+      const csv = gerarConferenciaCsv(conf, input?.filtro ?? "todos");
+      return {
+        filename: `conferencia-cadastros_${dataHojeBR(fuso)}.csv`,
+        base64: Buffer.from(csv, "utf8").toString("base64"),
+        mimeType: "text/csv;charset=utf-8",
+      };
+    }),
 });
+
+type PossivelDuplicadoFicha = {
+  id: number;
+  nome: string;
+  origem: string;
+  estagio: string;
+  temCpf: boolean;
+  createdAt: string | null;
+  conversas: number;
+  cobrancas: number;
+  processos: number;
+};
+
+type PossivelDuplicadoGrupo = {
+  chave: string;
+  telefone: string | null;
+  cpfsDiferentes: boolean;
+  sobrevivente: PossivelDuplicadoFicha;
+  mescladas: PossivelDuplicadoFicha[];
+};

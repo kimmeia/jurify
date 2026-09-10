@@ -32,6 +32,12 @@ function dadosCompletos(): ComercialDashboardData {
       variacaoContratosFechados: 5.9,
       valorTotalFechado: 133500,
       ticketMedio: 7029.17,
+      cancelados: 2,
+      valorCancelados: 6500,
+      canceladosFecharamNoPeriodo: 1,
+      variacaoCancelados: 100,
+      contratosFechadosCanceladosDepois: 1,
+      valorFechadosCanceladosDepois: 2500,
     },
     ranking: [
       { atendenteId: 1, nome: "Mariana Lopes", setorNome: "Comercial Cível", valorFechado: 52000, contratosFechados: 7, faturado: 36800, ticketMedio: 5257.14, meta: 40000, metaPeriodo: 40000, progressoMeta: 92 },
@@ -52,14 +58,41 @@ function dadosCompletos(): ComercialDashboardData {
       negociacao: { total: 9, valor: 96000 },
       fechado_ganho: { total: 18, valor: 133500 },
       fechado_perdido: { total: 11, valor: 71000 },
+      cancelado: { total: 2, valor: 6500 },
     },
-    contatosPorOrigem: [
-      { origem: "whatsapp", total: 48 }, { origem: "instagram", total: 22 },
-      { origem: "facebook", total: 9 }, { origem: "manual", total: 14 },
+    funilResumo: {
+      entraram: { total: 109, emAberto: 80, jaDecididos: 29 },
+      decididos: {
+        total: 29,
+        fechado_ganho: { total: 18, entraramNoPeriodo: 16, entraramAntes: 2 },
+        fechado_perdido: { total: 11, entraramNoPeriodo: 11, entraramAntes: 0 },
+      },
+      cancelados: { total: 2, valor: 6500, fecharamNoPeriodo: 1, fecharamAntes: 1 },
+    },
+    contratosCancelados: [
+      { leadId: 41, contatoId: 3, cliente: "Santiago Ribeiro", fechadoEm: "2026-05-08T12:00:00.000Z", canceladoEm: "2026-05-20T12:00:00.000Z", valor: 2500, motivo: "inadimplencia", detalhe: null, responsavel: "Mariana Lopes", recebidoAntes: 1250 },
+      { leadId: 42, contatoId: 8, cliente: "Márcia Teles", fechadoEm: "2026-04-22T12:00:00.000Z", canceladoEm: "2026-05-05T12:00:00.000Z", valor: 4000, motivo: "desistencia", detalhe: "pediu o distrato por telefone", responsavel: "Carlos Eduardo Pinto", recebidoAntes: 0 },
+    ],
+    leadsPorCanal: [
+      { canal: "whatsapp", total: 48 }, { canal: "manual", total: 22 },
+      { canal: "telefone", total: 9 }, { canal: "asaas", total: 14 },
     ],
     fechamentosPorOrigem: [
-      { origem: "Google revisional", total: 6 }, { origem: "Meta leilão", total: 4 },
-      { origem: "BNI", total: 3 }, { origem: "Indicação", total: 5 },
+      {
+        origem: "Google revisional", total: 6, valorTotal: 41350, recebidoTotal: 12000, pagaram: 2,
+        fechamentos: [
+          { contatoId: 1, cliente: "Francisco Antonio", fechadoEm: "2026-05-09T12:00:00.000Z", valor: 7250, recebido: 7250, situacao: "pago", responsavel: "Mariana Lopes", mesmoCliente: 1, foraDoFiltro: false },
+          { contatoId: 2, cliente: "Marly Souza", fechadoEm: "2026-05-08T12:00:00.000Z", valor: 6000, recebido: 4750, situacao: "parcial", responsavel: "Carlos Eduardo Pinto", mesmoCliente: 2, foraDoFiltro: false },
+          { contatoId: 3, cliente: "Santiago Ribeiro", fechadoEm: "2026-05-08T12:00:00.000Z", valor: 4800, recebido: 0, situacao: "nada", responsavel: "Mariana Lopes", mesmoCliente: 1, foraDoFiltro: false, canceladoEm: "2026-05-20T12:00:00.000Z", motivoCancelamento: "inadimplencia" },
+        ],
+      },
+      { origem: "Meta leilão", total: 4 }, { origem: "BNI", total: 3 }, { origem: "Indicação", total: 5 },
+      {
+        origem: "Sem origem / fora do filtro", total: 0, valorTotal: 0, recebidoTotal: 900, pagaram: 1,
+        fechamentos: [
+          { contatoId: 9, cliente: "Cliente de outro setor", fechadoEm: null, valor: null, recebido: 900, situacao: "fora_do_filtro", responsavel: null, mesmoCliente: 1, foraDoFiltro: true },
+        ],
+      },
     ],
     filtros: { setorId: null, atendenteId: null },
   };
@@ -112,9 +145,10 @@ describe("gerarComercialPdf", () => {
     const data = dadosCompletos();
     data.ranking = [];
     data.cobrancasPorDia = [];
-    data.contatosPorOrigem = [];
+    data.leadsPorCanal = [];
     data.fechamentosPorOrigem = [];
     data.etapas = {};
+    data.funilResumo = undefined;
     const buf = await gerarComercialPdf({ data, detalhes: [], nomeEscritorio: "Escritório Teste" });
     ehPdfValido(buf);
   });

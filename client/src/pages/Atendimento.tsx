@@ -51,6 +51,8 @@ import { parseValorBR } from "@shared/valor-br";
 import { FUSO_HORARIO_PADRAO, dataHojeBR, rotuloDataConversa } from "@shared/escritorio-types";
 import { RespostaRapidaAutocomplete } from "@/components/atendimento/RespostaRapidaAutocomplete";
 import { ConversationDiff } from "./atendimento/conversation-diff";
+import { CancelarContratoDialog, CanceladoOuPerdidoDialog, type AlvoCancelamento } from "./atendimento/cancelar-contrato-dialog";
+import { descricaoCancelamento, rotuloMotivoCancelamento } from "@shared/cancelamento-contrato";
 import { TransferirConversaDialog } from "./atendimento/TransferirConversaDialog";
 import { montarListaInbox } from "@shared/inbox-lista";
 import { AIActionCards } from "./atendimento/ai-action-cards";
@@ -64,6 +66,18 @@ import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { IconeTwilio } from "@/components/IconeTwilio";
 import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
+
+/** "2 conversas, 1 cobrança" — o que a unificação levou junto, em palavras. */
+function resumoContagens(c: { conversas: number; cobrancas: number; processos: number; leads: number; arquivos: number }): string {
+  const partes: string[] = [];
+  const add = (n: number, um: string, varios: string) => { if (n > 0) partes.push(`${n} ${n === 1 ? um : varios}`); };
+  add(c.conversas, "conversa", "conversas");
+  add(c.cobrancas, "cobrança", "cobranças");
+  add(c.processos, "processo", "processos");
+  add(c.leads, "lead", "leads");
+  add(c.arquivos, "arquivo", "arquivos");
+  return partes.length > 0 ? partes.join(", ") : "o histórico";
+}
 
 function formatBRL(v: number) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); }
 function timeAgo(d: string) { if (!d) return ""; const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return "agora"; if (m < 60) return m + "min"; const h = Math.floor(m / 60); if (h < 24) return h + "h"; return Math.floor(h / 24) + "d"; }
@@ -1866,6 +1880,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
   const conv = convEncontrada
     ?? (convAvulsa && (convAvulsa as any).id === cid ? convAvulsa : undefined)
     ?? (convCacheRef.current?.id === cid ? convCacheRef.current : undefined);
+  // Um número, um cadastro: aviso (desfazível por 7 dias) quando uma ficha
+  // magra deste número acabou de ser absorvida pelo cadastro completo.
+  const { data: unificacao, refetch: refetchUnificacao } = (trpc as any).crm.unificacaoRecente.useQuery(
+    { contatoId: conv?.contatoId ?? 0 },
+    { enabled: !!conv?.contatoId, retry: false, staleTime: 60_000 },
+  );
+  const desfazerUnificacaoMut = (trpc as any).crm.desfazerUnificacao.useMutation({
+    onSuccess: () => { toast.success("Unificação desfeita — a ficha voltou como estava."); refetchUnificacao(); onUpdate(); },
+    onError: (e: any) => toast.error("Não deu pra desfazer", { description: e.message }),
+  });
   // Está aberta mas fora do recorte atual do Inbox: a lista ao lado não a
   // mostra, e sem dizer isso a tela parece quebrada.
   const foraDoFiltro = !!conv && !convEncontrada;
@@ -2216,6 +2240,24 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               </>
             )}
             <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            {/* Um número, um cadastro: o nome vem do cadastro. Enquanto só existe a
+                ficha magra do WhatsApp, o selo diz isso — e o "Vincular" do menu
+                continua sendo o caminho manual. */}
+            {conv?.contatoId && ((conv as any)?.contatoCadastroCompleto ? (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-success-bg text-success-fg border-success/30 dark:text-success"
+                title="Este número foi reconhecido no cadastro do cliente (CPF, e-mail ou contrato)"
+              >
+                ✓ cadastro reconhecido
+              </span>
+            ) : (conv as any)?.contatoOrigem === "whatsapp" ? (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-muted text-muted-foreground"
+                title="Ficha criada pela primeira mensagem, sem CPF nem e-mail. Cadastre em Clientes com este telefone e ela é completada — ou use Vincular no menu."
+              >
+                contato do WhatsApp
+              </span>
+            ) : null)}
             {canalInoperante && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
@@ -2287,7 +2329,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             {(conv?.contatoTelefone || conv?.chatIdExterno) && (
               <span className="inline-flex items-center gap-1">
                 <span className="text-muted-foreground/40">·</span>
-                {conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "")}
+                {mascararTelefoneBR(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "")}
               </span>
             )}
             {conv?.contatoId && <FinanceiroBadge contatoId={conv.contatoId} />}
@@ -2359,6 +2401,36 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             Mostrar na lista
           </Button>
         )}
+      </div>
+    )}
+    {/* Um número, um cadastro: a ficha magra deste número acabou de ser
+        absorvida pelo cadastro completo (ou alguém mesclou à mão). Avisa na
+        conversa e deixa desfazer por 7 dias. */}
+    {unificacao && (
+      <div className="mx-3 mt-2 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-[11px] text-info-fg leading-snug" data-testid="aviso-unificacao">
+        <p>
+          <strong>Duas fichas com este número foram unificadas{unificacao.origem === "automatica" ? " agora" : ""}.</strong>{" "}
+          "{unificacao.duplicadoNome}" ({unificacao.duplicadoOrigem === "whatsapp" ? "contato do WhatsApp" : "cadastro"}
+          {unificacao.duplicadoCriadoEm ? `, ${new Date(unificacao.duplicadoCriadoEm).toLocaleDateString("pt-BR")}` : ""}) entrou em{" "}
+          <strong>{unificacao.principalNome}</strong>: {resumoContagens(unificacao.contagens)} estão juntos aqui.
+          {unificacao.duplicadoTelefone ? ` O número ${mascararTelefoneBR(unificacao.duplicadoTelefone)} ficou como telefone secundário.` : ""}
+        </p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {conv?.contatoId && (
+            <Button size="sm" variant="outline" className="h-6 text-[10.5px] border-info/30" onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}>
+              Abrir cadastro
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10.5px]"
+            disabled={desfazerUnificacaoMut.isPending}
+            onClick={() => desfazerUnificacaoMut.mutate({ id: unificacao.id })}
+          >
+            {desfazerUnificacaoMut.isPending ? "Desfazendo…" : "Desfazer"}
+          </Button>
+        </div>
       </div>
     )}
     {/* Diff + Action Cards. O Brief foi pro Customer 360° (rail); aqui ficam só
@@ -3273,6 +3345,23 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   // tem dado e o operador é forçado a pensar "por que perdi". State é
   // { id, nomeAtual } pra mostrar pra confirmação visual no dialog.
   const [perdaDialog, setPerdaDialog] = useState<{ id: number; nome: string } | null>(null);
+  // Contrato cancelado: o card sai de Ganho e vai pra coluna "Cancelados"
+  // (fechada por padrão). Arrastar um Ganho pra Perdido pergunta antes qual
+  // dos dois aconteceu.
+  const [cancelarAlvo, setCancelarAlvo] = useState<AlvoCancelamento | null>(null);
+  const [escolhaAlvo, setEscolhaAlvo] = useState<{ id: number; nome: string } | null>(null);
+  const [mostrarCancelados, setMostrarCancelados] = useState(false);
+  const reativarMut = trpc.crm.reativarContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato reativado"); onUpdate(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const abrirCancelamento = (ld: any) => setCancelarAlvo({
+    id: ld.id,
+    nome: ld.contatoNome || `Lead #${ld.id}`,
+    valorEstimado: ld.valorEstimado,
+    fechadoEm: ld.fechadoEm,
+    origemLead: ld.origemLead,
+  });
 
   // Handler único de drop: move lead pra etapa destino com optimistic update.
   // Cobre tanto drop na coluna (id da etapa) quanto drop sobre outro card
@@ -3285,6 +3374,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
     onDragChange?.(false);
     const ld = leads.find((l: any) => l.id === id);
     if (!ld || ld.etapaFunil === etapaDestino) return;
+    if (ld.canceladoEm) {
+      toast.error("Este contrato está cancelado. Reative antes de mover.");
+      return;
+    }
+    if (etapaDestino === "fechado_perdido" && ld.etapaFunil === "fechado_ganho") {
+      setEscolhaAlvo({ id, nome: ld.contatoNome || `Lead #${id}` });
+      return;
+    }
     if (etapaDestino === "fechado_perdido") {
       setPerdaDialog({ id, nome: ld.contatoNome || `Lead #${id}` });
       return;
@@ -3350,7 +3447,14 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
   const itemsByEtapa = useMemo(() => {
     const map: Record<string, any[]> = {};
     for (const e of ETAPAS) map[e] = [];
+    // Contrato cancelado sai da coluna Ganho e vai pra "Cancelados" (pela
+    // data do cancelamento, mês corrente). Continua etapa fechado_ganho.
+    map.cancelados = [];
     for (const l of leadsFiltrados) {
+      if (l.etapaFunil === "fechado_ganho" && l.canceladoEm) {
+        if (new Date(l.canceladoEm).getTime() >= inicioMesTs) map.cancelados.push(l);
+        continue;
+      }
       if (l.etapaFunil === "fechado_ganho" || l.etapaFunil === "fechado_perdido") {
         if (!l.fechadoEm || new Date(l.fechadoEm).getTime() < inicioMesTs) continue;
       }
@@ -3740,6 +3844,60 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
             </div>
           );
         })}
+        {(() => {
+          const cancelados = itemsByEtapa.cancelados || [];
+          const valCanc = cancelados.reduce((s: number, l: any) => s + parseValorBR(l.valorEstimado), 0);
+          return (
+            <div
+              className={
+                "flex-shrink-0 rounded-xl p-3 flex flex-col gap-2 border border-dashed border-danger/30 bg-danger-bg/40 " +
+                (mostrarCancelados ? (compacto ? "w-60" : "w-72") : "w-44")
+              }
+              style={{ maxHeight: "calc(100vh - 260px)" }}
+            >
+              <button
+                type="button"
+                onClick={() => setMostrarCancelados((v) => !v)}
+                className="sticky top-0 z-10 -mx-3 -mt-3 px-3 pt-3 pb-2 rounded-t-xl text-left"
+                title={mostrarCancelados ? "Recolher" : "Abrir"}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-danger" />
+                  <span className="text-xs font-bold uppercase tracking-wide flex-1 truncate text-danger-fg">Cancelados</span>
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0 border-danger/30 text-danger-fg">
+                    {cancelados.length}
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1 ml-[18px]">
+                  {mostrarCancelados
+                    ? `${formatBRL(valCanc)} · pela data do cancelamento, no mês`
+                    : "clique para abrir"}
+                </p>
+              </button>
+              {mostrarCancelados && (
+                <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-2">
+                  {cancelados.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-border text-muted-foreground/60 text-[11px] py-6 text-center">
+                      nenhum contrato cancelado neste mês
+                    </div>
+                  ) : (
+                    cancelados.map((l: any) => (
+                      <KCard
+                        key={l.id}
+                        lead={l}
+                        onWA={onWA}
+                        onDelete={handleDeleteLead}
+                        onGoToConversa={onGoToConversa}
+                        onOpen={() => setDetalheLeadId(l.id)}
+                        compacto={compacto}
+                      />
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     ) : (
       <KanbanLista
@@ -3756,7 +3914,25 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
       onUpdate={onUpdate}
       onGoToConversa={onGoToConversa}
       onWA={onWA}
+      onCancelarContrato={abrirCancelamento}
+      onReativarContrato={(ld) => reativarMut.mutate({ id: ld.id })}
+      reativando={reativarMut.isPending}
     />
+    <CanceladoOuPerdidoDialog
+      alvo={escolhaAlvo}
+      onClose={() => setEscolhaAlvo(null)}
+      onCancelado={() => {
+        const ld = escolhaAlvo ? leads.find((l: any) => l.id === escolhaAlvo.id) : null;
+        setEscolhaAlvo(null);
+        if (ld) abrirCancelamento(ld);
+      }}
+      onPerdido={() => {
+        const alvo = escolhaAlvo;
+        setEscolhaAlvo(null);
+        if (alvo) setPerdaDialog(alvo);
+      }}
+    />
+    <CancelarContratoDialog alvo={cancelarAlvo} onClose={() => setCancelarAlvo(null)} onDone={onUpdate} />
 
     <AlertDialog open={!!excluirLeadAlvo} onOpenChange={(o) => !o && setExcluirLeadAlvo(null)}>
       <AlertDialogContent>
@@ -3795,13 +3971,16 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
 }
 
 /** Painel lateral do Pipeline: detalhes + notas (observacoes) + edição rápida. */
-function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa, onWA }: {
+function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa, onWA, onCancelarContrato, onReativarContrato, reativando }: {
   lead: any | null;
   atendentes: any[];
   onClose: () => void;
   onUpdate: () => void;
   onGoToConversa: (conversaId: number) => void;
   onWA?: (p: string) => void;
+  onCancelarContrato?: (lead: any) => void;
+  onReativarContrato?: (lead: any) => void;
+  reativando?: boolean;
 }) {
   const [notas, setNotas] = useState("");
   const [valorEdit, setValorEdit] = useState("");
@@ -3908,6 +4087,32 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                   <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-[11px] inline-flex items-center justify-center">Sem WhatsApp</div>
                 )}
               </div>
+              {lead.etapaFunil === "fechado_ganho" && (
+                lead.canceladoEm ? (
+                  <div className="mt-3 rounded-lg border border-danger/30 bg-danger-bg px-3 py-2 text-[12px]">
+                    <p className="font-semibold text-danger-fg">
+                      Contrato cancelado em {new Date(lead.canceladoEm).toLocaleDateString("pt-BR")}
+                    </p>
+                    <p className="text-muted-foreground">{descricaoCancelamento(lead.motivoCancelamento, lead.detalheCancelamento)}</p>
+                    <button
+                      type="button"
+                      onClick={() => onReativarContrato?.(lead)}
+                      disabled={reativando}
+                      className="mt-1.5 text-[11.5px] font-semibold text-info-fg hover:underline disabled:opacity-50"
+                    >
+                      {reativando ? "Reativando…" : "Reativar contrato"}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onCancelarContrato?.(lead)}
+                    className="mt-3 h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-danger/30 text-danger-fg text-[12.5px] font-semibold hover:bg-danger-bg"
+                  >
+                    <XCircle className="h-3.5 w-3.5" /> Cancelar contrato
+                  </button>
+                )
+              )}
             </div>
 
             {/* BODY */}
@@ -3924,7 +4129,9 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                     <select
                       value={etapaEdit}
                       onChange={(e) => { setEtapaEdit(e.target.value as EtapaFunil); setDirty(true); }}
-                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px]"
+                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px] disabled:opacity-60"
+                      disabled={!!lead.canceladoEm}
+                      title={lead.canceladoEm ? "Contrato cancelado — reative antes de mudar a etapa" : undefined}
                     >
                       {ETAPAS.map((e) => (
                         <option key={e} value={e}>{ETAPA_FUNIL_LABELS[e]}</option>
@@ -4164,6 +4371,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
   const etapa = lead.etapaFunil as EtapaFunil;
   const isGanho = etapa === "fechado_ganho";
   const isPerd = etapa === "fechado_perdido";
+  const isCancelado = isGanho && !!lead.canceladoEm;
 
   // Dias parado: usa updatedAt do lead. Escala: ≤3d cinza, 4-7d laranja
   // (warn), >7d vermelho (danger). Pra Ganho/Perdido não mostra dias —
@@ -4175,11 +4383,13 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
     : diasParado > 3 ? "text-warning-fg font-semibold"
     : "text-muted-foreground";
 
-  const acao = ACAO_POR_ETAPA[etapa];
+  const acao = isCancelado ? undefined : ACAO_POR_ETAPA[etapa];
   const corOrig = lead.origemLead ? corOrigem(lead.origemLead) : null;
 
   // Background sutil pra Ganho/Perdido (mostra status do card só de bater o olho)
-  const cardBg = isGanho
+  const cardBg = isCancelado
+    ? "bg-gradient-to-br from-danger-bg/70 to-white dark:to-muted"
+    : isGanho
     ? "bg-gradient-to-br from-success-bg/70 to-white dark:to-muted"
     : isPerd
     ? "bg-gradient-to-br from-danger-bg/70 to-white dark:to-muted"
@@ -4230,6 +4440,11 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
                 <span className={"h-1 w-1 rounded-full " + corOrig.dot} />
                 {lead.origemLead}
               </span>
+            </div>
+          )}
+          {isCancelado && (
+            <div className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border bg-danger-bg text-danger-fg border-danger/30">
+              Cancelado {new Date(lead.canceladoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · {rotuloMotivoCancelamento(lead.motivoCancelamento)}
             </div>
           )}
 
@@ -4283,7 +4498,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
                 )}
               </div>
               <span className={"text-[10px] tabular-nums flex items-center gap-0.5 flex-shrink-0 " + paradoCls}>
-                {isGanho ? "✓ Fechado" : isPerd ? "Encerrado" :
+                {isCancelado ? "Cancelado" : isGanho ? "✓ Fechado" : isPerd ? "Encerrado" :
                   diasParado === null ? "" :
                   diasParado === 0 ? "hoje" :
                   diasParado === 1 ? "1d" :

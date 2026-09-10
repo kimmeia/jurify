@@ -10,6 +10,9 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { mascararTelefoneBR } from "@shared/telefone";
+import { FALTA_TIPOS, ROTULO_FALTA, type FaltaTipo } from "@shared/conferencia-cadastros";
+import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -30,8 +33,10 @@ import {
   MessageCircle, TrendingUp, FileText, StickyNote, CheckSquare, PenLine,
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
-  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown,
+  MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown, ClipboardCheck,
 } from "lucide-react";
+import { CancelarContratoDialog, type AlvoCancelamento } from "./atendimento/cancelar-contrato-dialog";
+import { descricaoCancelamento } from "@shared/cancelamento-contrato";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PulseDot, gradientAvatar, gerarIniciais } from "./dashboards/common";
@@ -396,6 +401,12 @@ export default function Clientes() {
       : FILTROS_VAZIOS;
   });
   const qtdFiltros = contarFiltros(filtros);
+  // "Ver na lista" da Conferência de cadastros chega como ?conferencia=<falta>:
+  // a lista mostra exatamente as fichas que o relatório contou.
+  const [conferencia, setConferencia] = useState<FaltaTipo | null>(() => {
+    const v = new URLSearchParams(window.location.search).get("conferencia") ?? "";
+    return (FALTA_TIPOS as readonly string[]).includes(v) ? (v as FaltaTipo) : null;
+  });
   const [pagina, setPagina] = useState(1);
   const [selId, setSelId] = useState<number | null>(() => {
     // Se veio com ?id=X na URL, abre direto no detalhe.
@@ -453,7 +464,7 @@ export default function Clientes() {
   // pra "Inativos" → bulk action exportava mix ou nada (IDs invisíveis).
   useEffect(() => {
     setSelecionados(new Set());
-  }, [filtros, buscaDebounced, pagina, aba]);
+  }, [filtros, buscaDebounced, pagina, aba, conferencia]);
 
   // Trocar de aba (Clientes ↔ Leads) ou de segmento volta pra página 1 —
   // senão a paginação herdada pode cair fora do range da nova lista. O
@@ -461,7 +472,7 @@ export default function Clientes() {
   // os controles de paginação por perto pra corrigir à mão.
   useEffect(() => {
     setPagina(1);
-  }, [aba, filtros]);
+  }, [aba, filtros, conferencia]);
 
   // A leitura de `?id=` acima só roda na MONTAGEM. Quem já está em
   // /clientes e navega pra /clientes?id=X — o que a busca ⌘K faz — não
@@ -484,10 +495,11 @@ export default function Clientes() {
     const params = new URLSearchParams();
     if (selId) params.set("id", String(selId));
     if (filtros.marcas.includes("docs")) params.set("aguardandoDocs", "1");
+    if (conferencia) params.set("conferencia", conferencia);
     const search = params.toString();
     const url = `${window.location.pathname}${search ? "?" + search : ""}`;
     window.history.replaceState({}, "", url);
-  }, [selId, filtros]);
+  }, [selId, filtros, conferencia]);
 
   const { data: stats, refetch: refetchStats } = trpc.clientes.estatisticas.useQuery();
   // Todos os segmentos (incluindo com_debito) filtram no servidor — antes
@@ -506,6 +518,7 @@ export default function Clientes() {
     marcas: filtros.marcas.length ? filtros.marcas : undefined,
     cadastroDe: filtros.cadastroDe || undefined,
     cadastroAte: filtros.cadastroAte || undefined,
+    conferencia: conferencia ?? undefined,
   });
 
   // Nomes pro filtro "Responsável" — a mesma procedure dos outros filtros do
@@ -697,6 +710,19 @@ export default function Clientes() {
                     <Download className="h-3.5 w-3.5 mr-1" />
                     {exportarDuplicatasMut.isPending ? "Gerando..." : "Duplicatas (PDF)"}
                   </Button>
+                  <PossiveisDuplicadosButton onMesclado={() => { refetch(); refetchStats(); }} />
+                  {podeExcluirCliente && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setLocation("/clientes/conferencia")}
+                      className="text-foreground hover:bg-muted border border-border h-8 text-xs"
+                      title="Duplicados por telefone e por CPF, dados divergentes, faltas — com PDF e planilha"
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                      Conferência de cadastros
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     onClick={() => setShowNovo(true)}
@@ -817,14 +843,22 @@ export default function Clientes() {
                     {qtdFiltros && busca ? " · " : ""}
                     {busca ? `busca “${busca}”` : ""}
                   </>
-                ) : (
+                ) : conferencia ? null : (
                   "sem filtro"
                 )}
               </span>
-              {(qtdFiltros || busca) && (
+              {conferencia && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info-bg px-2 py-0.5 text-[11px] font-semibold text-info-fg">
+                  Conferência: {ROTULO_FALTA[conferencia]}
+                  <button type="button" onClick={() => setConferencia(null)} aria-label="Tirar o filtro da conferência">
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              )}
+              {(qtdFiltros || busca || conferencia) && (
                 <button
                   type="button"
-                  onClick={() => { setFiltros(FILTROS_VAZIOS); setBusca(""); }}
+                  onClick={() => { setFiltros(FILTROS_VAZIOS); setBusca(""); setConferencia(null); }}
                   className="ml-1 inline-flex items-center gap-1 font-semibold text-info-fg hover:underline"
                 >
                   <X className="h-3 w-3" /> limpar tudo
@@ -866,7 +900,7 @@ export default function Clientes() {
               <CardContent className="py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  {qtdFiltros || busca
+                  {qtdFiltros || busca || conferencia
                     ? `Nenhum ${aba === "lead" ? "lead" : "cliente"} com esses filtros.`
                     : aba === "lead"
                       ? "Nenhum lead em atendimento. Leads aparecem aqui quando alguém entra em contato."
@@ -1525,7 +1559,7 @@ function LinhaCliente({
         <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
           {c.telefone && (
             <span className="flex items-center gap-1">
-              <Phone className="h-3 w-3" /> {c.telefone}
+              <Phone className="h-3 w-3" /> {mascararTelefoneBR(c.telefone)}
             </span>
           )}
           {c.email && (
@@ -3363,7 +3397,13 @@ function ClienteDetalhe({
   const [gerarContratoOpen, setGerarContratoOpen] = useState(false);
   const [fechamentoOpen, setFechamentoOpen] = useState(false);
   const utilsTrpc = trpc.useUtils();
-  const { data: cliente, refetch, isLoading: detalheCarregando } = trpc.clientes.detalhe.useQuery({ id });
+  const { data: clienteCarregado, refetch, isLoading: detalheCarregando } = trpc.clientes.detalhe.useQuery({ id });
+  // Trocar de ficha na lista lateral chegou a deixar a tela com os dados da
+  // ficha anterior (intermitente, produção 09/09). O que quer que entregue um
+  // registro de outro id aqui, ele não pode ser renderizado como se fosse o
+  // pedido: fica no esqueleto até o certo chegar.
+  const cliente = clienteCarregado && clienteCarregado.id === id ? clienteCarregado : undefined;
+  const registroDeOutroId = !!clienteCarregado && clienteCarregado.id !== id;
   // Resumo financeiro do Asaas — separado de `clientes.detalhe` pra reaproveitar
   // a mesma chave dos demais consumidores (FinanceiroPopover, FinanceiroBadge,
   // FinanceiroClienteTab) e cair no cache do React Query sem refetch.
@@ -3375,6 +3415,16 @@ function ClienteDetalhe({
   const { data: arquivos, refetch: rA } = trpc.clientes.listarArquivos.useQuery({ contatoId: id });
   const { data: convsData } = trpc.clientes.listarConversas.useQuery({ contatoId: id });
   const { data: leadsData, refetch: refetchLeads } = trpc.clientes.listarLeads.useQuery({ contatoId: id });
+  // Contrato cancelado: diálogo compartilhado com o Pipeline; reativar limpa
+  // data e motivo. Ao encerrar o serviço como cancelado/rescindido, a ficha
+  // oferece cancelar junto os contratos fechados em aberto.
+  const [cancelarAlvo, setCancelarAlvo] = useState<AlvoCancelamento | null>(null);
+  const [encerrarCancelarContratos, setEncerrarCancelarContratos] = useState(true);
+  const contratosAbertos = ((leadsData as any[]) || []).filter((l) => l.etapaFunil === "fechado_ganho" && !l.canceladoEm).length;
+  const reativarContratoMut = (trpc as any).crm.reativarContrato.useMutation({
+    onSuccess: () => { toast.success("Contrato reativado"); refetchLeads(); },
+    onError: (e: any) => toast.error(e?.message ?? "Falha ao reativar"),
+  });
   const fechamentosExistentes = ((leadsData as any[]) || [])
     .filter((l) => l.etapaFunil === "fechado_ganho")
     .map((l) => ({
@@ -3414,6 +3464,7 @@ function ClienteDetalhe({
       setEncerrarOpen(false);
       setEncerrarMotivo("");
       refetch();
+      refetchLeads();
       onUpdate();
       utilsTrpc.clientes.estatisticas.invalidate();
     },
@@ -3462,7 +3513,7 @@ function ClienteDetalhe({
   // (não erro) quando falta permissão, quando o contato é de outro escritório
   // e quando ele não existe mais — tratar isso como "ainda não chegou" deixava
   // a tela girando pra sempre, sem dizer nada a quem abriu.
-  if (detalheCarregando) {
+  if (detalheCarregando || registroDeOutroId) {
     // Esqueleto com a FORMA da ficha, não um círculo girando: o layout já
     // nasce no lugar, então nada pula quando os dados chegam.
     return (
@@ -3578,7 +3629,7 @@ function ClienteDetalhe({
               </div>
               <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-hero-fg/80">
                 {cliente.telefone && (
-                  <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{cliente.telefone}</span>
+                  <span className="flex items-center gap-1.5"><Phone className="h-3.5 w-3.5" />{mascararTelefoneBR(cliente.telefone)}</span>
                 )}
                 {(cliente as any).telefonesSecundarios?.length > 0 && (
                   <span>+{(cliente as any).telefonesSecundarios.length} tel</span>
@@ -3889,18 +3940,34 @@ function ClienteDetalhe({
                   {(leadsData || []).map((l: any) => (
                     <div
                       key={l.id}
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg border group"
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border group ${l.canceladoEm ? "border-danger/30 bg-danger-bg/30" : ""}`}
                     >
-                      <TrendingUp className="h-4 w-4 text-info shrink-0" />
+                      <TrendingUp className={`h-4 w-4 shrink-0 ${l.canceladoEm ? "text-danger" : "text-info"}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">
+                          {l.canceladoEm ? (
+                            <span className="inline-flex items-center rounded-full bg-danger-bg text-danger-fg border border-danger/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">
+                              Cancelado
+                            </span>
+                          ) : null}
                           {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
                           {l.origemLead && (
                             <span className="ml-2 text-[10px] text-muted-foreground font-normal">
                               · {l.origemLead}
                             </span>
                           )}
+                          {l.fechadoEm && l.etapaFunil === "fechado_ganho" && (
+                            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                              · fechado em {new Date(l.fechadoEm).toLocaleDateString("pt-BR")}
+                            </span>
+                          )}
                         </p>
+                        {l.canceladoEm && (
+                          <p className="text-[10px] text-danger-fg">
+                            cancelado em {new Date(l.canceladoEm).toLocaleDateString("pt-BR")} · {descricaoCancelamento(l.motivoCancelamento, l.detalheCancelamento)}
+                            {l.canceladoPorNome ? ` · por ${l.canceladoPorNome}` : ""}
+                          </p>
+                        )}
                         <LeadAtendenteInline
                           leadId={l.id}
                           responsavelAtualId={l.responsavelId ?? null}
@@ -3917,6 +3984,35 @@ function ClienteDetalhe({
                       <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
+                      {l.etapaFunil === "fechado_ganho" && !l.canceladoEm && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px] text-danger-fg border-danger/30 hover:bg-danger-bg"
+                          title="Cancelar contrato (o fechamento continua contando no mês em que fechou)"
+                          onClick={() => setCancelarAlvo({
+                            id: l.id,
+                            nome: cliente?.nome || "Cliente",
+                            valorEstimado: l.valorEstimado,
+                            fechadoEm: l.fechadoEm,
+                            origemLead: l.origemLead,
+                          })}
+                        >
+                          <Ban className="h-3 w-3 mr-1" /> Cancelar contrato
+                        </Button>
+                      )}
+                      {l.canceladoEm && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          title="Volta pra Ganho e apaga data e motivo do cancelamento"
+                          disabled={reativarContratoMut.isPending}
+                          onClick={() => reativarContratoMut.mutate({ id: l.id })}
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" /> Reativar
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -3969,6 +4065,17 @@ function ClienteDetalhe({
           }}
         />
       )}
+      <CancelarContratoDialog
+        alvo={cancelarAlvo}
+        onClose={() => setCancelarAlvo(null)}
+        onDone={() => {
+          refetchLeads();
+          // "encerrar também o serviço" muda a situação mostrada no cabeçalho
+          refetch();
+          utilsTrpc.clientes.detalhe.invalidate({ id });
+          utilsTrpc.clientes.estatisticas.invalidate();
+        }}
+      />
 
       <RegistrarFechamentoDialog
         open={fechamentoOpen}
@@ -4032,6 +4139,19 @@ function ClienteDetalhe({
                 maxLength={500}
               />
             </div>
+            {(encerrarTipo === "cancelado" || encerrarTipo === "rescindido") && contratosAbertos > 0 && (
+              <label className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-bg/40 px-2.5 py-2 text-[12px] leading-snug cursor-pointer">
+                <Checkbox
+                  checked={encerrarCancelarContratos}
+                  onCheckedChange={(v) => setEncerrarCancelarContratos(v === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  Cancelar também {contratosAbertos === 1 ? "o contrato fechado" : `os ${contratosAbertos} contratos fechados`} deste
+                  cliente, com a mesma data e motivo. O fechamento continua contando no mês em que fechou.
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEncerrarOpen(false)}>
@@ -4046,6 +4166,10 @@ function ClienteDetalhe({
                   tipo: encerrarTipo,
                   motivo: encerrarMotivo.trim() || undefined,
                   data: encerrarData || undefined,
+                  cancelarContratos:
+                    (encerrarTipo === "cancelado" || encerrarTipo === "rescindido") && contratosAbertos > 0
+                      ? encerrarCancelarContratos
+                      : undefined,
                 })
               }
             >

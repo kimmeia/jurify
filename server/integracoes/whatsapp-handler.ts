@@ -107,6 +107,23 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       chatIdExterno: msg.chatId,
     });
   }
+
+  // Um número, um cadastro: a resposta passa a ir pra onde o cliente
+  // escreveu, e uma ficha magra presa à conversa é absorvida pelo cadastro
+  // completo do mesmo número. Best-effort — nunca derruba o recebimento.
+  try {
+    const { getDb: pegarDbCadastro } = await import("../db");
+    const dbCadastro = await pegarDbCadastro();
+    if (dbCadastro) {
+      const { reconhecerCadastroNaEntrada } = await import("../escritorio/reconhecer-cadastro");
+      const rec = await reconhecerCadastroNaEntrada(dbCadastro, {
+        escritorioId, conversaId, contatoId, chatId: msg.chatId, telefone: msg.telefone,
+      });
+      if (rec.contatoId && rec.contatoId !== contatoId) contatoId = rec.contatoId;
+    }
+  } catch (e: any) {
+    log.warn({ err: e?.message, conversaId }, "[Cadastro] reconhecimento na entrada falhou — mensagem segue");
+  }
   // Whisper: se o escritório ligou transcrição de áudio no card do ChatGPT,
   // converte a nota de voz em texto AQUI — a transcrição vira o conteúdo salvo
   // (aparece na conversa e entra no histórico do agente) e alimenta o fluxo.
