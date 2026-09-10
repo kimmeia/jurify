@@ -708,6 +708,52 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     `[cliente.id, cliente.updatedAt]` (`camposExtrasDe` extraído). Se
     voltar a acontecer, o próximo passo é gravar no Sentry o par
     (id pedido, id recebido) no momento do esqueleto.
+  - **Entregue 10/09, "Mesclar com outro cliente" da ficha — mockup
+    `mockup-mesclar-cpf-diferente.html`, "pode fazer" do dono.** Duas coisas
+    no mesmo diálogo. (1) Ele prometia "operação definitiva" e "não há como
+    desfazer": falso desde 09/09, porque o Mesclar manual passa por
+    `unificarComRegistro` e fica desfazível por 7 dias — os dois textos
+    passaram a dizer o prazo real, e o comentário do componente (que
+    documentava a premissa velha, "rollback no futuro precisaria de
+    migration") foi corrigido junto. (2) `unificarContatos` só copia o CPF
+    quando o principal está VAZIO (db-crm), então duas fichas com CPF
+    diferente mesclavam caladas e o da absorvida sumia: `cpfsConflitam`
+    (shared, dois lados preenchidos e dígitos diferentes — máscara não
+    conta) alimenta a trava em `crm.unificarContatos`
+    (PRECONDITION_FAILED + `MENSAGEM_CPFS_DIFERENTES`, escapa com
+    `confirmarCpfDiferente`, consulta escopada por escritório) e a tela:
+    selo "CPF diferente" por candidato, aviso âmbar nomeando quem fica e
+    quem é descartado, botão que vira "Mesclar mesmo assim" e o CPF
+    descartado escrito na confirmação final. `mesclarDuplicados` da
+    Conferência passou a usar o MESMO helper (era cópia local da conta —
+    comportamento idêntico, teste antigo confirma). **"Vincular a cliente"
+    NÃO ganhou a trava**, de propósito: chama `unificarContatos` do db-crm
+    direto e não foi pedido; há teste travando isso.
+    O aviso com **Desfazer** passou a aparecer também na ficha do cliente
+    (`crm.unificacaoRecente`/`desfazerUnificacao`, hooks ANTES da saída
+    antecipada) — só existia no Atendimento, e quem mescla pela ficha sem
+    conversa de WhatsApp não achava a saída que o texto novo promete; o
+    aviso do Atendimento ficou intacto. Amarra:
+    `mesclar-cpf-diferente` (25 testes) — 27 mutações vermelhas
+    (`scratchpad/mutar-mesclar-cpf.py`; uma delas MOVE o hook para depois
+    do `return` antecipado, o React #310 que o remendo de hooks não pega).
+  - **Escolher campo a campo o que fica ao mesclar — proposta entregue
+    10/09 (`mockup-mesclar-escolher-campos.html`), AGUARDANDO decisão.**
+    Ideia do dono ("quando dados divergentes, poder escolher quais serão
+    mesclados"). O estudo mapeou a regra silenciosa de hoje: telefone do
+    absorvido vira secundário (não perde); e-mail/CPF/observações só
+    entram se o principal estiver vazio; nome e responsável nunca mudam;
+    tags, endereço e campos extras nunca entram. Proposta: passo entre
+    escolher a ficha e confirmar, só quando os dois lados têm valor
+    diferente, com o padrão já marcado no que o sistema faria sozinho, e a
+    ficha final escrita antes de confirmar. **Cuidado achado**: o
+    `principalAntes` do registro só guarda 4 campos (email, cpfCnpj,
+    observacoes, telefonesSecundarios), então trocar nome/responsável/tags
+    exige guardar esses também, senão o Desfazer devolve a ficha absorvida
+    e deixa a sobrevivente com o nome trocado (cabe no JSON que já existe,
+    sem migration). Duas decisões pendentes: a escolha vale também no
+    Mesclar um-a-um da Conferência? e o responsável entra na lista (mexe
+    no padrão de comissão e no rodízio do atendimento)?
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do

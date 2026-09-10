@@ -7,7 +7,7 @@ import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, 
 import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
 import { checkPermission } from "./check-permission";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
-import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
+import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES, cpfsConflitam } from "../../shared/conferencia-cadastros";
 import { verificarLimite } from "../billing/plan-limits";
 import { dataHojeBR, inicioDoDiaNoFuso, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
@@ -1876,8 +1876,8 @@ export const clientesRouter = router({
               .select({ id: contatos.id, cpfCnpj: contatos.cpfCnpj })
               .from(contatos)
               .where(and(eq(contatos.escritorioId, perm.escritorioId), inArray(contatos.id, [par.principalId, par.duplicadoId])));
-            const cpfs = new Set(fichas.map((f) => (f.cpfCnpj ?? "").replace(/\D/g, "")).filter(Boolean));
-            if (cpfs.size > 1) {
+            const cpfDe = (id: number) => fichas.find((f) => f.id === id)?.cpfCnpj ?? null;
+            if (cpfsConflitam(cpfDe(par.principalId), cpfDe(par.duplicadoId))) {
               falhas.push({ duplicadoId: par.duplicadoId, erro: MENSAGEM_CPFS_DIFERENTES });
               continue;
             }
