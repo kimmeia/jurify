@@ -3,8 +3,16 @@
 **Data do estudo:** 10/09/2026 · **Branch:** `claude/legal-system-frontend-hkcits`
 **Escopo autorizado pelo dono:** SÓ TELAS. Nada de backend, nada de procedure,
 nada de migration. "não mecha no backend, vamos apenas desenvolver as telas."
-**Ritmo decidido pelo dono (10/09):** mockup hoje, **código só depois do
-lançamento estabilizar**. Nenhuma linha de `client/` foi alterada neste estudo.
+
+**Linha do tempo das decisões dele em 10/09**, na ordem:
+1. "Mockup hoje, código depois do lançamento" — resposta à pergunta de ritmo.
+2. Mockups entregues (seção 8) e aprovados: **"pode fazer"**.
+3. Fatia 1 implementada na mesma sessão (seção 9).
+
+O "pode fazer" veio depois de ele ver os mockups, e no vocabulário do projeto
+é a autorização para virar código. **Ele NÃO autorizou merge** — o combinado
+foi "deixar pronta para aplicar quando você der o sinal", então a Fatia 1
+está na branch, verde, aguardando o sinal dele para entrar em `develop`/`main`.
 
 Este arquivo é a fonte de verdade do assunto "sistema visual" para qualquer
 agente que entrar depois. Atualize-o a cada entrega, stand-by ou correção.
@@ -240,27 +248,135 @@ Convertidos de OKLCH com `scratchpad/ok2hex.mjs`. Tema claro:
 
 ### Feito
 - Estudo e medição de todo o `client/` (72 rotas, ~100 arquivos de tela).
-- Tradução dos tokens OKLCH de produção para hex (`scratchpad/ok2hex.mjs`).
+- Tradução dos tokens OKLCH de produção para hex (`ok2hex.mjs`).
 - Este documento.
-- Mockups (ver seção 8).
+- Mockups (seção 8), aprovados pelo dono com "pode fazer".
+- **Fatia 1 implementada** (seção 9): escala em `index.css` + 673 pontos
+  migrados nas 6 telas do dia a dia + amarra `escala-tipografica.test.ts`.
 
 ### Aguardando o dono
-- **Aprovar o tom navy do mockup** e a escala de 7 degraus.
-- **Escolher a fatia** por onde começar. Ele respondeu "não tenho ideia" em
-  10/09; a recomendação registrada é a Fatia 1.
+- **O sinal para mergear** a Fatia 1 em `develop`/`main`. Está verde na
+  branch `claude/legal-system-frontend-hkcits`. Ele autorizou fazer, não
+  autorizou aplicar — e 10/09 é o dia do lançamento comercial.
+- **Conferência visual no app rodando.** Ver a ressalva na seção 9: daqui
+  não dá para subir o app (precisa de banco), então build + testes provam
+  que compila e que a regra vale, mas não provam que nenhuma tela ficou
+  apertada. É o único risco aberto desta entrega.
+- **Escolher a próxima fatia** (2 · cara de produto único, 3 · celular,
+  4 · resto do sistema).
 
 ### Stand-by explícito (não reabrir sozinho)
-- **Código.** Decisão dele em 10/09: "Mockup hoje, código depois do
-  lançamento." O gatilho para voltar é ele dizer que o lançamento
-  estabilizou.
-- **Atualizar a skill `mockup-juridflow` para navy.** Depende de ele aprovar
-  o tom primeiro.
+- **`text-xs` e `text-sm`.** Ficaram fora da Fatia 1 de propósito — motivo
+  na seção 9. Só entram com o app visível.
+- **Atualizar a skill `mockup-juridflow` para navy.** Ele aprovou os
+  mockups em navy, o que resolve a dúvida do tom; falta só executar. Não é
+  bloqueante para nada.
 - **Backend.** Fora de escopo por ordem expressa dele nesta sessão.
 
-### Nada foi corrigido
-Nenhum arquivo de `client/` foi alterado. Valem as duas regras do dono:
-mockup antes de qualquer mudança visível, e nunca remover sem autorização
-expressa daquela remoção específica.
+### Nada foi removido
+Valem as duas regras do dono: mockup antes de qualquer mudança visível
+(cumprido — os três mockups vieram antes), e nunca remover sem autorização
+expressa. A única remoção da Fatia 1 é o `uppercase tracking-[0.04em]` de
+DOIS selos da lista de Processos, que é exatamente o que o mockup aprovado
+mostrava, e está travada por teste.
+
+---
+
+## 9. Fatia 1 — entregue em 10/09
+
+### O que mudou
+
+**`client/src/index.css`** — os 7 degraus no `@theme inline`, com o porquê
+escrito no próprio arquivo. **Sem `line-height` pareado**, de propósito:
+`text-[10px]` também mexia só no `font-size`, então trocar por token não
+podia arrastar o espaçamento vertical junto e mudar layout que ninguém pediu.
+Conferido no CSS gerado — sai `.text-micro{font-size:11px}`, e só isso.
+
+**As 6 telas do dia a dia** — 673 pontos, de 16 valores distintos para 5
+degraus, via `scratchpad/mockup-tipografia/aplicar-escala.py` (roda com
+`--seco` primeiro):
+
+| De | Para | Quantos |
+|---|---|---|
+| 10px | `text-micro` (11px) | 292 |
+| 11px | `text-apoio` (11,5px) | 131 |
+| **9px** | `text-micro` (11px) | **96** |
+| 10,5px | `text-apoio` | 43 |
+| 11,5px | `text-apoio` | 27 |
+| 13px | `text-corpo` (13px) | 20 |
+| 9,5px | `text-micro` | 20 |
+| 12,5 · 12 · 12,8 · 13,5px | `text-corpo` | 25 |
+| 8 · 8,5 · 7px | `text-micro` | 13 |
+| 15px | `text-secao` | 3 |
+| 19px | `text-titulo` | 1 |
+| 27px | `text-pagina` (26px) | 2 |
+
+Resultado: **zero `text-[Npx]` nas 6 telas**. Restam 2.183 no resto do
+sistema, que é a Fatia 4.
+
+**Dois selos da lista de Processos** (`Pausado`, `2º grau?`) perderam
+`uppercase tracking-[0.04em]` e trocaram `font-bold` por `font-semibold` —
+é o que o mockup aprovado mostra, e é o que faz o piso de 11px sair de graça
+em largura. Os outros pills em caixa alta (`IA`, `AES-256`, `Novo`,
+`Em tempo real`) **não** foram tocados: são siglas e marcadores de destaque,
+papel diferente, e não estavam no mockup.
+
+### A amarra
+
+`server/__tests__/escala-tipografica.test.ts` (9 testes):
+1. os 7 degraus estão declarados no `index.css`;
+2. nenhum degrau desce abaixo de 11px;
+3. cada uma das 6 telas migradas não volta a escrever tamanho na mão;
+4. o selo "2º grau?" continua `text-micro` e continua fora da caixa alta.
+
+**Conferida por mutação** (`scratchpad/mockup-tipografia/mutar-escala.py`):
+5 mutações, todas vermelhas. Teste que passa não prova nada.
+
+`TELAS_MIGRADAS` no topo do teste é a lista que cresce a cada fatia — é essa
+linha que impede a migração de desandar. **Ao migrar uma tela, acrescente-a
+lá.**
+
+### O que NÃO entrou, e por quê
+
+- **`text-xs` (12px) e `text-sm` (14px).** São 490 usos nessas 6 telas.
+  Levar `xs` para `corpo` cresce 1px em 339 pontos densos — é a mudança com
+  maior chance de apertar layout, e é a que eu menos consigo verificar
+  daqui. Levar `sm` para `corpo` encolhe 1px (seguro), mas fazer só isso
+  aproximaria `sm` de `xs` e **achataria** a hierarquia onde hoje ela vem
+  do contraste 14 × 12. Ou os dois juntos, com o app na tela, ou nenhum.
+  Ficou nenhum.
+  Consequência assumida: as 6 telas usam 11 · 11,5 · 12(`xs`) · 13 · 14(`sm`)
+  · 15. São 6 tamanhos em vez dos 7 degraus puros — bem melhor que os 17 de
+  antes, e sem risco.
+- **Números grandes (KPI).** `text-numero` está declarado e ainda não é
+  usado; os KPIs continuam em `text-2xl`. Escolher entre `numero` (22px) e
+  `pagina` (26px) é decisão de papel, não de tamanho, e um mapeamento cego
+  encolheria um KPI de 42px para 22px sem ninguém pedir. Fatia 2.
+- **As outras 94 telas.** Fatias 2 a 4.
+
+### Ressalva honesta sobre a verificação
+
+O que foi provado: `pnpm check` limpo · `pnpm test` verde · `pnpm vite build`
+passa · as classes saem corretas no CSS gerado · a amarra fica vermelha
+quando o código quebra.
+
+O que **não** foi provado: que nenhuma tela ficou visualmente apertada.
+Deste ambiente não dá para subir o app (precisa de `DATABASE_URL`), então
+não houve QA visual no produto real. A medição de largura da seção 3 diz que
+os selos não crescem, e o `line-height` não foi tocado, o que limita muito o
+risco — mas limitar não é eliminar. **Quem abrir o app deve olhar primeiro
+as linhas mais densas**: lista de Processos, cartões do Kanban e o painel do
+cliente no Atendimento.
+
+### Efeito colateral corrigido
+
+`kanban-campo-vazio-atraso-coluna-tags.test.ts` recortava a tela com
+`indexOf('<p className="text-[10px] …">EDITAR</p>')`. O codemod trocou a
+classe, o `indexOf` virou −1 e o teste passou a olhar o lugar errado.
+Reancorado em `">EDITAR</p>"`, que não depende de estilo — âncora única no
+arquivo, então o recorte é idêntico ao de antes e o teste não enfraqueceu.
+**Lição para as próximas fatias:** teste que ancora em classe de estilo
+quebra na migração; ancore em texto ou em `data-testid`.
 
 ---
 

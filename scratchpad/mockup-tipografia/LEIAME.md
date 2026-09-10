@@ -37,7 +37,26 @@ NODE_PATH="$SC/node_modules" node .claude/skills/mockup-juridflow/scripts/render
   mockup-tipografia-antes.html mockup-tipografia-depois.html mockup-tipografia-escala.html
 ```
 
-## Os outros dois scripts
+## Os scripts da migração (Fatia 1, entregue 10/09)
+
+- `aplicar-escala.py` — troca `text-[Npx]` pelos degraus da escala nas telas
+  da lista `TELAS`. **Rode com `--seco` primeiro**, sempre: ele imprime
+  exatamente o que faria e lista os `>= 21px`, que ele NÃO toca de propósito
+  (escolher entre `numero` 22px e `pagina` 26px é decisão de papel, não de
+  tamanho). Para migrar uma tela nova, acrescente o caminho em `TELAS`,
+  rode seco, confira, aplique — e acrescente a mesma tela em
+  `TELAS_MIGRADAS` no `server/__tests__/escala-tipografica.test.ts`, senão a
+  amarra não cobre a tela nova.
+- `mutar-escala.py` — confere a amarra por mutação: quebra o código de cinco
+  jeitos e exige vermelho em todos. Rode depois de mexer no teste ou na
+  escala. Verde em todas = a amarra não está pegando nada.
+
+**Cuidado que já custou um teste vermelho:** teste que recorta a tela com
+`indexOf('<p className="text-[10px] …')` quebra na migração, porque a classe
+muda. Ancore em texto (`">EDITAR</p>"`) ou em `data-testid`. Foi o caso do
+`kanban-campo-vazio-atraso-coluna-tags.test.ts`.
+
+## Os dois scripts de medição
 
 - `mede.mjs` — mede no Chromium, com a fonte Inter real, a largura de um selo
   em 9px caixa alta contra 11px caixa normal. É de onde saem os números da

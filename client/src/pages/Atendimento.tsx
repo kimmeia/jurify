@@ -296,7 +296,7 @@ function TwilioCallPopup({ phone, onClose }: { phone: string; onClose: () => voi
         <Button variant="outline" onClick={onClose}>Fechar</Button>
       )}
     </div>
-    <p className="text-[10px] text-muted-foreground">Twilio VoIP · Chamada real via API</p>
+    <p className="text-micro text-muted-foreground">Twilio VoIP · Chamada real via API</p>
   </div></div>);
 }
 
@@ -360,7 +360,7 @@ function AvisoNumeroExistente({
 }) {
   if (carregando) {
     return (
-      <div className="rounded-lg border border-dashed px-3 py-2 text-[11px] text-muted-foreground flex items-center gap-2">
+      <div className="rounded-lg border border-dashed px-3 py-2 text-apoio text-muted-foreground flex items-center gap-2">
         <Loader2 className="h-3 w-3 animate-spin" /> Conferindo se este número já tem conversa…
       </div>
     );
@@ -370,10 +370,10 @@ function AvisoNumeroExistente({
   if (dados.estado === "livre") {
     return (
       <div className="rounded-lg border border-success/30 bg-success-bg px-3 py-2">
-        <p className="text-[11.5px] font-semibold text-success-fg flex items-center gap-1.5">
+        <p className="text-apoio font-semibold text-success-fg flex items-center gap-1.5">
           <Check className="h-3.5 w-3.5" /> Nenhuma conversa com este número
         </p>
-        <p className="text-[10.5px] text-success-fg/80 mt-1">
+        <p className="text-apoio text-success-fg/80 mt-1">
           É um contato novo pro Atendimento. Vai criar a conversa e enviar normalmente.
         </p>
       </div>
@@ -383,10 +383,10 @@ function AvisoNumeroExistente({
   if (dados.estado === "cadastrado") {
     return (
       <div className="rounded-lg border border-info/30 bg-info-bg px-3 py-2">
-        <p className="text-[11.5px] font-semibold text-info-fg flex items-center gap-1.5">
+        <p className="text-apoio font-semibold text-info-fg flex items-center gap-1.5">
           <User className="h-3.5 w-3.5" /> Nenhuma conversa — mas o número é de um cliente cadastrado
         </p>
-        <p className="text-[10.5px] text-info-fg/80 mt-1">
+        <p className="text-apoio text-info-fg/80 mt-1">
           <strong>{dados.contatoNome}</strong> já está na sua base. O nome vem preenchido
           sozinho, pra conversa nascer com o cadastro certo em vez de virar contato duplicado.
         </p>
@@ -397,10 +397,10 @@ function AvisoNumeroExistente({
   if (dados.estado === "sem_acesso") {
     return (
       <div className="rounded-lg border bg-muted/40 px-3 py-2">
-        <p className="text-[11.5px] font-semibold flex items-center gap-1.5">
+        <p className="text-apoio font-semibold flex items-center gap-1.5">
           <Lock className="h-3.5 w-3.5" /> Já existe conversa com este número
         </p>
-        <p className="text-[10.5px] text-muted-foreground mt-1">
+        <p className="text-apoio text-muted-foreground mt-1">
           Está com outra pessoa da equipe e você não tem acesso a ela. O aviso aparece pra
           você não abrir uma segunda conversa com o mesmo cliente.
         </p>
@@ -417,19 +417,19 @@ function AvisoNumeroExistente({
 
   return (
     <div className="rounded-lg border border-warning/30 bg-warning-bg px-3 py-2">
-      <p className="text-[11.5px] font-semibold text-warning-fg flex items-center gap-1.5">
+      <p className="text-apoio font-semibold text-warning-fg flex items-center gap-1.5">
         {aberta ? <MessageCircle className="h-3.5 w-3.5" /> : <Archive className="h-3.5 w-3.5" />}
         {aberta ? "Já existe conversa com este número" : "Este número já foi atendido"}
       </p>
       <div className="flex items-center gap-2 mt-1.5">
-        <div className="flex-1 min-w-0 text-[11px] text-warning-fg/90 leading-snug">
+        <div className="flex-1 min-w-0 text-apoio text-warning-fg/90 leading-snug">
           <strong>{dados.contatoNome}</strong>
           {aberta
             ? <> · em atendimento{dados.atendenteNome ? ` com ${dados.atendenteNome}` : ""}</>
             : <> · atendimento {dados.status === "resolvido" ? "resolvido" : "fechado"}
                 {dados.atendenteNome ? ` por ${dados.atendenteNome}` : ""}</>}
           <br />
-          <span className="text-[10px] opacity-75">
+          <span className="text-micro opacity-75">
             {aberta
               ? `última mensagem ${haQuantoTempo(dados.ultimaMensagemAt)}`
               : `${dados.totalMensagens ?? 0} mensagens no histórico`}
@@ -439,14 +439,14 @@ function AvisoNumeroExistente({
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-[11px] shrink-0 border-warning/30"
+            className="h-7 text-apoio shrink-0 border-warning/30"
             onClick={() => onAbrir(dados.conversaId!)}
           >
             {aberta ? "Abrir conversa" : "Ver conversa"}
           </Button>
         )}
       </div>
-      <p className="text-[10.5px] text-warning-fg/80 mt-1.5">{rodape}</p>
+      <p className="text-apoio text-warning-fg/80 mt-1.5">{rodape}</p>
     </div>
   );
 }
@@ -509,7 +509,7 @@ function IniciarConversaDialog({
     ini.mutate({ telefone: telDigits, nome: nome || undefined, mensagem: msg, canalId });
   };
   return (<Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-success-fg" /> Nova Conversa</DialogTitle></DialogHeader>
-    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-danger/30" : ""} />{tel && !telValido && <p className="text-[10px] text-danger">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
+    <div className="space-y-3 py-2"><div className="grid grid-cols-2 gap-3"><div className="space-y-1.5"><Label>Telefone *</Label><Input placeholder="(11) 99999-0000" value={tel} onChange={(e) => setTel(maskPhoneBR(e.target.value))} inputMode="tel" maxLength={16} className={tel && !telValido ? "border-danger/30" : ""} />{tel && !telValido && <p className="text-micro text-danger">DDD + número (10 ou 11 dígitos)</p>}</div><div className="space-y-1.5"><Label>Nome</Label><Input placeholder="Nome do contato" value={nome} onChange={(e) => setNome(e.target.value)} /></div></div>
     <AvisoNumeroExistente
       dados={dadosChecagem}
       carregando={telValido && (checagem.isLoading || telChecagem !== tel)}
@@ -588,7 +588,7 @@ function AddLeadFromConversaDialog({ open, onOpenChange, conversaId, atendentes,
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] text-muted-foreground">Vem preenchido com o atendente da conversa. O rodízio automático vale só pra leads que chegam sozinhos pelo WhatsApp.</p>
+        <p className="text-apoio text-muted-foreground">Vem preenchido com o atendente da conversa. O rodízio automático vale só pra leads que chegam sozinhos pelo WhatsApp.</p>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5"><Label>Etapa</Label>
@@ -986,7 +986,7 @@ export default function Atendimento() {
             <TabsTrigger value="chamadas" className="text-xs sm:text-sm gap-1.5 px-4">
               <Phone className="h-3.5 w-3.5" /> Chamadas
               {chamadaWa.filaAoVivo.length > 0 && (
-                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-success text-success-on text-[10px] font-bold flex items-center justify-center animate-pulse">
+                <span className="ml-0.5 h-4 min-w-4 px-1 rounded-full bg-success text-success-on text-micro font-bold flex items-center justify-center animate-pulse">
                   {chamadaWa.filaAoVivo.length}
                 </span>
               )}
@@ -1045,7 +1045,7 @@ export default function Atendimento() {
                   >
                     <Filter className="h-3.5 w-3.5" />
                     {filtrosAtivos > 0 && (
-                      <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground text-micro font-bold flex items-center justify-center">
                         {filtrosAtivos}
                       </span>
                     )}
@@ -1057,7 +1057,7 @@ export default function Atendimento() {
                       <DialogTitle className="flex items-center gap-2">
                         Filtros da inbox
                         {filtrosAtivos > 0 && (
-                          <span className="rounded-full bg-primary/10 text-primary text-[11px] font-bold px-2 py-0.5">
+                          <span className="rounded-full bg-primary/10 text-primary text-apoio font-bold px-2 py-0.5">
                             {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
                           </span>
                         )}
@@ -1068,7 +1068,7 @@ export default function Atendimento() {
                     </DialogHeader>
                     <div className="space-y-4 py-1">
                       <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
+                        <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
                         <div className="rounded-lg border overflow-hidden">
                           <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
                             <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -1102,7 +1102,7 @@ export default function Atendimento() {
                                       )
                                     }
                                     className={
-                                      "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
+                                      "flex items-center gap-2.5 px-3 py-1.5 text-corpo text-left border-b border-muted/40 " +
                                       (ativo
                                         ? "bg-primary/5 text-primary font-medium"
                                         : "text-foreground/80 hover:bg-muted/40")
@@ -1110,7 +1110,7 @@ export default function Atendimento() {
                                   >
                                     <span
                                       className={
-                                        "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
+                                        "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-micro " +
                                         (ativo ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/40")
                                       }
                                     >
@@ -1122,7 +1122,7 @@ export default function Atendimento() {
                               });
                             })()}
                           </div>
-                          <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-[11px] text-muted-foreground">
+                          <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-apoio text-muted-foreground">
                             <span>
                               <b>{atendentesFiltro.length}</b> {atendentesFiltro.length === 1 ? "selecionado" : "selecionados"}
                             </span>
@@ -1138,7 +1138,7 @@ export default function Atendimento() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+                          <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
                           <select
                             value={setorFiltro ?? ""}
                             onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
@@ -1151,7 +1151,7 @@ export default function Atendimento() {
                           </select>
                         </div>
                         <div className="space-y-1.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal</p>
+                          <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Canal</p>
                           <select
                             value={canalFiltro ?? ""}
                             onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
@@ -1182,7 +1182,7 @@ export default function Atendimento() {
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
+                        <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
                         <div className="grid grid-cols-5 gap-1.5">
                           {(["hoje", "7d", "30d", "90d", "todos"] as const).map((p) => {
                             const label = p === "hoje" ? "Hoje" : p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
@@ -1207,7 +1207,7 @@ export default function Atendimento() {
                             (sobrepõe os presets). Hora vazia = dia inteiro. */}
                         <div className="grid grid-cols-2 gap-2 mt-1.5">
                           <div className="space-y-1">
-                            <label className="text-[10px] text-muted-foreground">De (data · hora)</label>
+                            <label className="text-micro text-muted-foreground">De (data · hora)</label>
                             <div className="grid grid-cols-[1.4fr_1fr] gap-1">
                               <input
                                 type="date"
@@ -1226,7 +1226,7 @@ export default function Atendimento() {
                             </div>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] text-muted-foreground">Até (data · hora)</label>
+                            <label className="text-micro text-muted-foreground">Até (data · hora)</label>
                             <div className="grid grid-cols-[1.4fr_1fr] gap-1">
                               <input
                                 type="date"
@@ -1245,7 +1245,7 @@ export default function Atendimento() {
                             </div>
                           </div>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-micro text-muted-foreground">
                           {dataIni || dataFim
                             ? "Período exato ativo — os presets acima ficam ignorados. Hora vazia considera o dia inteiro."
                             : "Hora é opcional — em branco, o filtro considera o dia inteiro (00:00 a 23:59)."}
@@ -1255,7 +1255,7 @@ export default function Atendimento() {
                             atendimento (novo default) × qualquer mensagem
                             (comportamento antigo — nada removido). */}
                         <div className="rounded-lg border border-info/30 bg-info-bg/60 p-2.5 space-y-1.5 mt-1.5">
-                          <p className="text-[10px] font-bold uppercase tracking-wide text-info-fg">
+                          <p className="text-micro font-bold uppercase tracking-wide text-info-fg">
                             O período conta pelo…
                           </p>
                           <label className="flex items-start gap-2 cursor-pointer select-none">
@@ -1266,7 +1266,7 @@ export default function Atendimento() {
                               onChange={() => setModoPeriodo("inicio")}
                               className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
                             />
-                            <span className="text-[11px] leading-snug">
+                            <span className="text-apoio leading-snug">
                               <span className="font-semibold">Início do atendimento</span>
                               <span className="text-muted-foreground">
                                 {" "}— pega quem <strong>pediu atendimento</strong> no período: vale a primeira
@@ -1284,7 +1284,7 @@ export default function Atendimento() {
                               onChange={() => setModoPeriodo("mensagens")}
                               className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer"
                             />
-                            <span className="text-[11px] leading-snug">
+                            <span className="text-apoio leading-snug">
                               <span className="font-semibold">Qualquer mensagem no período</span>
                               <span className="text-muted-foreground">
                                 {" "}— como era antes: toda conversa com alguma mensagem na janela, mesmo que o
@@ -1304,7 +1304,7 @@ export default function Atendimento() {
                             onChange={(e) => setSomenteNovos(e.target.checked)}
                             className="mt-0.5 h-3.5 w-3.5 accent-info cursor-pointer disabled:opacity-40"
                           />
-                          <span className="text-[11px] leading-snug">
+                          <span className="text-apoio leading-snug">
                             <span className="font-semibold">Somente primeiro contato</span>
                             <span className="text-muted-foreground">
                               {" "}— só quem falou com o escritório pela primeira vez no período
@@ -1364,7 +1364,7 @@ export default function Atendimento() {
                       >
                         <span
                           className={
-                            "block text-[10px] font-semibold leading-tight truncate " +
+                            "block text-micro font-semibold leading-tight truncate " +
                             (ativo ? "text-info-fg" : "text-muted-foreground")
                           }
                         >
@@ -1373,7 +1373,7 @@ export default function Atendimento() {
                         <span
                           data-testid="inbox-pill-contagem"
                           className={
-                            "block text-[12.5px] font-extrabold tabular-nums leading-tight " +
+                            "block text-corpo font-extrabold tabular-nums leading-tight " +
                             (ativo ? "text-info-fg" : "text-muted-foreground/70")
                           }
                         >
@@ -1388,7 +1388,7 @@ export default function Atendimento() {
               <ScrollArea className="flex-1 min-h-0">
                 {mostrarArquivadas && (resumoArq?.canaisDesativados?.length ?? 0) > 0 && (
                   <div className="m-2 rounded-lg border border-dashed p-3 bg-muted/30">
-                    <p className="text-[11.5px] text-muted-foreground leading-relaxed">
+                    <p className="text-apoio text-muted-foreground leading-relaxed">
                       <strong className="text-foreground">
                         {resumoArq!.canaisDesativados.length} {resumoArq!.canaisDesativados.length === 1 ? "canal desativado" : "canais desativados"}
                       </strong>{" "}
@@ -1410,7 +1410,7 @@ export default function Atendimento() {
                   </div>
                 )}
                 {notaForaInput && (foraDoPeriodo?.total ?? 0) > 0 && (
-                  <div className="mx-2 mb-1.5 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
+                  <div className="mx-2 mb-1.5 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-apoio text-warning-fg leading-snug">
                     <span className="font-semibold">
                       {(foraDoPeriodo?.nomes || []).slice(0, 2).join(", ") || "Algumas conversas"}
                       {(foraDoPeriodo?.total ?? 0) > (foraDoPeriodo?.nomes?.length ?? 0)
@@ -1502,7 +1502,7 @@ export default function Atendimento() {
                             {(c as any).canalTipo && (
                               <div
                                 className={
-                                  "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border-2 " +
+                                  "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-micro border-2 " +
                                   (canalCaiu ? "bg-danger-bg border-danger/30" : "bg-background border-background")
                                 }
                                 title={
@@ -1533,7 +1533,7 @@ export default function Atendimento() {
                               </p>
                               <span
                                 className={
-                                  "text-[10px] shrink-0 tabular-nums " +
+                                  "text-micro shrink-0 tabular-nums " +
                                   (destaqueNaoLida ? "text-info-fg font-bold" : "text-muted-foreground")
                                 }
                               >
@@ -1550,7 +1550,7 @@ export default function Atendimento() {
                                 {previewMensagem(c)}
                               </p>
                               {naoLidas > 0 ? (
-                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-success text-success-on text-[10.5px] font-extrabold tabular-nums">
+                                <span className="shrink-0 inline-flex items-center justify-center min-w-[19px] h-[19px] px-1 rounded-full bg-success text-success-on text-apoio font-extrabold tabular-nums">
                                   {naoLidas > 99 ? "99+" : naoLidas}
                                 </span>
                               ) : marcadaNaoLida ? (
@@ -1562,13 +1562,13 @@ export default function Atendimento() {
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                               {(c as any).temAtraso ? (
-                                <span className="text-[9px] px-1.5 py-0 rounded font-bold bg-danger-bg text-danger-fg border border-danger/30 inline-flex items-center gap-0.5">
+                                <span className="text-micro px-1.5 py-0 rounded font-bold bg-danger-bg text-danger-fg border border-danger/30 inline-flex items-center gap-0.5">
                                   <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
                                 </span>
                               ) : (
                                 <span
                                   className={
-                                    "text-[9px] px-1.5 py-0 rounded font-semibold border inline-flex items-center gap-1 " +
+                                    "text-micro px-1.5 py-0 rounded font-semibold border inline-flex items-center gap-1 " +
                                     (STATUS_CONVERSA_CORES[c.status as StatusConversa] || "")
                                   }
                                 >
@@ -1599,7 +1599,7 @@ export default function Atendimento() {
                                 return (
                                   <span
                                     className={
-                                      "text-[9px] px-1.5 py-0 rounded font-bold shrink-0 " +
+                                      "text-micro px-1.5 py-0 rounded font-bold shrink-0 " +
                                       (reaberto
                                         ? "bg-info-bg text-info-fg"
                                         : "bg-success-bg text-success-fg")
@@ -1611,7 +1611,7 @@ export default function Atendimento() {
                                 );
                               })()}
                               {(c as any).atendenteNome && (
-                                <span className="text-[9px] px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
+                                <span className="text-micro px-1.5 py-0 rounded text-muted-foreground truncate max-w-[80px]" title={(c as any).atendenteNome}>
                                   · {(c as any).atendenteNome.split(" ")[0]}
                                 </span>
                               )}
@@ -1619,7 +1619,7 @@ export default function Atendimento() {
                                   por que a conversa não estava na lista. */}
                               {!mostrarArquivadas && (c as any).arquivadaEm && (
                                 <span
-                                  className="text-[9px] px-1.5 py-0 rounded bg-muted text-muted-foreground shrink-0"
+                                  className="text-micro px-1.5 py-0 rounded bg-muted text-muted-foreground shrink-0"
                                   title="Conversa arquivada — encontrada pela busca"
                                 >
                                   Arquivada
@@ -1632,7 +1632,7 @@ export default function Atendimento() {
                                     e.stopPropagation();
                                     arquivarMut.mutate({ id: c.id, arquivar: false });
                                   }}
-                                  className="ml-auto text-[10px] font-semibold text-primary hover:underline"
+                                  className="ml-auto text-micro font-semibold text-primary hover:underline"
                                 >
                                   Desarquivar
                                 </span>
@@ -1678,7 +1678,7 @@ export default function Atendimento() {
                   <span className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center text-sm" aria-hidden>🗄️</span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-xs font-bold">Arquivadas</span>
-                    <span className="block text-[10px] text-muted-foreground truncate">
+                    <span className="block text-micro text-muted-foreground truncate">
                       {resumoArq?.total ?? 0} conversas fora das abas e contadores
                     </span>
                   </span>
@@ -2070,9 +2070,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         {resolvedMedia ? (
           <audio controls className="max-w-[240px] h-8" src={resolvedMedia} />
         ) : (
-          <div className="flex items-center gap-2"><Mic className="h-3.5 w-3.5 opacity-60" /><span className="text-[13px]">🎵 Áudio</span></div>
+          <div className="flex items-center gap-2"><Mic className="h-3.5 w-3.5 opacity-60" /><span className="text-corpo">🎵 Áudio</span></div>
         )}
-        {cleanContent && !cleanContent.startsWith("🎵") && <p className="text-[11px] opacity-60">{cleanContent}</p>}
+        {cleanContent && !cleanContent.startsWith("🎵") && <p className="text-apoio opacity-60">{cleanContent}</p>}
       </div>);
     }
     if (m.tipo === "imagem") {
@@ -2080,27 +2080,27 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         {resolvedMedia ? (
           <img src={resolvedMedia} alt="Imagem" className="max-w-[240px] max-h-[200px] rounded-lg object-cover cursor-pointer" onClick={() => window.open(resolvedMedia, "_blank")} />
         ) : (
-          <p className="text-[13px]">📷 Imagem</p>
+          <p className="text-corpo">📷 Imagem</p>
         )}
-        {cleanContent && !cleanContent.startsWith("📷") && <p className="text-[11px] opacity-80">{cleanContent}</p>}
+        {cleanContent && !cleanContent.startsWith("📷") && <p className="text-apoio opacity-80">{cleanContent}</p>}
       </div>);
     }
     if (m.tipo === "video") {
-      return (<div><p className="text-[13px]">🎥 {cleanContent || "Vídeo"}</p></div>);
+      return (<div><p className="text-corpo">🎥 {cleanContent || "Vídeo"}</p></div>);
     }
     if (m.tipo === "documento") {
       return (<div>
         {resolvedMedia ? (
-          <a href={resolvedMedia} target="_blank" rel="noopener noreferrer" className="text-[13px] underline">📄 {cleanContent || "Documento"}</a>
+          <a href={resolvedMedia} target="_blank" rel="noopener noreferrer" className="text-corpo underline">📄 {cleanContent || "Documento"}</a>
         ) : (
-          <p className="text-[13px]">📄 {cleanContent || "Documento"}</p>
+          <p className="text-corpo">📄 {cleanContent || "Documento"}</p>
         )}
       </div>);
     }
-    if (m.tipo === "localizacao") return (<p className="text-[13px]">📍 {cleanContent || "Localização"}</p>);
-    if (m.tipo === "contato") return (<p className="text-[13px]">👤 {cleanContent || "Contato"}</p>);
-    if (m.tipo === "sticker") return (<p className="text-[13px]">🏷️ Sticker</p>);
-    return <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{content}</p>;
+    if (m.tipo === "localizacao") return (<p className="text-corpo">📍 {cleanContent || "Localização"}</p>);
+    if (m.tipo === "contato") return (<p className="text-corpo">👤 {cleanContent || "Contato"}</p>);
+    if (m.tipo === "sticker") return (<p className="text-corpo">🏷️ Sticker</p>);
+    return <p className="text-corpo leading-relaxed whitespace-pre-wrap">{content}</p>;
   };
 
   const mobile = !!onVoltar;
@@ -2115,7 +2115,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center text-xs font-bold text-primary shrink-0">{initials(conv?.contatoNome || "?")}</div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate leading-tight">{conv?.contatoNome || "Contato"}</p>
-          <p className="text-[11px] text-muted-foreground truncate leading-tight">
+          <p className="text-apoio text-muted-foreground truncate leading-tight">
             {STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status || ""}
             {(conv?.contatoTelefone || conv?.chatIdExterno) ? ` · ${conv?.contatoTelefone || conv?.chatIdExterno?.replace(/@.*/, "")}` : ""}
             {(conv as any)?.optOutWhatsapp ? " · 🔕 Avisos desativados" : ""}
@@ -2239,20 +2239,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 )}
               </>
             )}
-            <Badge variant="outline" className={"text-[9px] px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
+            <Badge variant="outline" className={"text-micro px-1 py-0 " + (STATUS_CONVERSA_CORES[conv?.status as StatusConversa] || "")}>{STATUS_CONVERSA_LABELS[conv?.status as StatusConversa] || conv?.status}</Badge>
             {/* Um número, um cadastro: o nome vem do cadastro. Enquanto só existe a
                 ficha magra do WhatsApp, o selo diz isso — e o "Vincular" do menu
                 continua sendo o caminho manual. */}
             {conv?.contatoId && ((conv as any)?.contatoCadastroCompleto ? (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-success-bg text-success-fg border-success/30 dark:text-success"
+                className="inline-flex items-center gap-1 text-micro px-1.5 py-0.5 rounded-full border font-semibold bg-success-bg text-success-fg border-success/30 dark:text-success"
                 title="Este número foi reconhecido no cadastro do cliente (CPF, e-mail ou contrato)"
               >
                 ✓ cadastro reconhecido
               </span>
             ) : (conv as any)?.contatoOrigem === "whatsapp" ? (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-muted text-muted-foreground"
+                className="inline-flex items-center gap-1 text-micro px-1.5 py-0.5 rounded-full border font-semibold bg-muted text-muted-foreground"
                 title="Ficha criada pela primeira mensagem, sem CPF nem e-mail. Cadastre em Clientes com este telefone e ela é completada — ou use Vincular no menu."
               >
                 contato do WhatsApp
@@ -2260,7 +2260,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             ) : null)}
             {canalInoperante && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
+                className="inline-flex items-center gap-1 text-micro px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={`Canal fora do ar: ${canalInoperanteDetalhe}. Nenhuma mensagem sai por ele.`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-danger animate-pulse" />
@@ -2269,7 +2269,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             )}
             {(conv as any)?.optOutWhatsapp && (
               <span
-                className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
+                className="inline-flex items-center gap-1 text-micro px-1.5 py-0.5 rounded-full border font-semibold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
                 title={
                   "Contato pediu pra não receber cobranças e avisos automáticos no WhatsApp" +
                   ((conv as any)?.optOutWhatsappEm ? ` (desde ${new Date((conv as any).optOutWhatsappEm).toLocaleDateString("pt-BR")})` : "")
@@ -2287,7 +2287,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 disabled={botToggle.pending}
                 title={bot.pausado ? "Bot pausado — clique para reativar" : "Bot ativo — clique para pausar e assumir"}
                 className={
-                  "inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full border font-semibold transition disabled:opacity-50 " +
+                  "inline-flex items-center gap-1 text-micro px-1.5 py-0.5 rounded-full border font-semibold transition disabled:opacity-50 " +
                   (bot.pausado
                     ? "bg-warning-bg text-warning-fg border-warning/30 hover:bg-warning-bg dark:text-warning"
                     : "bg-success-bg text-success-fg border-success/30 hover:bg-success-bg dark:text-success")
@@ -2301,7 +2301,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
           {/* Linha 2 (subtítulo discreto): atendente · canal/número · telefone ·
               financeiro. Mesma informação dos badges de antes, sem o ruído visual. */}
-          <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap mt-0.5 text-[10px] text-muted-foreground">
+          <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap mt-0.5 text-micro text-muted-foreground">
             {(conv as any)?.atendenteNome ? (
               <span className="inline-flex items-center gap-1" title={`Responsável: ${(conv as any).atendenteNome}`}>
                 <User className="h-3 w-3" />{(conv as any).atendenteNome}
@@ -2359,9 +2359,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       <div className="flex items-center gap-1.5 mt-2 overflow-x-auto">
         {conv?.contatoId && <FinanceiroPopover contatoId={conv.contatoId} />}
         <div className="flex-1" />
-        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-3 shrink-0 font-semibold text-success-fg bg-success-bg hover:bg-success-bg hover:text-success-fg dark:bg-success/40" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
-        <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-apoio px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => setShowTransferir(true)}><ArrowRightLeft className="h-3.5 w-3.5 mr-1" />Transferir</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-apoio px-3 shrink-0 font-semibold text-success-fg bg-success-bg hover:bg-success-bg hover:text-success-fg dark:bg-success/40" onClick={() => atualizar.mutate({ id: cid, status: "resolvido" })}><CheckCircle className="h-3.5 w-3.5 mr-1" />Resolver</Button>
+        <Button variant="ghost" size="sm" className="h-7 text-apoio px-2.5 text-muted-foreground hover:text-foreground shrink-0" onClick={() => atualizar.mutate({ id: cid, status: "fechado" })}><XCircle className="h-3.5 w-3.5 mr-1" />Fechar</Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground shrink-0" title="Mais ações" aria-label="Mais ações"><MoreVertical className="h-4 w-4" /></Button>
@@ -2383,7 +2383,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         a conversa existe e está inteira, mas o recorte atual do Inbox não a
         lista. Sem dizer isso, a tela parece ter perdido a conversa. */}
     {foraDoFiltro && (
-      <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-[11px] text-warning-fg leading-snug">
+      <div className="mx-3 mt-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning-bg px-3 py-2 text-apoio text-warning-fg leading-snug">
         <Pin className="h-3.5 w-3.5 shrink-0" />
         <span className="flex-1">
           Esta conversa está <strong>fora do filtro atual</strong> do Inbox — por isso ela
@@ -2393,7 +2393,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <Button
             size="sm"
             variant="outline"
-            className="h-6 text-[10.5px] shrink-0 border-warning/30"
+            className="h-6 text-apoio shrink-0 border-warning/30"
             onClick={() => onMostrarNaLista(
               String(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || ""),
             )}
@@ -2407,7 +2407,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         absorvida pelo cadastro completo (ou alguém mesclou à mão). Avisa na
         conversa e deixa desfazer por 7 dias. */}
     {unificacao && (
-      <div className="mx-3 mt-2 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-[11px] text-info-fg leading-snug" data-testid="aviso-unificacao">
+      <div className="mx-3 mt-2 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-apoio text-info-fg leading-snug" data-testid="aviso-unificacao">
         <p>
           <strong>Duas fichas com este número foram unificadas{unificacao.origem === "automatica" ? " agora" : ""}.</strong>{" "}
           "{unificacao.duplicadoNome}" ({unificacao.duplicadoOrigem === "whatsapp" ? "contato do WhatsApp" : "cadastro"}
@@ -2417,14 +2417,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         </p>
         <div className="mt-1.5 flex flex-wrap gap-2">
           {conv?.contatoId && (
-            <Button size="sm" variant="outline" className="h-6 text-[10.5px] border-info/30" onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}>
+            <Button size="sm" variant="outline" className="h-6 text-apoio border-info/30" onClick={() => setLocation(`/clientes?id=${conv.contatoId}`)}>
               Abrir cadastro
             </Button>
           )}
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-[10.5px]"
+            className="h-6 text-apoio"
             disabled={desfazerUnificacaoMut.isPending}
             onClick={() => desfazerUnificacaoMut.mutate({ id: unificacao.id })}
           >
@@ -2447,7 +2447,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-[11px]"
+            className="h-7 text-apoio"
             onClick={carregarMaisAntigas}
             disabled={loadingOlder}
           >
@@ -2467,7 +2467,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <Fragment key={m.id}>
                 {novaData && (
                   <div className="flex justify-center">
-                    <span className="bg-muted text-muted-foreground text-[11px] font-medium px-3 py-1 rounded-full">
+                    <span className="bg-muted text-muted-foreground text-apoio font-medium px-3 py-1 rounded-full">
                       {rotuloDataConversa(m.createdAt, tz)}
                     </span>
                   </div>
@@ -2479,9 +2479,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 ) : (
                 <div className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
                   <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
-                    {m.remetenteNome && m.direcao === "saida" && <p className="text-[10px] opacity-60 mb-0.5">{m.remetenteNome}</p>}
+                    {m.remetenteNome && m.direcao === "saida" && <p className="text-micro opacity-60 mb-0.5">{m.remetenteNome}</p>}
                     {renderMsgContent(m)}
-                    <div className={"flex items-center gap-1 justify-end mt-1 text-[10px] " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
+                    <div className={"flex items-center gap-1 justify-end mt-1 text-micro " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
                       <span>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}</span>
                       {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
                       {m.direcao === "saida" && (m.status === "enviada" || m.status === "entregue" || m.status === "lida") && <Check className="h-3 w-3" aria-label="Enviada" />}
@@ -2492,7 +2492,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                       )}
                     </div>
                     {m.direcao === "saida" && m.status === "falha" && (m as any).erroEntrega && (
-                      <p className="text-[10px] mt-1 text-danger/90 leading-snug break-words">
+                      <p className="text-micro mt-1 text-danger/90 leading-snug break-words">
                         ⚠ Não entregue — {(m as any).erroEntrega}
                       </p>
                     )}
@@ -2520,7 +2520,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-[11px] border-info/30 text-info-fg hover:bg-info-bg hover:text-info-fg px-2.5"
+          className="h-7 text-apoio border-info/30 text-info-fg hover:bg-info-bg hover:text-info-fg px-2.5"
           disabled={composerSugestao.isPending || composerBloqueado}
           onClick={() => composerSugestao.mutate({ conversaId: cid, tom })}
           title={composerBloqueado ? "Envio de texto livre bloqueado nesta conversa" : "Gerar resposta com IA no tom selecionado"}
@@ -2535,7 +2535,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             único com lista suspensa — mesma escolha, sem ocupar espaço. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-7 text-[11px] px-2.5 gap-1 text-muted-foreground font-normal">
+            <Button variant="outline" size="sm" className="h-7 text-apoio px-2.5 gap-1 text-muted-foreground font-normal">
               Tom: <span className="font-semibold text-foreground">{tom === "formal" ? "Formal" : tom === "direto" ? "Direto" : tom === "empatico" ? "Empático" : "Amigável"}</span>
               <ChevronDown className="h-3 w-3 opacity-60" />
             </Button>
@@ -2569,7 +2569,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <p className="text-xs font-medium text-success-fg truncate">
               {pendingMedia.nome || pendingMedia.tipo}
             </p>
-            <p className="text-[10px] text-success-fg/80 truncate">
+            <p className="text-micro text-success-fg/80 truncate">
               {pendingMedia.tamanho
                 ? `${(pendingMedia.tamanho / 1024 / 1024).toFixed(1)} MB · o texto digitado vira a legenda`
                 : pendingMedia.url}
@@ -2586,7 +2586,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       )}
 
       {canalInoperante ? (
-        <div className="mx-3 mt-2 mb-1 bg-danger-bg border border-danger/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-danger-fg">
+        <div className="mx-3 mt-2 mb-1 bg-danger-bg border border-danger/30 rounded-md px-2.5 py-2 text-apoio leading-snug text-danger-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">⛔</span>
             <span>
@@ -2600,7 +2600,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             <Button
               variant="outline"
               size="sm"
-              className="h-6 text-[11px] px-2 border-danger/30 text-danger-fg hover:bg-danger-bg hover:text-danger-fg dark:text-danger"
+              className="h-6 text-apoio px-2 border-danger/30 text-danger-fg hover:bg-danger-bg hover:text-danger-fg dark:text-danger"
               onClick={() => setLocation("/configuracoes?tab=canais")}
             >
               Ver status do canal
@@ -2608,7 +2608,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           </div>
         </div>
       ) : janela24hFechada ? (
-        <div className="mx-3 mt-2 mb-1 bg-warning-bg border border-warning/30 rounded-md px-2.5 py-2 text-[11px] leading-snug text-warning-fg">
+        <div className="mx-3 mt-2 mb-1 bg-warning-bg border border-warning/30 rounded-md px-2.5 py-2 text-apoio leading-snug text-warning-fg">
           <div className="flex items-start gap-1.5">
             <span className="shrink-0">🔒</span>
             <span>
@@ -2619,7 +2619,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
           <div className="flex items-center gap-2 mt-1.5 pl-5">
             <Button
               size="sm"
-              className="h-6 text-[11px] px-2.5 bg-info"
+              className="h-6 text-apoio px-2.5 bg-info"
               onClick={() => setShowTemplates(true)}
             >
               <Zap className="h-3 w-3 mr-1" /> Enviar template aprovado
@@ -2653,7 +2653,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                   {composerSugestao.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 </span>
-                <span className="min-w-0"><span className="block text-sm font-semibold">Compor com IA</span><span className="block text-[11px] text-muted-foreground">Gera a resposta no tom escolhido</span></span>
+                <span className="min-w-0"><span className="block text-sm font-semibold">Compor com IA</span><span className="block text-apoio text-muted-foreground">Gera a resposta no tom escolhido</span></span>
               </button>
               <button
                 type="button"
@@ -2664,7 +2664,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <span className="h-9 w-9 rounded-xl bg-success-bg text-success-fg dark:text-success flex items-center justify-center shrink-0">
                   <Zap className="h-4 w-4" />
                 </span>
-                <span className="min-w-0"><span className="block text-sm font-semibold">Respostas rápidas / Templates</span><span className="block text-[11px] text-muted-foreground">Atalho “/” e templates da Meta</span></span>
+                <span className="min-w-0"><span className="block text-sm font-semibold">Respostas rápidas / Templates</span><span className="block text-apoio text-muted-foreground">Atalho “/” e templates da Meta</span></span>
               </button>
               <AnexoButton
                 onAnexar={(m) => { setPendingMedia(m); setMaisMenuAberto(false); }}
@@ -2673,7 +2673,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                     <span className="h-9 w-9 rounded-xl bg-info-bg text-info-fg dark:text-info flex items-center justify-center shrink-0">
                       <Paperclip className="h-4 w-4" />
                     </span>
-                    <span className="min-w-0"><span className="block text-sm font-semibold">Anexar</span><span className="block text-[11px] text-muted-foreground">Foto, vídeo ou documento</span></span>
+                    <span className="min-w-0"><span className="block text-sm font-semibold">Anexar</span><span className="block text-apoio text-muted-foreground">Foto, vídeo ou documento</span></span>
                   </button>
                 }
               />
@@ -2701,9 +2701,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
               <div>
                 <div className="flex items-center justify-between px-2 pb-1">
                   <p className="text-xs font-medium text-muted-foreground">📝 Respostas rápidas</p>
-                  <span className="text-[10px] text-muted-foreground/70">{tplList?.length || 0}</span>
+                  <span className="text-micro text-muted-foreground/70">{tplList?.length || 0}</span>
                 </div>
-                <p className="text-[10px] px-2 pb-1 text-muted-foreground/70">
+                <p className="text-micro px-2 pb-1 text-muted-foreground/70">
                   Digite <span className="font-mono bg-muted px-1 rounded">/</span> no chat pra autocompletar
                 </p>
                 {tplList && tplList.length > 0 ? (
@@ -2717,12 +2717,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium text-xs">{t.titulo}</p>
                           {t.atalho && (
-                            <span className="font-mono text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">
+                            <span className="font-mono text-micro bg-info-bg text-info-fg px-1 py-0.5 rounded">
                               /{t.atalho}
                             </span>
                           )}
                           {t.midiaTipo && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-success-bg text-success-fg px-1 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-0.5 text-micro bg-success-bg text-success-fg px-1 py-0.5 rounded">
                               {t.midiaTipo === "imagem" ? <ImageIcon className="h-2.5 w-2.5" /> :
                                t.midiaTipo === "documento" ? <FileText className="h-2.5 w-2.5" /> :
                                <Paperclip className="h-2.5 w-2.5" />}
@@ -2730,12 +2730,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                             </span>
                           )}
                         </div>
-                        <p className="text-[10px] text-muted-foreground truncate">{t.conteudo}</p>
+                        <p className="text-micro text-muted-foreground truncate">{t.conteudo}</p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[10px] text-muted-foreground/80 text-center py-1.5 italic">Nenhum. Crie em Configurações → Templates.</p>
+                  <p className="text-micro text-muted-foreground/80 text-center py-1.5 italic">Nenhum. Crie em Configurações → Templates.</p>
                 )}
               </div>
 
@@ -2744,9 +2744,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <div className="border-t pt-2">
                   <div className="flex items-center justify-between px-2 pb-1">
                     <p className="text-xs font-medium text-muted-foreground">✅ Templates Meta aprovados</p>
-                    <span className="text-[10px] text-muted-foreground/70">{metaTpls.length}</span>
+                    <span className="text-micro text-muted-foreground/70">{metaTpls.length}</span>
                   </div>
-                  <p className="text-[10px] px-2 pb-1 text-muted-foreground/70">
+                  <p className="text-micro px-2 pb-1 text-muted-foreground/70">
                     Enviam via API oficial (com custo). Bom pra avisos fora da janela 24h.
                   </p>
                   {metaTpls.length > 0 ? (
@@ -2762,20 +2762,20 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                           >
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-mono text-xs">{t.name}</p>
-                              <span className="text-[10px] bg-info-bg text-info-fg px-1 py-0.5 rounded">{t.language}</span>
+                              <span className="text-micro bg-info-bg text-info-fg px-1 py-0.5 rounded">{t.language}</span>
                               {totalVars > 0 && (
-                                <span className="text-[10px] bg-warning-bg text-warning-fg px-1 py-0.5 rounded">
+                                <span className="text-micro bg-warning-bg text-warning-fg px-1 py-0.5 rounded">
                                   {totalVars} {totalVars === 1 ? "var" : "vars"}
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] text-muted-foreground line-clamp-2">{body}</p>
+                            <p className="text-micro text-muted-foreground line-clamp-2">{body}</p>
                           </div>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-muted-foreground/80 text-center py-1.5 italic">
+                    <p className="text-micro text-muted-foreground/80 text-center py-1.5 italic">
                       Nenhum aprovado. Cadastre em Configurações → Canais → WhatsApp → Templates.
                     </p>
                   )}
@@ -2831,14 +2831,14 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
 
       {/* Linha 3: Hint compacto — só desktop (atalhos de teclado). */}
       {!mobile && (
-      <div className="px-3 pb-2 flex items-center justify-between gap-2 text-[10px] text-muted-foreground">
+      <div className="px-3 pb-2 flex items-center justify-between gap-2 text-micro text-muted-foreground">
         <span className="inline-flex items-center gap-1">
-          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">/</kbd> respostas rápidas
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-micro">/</kbd> respostas rápidas
           <span className="mx-1.5">·</span>
-          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-[10px]">Enter</kbd> enviar
+          <kbd className="font-mono bg-background px-1 py-0.5 rounded border text-micro">Enter</kbd> enviar
         </span>
         {composerSugestao.data?.ia === false && (
-          <span className="text-warning-fg text-[10px]">⚠ IA não configurada — usando template</span>
+          <span className="text-warning-fg text-micro">⚠ IA não configurada — usando template</span>
         )}
       </div>
       )}
@@ -2877,7 +2877,7 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                   disabled={vincularMut.isPending}
                 >
                   <User className="h-4 w-4 text-info shrink-0" />
-                  <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{c.nome}</p>{c.cpfCnpj && <p className="text-[9px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}</div>
+                  <div className="flex-1 min-w-0"><p className="text-xs font-medium truncate">{c.nome}</p>{c.cpfCnpj && <p className="text-micro text-muted-foreground font-mono">{c.cpfCnpj}</p>}</div>
                 </button>
               ))}
               {buscaVincular && (!clientesBusca?.clientes || clientesBusca.clientes.length === 0) && (
@@ -3243,21 +3243,21 @@ function AnexoButton({
             <ImageIcon className="h-4 w-4 mr-2 text-success-fg" />
             <span className="text-sm">
               Foto
-              <span className="block text-[10px] text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
+              <span className="block text-micro text-muted-foreground">JPG, PNG, GIF, WebP · até 5 MB</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("video")}>
             <VideoIcon className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Vídeo
-              <span className="block text-[10px] text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
+              <span className="block text-micro text-muted-foreground">MP4 · até 16 MB (WhatsApp)</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => escolher("documento")}>
             <FileText className="h-4 w-4 mr-2 text-info-fg" />
             <span className="text-sm">
               Documento
-              <span className="block text-[10px] text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
+              <span className="block text-micro text-muted-foreground">PDF, Word, Excel, CSV · até 95 MB</span>
             </span>
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -3494,7 +3494,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         <div>
           <h2 className="text-xl font-extrabold tracking-tight leading-tight">Pipeline de Vendas</h2>
           <p className="text-xs text-white/85 mt-1 flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-1 bg-white/20 px-2 py-0.5 rounded-full text-micro font-semibold">
               <span className="h-1.5 w-1.5 rounded-full bg-card animate-pulse" />
               Atualização ao vivo
             </span>
@@ -3538,7 +3538,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         <Filter className="h-3.5 w-3.5" />
         Filtros
         {filtrosAtivos > 0 && (
-          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-info text-info-on text-[9px] font-bold">
+          <span className="inline-flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-info text-info-on text-micro font-bold">
             {filtrosAtivos}
           </span>
         )}
@@ -3549,7 +3549,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           type="button"
           onClick={() => setCompacto(false)}
           className={
-            "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
+            "px-2.5 py-1.5 rounded-md text-apoio font-semibold transition " +
             (!compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards no tamanho normal"
@@ -3560,7 +3560,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           type="button"
           onClick={() => setCompacto(true)}
           className={
-            "px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition " +
+            "px-2.5 py-1.5 rounded-md text-apoio font-semibold transition " +
             (compacto ? "bg-background text-info-fg shadow-sm" : "text-muted-foreground hover:text-foreground")
           }
           title="Cards menores — cabem mais por coluna"
@@ -3603,7 +3603,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           <DialogTitle className="flex items-center gap-2">
             Filtros do pipeline
             {filtrosAtivos > 0 && (
-              <span className="rounded-full bg-info-bg text-info-fg text-[11px] font-bold px-2 py-0.5">
+              <span className="rounded-full bg-info-bg text-info-fg text-apoio font-bold px-2 py-0.5">
                 {filtrosAtivos} {filtrosAtivos === 1 ? "ativo" : "ativos"}
               </span>
             )}
@@ -3614,7 +3614,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
+            <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Atendentes</p>
             <div className="rounded-lg border overflow-hidden">
               <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
                 <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -3644,13 +3644,13 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                         key={a.id}
                         onClick={() => setResponsaveisFiltro((p) => ativo ? p.filter((x) => x !== a.id) : [...p, a.id])}
                         className={
-                          "flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-left border-b border-muted/40 " +
+                          "flex items-center gap-2.5 px-3 py-1.5 text-corpo text-left border-b border-muted/40 " +
                           (ativo ? "bg-info-bg text-info-fg font-medium" : "text-foreground/80 hover:bg-muted/40")
                         }
                       >
                         <span
                           className={
-                            "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-[10px] " +
+                            "h-4 w-4 shrink-0 rounded border flex items-center justify-center text-micro " +
                             (ativo ? "bg-info border-info/30 text-info-on" : "border-muted-foreground/40")
                           }
                         >
@@ -3662,7 +3662,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                   });
                 })()}
               </div>
-              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-[11px] text-muted-foreground">
+              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-t text-apoio text-muted-foreground">
                 <span>
                   <b>{responsaveisFiltro.length}</b> {responsaveisFiltro.length === 1 ? "selecionado" : "selecionados"}
                 </span>
@@ -3678,7 +3678,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
+              <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Setor</p>
               <select
                 value={setorFiltro ?? ""}
                 onChange={(e) => setSetorFiltro(e.target.value ? Number(e.target.value) : null)}
@@ -3691,7 +3691,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
               </select>
             </div>
             <div className="space-y-1.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Canal de comunicação</p>
+              <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Canal de comunicação</p>
               <select
                 value={canalFiltro ?? ""}
                 onChange={(e) => setCanalFiltro(e.target.value ? Number(e.target.value) : null)}
@@ -3718,7 +3718,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
             </div>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
+            <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Período</p>
             <div className="grid grid-cols-4 gap-1.5">
               {(["todos", "7d", "30d", "90d"] as const).map((p) => {
                 const label = p === "todos" ? "Todos" : p === "7d" ? "7 dias" : p === "30d" ? "30 dias" : "90 dias";
@@ -3736,7 +3736,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
             </div>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Valor (R$)</p>
+            <p className="text-apoio font-semibold uppercase tracking-wide text-muted-foreground">Valor (R$)</p>
             <div className="flex items-center gap-2">
               <Input value={valorMin} onChange={(e) => setValorMin(e.target.value)} placeholder="Mín" className="h-9 text-sm" />
               <span className="text-muted-foreground">–</span>
@@ -3788,12 +3788,12 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                   <span className={"text-xs font-bold uppercase tracking-wide flex-1 truncate " + (isGanho ? "text-success-fg" : "text-foreground")}>
                     {ETAPA_FUNIL_LABELS[etapa]}
                   </span>
-                  <Badge variant="outline" className={"text-[10px] h-5 px-1.5 shrink-0 " + (isGanho ? "bg-success text-success-on border-success/30" : "")}>
+                  <Badge variant="outline" className={"text-micro h-5 px-1.5 shrink-0 " + (isGanho ? "bg-success text-success-on border-success/30" : "")}>
                     {items.length}
                   </Badge>
                 </div>
                 {val > 0 && (
-                  <p className={"text-[11px] font-semibold mt-1 ml-[18px] " + (isGanho ? "text-success-fg" : "text-muted-foreground")}>
+                  <p className={"text-apoio font-semibold mt-1 ml-[18px] " + (isGanho ? "text-success-fg" : "text-muted-foreground")}>
                     {formatBRL(val)} {isGanho ? "fechado" : "estimado"}
                   </p>
                 )}
@@ -3804,7 +3804,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                 {items.length === 0 ? (
                   <div
                     className={
-                      "rounded-lg flex items-center justify-center text-[11px] py-6 transition-colors " +
+                      "rounded-lg flex items-center justify-center text-apoio py-6 transition-colors " +
                       (isOver
                         ? "border-2 border-dashed border-info/30 bg-info-bg text-info-fg"
                         : "border border-dashed border-border text-muted-foreground/60")
@@ -3864,11 +3864,11 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full shrink-0 bg-danger" />
                   <span className="text-xs font-bold uppercase tracking-wide flex-1 truncate text-danger-fg">Cancelados</span>
-                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 shrink-0 border-danger/30 text-danger-fg">
+                  <Badge variant="outline" className="text-micro h-5 px-1.5 shrink-0 border-danger/30 text-danger-fg">
                     {cancelados.length}
                   </Badge>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1 ml-[18px]">
+                <p className="text-micro text-muted-foreground mt-1 ml-[18px]">
                   {mostrarCancelados
                     ? `${formatBRL(valCanc)} · pela data do cancelamento, no mês`
                     : "clique para abrir"}
@@ -3877,7 +3877,7 @@ function PipelineKanban({ leads, onUpdate, onWA, onAddLead, onGoToConversa, onDr
               {mostrarCancelados && (
                 <div className="flex-1 overflow-y-auto -mx-1 px-1 space-y-2">
                   {cancelados.length === 0 ? (
-                    <div className="rounded-lg border border-dashed border-border text-muted-foreground/60 text-[11px] py-6 text-center">
+                    <div className="rounded-lg border border-dashed border-border text-muted-foreground/60 text-apoio py-6 text-center">
                       nenhum contrato cancelado neste mês
                     </div>
                   ) : (
@@ -4051,14 +4051,14 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                   <div className="flex items-center gap-2 flex-wrap">
                     <SheetTitle className="text-left text-lg leading-tight truncate">{lead.contatoNome}</SheetTitle>
                     {etapaSt && (
-                      <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide " + etapaSt.bg + " " + etapaSt.text}>
+                      <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-bold uppercase tracking-wide " + etapaSt.bg + " " + etapaSt.text}>
                         <span className={"h-1.5 w-1.5 rounded-full " + etapaSt.dot} />
                         {ETAPA_FUNIL_LABELS[lead.etapaFunil as EtapaFunil]}
                       </span>
                     )}
                   </div>
                   {lead.contatoTelefone && (
-                    <p className="text-[12.5px] text-muted-foreground flex items-center gap-1.5 mt-1">
+                    <p className="text-corpo text-muted-foreground flex items-center gap-1.5 mt-1">
                       <Phone className="h-3 w-3" /> {fmtTel(lead.contatoTelefone)}
                     </p>
                   )}
@@ -4069,27 +4069,27 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                 {lead.conversaId ? (
                   <button
                     onClick={() => onGoToConversa(lead.conversaId)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-info-bg text-info-fg border border-info/30 text-[12.5px] font-semibold hover:bg-info-bg"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-info-bg text-info-fg border border-info/30 text-corpo font-semibold hover:bg-info-bg"
                   >
                     <Inbox className="h-3.5 w-3.5" /> Ir pra conversa
                   </button>
                 ) : (
-                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-[11px] inline-flex items-center justify-center">Sem conversa</div>
+                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-apoio inline-flex items-center justify-center">Sem conversa</div>
                 )}
                 {lead.contatoTelefone && onWA ? (
                   <button
                     onClick={() => onWA(lead.contatoTelefone)}
-                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-success-bg text-success-fg border border-success/30 text-[12.5px] font-semibold hover:bg-success-bg"
+                    className="h-9 inline-flex items-center justify-center gap-1.5 rounded-lg bg-success-bg text-success-fg border border-success/30 text-corpo font-semibold hover:bg-success-bg"
                   >
                     <PhoneCall className="h-3.5 w-3.5" /> WhatsApp
                   </button>
                 ) : (
-                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-[11px] inline-flex items-center justify-center">Sem WhatsApp</div>
+                  <div className="h-9 rounded-lg bg-muted/30 border border-dashed text-muted-foreground text-apoio inline-flex items-center justify-center">Sem WhatsApp</div>
                 )}
               </div>
               {lead.etapaFunil === "fechado_ganho" && (
                 lead.canceladoEm ? (
-                  <div className="mt-3 rounded-lg border border-danger/30 bg-danger-bg px-3 py-2 text-[12px]">
+                  <div className="mt-3 rounded-lg border border-danger/30 bg-danger-bg px-3 py-2 text-corpo">
                     <p className="font-semibold text-danger-fg">
                       Contrato cancelado em {new Date(lead.canceladoEm).toLocaleDateString("pt-BR")}
                     </p>
@@ -4098,7 +4098,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                       type="button"
                       onClick={() => onReativarContrato?.(lead)}
                       disabled={reativando}
-                      className="mt-1.5 text-[11.5px] font-semibold text-info-fg hover:underline disabled:opacity-50"
+                      className="mt-1.5 text-apoio font-semibold text-info-fg hover:underline disabled:opacity-50"
                     >
                       {reativando ? "Reativando…" : "Reativar contrato"}
                     </button>
@@ -4107,7 +4107,7 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                   <button
                     type="button"
                     onClick={() => onCancelarContrato?.(lead)}
-                    className="mt-3 h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-danger/30 text-danger-fg text-[12.5px] font-semibold hover:bg-danger-bg"
+                    className="mt-3 h-9 w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-danger/30 text-danger-fg text-corpo font-semibold hover:bg-danger-bg"
                   >
                     <XCircle className="h-3.5 w-3.5" /> Cancelar contrato
                   </button>
@@ -4120,16 +4120,16 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
 
               {/* Seção: Status e Valor */}
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                <p className="text-apoio font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
                   <BarChart3 className="h-3 w-3" /> Status e Valor
                 </p>
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-foreground/80">Etapa</label>
+                    <label className="text-apoio font-semibold text-foreground/80">Etapa</label>
                     <select
                       value={etapaEdit}
                       onChange={(e) => { setEtapaEdit(e.target.value as EtapaFunil); setDirty(true); }}
-                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px] disabled:opacity-60"
+                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-corpo disabled:opacity-60"
                       disabled={!!lead.canceladoEm}
                       title={lead.canceladoEm ? "Contrato cancelado — reative antes de mudar a etapa" : undefined}
                     >
@@ -4140,16 +4140,16 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground/80">Valor estimado</label>
+                      <label className="text-apoio font-semibold text-foreground/80">Valor estimado</label>
                       <Input
                         value={valorEdit}
                         onChange={(e) => { setValorEdit(e.target.value); setDirty(true); }}
                         placeholder="R$ 0,00"
-                        className="h-9 text-[13px]"
+                        className="h-9 text-corpo"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground/80">Probabilidade</label>
+                      <label className="text-apoio font-semibold text-foreground/80">Probabilidade</label>
                       <div className="flex items-center gap-2.5 h-9 px-3 rounded-lg border bg-background">
                         <input
                           type="range" min={0} max={100} step={5}
@@ -4157,16 +4157,16 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
                           onChange={(e) => { setProbEdit(Number(e.target.value)); setDirty(true); }}
                           className="flex-1"
                         />
-                        <span className="text-[13px] font-bold text-info-fg tabular-nums w-9 text-right">{probEdit}%</span>
+                        <span className="text-corpo font-bold text-info-fg tabular-nums w-9 text-right">{probEdit}%</span>
                       </div>
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-foreground/80">Responsável</label>
+                    <label className="text-apoio font-semibold text-foreground/80">Responsável</label>
                     <select
                       value={respEdit ?? ""}
                       onChange={(e) => { setRespEdit(e.target.value ? Number(e.target.value) : null); setDirty(true); }}
-                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-[13px]"
+                      className="w-full h-9 rounded-lg border bg-background px-2.5 text-corpo"
                     >
                       <option value="">— Sem responsável —</option>
                       {atendentes.map((a) => (
@@ -4179,17 +4179,17 @@ function LeadDetalheSheet({ lead, atendentes, onClose, onUpdate, onGoToConversa,
 
               {/* Seção: Notas */}
               <div className="pt-5 border-t">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
+                <p className="text-apoio font-bold uppercase tracking-wider text-muted-foreground mb-2.5 flex items-center gap-1.5">
                   <ScrollText className="h-3 w-3" /> Notas e Observações
                 </p>
                 <textarea
                   value={notas}
                   onChange={(e) => { setNotas(e.target.value); setDirty(true); }}
                   placeholder="Contexto, próximos passos, objeções, contatos da família…"
-                  className="w-full min-h-[180px] rounded-lg border bg-background px-3 py-2.5 text-[13px] resize-y leading-relaxed placeholder:italic placeholder:text-muted-foreground/60"
+                  className="w-full min-h-[180px] rounded-lg border bg-background px-3 py-2.5 text-corpo resize-y leading-relaxed placeholder:italic placeholder:text-muted-foreground/60"
                   maxLength={2000}
                 />
-                <p className="text-[10.5px] text-muted-foreground text-right mt-1">{notas.length} / 2000</p>
+                <p className="text-apoio text-muted-foreground text-right mt-1">{notas.length} / 2000</p>
               </div>
             </div>
 
@@ -4232,7 +4232,7 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
   return (
     <div className="rounded-xl border bg-card overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-muted/30 border-b text-[10px] uppercase font-bold text-muted-foreground tracking-wide">
+        <thead className="bg-muted/30 border-b text-micro uppercase font-bold text-muted-foreground tracking-wide">
           <tr>
             <th className="px-3 py-2 text-left">Lead</th>
             <th className="px-3 py-2 text-left">Telefone</th>
@@ -4255,7 +4255,7 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
               <tr key={l.id} className="hover:bg-muted/20 transition-colors">
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2.5">
-                    <div className={"w-8 h-8 rounded-lg flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 " + gradientFromName(l.contatoNome || "?")}>
+                    <div className={"w-8 h-8 rounded-lg flex items-center justify-center text-white text-micro font-bold flex-shrink-0 " + gradientFromName(l.contatoNome || "?")}>
                       {initials(l.contatoNome || "?")}
                     </div>
                     <span className="font-medium truncate">{l.contatoNome}</span>
@@ -4263,7 +4263,7 @@ function KanbanLista({ leads, onWA, onDelete, onGoToConversa }: {
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{l.contatoTelefone || "—"}</td>
                 <td className="px-3 py-2">
-                  <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold " + corBg}>
+                  <span className={"inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-bold " + corBg}>
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: ETAPA_HEX[l.etapaFunil as EtapaFunil] }} />
                     {ETAPA_FUNIL_LABELS[l.etapaFunil as EtapaFunil]}
                   </span>
@@ -4325,9 +4325,9 @@ function gradientFromName(name: string) {
 function KpiCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl bg-white/12 border border-white/20 backdrop-blur-sm px-3.5 py-2.5">
-      <p className="text-[10px] font-bold uppercase tracking-wider opacity-85">{label}</p>
+      <p className="text-micro font-bold uppercase tracking-wider opacity-85">{label}</p>
       <p className="text-xl font-extrabold leading-tight tabular-nums mt-0.5 -tracking-tight">{value}</p>
-      {hint && <p className="text-[10px] opacity-80 mt-0.5">{hint}</p>}
+      {hint && <p className="text-micro opacity-80 mt-0.5">{hint}</p>}
     </div>
   );
 }
@@ -4422,13 +4422,13 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
       }
     >
       <div className="flex items-start gap-2.5">
-        <div className={(compacto ? "w-7 h-7 text-[10px]" : "w-9 h-9 text-[11px]") + " rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
+        <div className={(compacto ? "w-7 h-7 text-micro" : "w-9 h-9 text-apoio") + " rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0 " + gradientFromName(lead.contatoNome || "?")}>
           {initials(lead.contatoNome || "?")}
         </div>
         <div className="flex-1 min-w-0">
-          <p className={(compacto ? "text-[12px]" : "text-[13px]") + " font-semibold truncate text-foreground"}>{lead.contatoNome}</p>
+          <p className={(compacto ? "text-corpo" : "text-corpo") + " font-semibold truncate text-foreground"}>{lead.contatoNome}</p>
           {!compacto && lead.contatoTelefone && (
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
+            <p className="text-micro text-muted-foreground flex items-center gap-1 mt-0.5 truncate">
               <Phone className="h-2.5 w-2.5 flex-shrink-0" /> {lead.contatoTelefone}
             </p>
           )}
@@ -4436,14 +4436,14 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Tag de origem (se houver) */}
           {!compacto && corOrig && (
             <div className="flex flex-wrap gap-1 mt-1.5">
-              <span className={"inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold " + corOrig.bg + " " + corOrig.text}>
+              <span className={"inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-micro font-semibold " + corOrig.bg + " " + corOrig.text}>
                 <span className={"h-1 w-1 rounded-full " + corOrig.dot} />
                 {lead.origemLead}
               </span>
             </div>
           )}
           {isCancelado && (
-            <div className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border bg-danger-bg text-danger-fg border-danger/30">
+            <div className="mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-micro font-bold uppercase tracking-wide border bg-danger-bg text-danger-fg border-danger/30">
               Cancelado {new Date(lead.canceladoEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · {rotuloMotivoCancelamento(lead.motivoCancelamento)}
             </div>
           )}
@@ -4451,12 +4451,12 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Valor + probabilidade */}
           <div className="flex items-center justify-between mt-1.5 gap-2">
             {v > 0 ? (
-              <span className={(compacto ? "text-[12px]" : "text-[13.5px]") + " font-extrabold text-success-fg tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
+              <span className={(compacto ? "text-corpo" : "text-corpo") + " font-extrabold text-success-fg tabular-nums -tracking-tight"}>{formatBRL(v)}</span>
             ) : (
-              <span className="text-[10px] text-muted-foreground italic">sem valor</span>
+              <span className="text-micro text-muted-foreground italic">sem valor</span>
             )}
             {lead.probabilidade > 0 && (
-              <span className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-0.5 flex-shrink-0 font-semibold">
+              <span className="text-micro text-muted-foreground tabular-nums flex items-center gap-0.5 flex-shrink-0 font-semibold">
                 <Percent className="h-2.5 w-2.5" />{lead.probabilidade}%
               </span>
             )}
@@ -4473,7 +4473,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
           {/* Badge de ação contextual por etapa */}
           {!compacto && acao && (
             <div className={
-              "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold uppercase tracking-wide border " +
+              "mt-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-micro font-bold uppercase tracking-wide border " +
               (acao.tone === "emerald"
                 ? "bg-success-bg text-success-fg border-success/30"
                 : "bg-warning-bg text-warning-fg border-warning/30")
@@ -4488,16 +4488,16 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
               <div className="flex items-center gap-1.5 min-w-0">
                 {lead.responsavelNome ? (
                   <>
-                    <span className={"h-4 w-4 rounded-full flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0 " + gradientFromName(lead.responsavelNome)}>
+                    <span className={"h-4 w-4 rounded-full flex items-center justify-center text-white text-micro font-bold flex-shrink-0 " + gradientFromName(lead.responsavelNome)}>
                       {initials(lead.responsavelNome)}
                     </span>
-                    <span className="text-[10px] text-muted-foreground truncate font-medium">{lead.responsavelNome.split(" ")[0]}</span>
+                    <span className="text-micro text-muted-foreground truncate font-medium">{lead.responsavelNome.split(" ")[0]}</span>
                   </>
                 ) : (
-                  <span className="text-[10px] text-muted-foreground italic">Sem dono</span>
+                  <span className="text-micro text-muted-foreground italic">Sem dono</span>
                 )}
               </div>
-              <span className={"text-[10px] tabular-nums flex items-center gap-0.5 flex-shrink-0 " + paradoCls}>
+              <span className={"text-micro tabular-nums flex items-center gap-0.5 flex-shrink-0 " + paradoCls}>
                 {isCancelado ? "Cancelado" : isGanho ? "✓ Fechado" : isPerd ? "Encerrado" :
                   diasParado === null ? "" :
                   diasParado === 0 ? "hoje" :
@@ -4513,7 +4513,7 @@ function KCard({ lead, onWA, onDelete, onGoToConversa, onOpen, compacto, isDragg
             {lead.conversaId && (
               <Button
                 variant="ghost" size="sm"
-                className="h-6 px-1.5 text-[10px] text-info-fg"
+                className="h-6 px-1.5 text-micro text-info-fg"
                 title="Ir para conversa"
                 onClick={(e) => { e.stopPropagation(); onGoToConversa(lead.conversaId); }}
               >
@@ -4712,7 +4712,7 @@ function MetaTemplateParamsDialog({
           ))}
 
           <div className="rounded-md border bg-muted/30 p-3 mt-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1">Preview</p>
+            <p className="text-micro uppercase tracking-wide text-muted-foreground font-semibold mb-1">Preview</p>
             <p className="text-sm whitespace-pre-wrap">{bodyInterpolado}</p>
           </div>
         </div>
