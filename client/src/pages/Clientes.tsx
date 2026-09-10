@@ -11,7 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mascararTelefoneBR } from "@shared/telefone";
-import { FALTA_TIPOS, ROTULO_FALTA, type FaltaTipo } from "@shared/conferencia-cadastros";
+import { FALTA_TIPOS, ROTULO_FALTA, cpfsConflitam, type FaltaTipo } from "@shared/conferencia-cadastros";
 import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -3493,6 +3493,22 @@ function ClienteDetalhe({
     onError: (err: any) =>
       toast.error("Erro ao mesclar", { description: err.message }),
   });
+  // A mesclagem fica desfazível por 7 dias, mas o aviso com o botão só existia
+  // na conversa do Atendimento — quem mescla pela ficha e não conversa com o
+  // cliente pelo WhatsApp não achava a saída que o texto promete.
+  const { data: unificacao, refetch: refetchUnificacao } = (trpc as any).crm.unificacaoRecente.useQuery(
+    { contatoId: id },
+    { enabled: !!id, retry: false, staleTime: 60_000 },
+  );
+  const desfazerUnificacaoMut = (trpc as any).crm.desfazerUnificacao.useMutation({
+    onSuccess: () => {
+      toast.success("Unificação desfeita — a ficha voltou como estava.");
+      refetchUnificacao();
+      refetch();
+      onUpdate();
+    },
+    onError: (e: any) => toast.error("Não deu pra desfazer", { description: e.message }),
+  });
   // Editor de lead na aba Histórico — abre quando user clica no lápis do card.
   // null = fechado. Quando o lead muda (mutation), o key={alvo.id} no Dialog
   // garante remount com valores frescos.
@@ -3781,8 +3797,8 @@ function ClienteDetalhe({
         open={mesclarOpen}
         onOpenChange={setMesclarOpen}
         clienteAtual={cliente}
-        onConfirmar={(principalId) =>
-          mesclarMut.mutate({ principalId, duplicadoId: id })
+        onConfirmar={(principalId, confirmarCpfDiferente) =>
+          mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente })
         }
         isPending={mesclarMut.isPending}
       />
@@ -3812,6 +3828,30 @@ function ClienteDetalhe({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {unificacao && (
+        <div className="mb-3 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-[11px] text-info-fg leading-snug" data-testid="aviso-unificacao-ficha">
+          <p>
+            <strong>Duas fichas foram unificadas.</strong>{" "}
+            "{unificacao.duplicadoNome}" ({unificacao.duplicadoOrigem === "whatsapp" ? "contato do WhatsApp" : "cadastro"}
+            {unificacao.duplicadoCriadoEm ? `, ${new Date(unificacao.duplicadoCriadoEm).toLocaleDateString("pt-BR")}` : ""}) entrou
+            neste cadastro e foi excluída.
+            {unificacao.duplicadoTelefone ? ` O número ${mascararTelefoneBR(unificacao.duplicadoTelefone)} ficou como telefone secundário.` : ""}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10.5px]"
+              disabled={desfazerUnificacaoMut.isPending}
+              onClick={() => desfazerUnificacaoMut.mutate({ id: unificacao.id })}
+            >
+              {desfazerUnificacaoMut.isPending ? "Desfazendo…" : "Desfazer"}
+            </Button>
+            <span className="text-[10px] text-muted-foreground">este aviso some 7 dias depois da mesclagem</span>
+          </div>
+        </div>
+      )}
 
       {/* 6 abas consolidadas — pill style igual Dashboard */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -4230,9 +4270,10 @@ function KPIClienteHero({
  * anotações, arquivos, assinaturas e smartflow. Telefones/emails/CPF
  * complementares do duplicado também são copiados pro principal.
  *
- * NOTA: hard delete do contato duplicado é definitivo. Pra suportar
- * rollback no futuro, precisaria de migration adicionando `ativo` em
- * `contatos` e filtro nas queries (não está no escopo deste PR).
+ * O contato absorvido é apagado, mas a mesclagem fica registrada e desfazível
+ * por 7 dias (`unificarComRegistro`) — por isso a tela NÃO promete que é
+ * definitivo. O que se perde de verdade sem aviso é o CPF do absorvido quando
+ * o que sobrevive já tem um: daí a trava, que o servidor repete.
  */
 function MesclarClienteDialog({
   open,
@@ -4243,12 +4284,12 @@ function MesclarClienteDialog({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  clienteAtual: { id: number; nome: string };
-  onConfirmar: (principalId: number) => void;
+  clienteAtual: { id: number; nome: string; cpfCnpj?: string | null };
+  onConfirmar: (principalId: number, confirmarCpfDiferente?: boolean) => void;
   isPending: boolean;
 }) {
   const [busca, setBusca] = useState("");
-  const [selecionado, setSelecionado] = useState<{ id: number; nome: string } | null>(
+  const [selecionado, setSelecionado] = useState<{ id: number; nome: string; cpfCnpj?: string | null } | null>(
     null,
   );
   const [confirmacao, setConfirmacao] = useState(false);
@@ -4258,6 +4299,8 @@ function MesclarClienteDialog({
   ) ?? { data: [] };
 
   const candidatos = (contatos as any[]).filter((c) => c.id !== clienteAtual.id);
+  const conflitaCom = (cpf: string | null | undefined) => cpfsConflitam(clienteAtual.cpfCnpj, cpf);
+  const conflito = !!selecionado && conflitaCom(selecionado.cpfCnpj);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -4271,7 +4314,7 @@ function MesclarClienteDialog({
             Vai mover <b>todas</b> as cobranças, conversas, processos e
             histórico de <b>{clienteAtual.nome}</b> pro cliente selecionado.
             Depois,&nbsp;<b className="text-danger-fg">{clienteAtual.nome}</b>
-            &nbsp;será <b>excluído</b> deste CRM (operação definitiva).
+            &nbsp;será <b>excluído</b> deste CRM — <b>dá para desfazer por 7 dias</b>.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -4294,19 +4337,42 @@ function MesclarClienteDialog({
                 <button
                   type="button"
                   key={c.id}
-                  onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
+                  onClick={() => setSelecionado({ id: c.id, nome: c.nome, cpfCnpj: c.cpfCnpj })}
                   className={
-                    "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
+                    "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 flex items-center gap-2 " +
                     (selecionado?.id === c.id ? "bg-info-bg" : "")
                   }
                 >
-                  <div className="font-medium">{c.nome}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
-                  </div>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium truncate">{c.nome}</span>
+                    <span className="block text-[10px] text-muted-foreground truncate">
+                      {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
+                    </span>
+                  </span>
+                  {conflitaCom(c.cpfCnpj) && (
+                    <span className="shrink-0 rounded-full bg-warning-bg text-warning-fg border border-warning/30 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                      CPF diferente
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            {conflito && (
+              <div className="rounded-lg border-2 border-warning/40 bg-warning-bg p-3 text-xs space-y-1.5" data-testid="aviso-cpf-diferente">
+                <p className="font-semibold text-warning-fg flex items-center gap-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  As duas fichas têm CPF, e eles são diferentes
+                </p>
+                <p className="text-warning-fg">
+                  <b>{selecionado?.nome}</b> ({selecionado?.cpfCnpj}) <b>fica</b>.{" "}
+                  O CPF de <b>{clienteAtual.nome}</b> ({clienteAtual.cpfCnpj}) <b>será descartado</b>.
+                </p>
+                <p className="text-warning-fg">
+                  Se forem duas pessoas com o mesmo telefone, o certo não é mesclar: marque
+                  "Não é duplicado" na Conferência de cadastros.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-lg border-2 border-danger/30 bg-danger-bg p-3 text-xs space-y-2">
@@ -4317,7 +4383,16 @@ function MesclarClienteDialog({
             <p className="text-danger-fg">
               Vai mover dados de <b>{clienteAtual.nome}</b> pra{" "}
               <b>{selecionado?.nome}</b> e <b>excluir</b>{" "}
-              <b>{clienteAtual.nome}</b> deste CRM. Não há como desfazer.
+              <b>{clienteAtual.nome}</b> deste CRM.
+            </p>
+            {conflito && (
+              <p className="text-danger-fg">
+                O CPF <b>{clienteAtual.cpfCnpj}</b> ({clienteAtual.nome}) <b>será descartado</b>:
+                a ficha que sobrevive fica com o CPF de {selecionado?.nome}.
+              </p>
+            )}
+            <p className="text-danger-fg border-t border-danger/20 pt-1.5">
+              <b>Dá para desfazer por 7 dias</b>, pelo aviso na ficha de {selecionado?.nome}.
             </p>
           </div>
         )}
@@ -4326,11 +4401,12 @@ function MesclarClienteDialog({
           <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
           {!confirmacao ? (
             <Button
-              variant="default"
+              variant={conflito ? "outline" : "default"}
+              className={conflito ? "border-danger/40 bg-danger-bg text-danger-fg hover:bg-danger-bg" : undefined}
               disabled={!selecionado}
               onClick={() => setConfirmacao(true)}
             >
-              Continuar
+              {conflito ? "Mesclar mesmo assim" : "Continuar"}
             </Button>
           ) : (
             <AlertDialogAction
@@ -4338,7 +4414,7 @@ function MesclarClienteDialog({
               disabled={isPending || !selecionado}
               onClick={(e) => {
                 e.preventDefault();
-                if (selecionado) onConfirmar(selecionado.id);
+                if (selecionado) onConfirmar(selecionado.id, conflito || undefined);
               }}
             >
               {isPending ? (

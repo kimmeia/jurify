@@ -65,6 +65,18 @@ export const ROTULO_DIVERGENCIA: Record<Divergencia, string> = {
 export const MENSAGEM_CPFS_DIFERENTES =
   "As duas fichas têm CPF/CNPJ e eles são diferentes — confirme na tela qual seria descartado.";
 
+/**
+ * Mesclar fica com o CPF da ficha que sobrevive e descarta o da outra. Com os
+ * dois lados preenchidos e diferentes pode ser duas pessoas (casal com o mesmo
+ * telefone) — aí a mesclagem só passa com confirmação explícita. Um lado vazio
+ * não é conflito: o valor entra sem tirar nada de ninguém.
+ */
+export function cpfsConflitam(a: string | null | undefined, b: string | null | undefined): boolean {
+  const digA = (a ?? "").replace(/\D/g, "");
+  const digB = (b ?? "").replace(/\D/g, "");
+  return !!digA && !!digB && digA !== digB;
+}
+
 /** DDDs em uso no Brasil. Fora daqui o número não é de telefone brasileiro. */
 export const DDDS_BR = new Set<number>([
   11, 12, 13, 14, 15, 16, 17, 18, 19,
