@@ -694,7 +694,7 @@ export default function Financeiro() {
             >
               <Receipt className="h-3.5 w-3.5" />
               Cobranças
-              <span className="ml-1 text-[10px] bg-muted/70 text-muted-foreground px-1.5 rounded-full tabular-nums font-semibold">
+              <span className="ml-1 text-micro bg-muted/70 text-muted-foreground px-1.5 rounded-full tabular-nums font-semibold">
                 {kpis?.totalCobrancas ?? 0}
               </span>
             </TabsTrigger>
@@ -704,7 +704,7 @@ export default function Financeiro() {
             >
               <Users className="h-3.5 w-3.5" />
               Clientes
-              <span className="ml-1 text-[10px] bg-muted/70 text-muted-foreground px-1.5 rounded-full tabular-nums font-semibold">
+              <span className="ml-1 text-micro bg-muted/70 text-muted-foreground px-1.5 rounded-full tabular-nums font-semibold">
                 {clientesVinculados?.length ?? 0}
               </span>
             </TabsTrigger>
@@ -826,7 +826,7 @@ export default function Financeiro() {
                           className="h-8 text-sm"
                         />
                       </div>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-micro text-muted-foreground">
                         Agrupamento mensal. Máx 36 meses.
                       </p>
                       <div className="flex gap-2 pt-1">
@@ -1158,7 +1158,7 @@ export default function Financeiro() {
                         <div className="flex items-center gap-1.5">
                           {c.parcelaAtual && c.parcelaTotal && (
                             <span
-                              className="shrink-0 rounded border border-info/30 bg-info-bg px-1 py-0 text-[9px] font-medium text-info-fg"
+                              className="shrink-0 rounded border border-info/30 bg-info-bg px-1 py-0 text-micro font-medium text-info-fg"
                               title={`Parcela ${c.parcelaAtual} de ${c.parcelaTotal}`}
                             >
                               {c.parcelaAtual}/{c.parcelaTotal}
@@ -1176,13 +1176,13 @@ export default function Financeiro() {
                             {c.acoesVinculadas.slice(0, 3).map((a: any) => (
                               <span
                                 key={a.processoId}
-                                className="rounded border border-info/30 bg-info-bg px-1 py-0 text-[9px] text-info-fg"
+                                className="rounded border border-info/30 bg-info-bg px-1 py-0 text-micro text-info-fg"
                               >
                                 {a.apelido || `#${a.processoId}`}
                               </span>
                             ))}
                             {c.acoesVinculadas.length > 3 && (
-                              <span className="text-[9px] text-muted-foreground">
+                              <span className="text-micro text-muted-foreground">
                                 +{c.acoesVinculadas.length - 3}
                               </span>
                             )}
@@ -1645,7 +1645,7 @@ function ClientesContent({
 
       {/* Linha 2: chips de quick filter */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Mostrar:</span>
+        <span className="text-micro text-muted-foreground uppercase tracking-wider mr-1">Mostrar:</span>
         <ClientesChipBtn ativo={chip === "todos"} onClick={() => setChip("todos")}>
           Todos ({contagens.todos})
         </ClientesChipBtn>
@@ -1804,7 +1804,7 @@ function KPICard({
             <p className="text-xs text-muted-foreground font-medium">{label}</p>
             <p className={`text-xl font-bold ${c.valueText}`}>{value}</p>
             {subValue && (
-              <p className="text-[10px] text-muted-foreground mt-0.5">{subValue}</p>
+              <p className="text-micro text-muted-foreground mt-0.5">{subValue}</p>
             )}
           </div>
         </div>
@@ -1899,7 +1899,7 @@ function FiltrosAvancadosPopover({
           <Filter className="h-3.5 w-3.5" />
           Filtros avançados
           {ativos > 0 && (
-            <span className="ml-1 rounded-full bg-white/20 px-1.5 text-[10px] font-semibold tabular-nums">
+            <span className="ml-1 rounded-full bg-white/20 px-1.5 text-micro font-semibold tabular-nums">
               {ativos}
             </span>
           )}
@@ -2274,13 +2274,13 @@ function CelulaCliente({
             <div className="text-sm font-medium flex items-center gap-1">
               <span className="truncate">{nomeBeneficiario}</span>
               <span
-                className="shrink-0 rounded border border-info/30 bg-info-bg px-1 text-[9px] font-medium text-info-fg"
+                className="shrink-0 rounded border border-info/30 bg-info-bg px-1 text-micro font-medium text-info-fg"
                 title="Cliente real — beneficiário do pagamento"
               >
                 cliente
               </span>
             </div>
-            <div className="text-[11px] text-muted-foreground truncate">
+            <div className="text-apoio text-muted-foreground truncate">
               Pago por {nomePagador}
             </div>
           </>
@@ -2340,7 +2340,7 @@ function BuscarBeneficiario({
   return (
     <div className="space-y-2">
       <div className="text-xs font-semibold">Pagamento por terceiro</div>
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-apoio text-muted-foreground">
         Quem é o <b>cliente real</b> (beneficiário)? O pagador atual continua
         registrado como quem efetuou o pagamento.
       </p>
@@ -2386,7 +2386,7 @@ function BuscarBeneficiario({
               }
             >
               <div className="font-medium">{c.nome}</div>
-              <div className="text-[10px] text-muted-foreground">
+              <div className="text-micro text-muted-foreground">
                 {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
               </div>
             </button>
@@ -2726,7 +2726,7 @@ function PainelSyncHistorico() {
             </Select>
           </label>
           {(intervaloMin <= 5 || diasPorTick >= 5) && (
-            <span className="text-warning-fg text-[11px]">
+            <span className="text-warning-fg text-apoio">
               ⚡ Modo turbo — pode bater no rate guard se Asaas estiver com cota baixa
             </span>
           )}
@@ -2832,7 +2832,7 @@ function HeroFinanceiro({
               <button
                 key={m}
                 onClick={() => onPeriodoChange(m)}
-                className={`px-3 py-1 text-[11px] font-medium transition-colors ${
+                className={`px-3 py-1 text-apoio font-medium transition-colors ${
                   !rangeCustom && periodo === m
                     ? "bg-card text-foreground shadow-sm"
                     : "text-white/80 hover:text-white"
@@ -2889,7 +2889,7 @@ function HeroFinanceiro({
           <div className="lg:col-span-6">
             <div className="flex items-baseline justify-between mb-2">
               <div>
-                <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">
+                <p className="text-micro text-white/65 uppercase tracking-wider mb-1">
                   Tendência · período
                 </p>
                 <p className="text-xl font-bold tabular-nums leading-none">
@@ -2972,7 +2972,7 @@ function KPIHero({
     : "text-white";
   return (
     <div className={`bg-white/10 rounded-xl p-4 border border-white/15 ${alert ? "ring-1 ring-danger/30" : ""}`}>
-      <div className="flex items-center gap-1.5 mb-2 text-[10px] text-white/65 uppercase tracking-wider font-semibold">
+      <div className="flex items-center gap-1.5 mb-2 text-micro text-white/65 uppercase tracking-wider font-semibold">
         <Icon className="w-3 h-3" />
         {label}
       </div>
@@ -2980,14 +2980,14 @@ function KPIHero({
       {breakdown && breakdown.length > 0 && (
         <div className="mt-2 space-y-0.5">
           {breakdown.map((b) => (
-            <div key={b.label} className="flex items-center justify-between text-[11px] text-white/70 tabular-nums">
+            <div key={b.label} className="flex items-center justify-between text-apoio text-white/70 tabular-nums">
               <span>{b.label}</span>
               <span>{b.valor}</span>
             </div>
           ))}
         </div>
       )}
-      {hint && <p className="text-[11px] text-white/65 mt-1 tabular-nums">{hint}</p>}
+      {hint && <p className="text-apoio text-white/65 mt-1 tabular-nums">{hint}</p>}
     </div>
   );
 }
@@ -3035,15 +3035,15 @@ function CardInadimplencia({ pct, vencido }: { pct: number | null; vencido: numb
                 {pct != null ? pct.toFixed(1) : "—"}
                 <span className="text-sm">%</span>
               </p>
-              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">por valor</p>
+              <p className="text-micro text-muted-foreground uppercase tracking-wider">por valor</p>
             </div>
           </div>
           <div className="flex-1 space-y-1.5">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-apoio text-muted-foreground">
               Total em aberto
             </p>
             <p className="text-lg font-bold text-danger-fg tabular-nums">{formatBRL(vencido)}</p>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-micro text-muted-foreground/70">
               {pct == null
                 ? "Sem cobranças no período"
                 : pct >= 15
@@ -3067,7 +3067,7 @@ function CardTopDevedores({ devedores }: { devedores: Array<{ nome: string; valo
           <h3 className="text-xs uppercase tracking-wider font-bold text-muted-foreground">
             Top devedores
           </h3>
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg">
+          <span className="inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg">
             {devedores.length} {devedores.length === 1 ? "ativo" : "ativos"}
           </span>
         </div>
@@ -3080,13 +3080,13 @@ function CardTopDevedores({ devedores }: { devedores: Array<{ nome: string; valo
             {devedores.map((d) => (
               <div key={d.nome} className="flex items-center gap-2.5">
                 <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white shrink-0 bg-gradient-to-br ${gradientAvatar(d.nome)}`}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-micro text-white shrink-0 bg-gradient-to-br ${gradientAvatar(d.nome)}`}
                 >
                   {gerarIniciais(d.nome)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate">{d.nome}</p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-micro text-muted-foreground">
                     {d.qtd} vencida{d.qtd !== 1 ? "s" : ""} · {d.maxDias}d atraso
                   </p>
                 </div>
@@ -3116,7 +3116,7 @@ function CardReceitaPrevista({
           <h3 className="text-xs uppercase tracking-wider font-bold text-muted-foreground">
             Receita esperada (7d)
           </h3>
-          <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg tabular-nums">
+          <span className="inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg tabular-nums">
             {formatBRLShort(total)}
           </span>
         </div>
@@ -3133,12 +3133,12 @@ function CardReceitaPrevista({
                 : "—";
               return (
                 <div key={c.id} className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-success-bg flex items-center justify-center text-[9px] font-bold text-success-fg tabular-nums leading-tight whitespace-pre text-center shrink-0">
+                  <div className="w-7 h-7 rounded-lg bg-success-bg flex items-center justify-center text-micro font-bold text-success-fg tabular-nums leading-tight whitespace-pre text-center shrink-0">
                     {diaCurto}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold truncate">{c.nome}</p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       {c.forma === "PIX" ? "PIX" : c.forma === "BOLETO" ? "Boleto" : c.forma === "CREDIT_CARD" ? "Cartão" : "—"}
                       {" · "}
                       {c.diasAte === 0 ? "vence hoje" : c.diasAte === 1 ? "vence amanhã" : `vence em ${c.diasAte}d`}

@@ -65,7 +65,7 @@ function CoberturaVarredura({ mons }: { mons: any[] }) {
   }
   if (estados.size === 0) return null;
   return (
-    <p className="text-[10px] mt-0.5">
+    <p className="text-micro mt-0.5">
       <span className="text-info-fg font-semibold">
         Vigiando em {[...estados].map(siglaDoTribunal).join(" · ")}
       </span>
@@ -326,19 +326,19 @@ function ProcessoCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="text-sm font-bold font-mono">{d.code || "-"}</p>
-              {d.tribunal_acronym && <Badge variant="outline" className="text-[9px]">{d.tribunal_acronym}</Badge>}
-              {d.instance && <Badge variant="outline" className="text-[9px]">{d.instance}a inst.</Badge>}
+              {d.tribunal_acronym && <Badge variant="outline" className="text-micro">{d.tribunal_acronym}</Badge>}
+              {d.instance && <Badge variant="outline" className="text-micro">{d.instance}a inst.</Badge>}
             </div>
             {d.classifications?.[0] && <p className="text-xs text-muted-foreground mt-0.5">{d.classifications[0].name}</p>}
-            {d.courts?.[0] && <p className="text-[10px] text-muted-foreground">{d.courts[0].name}</p>}
+            {d.courts?.[0] && <p className="text-micro text-muted-foreground">{d.courts[0].name}</p>}
             <div className="flex items-center gap-3 mt-0.5">
-              {d.distribution_date && <span className="text-[10px] text-muted-foreground">Dist: {new Date(d.distribution_date).toLocaleDateString("pt-BR")}</span>}
+              {d.distribution_date && <span className="text-micro text-muted-foreground">Dist: {new Date(d.distribution_date).toLocaleDateString("pt-BR")}</span>}
               {d.amount && <span className="text-xs font-medium text-success-fg">{formatBRL(d.amount)}</span>}
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {movsComAlerta > 0 && (
-              <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] gap-1">
+              <Badge className="bg-info/15 text-info-fg border-info/30 text-micro gap-1">
                 <Bell className="h-2.5 w-2.5" />
                 {movsComAlerta}
               </Badge>
@@ -347,7 +347,7 @@ function ProcessoCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-[10px]"
+                className="h-7 text-micro"
                 disabled={carregandoDetalhes}
                 onClick={() => onCarregarDetalhes(d.code)}
               >
@@ -361,7 +361,7 @@ function ProcessoCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-7 text-[10px]"
+                className="h-7 text-micro"
                 disabled={monitorando}
                 onClick={() => onMonitorar(d.code)}
               >
@@ -377,18 +377,18 @@ function ProcessoCard({
 
         {aberto && (
           <div className="mt-3 pt-3 border-t space-y-4">
-            {d.subjects?.length > 0 && (<div><p className="text-[10px] font-semibold text-muted-foreground mb-1">ASSUNTOS</p><div className="flex flex-wrap gap-1">{d.subjects.map((s: any, i: number) => (<Badge key={i} variant="outline" className="text-[9px]">{s.name}</Badge>))}</div></div>)}
+            {d.subjects?.length > 0 && (<div><p className="text-micro font-semibold text-muted-foreground mb-1">ASSUNTOS</p><div className="flex flex-wrap gap-1">{d.subjects.map((s: any, i: number) => (<Badge key={i} variant="outline" className="text-micro">{s.name}</Badge>))}</div></div>)}
 
             <div className="grid grid-cols-2 gap-4">
-              {ativos.length > 0 && (<div><p className="text-[10px] font-semibold text-info-fg mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-info shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
-              {passivos.length > 0 && (<div><p className="text-[10px] font-semibold text-danger-fg mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-danger shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {ativos.length > 0 && (<div><p className="text-micro font-semibold text-info-fg mb-1">POLO ATIVO</p>{ativos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-info shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
+              {passivos.length > 0 && (<div><p className="text-micro font-semibold text-danger-fg mb-1">POLO PASSIVO</p>{passivos.map((p: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><User className="h-3 w-3 text-danger shrink-0" /><span className="truncate">{p.name}</span></div>))}</div>)}
             </div>
 
-            {advs.length > 0 && (<div><p className="text-[10px] font-semibold text-info-fg mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-info shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-[9px] text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
+            {advs.length > 0 && (<div><p className="text-micro font-semibold text-info-fg mb-1">ADVOGADOS</p>{advs.map((l: any, i: number) => (<div key={i} className="flex items-center gap-1.5 text-xs py-0.5"><Gavel className="h-3 w-3 text-info shrink-0" /><span>{l.name}</span>{l.main_document && <span className="text-micro text-muted-foreground font-mono">{l.main_document}</span>}</div>))}</div>)}
 
             {movs.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground mb-2">
+                <p className="text-micro font-semibold text-muted-foreground mb-2">
                   MOVIMENTAÇÕES ({d.steps?.length || 0} total)
                 </p>
                 {/* Timeline visual */}
@@ -408,11 +408,11 @@ function ProcessoCard({
                           className={`text-xs pl-2 py-1 ${hasAlert ? "bg-info-bg rounded pr-2" : ""}`}
                         >
                           <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-[9px] text-muted-foreground font-mono">
+                            <span className="text-micro text-muted-foreground font-mono">
                               {m.step_date ? new Date(m.step_date).toLocaleDateString("pt-BR") : ""}
                             </span>
                             {hasAlert && (
-                              <Badge className="bg-info/20 text-info-fg border-0 text-[8px] px-1 py-0">
+                              <Badge className="bg-info/20 text-info-fg border-0 text-micro px-1 py-0">
                                 <Bell className="h-2 w-2 mr-0.5" />
                                 {matches[0]}
                               </Badge>
@@ -636,7 +636,7 @@ function ConsultarTab() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-tight">Consultar processo</p>
-            <p className="text-[11px] text-muted-foreground">CNJ direto, ou busca por CPF/CNPJ em +90 tribunais.</p>
+            <p className="text-apoio text-muted-foreground">CNJ direto, ou busca por CPF/CNPJ em +90 tribunais.</p>
           </div>
         </div>
 
@@ -676,7 +676,7 @@ function ConsultarTab() {
             <div className="flex items-center gap-2 flex-1 flex-wrap">
               <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-info-bg border border-info/30">
                 <Lock className="h-3 w-3 text-info-fg" />
-                <span className="text-[10px] font-medium text-info-fg">Cofre</span>
+                <span className="text-micro font-medium text-info-fg">Cofre</span>
               </div>
               <select
                 value={credencialId}
@@ -690,10 +690,10 @@ function ConsultarTab() {
                   </option>
                 ))}
               </select>
-              <span className="text-[10px] text-muted-foreground/70">Selecione pra ver segredo de justiça</span>
+              <span className="text-micro text-muted-foreground/70">Selecione pra ver segredo de justiça</span>
             </div>
           ) : (
-            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+            <p className="text-micro text-muted-foreground flex items-center gap-1.5">
               <Lock className="h-3 w-3" />
               Cadastre uma credencial OAB no Cofre para acessar processos em segredo de justiça.
             </p>
@@ -704,21 +704,21 @@ function ConsultarTab() {
           {tipo === "lawsuit_cnj" ? (
             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-bg border border-success/30">
               <Coins className="h-3 w-3 text-success-fg" />
-              <p className="text-[11px] text-success-fg">
+              <p className="text-apoio text-success-fg">
                 Custo: <strong>1 crédito</strong> — consulta direta por número do processo.
               </p>
             </div>
           ) : (
-            <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 text-[11px] text-warning-fg">
+            <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 text-apoio text-warning-fg">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning-fg" />
                 <div>
                   <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
-                  <p className="mt-0.5 text-[10.5px] opacity-90">
+                  <p className="mt-0.5 text-apoio opacity-90">
                     <strong>3 créditos base</strong> + <strong>1 crédito por lote de 10 processos</strong> encontrados (sem teto).
                     Ex: 30 processos = 6 créditos. Sem resultados? Só os 3 base.
                   </p>
-                  <p className="mt-0.5 text-[10px] opacity-75">Pode levar até 2 minutos.</p>
+                  <p className="mt-0.5 text-micro opacity-75">Pode levar até 2 minutos.</p>
                 </div>
               </div>
             </div>
@@ -791,7 +791,7 @@ function ConsultarTab() {
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
                   {ehListaCpf && (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-micro text-muted-foreground">
                       Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações (1 cred cada).
                     </p>
                   )}
@@ -853,7 +853,7 @@ function ConsultarTab() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" title={c.nome}>{c.nome}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
+                    <p className="text-micro text-muted-foreground font-mono">{c.cpfCnpj}</p>
                   </div>
                   <Button
                     size="sm"
@@ -919,7 +919,7 @@ function ResumoIABloco({ texto }: { texto: string }) {
 
   return (
     <div className="rounded-lg bg-info-bg border border-info/30 p-3 space-y-3">
-      <p className="text-[10px] font-semibold text-info-fg flex items-center gap-1">
+      <p className="text-micro font-semibold text-info-fg flex items-center gap-1">
         <FileText className="h-3 w-3" /> ANÁLISE ESTRATÉGICA IA
       </p>
       <div
@@ -932,13 +932,13 @@ function ResumoIABloco({ texto }: { texto: string }) {
       {mensagemCliente && (
         <div className="rounded-md bg-success-bg border border-success/30 p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] font-semibold text-success-fg flex items-center gap-1">
+            <p className="text-micro font-semibold text-success-fg flex items-center gap-1">
               💬 MENSAGEM PRONTA PRO CLIENTE
             </p>
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[10px] border-success/30"
+              className="h-6 text-micro border-success/30"
               onClick={copiarMensagem}
             >
               <Copy className="h-3 w-3 mr-1" />
@@ -1280,17 +1280,17 @@ function MonitoramentoCard({
                 createdAt={mon.createdAt ? (typeof mon.createdAt === "string" ? mon.createdAt : (mon.createdAt as Date).toISOString()) : null}
                 ultimoErro={mon.ultimoErro}
               />
-              <p className="text-[13px] font-bold truncate" title={nomeDoCasoMon(mon)}>
+              <p className="text-corpo font-bold truncate" title={nomeDoCasoMon(mon)}>
                 {nomeDoCasoMon(mon)}
               </p>
               {pausado && (
-                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-muted text-muted-foreground">
+                <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-micro font-semibold bg-muted text-muted-foreground">
                   Pausado
                 </span>
               )}
               {mon.subiu2grau && (
                 <span
-                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-[0.04em] bg-warning-bg text-warning-fg"
+                  className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-micro font-semibold bg-warning-bg text-warning-fg"
                   title={mon.indicios2grau ? `Indícios de 2º grau: ${mon.indicios2grau}` : "As movimentações sugerem que o processo subiu pro 2º grau (recurso)."}
                 >
                   2º grau?
@@ -1298,7 +1298,7 @@ function MonitoramentoCard({
               )}
             </div>
 
-            <p className="text-[10.5px] font-mono text-muted-foreground mt-0.5 truncate">
+            <p className="text-apoio font-mono text-muted-foreground mt-0.5 truncate">
               {mon.searchKey}
               {mon.tribunal ? ` · ${mon.tribunal}` : ""}
             </p>
@@ -1309,7 +1309,7 @@ function MonitoramentoCard({
             <div className="flex items-center gap-2 mt-1.5 min-w-0">
               {mon.diagnostico ? (
                 <span
-                  className={`text-[12px] truncate ${
+                  className={`text-corpo truncate ${
                     mon.diagnostico.severidade === "alerta"
                       ? "text-danger-fg"
                       : "text-warning-fg"
@@ -1319,15 +1319,15 @@ function MonitoramentoCard({
                   {mon.diagnostico.motivo}
                 </span>
               ) : mon.ultimaMovimentacao ? (
-                <span className="text-[12px] text-muted-foreground truncate" title={mon.ultimaMovimentacao.titulo}>
+                <span className="text-corpo text-muted-foreground truncate" title={mon.ultimaMovimentacao.titulo}>
                   {mon.ultimaMovimentacao.titulo}
                 </span>
               ) : aguardandoCapa ? (
-                <span className="text-[12px] text-muted-foreground italic truncate">
+                <span className="text-corpo text-muted-foreground italic truncate">
                   Aguardando a primeira sincronização com o tribunal…
                 </span>
               ) : (
-                <span className="text-[12px] text-muted-foreground truncate">
+                <span className="text-corpo text-muted-foreground truncate">
                   Sem movimentação registrada ainda
                 </span>
               )}
@@ -1337,22 +1337,22 @@ function MonitoramentoCard({
           <div className="shrink-0 text-right mr-1">
             {atualizando ? (
               <>
-                <p className="text-[11.5px] font-semibold text-info-fg flex items-center justify-end gap-1">
+                <p className="text-apoio font-semibold text-info-fg flex items-center justify-end gap-1">
                   <Loader2 className="h-3 w-3 animate-spin" />
                   consultando…
                 </p>
-                <p className="text-[10px] text-muted-foreground">tribunal agora</p>
+                <p className="text-micro text-muted-foreground">tribunal agora</p>
               </>
             ) : (
               <>
-                <p className="text-[11.5px] font-semibold text-foreground/70">
+                <p className="text-apoio font-semibold text-foreground/70">
                   {mon.diagnostico
                     ? tempoRelativo ?? "—"
                     : mon.ultimaMovimentacao
                       ? haQuantoTempoMon(mon.ultimaMovimentacao.dataEvento)
                       : tempoRelativo ?? "—"}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   {mon.diagnostico ? "parado" : "última mov."}
                 </p>
               </>
@@ -1374,7 +1374,7 @@ function MonitoramentoCard({
                     <DropdownMenuItem disabled={atualizando} onClick={onAtualizar}>
                       <RefreshCcw className="h-3.5 w-3.5 mr-2" />
                       {atualizando ? "Atualizando…" : "Atualizar só este"}
-                      <span className="ml-auto text-[10px] text-muted-foreground">sem custo</span>
+                      <span className="ml-auto text-micro text-muted-foreground">sem custo</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -1384,12 +1384,12 @@ function MonitoramentoCard({
                     <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
                       <Search className="h-3.5 w-3.5 mr-2" />
                       Buscar histórico
-                      <span className="ml-auto text-[10px] text-muted-foreground">1 crédito</span>
+                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={resumoMut.isPending} onClick={() => setConfirmResumoOpen(true)}>
                       <FileText className="h-3.5 w-3.5 mr-2" />
                       Resumo IA
-                      <span className="ml-auto text-[10px] text-muted-foreground">1 crédito</span>
+                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -1433,23 +1433,23 @@ function MonitoramentoCard({
               <div className="text-center py-8 text-xs text-muted-foreground">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>Ainda não há dados do processo.</p>
-                <p className="text-[10px] mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
+                <p className="text-micro mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
               </div>
             ) : (
               <>
                 {/* Cabeçalho do processo */}
                 <div className="flex items-center gap-2 flex-wrap">
                   {processoData.tribunal_acronym && (
-                    <Badge variant="outline" className="text-[10px]">
+                    <Badge variant="outline" className="text-micro">
                       <MapPin className="h-2.5 w-2.5 mr-0.5" />
                       {processoData.tribunal_acronym}
                     </Badge>
                   )}
                   {processoData.instance && (
-                    <Badge variant="outline" className="text-[10px]">{processoData.instance}ª instância</Badge>
+                    <Badge variant="outline" className="text-micro">{processoData.instance}ª instância</Badge>
                   )}
                   {processoData.amount && (
-                    <Badge className="bg-success/15 text-success-fg border-success/30 text-[10px]">
+                    <Badge className="bg-success/15 text-success-fg border-success/30 text-micro">
                       <CircleDollarSign className="h-2.5 w-2.5 mr-0.5" />
                       {formatBRL(processoData.amount)}
                     </Badge>
@@ -1465,7 +1465,7 @@ function MonitoramentoCard({
                   <div className="grid grid-cols-2 gap-3">
                     {ativos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-info-fg mb-1">POLO ATIVO</p>
+                        <p className="text-micro font-semibold text-info-fg mb-1">POLO ATIVO</p>
                         {ativos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1473,7 +1473,7 @@ function MonitoramentoCard({
                     )}
                     {passivos.length > 0 && (
                       <div>
-                        <p className="text-[10px] font-semibold text-danger-fg mb-1">POLO PASSIVO</p>
+                        <p className="text-micro font-semibold text-danger-fg mb-1">POLO PASSIVO</p>
                         {passivos.map((p: any, i: number) => (
                           <p key={i} className="text-xs truncate">{p.name}</p>
                         ))}
@@ -1486,12 +1486,12 @@ function MonitoramentoCard({
                 {steps.length > 0 ? (
                   <div>
                     <div className="flex items-center justify-between mb-2 gap-2">
-                      <p className="text-[10px] font-semibold text-muted-foreground">
+                      <p className="text-micro font-semibold text-muted-foreground">
                         MOVIMENTAÇÕES ({steps.length})
                       </p>
                       {steps.some((s: any) => s.eventoId && !s.resumoIa) && (
                         <button
-                          className="text-[10px] font-semibold text-info-fg hover:text-info-fg inline-flex items-center gap-1 disabled:opacity-60"
+                          className="text-micro font-semibold text-info-fg hover:text-info-fg inline-flex items-center gap-1 disabled:opacity-60"
                           disabled={reclassificarMut.isPending}
                           onClick={() => reclassificarMut.mutate({ monitoramentoId: mon.id })}
                           title="Gera resumo + selos (desfecho/relevância) das movimentações que ainda não têm."
@@ -1513,26 +1513,26 @@ function MonitoramentoCard({
                           <div className="text-xs">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {s.step_date && (
-                                <span className="text-[10px] text-muted-foreground font-medium">
+                                <span className="text-micro text-muted-foreground font-medium">
                                   {new Date(s.step_date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
                                 </span>
                               )}
-                              {dm && <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${dm.cls}`}>{dm.emoji} {dm.label}</span>}
+                              {dm && <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-micro font-semibold border ${dm.cls}`}>{dm.emoji} {dm.label}</span>}
                               {(s.relevancia === "rotina" || s.relevancia === "relevante") && (
                                 rotina
-                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-muted text-muted-foreground border-border">📄 Rotina</span>
-                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-medium border bg-info-bg text-info-fg border-info/30">⭐ Relevante</span>
+                                  ? <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-micro font-medium border bg-muted text-muted-foreground border-border">📄 Rotina</span>
+                                  : <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-micro font-medium border bg-info-bg text-info-fg border-info/30">⭐ Relevante</span>
                               )}
-                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold border bg-warning-bg text-warning-fg border-warning/30">⏰ Requer prazo</span>}
+                              {prazo && <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-micro font-semibold border bg-warning-bg text-warning-fg border-warning/30">⏰ Requer prazo</span>}
                             </div>
                             {s.resumoIa
-                              ? <p className="text-[11.5px] leading-snug mt-1 font-medium text-foreground">{s.resumoIa}</p>
-                              : <p className="text-[11px] leading-tight mt-0.5">{s.content}</p>}
-                            {s.resumoIa && <p className="text-[10px] leading-tight mt-0.5 text-muted-foreground line-clamp-2">{s.content}</p>}
+                              ? <p className="text-apoio leading-snug mt-1 font-medium text-foreground">{s.resumoIa}</p>
+                              : <p className="text-apoio leading-tight mt-0.5">{s.content}</p>}
+                            {s.resumoIa && <p className="text-micro leading-tight mt-0.5 text-muted-foreground line-clamp-2">{s.content}</p>}
                             {prazo && (
                               <div className="mt-1.5 rounded-md bg-warning-bg border border-warning/30 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap dark:bg-warning/20">
-                                <span className="text-[10px] text-warning-fg">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${formatarDataCalendario(prazo.dataSugerida)}` : ""}</span>
-                                <Button size="sm" className="h-6 text-[10px] rounded-md bg-warning hover:bg-warning text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
+                                <span className="text-micro text-warning-fg">⏰ <b>{prazo.titulo}</b> — {prazo.prazoDias} dias{prazo.prazoUteis ? " úteis" : ""}{prazo.dataSugerida ? ` · vence ${formatarDataCalendario(prazo.dataSugerida)}` : ""}</span>
+                                <Button size="sm" className="h-6 text-micro rounded-md bg-warning hover:bg-warning text-white px-2 shrink-0" disabled={criarPrazoMut.isPending} onClick={() => criarPrazoMut.mutate({ id: prazo.id })}>
                                   {criarPrazoMut.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : "＋ Criar prazo"}
                                 </Button>
                               </div>
@@ -1550,7 +1550,7 @@ function MonitoramentoCard({
                   <p className="text-xs text-muted-foreground text-center py-4">
                     Tribunal não retornou movimentações pra este processo.
                     <br />
-                    <span className="text-[10px]">Pode estar em segredo de justiça ou sem trâmite recente.</span>
+                    <span className="text-micro">Pode estar em segredo de justiça ou sem trâmite recente.</span>
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground text-center py-4">
@@ -1878,7 +1878,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 >
                   {abaF.label}
                   <span
-                    className={`rounded-full px-1.5 text-[10px] font-extrabold tabular-nums ${
+                    className={`rounded-full px-1.5 text-micro font-extrabold tabular-nums ${
                       ativa ? "bg-primary text-primary-foreground" : "bg-border text-muted-foreground"
                     }`}
                   >
@@ -1952,10 +1952,10 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
             <KeyRound className="h-[18px] w-[18px]" />
           </div>
           <div className="flex-1 min-w-[320px]">
-            <p className="text-[15px] font-bold">
+            <p className="text-secao font-bold">
               {principal.causa.titulo.replace("{n}", String(principal.total))}
             </p>
-            <p className="text-[12.5px] text-muted-foreground mt-1 leading-relaxed max-w-3xl">
+            <p className="text-corpo text-muted-foreground mt-1 leading-relaxed max-w-3xl">
               {principal.causa.explicacao}
             </p>
           </div>
@@ -1992,7 +1992,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       {secundarios.length > 0 && (
         <div className="rounded-xl border bg-card border-l-[3px] border-l-warning px-4 py-2.5 flex items-center gap-3 flex-wrap">
           <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0" />
-          <p className="text-[12.5px] text-muted-foreground min-w-0">
+          <p className="text-corpo text-muted-foreground min-w-0">
             <b className="font-bold text-foreground">{totalSecundarios}</b>{" "}
             {totalSecundarios === 1 ? "processo para" : "processos param"} por{" "}
             {secundarios.length === 1 ? "outro motivo" : "outros motivos"}:{" "}
@@ -2045,21 +2045,21 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                       {m.status === "erro" && <span className="text-danger-fg">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
-                    <Badge variant="outline" className="text-[9px] shrink-0">
+                    <Badge variant="outline" className="text-micro shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-info/15 text-info-fg border-info/30 text-micro shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-success/15 text-success-fg border-success/30 text-micro shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
-                      <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
+                      <span className="text-micro text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
                       <span
-                        className="text-[9px] text-danger-fg shrink-0 max-w-[180px] truncate"
+                        className="text-micro text-danger-fg shrink-0 max-w-[180px] truncate"
                         title={m.erro}
                       >
                         {m.erro}
@@ -2133,7 +2133,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
       {/* O saldo aparecia em destaque sem dizer o que o consome, e não havia
           nada na tela dizendo com que frequência o robô roda. */}
       {listaMons.length > 0 && (
-        <div className="rounded-xl border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap text-[12px] text-muted-foreground">
+        <div className="rounded-xl border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap text-corpo text-muted-foreground">
           <RefreshCcw className="h-3.5 w-3.5 shrink-0" />
           <span>
             O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b>, sem
@@ -2282,8 +2282,8 @@ function CabecalhoProcessos({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-[27px] font-bold tracking-tight leading-none">Processos</h1>
-        <p className="text-[13.5px] text-muted-foreground mt-1.5">
+        <h1 className="text-pagina font-bold tracking-tight leading-none">Processos</h1>
+        <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
         </p>
         <div className="flex flex-wrap gap-2 mt-3">
@@ -2302,8 +2302,8 @@ function CabecalhoProcessos({
       <div className="flex items-center gap-2 shrink-0">
         <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
           <Coins className="h-4 w-4 text-warning" />
-          <span className="text-[13px] font-bold tabular-nums">{saldo}</span>
-          <span className="text-[11.5px] text-muted-foreground">créditos</span>
+          <span className="text-corpo font-bold tabular-nums">{saldo}</span>
+          <span className="text-apoio text-muted-foreground">créditos</span>
         </div>
         <Button size="sm" variant="outline" onClick={onConsultar}>
           <Search className="h-4 w-4 mr-1.5" />
@@ -2336,14 +2336,14 @@ function PastilhaProc({
       }`}
     >
       <b
-        className={`text-[15px] font-bold tabular-nums ${
+        className={`text-secao font-bold tabular-nums ${
           tom === "alerta" ? "text-danger-fg" : ""
         }`}
       >
         {valor}
       </b>
       <span
-        className={`text-[11.5px] ${
+        className={`text-apoio ${
           tom === "alerta" ? "text-danger-fg" : "text-muted-foreground"
         }`}
       >
@@ -2502,7 +2502,7 @@ function CentralBadge() {
   const n = data?.naoLidas ?? 0;
   if (n <= 0) return null;
   return (
-    <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-[9.5px] font-extrabold px-1.5 py-px tabular-nums">
+    <span className="ml-0.5 rounded-full bg-primary text-primary-foreground text-micro font-extrabold px-1.5 py-px tabular-nums">
       {n > 99 ? "99+" : n}
     </span>
   );
@@ -2579,12 +2579,12 @@ function AlertasTab() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <p className="font-semibold text-sm tracking-tight">Alertas detectados nas movimentações</p>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning text-warning-on text-[9px] font-bold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning text-warning-on text-micro font-bold uppercase tracking-wider">
                 <Sparkles className="h-2.5 w-2.5" />
                 IA
               </span>
             </div>
-            <p className="text-[11px] text-warning-fg/75 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-apoio text-warning-fg/75 mt-1 max-w-2xl leading-relaxed">
               Sistema detecta automaticamente <strong>audiências, intimações, réplica, contestação e recursos</strong>.
               Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
             </p>
@@ -2647,14 +2647,14 @@ function AlertasTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold tracking-tight">{sug.titulo}</p>
-                      <Badge className={`${palette.badgeBg} text-[9px]`}>{palette.tipoLabel}</Badge>
-                      {sug.tribunal && <Badge variant="outline" className="text-[9px]">{sug.tribunal}</Badge>}
+                      <Badge className={`${palette.badgeBg} text-micro`}>{palette.tipoLabel}</Badge>
+                      {sug.tribunal && <Badge variant="outline" className="text-micro">{sug.tribunal}</Badge>}
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-micro text-muted-foreground mt-1">
                       <span className="font-medium text-foreground">{sug.apelidoProcesso}</span>
                       {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
                     </p>
-                    <div className="flex items-center gap-3 mt-1.5 text-[11px] flex-wrap">
+                    <div className="flex items-center gap-3 mt-1.5 text-apoio flex-wrap">
                       {sug.dataSugerida && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg font-medium tabular-nums">
                           <Clock className="h-3 w-3" />
@@ -2662,7 +2662,7 @@ function AlertasTab() {
                         </span>
                       )}
                       {sug.prazoDias != null && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-medium border ${
                           isUrgente
                             ? "bg-danger-bg border-danger/30 text-danger-fg"
                             : "bg-muted border-border text-muted-foreground"
@@ -2672,15 +2672,15 @@ function AlertasTab() {
                       )}
                     </div>
                     {sug.motivo && (
-                      <p className="text-[10px] text-muted-foreground mt-1.5 italic">"{sug.motivo}"</p>
+                      <p className="text-micro text-muted-foreground mt-1.5 italic">"{sug.motivo}"</p>
                     )}
                     {sug.trechoOrigem && (
                       <details className="mt-1.5 group">
-                        <summary className="text-[10px] text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1 list-none">
+                        <summary className="text-micro text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1 list-none">
                           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
                           Ver trecho original
                         </summary>
-                        <p className="text-[10px] text-muted-foreground mt-1.5 bg-muted border border-border/70 rounded-lg p-2.5 leading-relaxed">
+                        <p className="text-micro text-muted-foreground mt-1.5 bg-muted border border-border/70 rounded-lg p-2.5 leading-relaxed">
                           {sug.trechoOrigem}
                         </p>
                       </details>
@@ -2689,7 +2689,7 @@ function AlertasTab() {
                   <div className="flex flex-col gap-1.5 shrink-0">
                     <Button
                       size="sm"
-                      className="h-7 text-[10px] rounded-lg bg-success shadow-sm"
+                      className="h-7 text-micro rounded-lg bg-success shadow-sm"
                       onClick={() => abrirAprovar(sug)}
                       disabled={aprovarMut.isPending || descartarMut.isPending}
                     >
@@ -2699,7 +2699,7 @@ function AlertasTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 text-[10px] rounded-lg border-border hover:border-border hover:bg-muted"
+                      className="h-7 text-micro rounded-lg border-border hover:border-border hover:bg-muted"
                       onClick={() => descartarMut.mutate({ id: sug.id })}
                       disabled={aprovarMut.isPending || descartarMut.isPending}
                     >
@@ -2773,7 +2773,7 @@ function MonitoramentosCount() {
   const parados = mons.filter((m: any) => !!m.diagnostico).length;
   return (
     <span
-      className={`ml-1 text-[10px] px-1.5 rounded-full tabular-nums font-semibold ${
+      className={`ml-1 text-micro px-1.5 rounded-full tabular-nums font-semibold ${
         parados > 0
           ? "bg-danger-bg text-danger-fg dark:text-danger"
           : "bg-info-bg text-info-fg"
@@ -2793,7 +2793,7 @@ function NovasAcoesBadge() {
   const count = data?.totalNaoLidas ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-danger-bg text-danger-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-micro bg-danger-bg text-danger-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2807,7 +2807,7 @@ function AlertasBadge() {
   const count = data?.pendentes ?? 0;
   if (count === 0) return null;
   return (
-    <span className="ml-1 text-[10px] bg-warning-bg text-warning-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
+    <span className="ml-1 text-micro bg-warning-bg text-warning-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -3259,12 +3259,12 @@ function NovasAcoesTab() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-semibold text-sm tracking-tight">Alerta de novas ações contra clientes</p>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-[9px] font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-micro font-bold uppercase tracking-wider">
                   <span className="h-1 w-1 rounded-full bg-card animate-pulse" />
                   Em tempo real
                 </span>
               </div>
-              <p className="text-[11px] text-danger-fg/75 mt-1 max-w-2xl leading-relaxed">
+              <p className="text-apoio text-danger-fg/75 mt-1 max-w-2xl leading-relaxed">
                 Selecione clientes cadastrados e seja avisado <strong>imediatamente</strong> quando uma nova ação for distribuída contra eles —
                 antes mesmo da citação. Funciona pra busca e apreensão, reclamações trabalhistas, execuções, etc.
               </p>
@@ -3327,20 +3327,20 @@ function NovasAcoesTab() {
                       {m.status === "erro" && <span className="text-danger-fg">✗</span>}
                     </div>
                     <span className="flex-1 truncate">{m.apelido || `Monitor ${m.monitoramentoId}`}</span>
-                    <Badge variant="outline" className="text-[9px] shrink-0">
+                    <Badge variant="outline" className="text-micro shrink-0">
                       {m.tipo === "novas_acoes" ? "Novas ações" : "Movs"}
                     </Badge>
                     {m.status === "ok" && m.baseline && (
-                      <Badge className="bg-info/15 text-info-fg border-info/30 text-[9px] shrink-0">Baseline</Badge>
+                      <Badge className="bg-info/15 text-info-fg border-info/30 text-micro shrink-0">Baseline</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) > 0 && (
-                      <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px] shrink-0">+{m.detectadas} novo(s)</Badge>
+                      <Badge className="bg-success/15 text-success-fg border-success/30 text-micro shrink-0">+{m.detectadas} novo(s)</Badge>
                     )}
                     {m.status === "ok" && !m.baseline && (m.detectadas ?? 0) === 0 && (
-                      <span className="text-[9px] text-muted-foreground shrink-0">Sem novidades</span>
+                      <span className="text-micro text-muted-foreground shrink-0">Sem novidades</span>
                     )}
                     {m.status === "erro" && (
-                      <span className="text-[9px] text-danger-fg shrink-0 max-w-[180px] truncate" title={m.erro}>
+                      <span className="text-micro text-danger-fg shrink-0 max-w-[180px] truncate" title={m.erro}>
                         {m.erro}
                       </span>
                     )}
@@ -3375,13 +3375,13 @@ function NovasAcoesTab() {
                 <p className="text-xs font-bold tracking-tight text-foreground">
                   Monitorando {monitoramentosRaw.length} {monitoramentosRaw.length === 1 ? "cliente" : "clientes"}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   {monitoramentosRaw.filter((m: any) => (m.statusJudit || m.status) === "ativo").length} ativos · {monitoramentosRaw.filter((m: any) => !!m.ultimoErro).length} com erro
                 </p>
                 <CoberturaVarredura mons={monitoramentosRaw} />
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground/70">
+            <p className="text-micro text-muted-foreground/70">
               {monitoramentos.length !== monitoramentosRaw.length && (
                 <>Mostrando <b className="text-foreground">{monitoramentos.length}</b> de {monitoramentosRaw.length}</>
               )}
@@ -3391,7 +3391,7 @@ function NovasAcoesTab() {
           {/* Grid de cards — mais altos com info enriquecida */}
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {monitoramentos.length === 0 ? (
-              <p className="col-span-full text-center text-[11px] text-muted-foreground/70 italic py-4">
+              <p className="col-span-full text-center text-apoio text-muted-foreground/70 italic py-4">
                 Nenhum cliente bate com a busca acima.
               </p>
             ) : (
@@ -3413,7 +3413,7 @@ function NovasAcoesTab() {
                     <div className="p-3">
                       <div className="flex items-start gap-2.5">
                         <span
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow-sm bg-gradient-to-br ${gradientAvatar(nome)}`}
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center text-apoio font-bold text-white shrink-0 shadow-sm bg-gradient-to-br ${gradientAvatar(nome)}`}
                         >
                           {gerarIniciais(nome)}
                         </span>
@@ -3430,22 +3430,22 @@ function NovasAcoesTab() {
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-muted text-muted-foreground text-[9px] font-mono font-semibold">
+                            <span className="inline-flex items-center px-1.5 py-0 rounded-full bg-muted text-muted-foreground text-micro font-mono font-semibold">
                               {(m.searchType || "").toUpperCase()}
                             </span>
-                            <span className="text-[10px] text-muted-foreground font-mono truncate">{m.searchKey}</span>
+                            <span className="text-micro text-muted-foreground font-mono truncate">{m.searchKey}</span>
                           </div>
-                          <p className="text-[9.5px] text-muted-foreground mt-1 truncate" title="Estados vigiados">
+                          <p className="text-micro text-muted-foreground mt-1 truncate" title="Estados vigiados">
                             <span className="font-semibold text-info-fg">{lerTribunaisDoMonitorCliente(m).map(siglaDoTribunal).join(" · ")}</span>
                           </p>
                           {(m.totalNovasAcoes ?? 0) > 0 && (
-                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg text-[9.5px] font-bold mt-1.5">
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg text-micro font-bold mt-1.5">
                               <Siren className="h-2.5 w-2.5" />
                               {m.totalNovasAcoes} {m.totalNovasAcoes === 1 ? "ação nova" : "ações novas"}
                             </div>
                           )}
                           {temErro && (
-                            <p className="text-[9.5px] text-danger-fg mt-1 truncate" title={m.ultimoErro}>
+                            <p className="text-micro text-danger-fg mt-1 truncate" title={m.ultimoErro}>
                               ⚠ {m.ultimoErro}
                             </p>
                           )}
@@ -3455,7 +3455,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-muted-foreground hover:bg-info-bg hover:text-info-fg px-2"
+                          className="h-6 text-micro rounded-md text-muted-foreground hover:bg-info-bg hover:text-info-fg px-2"
                           title="Escolher em quais estados vigiar este cliente"
                           onClick={() => {
                             setEditarEstadosTarget(m);
@@ -3468,7 +3468,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-info-fg hover:bg-info-bg px-2"
+                          className="h-6 text-micro rounded-md text-info-fg hover:bg-info-bg px-2"
                           title="Atualizar agora — força consulta imediata (sem custo extra)"
                           onClick={() => atualizarAgoraMut.mutate({ monitoramentoId: m.id })}
                           disabled={atualizarAgoraMut.isPending}
@@ -3481,7 +3481,7 @@ function NovasAcoesTab() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 text-[10px] rounded-md text-danger-fg hover:bg-danger-bg px-2"
+                          className="h-6 text-micro rounded-md text-danger-fg hover:bg-danger-bg px-2"
                           title="Remover monitoramento"
                           onClick={() => setDeletarMonTarget({ id: m.id, nome: m.apelido || m.searchKey || "cliente" })}
                           disabled={deletarMonMut.isPending}
@@ -3538,7 +3538,7 @@ function NovasAcoesTab() {
             >
               {label}
               {val === "pendentes" && (data?.totalNaoLidas ?? 0) > 0 && (
-                <span className={`px-1.5 rounded-full text-[10px] tabular-nums ${filtro === val ? "bg-white/25" : "bg-danger-bg text-danger-fg"}`}>{data?.totalNaoLidas}</span>
+                <span className={`px-1.5 rounded-full text-micro tabular-nums ${filtro === val ? "bg-white/25" : "bg-danger-bg text-danger-fg"}`}>{data?.totalNaoLidas}</span>
               )}
             </button>
           ))}
@@ -3549,7 +3549,7 @@ function NovasAcoesTab() {
           contra o cliente com a que o próprio escritório ajuizou — e o alerta
           tocava nas duas. */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mr-0.5">Polo do cliente</span>
+        <span className="text-micro font-bold uppercase tracking-wider text-muted-foreground mr-0.5">Polo do cliente</span>
         {GAVETAS.map((g) => {
           const ativo = polo === g.id;
           const n = data?.contagemPorPolo?.[g.id] ?? 0;
@@ -3559,7 +3559,7 @@ function NovasAcoesTab() {
               key={g.id}
               type="button"
               onClick={() => setPolo(g.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-apoio font-semibold transition-colors ${
                 ativo ? "bg-foreground text-background border-foreground" : "bg-card text-muted-foreground border-border hover:text-foreground"
               }`}
               title={g.explicacao}
@@ -3567,22 +3567,22 @@ function NovasAcoesTab() {
               <span className={`h-1.5 w-1.5 rounded-full ${cor}`} />
               <span className="hidden sm:inline">{g.rotulo}</span>
               <span className="sm:hidden">{g.curto}</span>
-              <span className={`min-w-[17px] px-1 rounded-full text-[10px] tabular-nums text-center ${ativo ? "bg-white/25" : "bg-muted text-foreground"}`}>{n}</span>
+              <span className={`min-w-[17px] px-1 rounded-full text-micro tabular-nums text-center ${ativo ? "bg-white/25" : "bg-muted text-foreground"}`}>{n}</span>
             </button>
           );
         })}
-        <p className="text-[10.5px] text-muted-foreground ml-auto text-right max-w-xs hidden md:block">
+        <p className="text-apoio text-muted-foreground ml-auto text-right max-w-xs hidden md:block">
           {GAVETAS.find((g) => g.id === polo)?.explicacao}
         </p>
       </div>
       {polo === "ativo" && (
-        <div className="rounded-lg bg-info-bg border border-info/30 px-3 py-2 text-[11px] text-info-fg leading-relaxed">
+        <div className="rounded-lg bg-info-bg border border-info/30 px-3 py-2 text-apoio text-info-fg leading-relaxed">
           Ações que o <b>seu cliente moveu</b>. Ficam aqui só pra consulta: não viram "Novo", não tocam o sino,
           não mandam e-mail. Quando o advogado do escritório aparece na causa, o card diz.
         </div>
       )}
       {polo === "desconhecido" && (
-        <div className="rounded-lg bg-warning-bg border border-warning/30 px-3 py-2 text-[11px] text-warning-fg leading-relaxed">
+        <div className="rounded-lg bg-warning-bg border border-warning/30 px-3 py-2 text-apoio text-warning-fg leading-relaxed">
           O robô leu as partes mas <b>não achou o cliente</b> — nome abreviado, CPF escondido ou tabela fora do
           padrão. Enquanto não identificado, <b>conta como alerta</b> (melhor um aviso a mais do que um processo
           escondido). Você resolve com um clique no card.
@@ -3687,25 +3687,25 @@ function NovasAcoesTab() {
                           {clienteNome}
                         </p>
                         {!resolvido && ehAlerta && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-danger text-danger-on text-micro font-bold uppercase tracking-wider animate-pulse">
                             <Siren className="h-2.5 w-2.5" />
                             Novo
                           </span>
                         )}
                         {resolvido && rMeta && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${rMeta.badge}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-semibold border ${rMeta.badge}`}>
                             {rMeta.emoji} {rMeta.label}
                           </span>
                         )}
                         {selo && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${selo.classe}`}>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-bold border ${selo.classe}`}>
                             {poloCliente === "desconhecido" ? <HelpCircle className="h-2.5 w-2.5" /> : <AlertTriangle className="h-2.5 w-2.5" />}
                             {selo.texto}
                           </span>
                         )}
                         {a.capa?.advogadoDoEscritorio && (
                           <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold border bg-primary/10 text-primary border-primary/30"
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-bold border bg-primary/10 text-primary border-primary/30"
                             title="A OAB do escritório aparece entre as partes deste processo"
                           >
                             <Scale className="h-2.5 w-2.5" />
@@ -3713,13 +3713,13 @@ function NovasAcoesTab() {
                           </span>
                         )}
                         {a.clienteSearchType && a.clienteSearchKey && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[9px] font-mono">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-micro font-mono">
                             {a.clienteSearchType.toUpperCase()} {a.clienteSearchKey}
                           </span>
                         )}
                       </div>
                       {resolvido && (
-                        <p className="text-[10.5px] text-muted-foreground mt-1">
+                        <p className="text-apoio text-muted-foreground mt-1">
                           {rMeta?.verbo} por <b className="text-foreground">{a.resolvidoPorNome || "—"}</b>
                           {a.resolvidoEm && <> · {tempoRelativoBR(a.resolvidoEm)}</>}
                           {a.resolucao === "monitorando" && <> · agora aparece em <b className="text-foreground">Movimentações</b></>}
@@ -3727,7 +3727,7 @@ function NovasAcoesTab() {
                       )}
 
                       {/* Detectado há X / em Y tribunal */}
-                      <div className="flex items-center gap-2 text-[10.5px] text-muted-foreground mt-1 flex-wrap">
+                      <div className="flex items-center gap-2 text-apoio text-muted-foreground mt-1 flex-wrap">
                         {tempoRel && (
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -3737,7 +3737,7 @@ function NovasAcoesTab() {
                         {a.tribunal && (
                           <>
                             <span className="text-muted-foreground/70">·</span>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg font-semibold text-[9.5px]">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg font-semibold text-micro">
                               {a.tribunal.toUpperCase()}
                             </span>
                           </>
@@ -3754,26 +3754,26 @@ function NovasAcoesTab() {
                           {(() => {
                             const trib = tribunalDoCnj(a.cnj) ?? a.tribunal;
                             return trib ? (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-info-bg text-info-fg border border-info/30 text-[9.5px] font-extrabold tracking-wide">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-info-bg text-info-fg border border-info/30 text-micro font-extrabold tracking-wide">
                                 {siglaDoTribunal(trib)}
                               </span>
                             ) : null;
                           })()}
                           {valor != null && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg text-[9.5px] font-semibold tabular-nums">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg text-micro font-semibold tabular-nums">
                               <CircleDollarSign className="h-2.5 w-2.5" />
                               {formatBRL(valor)}
                             </span>
                           )}
                           {capa?.dist && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-micro text-muted-foreground">
                               Dist. {new Date(capa.dist).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </div>
                         {natureza && (
                           <div className="pt-2 mt-1 border-t border-border/70">
-                            <p className="text-[9px] font-bold text-muted-foreground/70 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
+                            <p className="text-micro font-bold text-muted-foreground/70 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
                             <p className="text-xs text-foreground leading-snug">{natureza}</p>
                           </div>
                         )}
@@ -3781,36 +3781,36 @@ function NovasAcoesTab() {
                           <div className="grid grid-cols-2 gap-3 pt-2 mt-1 border-t border-border/70">
                             {ativos.length > 0 && (
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-info-fg mb-1 tracking-wider">POLO ATIVO</p>
+                                <p className="text-micro font-bold text-info-fg mb-1 tracking-wider">POLO ATIVO</p>
                                 {ativos.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-apoio text-foreground truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                             {passivos.length > 0 && (
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-danger-fg mb-1 tracking-wider">POLO PASSIVO</p>
+                                <p className="text-micro font-bold text-danger-fg mb-1 tracking-wider">POLO PASSIVO</p>
                                 {passivos.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-apoio text-foreground truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                             {outras.length > 0 && (
                               <div className="min-w-0">
-                                <p className="text-[9px] font-bold text-muted-foreground mb-1 tracking-wider">OUTRAS PARTES</p>
+                                <p className="text-micro font-bold text-muted-foreground mb-1 tracking-wider">OUTRAS PARTES</p>
                                 {outras.map((p, i) => (
-                                  <p key={i} className="text-[11px] text-foreground truncate" title={p.nome}>{p.nome}</p>
+                                  <p key={i} className="text-apoio text-foreground truncate" title={p.nome}>{p.nome}</p>
                                 ))}
                               </div>
                             )}
                           </div>
                         )}
                         {corte && (
-                          <p className="text-[10.5px] text-muted-foreground flex items-center gap-1 pt-2 mt-1 border-t border-border/70">
+                          <p className="text-apoio text-muted-foreground flex items-center gap-1 pt-2 mt-1 border-t border-border/70">
                             <MapPin className="h-2.5 w-2.5" />
                             {corte}
                             {capa?.daDeteccao && (
-                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-[9px] font-semibold">
+                              <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-micro font-semibold">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 Capa lida na detecção — sem crédito extra
                               </span>
@@ -3821,7 +3821,7 @@ function NovasAcoesTab() {
                           <div className="pt-2 mt-1 border-t border-border/70">
                             <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 flex gap-2">
                               <AlertTriangle className="h-3.5 w-3.5 text-warning-fg shrink-0 mt-px" />
-                              <p className="text-[11px] text-warning-fg leading-relaxed">
+                              <p className="text-apoio text-warning-fg leading-relaxed">
                                 <b>O tribunal não devolveu a capa deste processo.</b>{" "}
                                 Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
                                 e por isso o card veio pra cá em vez de ser silenciado.
@@ -3831,14 +3831,14 @@ function NovasAcoesTab() {
                         )}
                         {advogados.length > 0 && (
                           <div className="pt-1.5 mt-1 border-t border-border/70">
-                            <p className="text-[9px] font-bold text-info-fg mb-0.5 tracking-wider">ADVOGADOS</p>
-                            <p className="text-[10.5px] text-muted-foreground truncate">{advogados.join(" · ")}</p>
+                            <p className="text-micro font-bold text-info-fg mb-0.5 tracking-wider">ADVOGADOS</p>
+                            <p className="text-apoio text-muted-foreground truncate">{advogados.join(" · ")}</p>
                           </div>
                         )}
                         {/* Timeline de movimentações (quando detalhes carregados) */}
                         {detalhes?.steps && detalhes.steps.length > 0 && (
                           <div className="pt-2 mt-1 border-t border-border/70">
-                            <p className="text-[9px] font-bold text-info-fg mb-1.5 tracking-wider">
+                            <p className="text-micro font-bold text-info-fg mb-1.5 tracking-wider">
                               MOVIMENTAÇÕES ({detalhes.steps.length})
                             </p>
                             <div className="relative space-y-2 max-h-52 overflow-y-auto pl-3">
@@ -3846,9 +3846,9 @@ function NovasAcoesTab() {
                               {detalhes.steps.slice(0, 10).map((s: any, i: number) => (
                                 <div key={i} className="relative">
                                   <div className="absolute -left-[9px] top-1 h-1.5 w-1.5 rounded-full bg-info ring-2 ring-white" />
-                                  <div className="text-[10.5px] pl-2">
+                                  <div className="text-apoio pl-2">
                                     {s.step_date && (
-                                      <span className="text-[9.5px] text-muted-foreground/70 font-mono">
+                                      <span className="text-micro text-muted-foreground/70 font-mono">
                                         {new Date(s.step_date).toLocaleDateString("pt-BR")}
                                       </span>
                                     )}
@@ -3857,7 +3857,7 @@ function NovasAcoesTab() {
                                 </div>
                               ))}
                               {detalhes.steps.length > 10 && (
-                                <p className="text-[9.5px] text-muted-foreground/70 italic pl-2 mt-1">
+                                <p className="text-micro text-muted-foreground/70 italic pl-2 mt-1">
                                   +{detalhes.steps.length - 10} movimentações mais antigas
                                 </p>
                               )}
@@ -3867,7 +3867,7 @@ function NovasAcoesTab() {
                         {pedePolo && (
                           <div className="pt-2 mt-1 border-t border-border/70">
                             <div className="rounded-lg border border-dashed border-warning/50 bg-warning-bg px-3 py-2 flex items-center gap-2 flex-wrap">
-                              <span className="text-[11px] font-bold text-warning-fg">Este cliente é:</span>
+                              <span className="text-apoio font-bold text-warning-fg">Este cliente é:</span>
                               {([
                                 ["passivo", "Réu"],
                                 ["ativo", "Autor"],
@@ -3877,20 +3877,20 @@ function NovasAcoesTab() {
                                   key={valor}
                                   size="sm"
                                   variant="outline"
-                                  className="h-6 px-2.5 text-[10.5px] rounded-md bg-card border-warning/50 hover:bg-warning-bg"
+                                  className="h-6 px-2.5 text-apoio rounded-md bg-card border-warning/50 hover:bg-warning-bg"
                                   disabled={definirPoloMut.isPending}
                                   onClick={() => definirPoloMut.mutate({ id: a.id, polo: valor })}
                                 >
                                   {rotulo}
                                 </Button>
                               ))}
-                              <span className="text-[10px] text-warning-fg/80">· o card muda de gaveta na hora; vale só pra este processo</span>
+                              <span className="text-micro text-warning-fg/80">· o card muda de gaveta na hora; vale só pra este processo</span>
                             </div>
                           </div>
                         )}
                         {!detalhes && (
                           <div className="pt-2 mt-1 border-t border-border/70 flex items-center justify-between gap-2 flex-wrap">
-                            <p className="text-[10.5px] text-muted-foreground italic">
+                            <p className="text-apoio text-muted-foreground italic">
                               {capa?.daDeteccao
                                 ? "Movimentações e advogados não carregados ainda."
                                 : a.capaFalhou
@@ -3900,7 +3900,7 @@ function NovasAcoesTab() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className={`h-7 text-[10.5px] rounded-lg bg-card ${a.capaFalhou && !capa ? "border-warning/30 hover:bg-warning-bg text-warning-fg" : "border-info/30 hover:bg-info-bg hover:border-info/30 text-info-fg"}`}
+                              className={`h-7 text-apoio rounded-lg bg-card ${a.capaFalhou && !capa ? "border-warning/30 hover:bg-warning-bg text-warning-fg" : "border-info/30 hover:bg-info-bg hover:border-info/30 text-info-fg"}`}
                               disabled={carregando || carregandoAcaoId !== null}
                               onClick={() => carregarDetalhes(a.id, a.cnj, credencialIdDoMonitor(a.monitoramentoId))}
                             >
@@ -3910,7 +3910,7 @@ function NovasAcoesTab() {
                                 : capa?.daDeteccao
                                   ? "Ver movimentações"
                                   : "Carregar detalhes"}
-                              <span className="ml-1 text-[9.5px] opacity-70">1 cred</span>
+                              <span className="ml-1 text-micro opacity-70">1 cred</span>
                             </Button>
                           </div>
                         )}
@@ -3923,7 +3923,7 @@ function NovasAcoesTab() {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 text-[10.5px] rounded-lg text-muted-foreground"
+                          className="h-7 text-apoio rounded-lg text-muted-foreground"
                           title="Reabrir — volta pras Pendentes"
                           disabled={reabrirMut.isPending}
                           onClick={() => reabrirMut.mutate({ id: a.id })}
@@ -3935,7 +3935,7 @@ function NovasAcoesTab() {
                         <>
                           <Button
                             size="sm"
-                            className="h-7 text-[10.5px] rounded-lg bg-info text-info-on shadow-sm"
+                            className="h-7 text-apoio rounded-lg bg-info text-info-on shadow-sm"
                             title="Monitorar movimentações deste processo (2 cred/mês) — resolve o card"
                             disabled={monitorarMut.isPending || resolverMut.isPending}
                             onClick={() => handleMonitorarAcao(a)}
@@ -3948,7 +3948,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-muted-foreground hover:bg-muted"
+                            className="h-7 text-apoio rounded-lg text-muted-foreground hover:bg-muted"
                             title="Ciente — você viu, mas não precisa monitorar agora"
                             disabled={resolverMut.isPending}
                             onClick={() => resolverMut.mutate({ id: a.id, resolucao: "lida" })}
@@ -3959,7 +3959,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 text-[10.5px] rounded-lg text-danger-fg hover:bg-danger-bg"
+                            className="h-7 text-apoio rounded-lg text-danger-fg hover:bg-danger-bg"
                             title="Falso positivo (reversível — vai pras Resolvidas)"
                             disabled={resolverMut.isPending}
                             onClick={() => handleFalsoAcao(a.id)}
@@ -4025,7 +4025,7 @@ function NovasAcoesTab() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" title={c.nome}>{c.nome}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>
+                      <p className="text-micro text-muted-foreground font-mono">{c.cpfCnpj}</p>
                     </div>
                   </button>
                 ))}
@@ -4036,7 +4036,7 @@ function NovasAcoesTab() {
               <div className="text-center py-4 border rounded-lg">
                 <Users className="h-6 w-6 text-muted-foreground/30 mx-auto mb-1" />
                 <p className="text-xs text-muted-foreground">Nenhum cliente com CPF/CNPJ encontrado.</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Cadastre o cliente primeiro em Clientes.</p>
+                <p className="text-micro text-muted-foreground mt-0.5">Cadastre o cliente primeiro em Clientes.</p>
               </div>
             )}
 
@@ -4071,7 +4071,7 @@ function NovasAcoesTab() {
                   ))}
                 </select>
                 {credsAtivas.length === 0 && (
-                  <p className="text-[10px] text-warning-fg mt-1">
+                  <p className="text-micro text-warning-fg mt-1">
                     Sem credenciais ativas. Cadastre uma na aba "Cofre de Credenciais" primeiro.
                   </p>
                 )}
@@ -4457,12 +4457,12 @@ function CofreTab() {
             <div className="min-w-0 max-w-2xl">
               <div className="flex items-center gap-2 flex-wrap">
                 <p className="font-semibold text-sm tracking-tight">Cofre de Credenciais de Advogado</p>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-micro font-bold uppercase tracking-wider">
                   <ShieldCheck className="h-2.5 w-2.5" />
                   AES-256
                 </span>
               </div>
-              <p className="text-[11px] text-info-fg/75 mt-1 leading-relaxed">
+              <p className="text-apoio text-info-fg/75 mt-1 leading-relaxed">
                 Cadastre o login OAB de um advogado pra acessar processos em <strong>segredo de justiça</strong>.
                 As senhas ficam criptografadas e <strong>nunca</strong> são expostas após o cadastro — se precisar trocar, delete e cadastre nova.
               </p>
@@ -4490,7 +4490,7 @@ function CofreTab() {
               <p className="text-sm font-semibold text-warning-fg">
                 Processos apontando para credencial que não pode atender
               </p>
-              <p className="text-[11px] text-warning-fg/80 leading-relaxed mt-0.5">
+              <p className="text-apoio text-warning-fg/80 leading-relaxed mt-0.5">
                 Eles continuam parados até serem reapontados para uma credencial ativa. Reapontar
                 não altera nada no processo — só troca qual login o robô usa.
               </p>
@@ -4507,7 +4507,7 @@ function CofreTab() {
                   {o.total} processo(s) do {String(o.tribunal).toUpperCase()} →{" "}
                   {o.apelido ? `"${o.apelido}"` : "sem credencial"}
                 </p>
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-apoio text-muted-foreground">
                   {o.acao === "revalidar"
                     ? `credencial ${o.status} — costuma voltar sozinha; tente "Validar" antes de mover`
                     : o.status === "removida"
@@ -4593,7 +4593,7 @@ function CofreTab() {
                     <p className="text-sm font-semibold tracking-tight truncate" title={c.apelido || c.usernameMascarado}>
                       {c.apelido || c.usernameMascarado}
                     </p>
-                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium truncate" title={(c.sistema || c.systemName || "").toUpperCase()}>
+                    <p className="text-micro text-muted-foreground uppercase tracking-wider font-medium truncate" title={(c.sistema || c.systemName || "").toUpperCase()}>
                       {(c.sistema || c.systemName || "").toUpperCase()}
                     </p>
                   </div>
@@ -4601,7 +4601,7 @@ function CofreTab() {
                     {statusInfo.animated && (
                       <span className={`absolute inset-0 rounded-full ${statusInfo.dot} animate-ping opacity-30`} />
                     )}
-                    <span className={`relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold border ${statusInfo.labelColor}`}>
+                    <span className={`relative inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-semibold border ${statusInfo.labelColor}`}>
                       <span className={`h-1.5 w-1.5 rounded-full ${statusInfo.dot}`} />
                       {statusInfo.label}
                     </span>
@@ -4613,7 +4613,7 @@ function CofreTab() {
                     <span className="font-mono truncate" title={c.usernameMascarado}>{c.usernameMascarado}</span>
                   </div>
                   {(c.tem2fa || c.has2fa) && (
-                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-[10px] font-medium">
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-micro font-medium">
                       <ShieldAlert className="h-3 w-3" />
                       2FA ativado
                     </div>
@@ -4624,13 +4624,13 @@ function CofreTab() {
                       atrás, logo acima da mensagem de erro. Parecia que tinha
                       validado bem naquele dia. */}
                   {c.ultimoLoginSucessoEm && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-micro text-muted-foreground">
                       <CheckCircle2 className="h-3 w-3 text-success" />
                       <span>Último acesso com sucesso: {new Date(c.ultimoLoginSucessoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                     </div>
                   )}
                   {c.ultimoLoginTentativaEm && c.ultimoLoginTentativaEm !== c.ultimoLoginSucessoEm && (
-                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5 text-micro text-muted-foreground">
                       <RefreshCcw className="h-3 w-3 text-muted-foreground/70" />
                       <span>Última tentativa: {new Date(c.ultimoLoginTentativaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
                     </div>
@@ -4641,7 +4641,7 @@ function CofreTab() {
                     </div>
                   )}
                   {(c.ultimoErro || c.mensagemErro) && (
-                    <div className={`text-[10px] rounded-lg p-2 ${
+                    <div className={`text-micro rounded-lg p-2 ${
                       c.status === "erro" || c.status === "expirada"
                         ? "bg-danger-bg border border-danger/30 text-danger-fg"
                         : "bg-info-bg border border-info/30 text-info-fg"
@@ -4772,7 +4772,7 @@ function CofreTab() {
                         <p className={`text-xs font-semibold ${ativo ? "text-info-fg" : ""}`}>
                           {o.titulo}
                         </p>
-                        <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                        <p className="text-apoio text-muted-foreground leading-relaxed">{o.desc}</p>
                       </div>
                     </div>
                   </button>
@@ -4797,7 +4797,7 @@ function CofreTab() {
                   registro de interesse, não beco sem saída. */}
               <button
                 type="button"
-                className="text-[11px] text-info-fg underline underline-offset-2"
+                className="text-apoio text-info-fg underline underline-offset-2"
                 onClick={() => setInteresseOpen(true)}
               >
                 Seu tribunal não está na lista? Avisar quando chegar →
@@ -4842,7 +4842,7 @@ function CofreTab() {
                       key={m}
                       type="button"
                       onClick={() => setModo2fa(m)}
-                      className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition ${
+                      className={`px-2.5 py-1 text-apoio font-medium rounded-md transition ${
                         modo2fa === m ? "bg-background shadow-sm text-info-fg" : "text-muted-foreground"
                       }`}
                     >
@@ -4870,7 +4870,7 @@ function CofreTab() {
                       {show2fa ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                     </button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                  <p className="text-micro text-muted-foreground mt-0.5">
                     Cole o secret base32 do app autenticador (Google Authenticator, etc). Opcional.
                   </p>
                 </>
@@ -5054,7 +5054,7 @@ function CofreTab() {
                   <p className="text-xs font-semibold">
                     {o.titulo} {atual && <span className="text-info-fg">· atual</span>}
                   </p>
-                  <p className="text-[11px] text-muted-foreground leading-relaxed">{o.desc}</p>
+                  <p className="text-apoio text-muted-foreground leading-relaxed">{o.desc}</p>
                 </button>
               );
             })}
@@ -5062,10 +5062,10 @@ function CofreTab() {
 
           {alcancePendente && (
             <div className="rounded-lg border border-warning/30 bg-warning-bg p-2.5 dark:border-warning/30">
-              <p className="text-[11.5px] text-warning-fg leading-relaxed dark:text-warning">
+              <p className="text-apoio text-warning-fg leading-relaxed dark:text-warning">
                 {alcancePendente.aviso}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-1.5">
+              <p className="text-apoio text-muted-foreground mt-1.5">
                 Clique de novo na mesma opção para confirmar.
               </p>
             </div>
@@ -5123,7 +5123,7 @@ function CofreTab() {
           <div className="rounded-lg border bg-muted/40 p-3">
             <p className="font-mono text-sm tracking-wider break-all select-all">{secretNovo}</p>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-apoio text-muted-foreground">
             Google Authenticator, Authy ou 1Password → adicionar conta → inserir chave manualmente.
           </p>
 
