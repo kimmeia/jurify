@@ -2474,6 +2474,16 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                   <div className="flex justify-center">
                     <CartaoLigacao m={m} tz={tz} />
                   </div>
+                ) : m.tipo === "sistema" ? (
+                  <div className="flex justify-center" data-testid="recado-sistema">
+                    <div className="max-w-[80%] rounded-lg border border-dashed bg-background px-3 py-1.5 text-center text-[11px] leading-snug text-muted-foreground">
+                      {m.conteudo}
+                      <span className="ml-1.5 opacity-70">
+                        {new Date(m.createdAt).toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <p className="mt-0.5 text-[10px] opacity-70">Recado interno — o cliente não vê.</p>
+                    </div>
+                  </div>
                 ) : (
                 <div className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
                   <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>

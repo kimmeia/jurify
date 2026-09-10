@@ -64,6 +64,41 @@ export function paginasPublicas(): string[] {
   return [...achados].sort();
 }
 
+/**
+ * Os CAMINHOS das rotas sem guarda de sessão — a mesma derivação de
+ * `paginasPublicas`, do outro lado: ali interessa o arquivo da tela, aqui a
+ * URL que um estranho digita. Rota com gate próprio fica de fora.
+ */
+export function rotasPublicas(): string[] {
+  const app = ler("client/src/App.tsx");
+  const imports = new Map<string, string>();
+  for (const i of app.matchAll(/^import\s+(\w+)\s+from\s+["'](.+?)["'];?$/gm)) {
+    imports.set(i[1], i[2]);
+  }
+  const corpo = app.slice(app.indexOf("<Switch>"), app.indexOf("</Switch>"));
+
+  const achados = new Set<string>();
+  for (const bloco of corpo.matchAll(/<Route\b[\s\S]*?(?:\/>|<\/Route>)/g)) {
+    const texto = bloco[0];
+    if (GUARDAS.some((g) => texto.includes(`<${g}`))) continue;
+    const caminho = texto.match(/path="([^"]+)"/)?.[1];
+    if (!caminho) continue; // catch-all do 404, sem path
+    let temGateProprio = false;
+    let temTela = false;
+    for (const c of texto.matchAll(/component=\{(\w+)\}|<([A-Z]\w*)\b/g)) {
+      const nome = c[1] || c[2];
+      if (nome === "Route" || nome === "Redirect") continue;
+      const spec = imports.get(nome);
+      const arquivo = spec ? resolverArquivo(spec) : null;
+      if (arquivo && GATE_PROPRIO.includes(arquivo)) temGateProprio = true;
+      // Rota que só redireciona não mostra tela nenhuma pra ninguém.
+      if (arquivo && arquivo.startsWith("client/src/pages/")) temTela = true;
+    }
+    if (temTela && !temGateProprio) achados.add(caminho);
+  }
+  return [...achados].sort();
+}
+
 export function semComentarios(fonte: string): string {
   return fonte
     .replace(/\/\*[\s\S]*?\*\//g, "")

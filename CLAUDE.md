@@ -820,6 +820,60 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   Conferido de passagem: `retomarExecucao` só é chamada pelo scheduler, e
   execução com `conversaId` só nasce em `dispararMensagemCanal` (os fluxos
   de cobrança não passam por lá) — a trava não alcança lembrete nenhum.
+- **Entregue 10/09, "encerrei a conversa e o robô voltou a falar" + convite
+  de instalar o app no link de assinatura — mockup
+  `mockup-robo-encerrada-e-app.html`, "pode fazer" do dono; fiz pelas quatro
+  opções recomendadas (1-A, 2-A, 3-A e A no app).** Origem: print dele — o
+  fluxo marcado "1x por dia" voltou a falar depois de ele encerrar a
+  conversa e o cliente escrever de novo; e um cliente que recebeu link de
+  assinatura ganhou junto o botão de baixar o app. **Não reiniciou:
+  RETOMOU.** Três coisas se somavam — roteiro que espera resposta fica
+  `rodando` com prazo por até 24h; encerrar a conversa mexia só no status
+  (quem cancelava roteiro parado era só `excluirConversa`, e o comentário de
+  lá já dizia por quê: "a conversa ressuscita"); e `atingiuLimitePorContato`
+  só é consultado quando um roteiro COMEÇA — retomada é a mesma passagem.
+  - `encerrarRoteirosParadosDaConversa` (db-crm, exportada) cancela as
+    execuções `rodando` da conversa **que estejam paradas** (`retomarEm` OU
+    `aguardandoMensagemContatoId` não nulos), chamada por `atualizarConversa`
+    quando o status vira `resolvido`/`fechado`. O filtro de "parada" existe
+    pra não sobrescrever o desfecho da execução que está rodando naquele
+    instante — inclusive a do próprio bloco "Encerrar conversa", que escreve
+    na conversa por `aplicarEfeitosNaConversa`, fora deste caminho.
+    `excluirConversa` continua cancelando TUDO dela (mais amplo, de
+    propósito). Efeito colateral bom: o scheduler não tem mais o que acordar,
+    então some o "você ainda está aí?" horas depois numa conversa encerrada
+    (era o item (c) da lista de não-corrigidos acima).
+  - **Recado interno** (decisão 2): quando o limite cala o robô,
+    `registrarRoboSilenciado` grava na conversa uma `mensagens` tipo
+    `sistema` com o texto de `shared/limite-por-contato.ts`
+    (`recadoRoboSilenciado`) e o marcador `robo_silenciado` no payload —
+    **um por atendimento** (dedup pela janela `atendimentoIniciadoEm ??
+    createdAt` + `like` no marcador), silencioso em caso de falha. Ninguém
+    escrevia `mensagens` tipo `sistema` até agora (o enum existia e os
+    leitores já pulavam), então o Atendimento ganhou o desenho: nota cinza
+    centralizada com "Recado interno — o cliente não vê."
+  - **Rótulos** (decisão 3-A, nada muda de comportamento): a conta continua
+    janela deslizante de 24h/7d/30d; os textos passaram a dizer isso
+    (`ROTULO_LIMITE_CONTATO`: "1x a cada 24h"…), e editor + zod do router
+    leem a MESMA lista (`LIMITES_POR_CONTATO`).
+  - **Convite de instalar o app**: `<InstallPWA />` é montado fora do
+    `<Switch>` (segue lá — nada foi tirado do App.tsx) e no iPhone aparece
+    sozinho 3s depois do load, sem depender de `beforeinstallprompt`. Agora
+    consulta `conviteInstalarAppPermitido` (shared, via `useLocation`,
+    DEPOIS de todos os hooks): fica no login/cadastro/convite/esqueci/
+    redefinir/confirmar-email/checkout e dentro do app; **sai de `/assinar`,
+    da página inicial, dos termos, da privacidade e do /404**. A tela de
+    assinatura NÃO manda link de app na mensagem — era só o banner.
+  - Amarras: `encerrar-conversa-encerra-roteiro` (31) e
+    `convite-instalar-app` (31; as duas listas de rotas são conferidas
+    contra `rotasPublicas()`, derivada do App.tsx em `_paginas-publicas.ts`
+    — rota pública nova quebra o teste até ser classificada). 37 mutações
+    vermelhas (`scratchpad/mutar-encerrar-e-app.py`; duas só morreram depois
+    de ajustar a amarra: o `z.enum` aparece 2× no router, e "/termometro" não
+    é prefixo de "/termos" — o caso que discrimina é "/termos-de-uso").
+  - **Continuam NÃO corrigidos** (itens (a) e (b) do bloco acima): disparo
+    proativo de verdade não confere conversa, e as bolhas da mesma resposta
+    não se reconferem entre si.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
