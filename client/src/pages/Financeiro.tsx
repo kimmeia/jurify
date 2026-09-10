@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -75,6 +76,7 @@ function rangeMesCorrente(): { inicio: string; fim: string } {
 // ─── Componente principal ────────────────────────────────────────────────────
 
 export default function Financeiro() {
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const [tab, setTab] = useState("cobrancas");
   const [novaCobrancaOpen, setNovaCobrancaOpen] = useState(false);
@@ -581,7 +583,7 @@ export default function Financeiro() {
               variant="outline"
               size="sm"
               className="h-9"
-              onClick={() => (window.location.href = "/configuracoes")}
+              onClick={() => setLocation("/configuracoes")}
             >
               <Settings className="h-3.5 w-3.5 mr-1.5" />
               Conectar Asaas
@@ -731,7 +733,7 @@ export default function Financeiro() {
               caixa,{" "}
               <button
                 className="underline font-medium"
-                onClick={() => (window.location.href = "/configuracoes")}
+                onClick={() => setLocation("/configuracoes")}
               >
                 conecte o Asaas
               </button>
@@ -2742,6 +2744,7 @@ function PainelSyncHistorico() {
  *  Mantém o módulo Financeiro acessível pra Despesas/Comissões mesmo
  *  sem Asaas — só as abas Asaas-específicas é que pedem conexão. */
 function AsaasDisconnectedCta({ titulo, descricao }: { titulo: string; descricao: string }) {
+  const [, setLocation] = useLocation();
   return (
     <Card>
       <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
@@ -2754,7 +2757,7 @@ function AsaasDisconnectedCta({ titulo, descricao }: { titulo: string; descricao
             {descricao} Conecte sua conta Asaas pra ativar.
           </p>
         </div>
-        <Button size="sm" onClick={() => (window.location.href = "/configuracoes")}>
+        <Button size="sm" onClick={() => setLocation("/configuracoes")}>
           <Settings className="h-4 w-4 mr-2" />
           Conectar Asaas
         </Button>

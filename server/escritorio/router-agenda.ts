@@ -21,6 +21,7 @@ import { TRPCError } from "@trpc/server";
 import { criarNotificacao } from "../processos/router-notificacoes";
 import { checkPermission } from "./check-permission";
 import { validarResponsavel } from "./atribuicao-responsavel";
+import { exigirContatoDoEscritorio } from "./contato-do-escritorio";
 import {
   listarBloqueios,
   criarBloqueio,
@@ -837,6 +838,7 @@ export const agendaRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await validarResponsavel(db, perm, input.responsavelId);
+      await exigirContatoDoEscritorio(db, perm.escritorioId, input.contatoId);
 
       // Se o compromisso é vinculado a um cliente, e o usuário não definiu
       // explicitamente um responsável, atribui automaticamente ao
@@ -901,6 +903,7 @@ export const agendaRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       await validarResponsavel(db, perm, input.responsavelId);
+      await exigirContatoDoEscritorio(db, perm.escritorioId, input.contatoId);
 
       // Se vinculada a cliente e sem responsável explícito, herda do cliente
       let responsavelId = input.responsavelId;
@@ -1054,6 +1057,7 @@ export const agendaRouter = router({
       }
 
       await validarResponsavel(db, perm, input.responsavelId);
+      await exigirContatoDoEscritorio(db, perm.escritorioId, input.contatoId);
 
       if (input.fonte === "compromisso") {
         const updates: Record<string, unknown> = {};

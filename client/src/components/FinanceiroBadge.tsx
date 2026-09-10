@@ -5,6 +5,7 @@
  */
 
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -560,6 +561,7 @@ export function VincularAsaasBlock({
   contatoId: number;
   cpfCnpj: string | null;
 }) {
+  const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
   const { data: asaasStatus } = trpc.asaas.status.useQuery(undefined, { retry: false });
   const { data: resumo, isLoading: resumoLoading } = trpc.asaas.resumoContato.useQuery(
@@ -645,7 +647,7 @@ export function VincularAsaasBlock({
               Conecte sua conta Asaas em Configurações para vincular este cliente e importar cobranças automaticamente.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => (window.location.href = "/configuracoes?tab=integracoes")}>
+          <Button size="sm" variant="outline" onClick={() => setLocation("/configuracoes?tab=integracoes")}>
             Configurar
           </Button>
         </CardContent>

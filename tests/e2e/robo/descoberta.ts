@@ -39,9 +39,24 @@ export async function descobrirAcoes(
         for (const el of regiao.querySelectorAll("*")) foraDeConteudo.add(el);
       }
 
+      // `checkVisibility` é o que enxerga o que a régua manual não vê:
+      // controle dentro de <details> recolhido, de `content-visibility`
+      // ou de ancestral escondido. Sem ele o robô mapeava o "Abrir
+      // backup" do /configuracoes — que mora num <details> fechado — e
+      // depois reportava falha porque o clique, corretamente, não
+      // acontecia. Ação que o usuário não alcança sem abrir a seção não
+      // é superfície desta passada.
       const visivel = (el: Element) => {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return false;
+        const comChecagem = el as Element & { checkVisibility?: (o?: unknown) => boolean };
+        if (typeof comChecagem.checkVisibility === "function") {
+          return comChecagem.checkVisibility({
+            contentVisibilityAuto: true,
+            opacityProperty: true,
+            visibilityProperty: true,
+          });
+        }
         const cs = getComputedStyle(el);
         return cs.visibility !== "hidden" && cs.display !== "none";
       };

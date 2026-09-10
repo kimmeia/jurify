@@ -95,6 +95,38 @@ test.describe("prontidão da tela", () => {
   });
 });
 
+test.describe("portão de produto na frente da rota", () => {
+  test.setTimeout(60_000);
+
+  test("vira uma linha, não uma por controle", async ({ page }) => {
+    await page.route("**/*", (rota) =>
+      rota.fulfill({
+        status: 200,
+        contentType: "text/html; charset=utf-8",
+        body: `<!doctype html><html><body>
+          <main>
+            <button>Novo cliente</button>
+            <button>Editar</button>
+            <button>Excluir</button>
+          </main>
+          <div role="dialog"><h2>Atualizamos os Termos de Uso</h2>
+            <button>Aceitar e continuar</button></div>
+        </body></html>`,
+      }),
+    );
+    const sonda = instalarSonda(page, watchConsoleErrors(page), watchNetwork5xx(page));
+    const resultados = await exercitarRota(sonda, "/dashboard");
+
+    // Medido no app: o modal de re-aceite dos Termos fez 48 ações de 4
+    // rotas voltarem como falha, todas a mesma coisa. Um problema
+    // multiplicado por quarenta e oito é relatório que ninguém lê duas
+    // vezes.
+    expect(resultados).toHaveLength(1);
+    expect(resultados[0]!.veredito.motivo).toBe("rota_bloqueada");
+    expect(resultados[0]!.veredito.evidencia).toContain("Termos de Uso");
+  });
+});
+
 test.describe("veredito do robô de ação", () => {
   // Um dos casos espera 4s pela prova que nunca chega, e outro espera o
   // ciclo de erro de JS; a varredura inteira recarrega a rota por ação.

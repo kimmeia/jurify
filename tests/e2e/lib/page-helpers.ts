@@ -45,6 +45,21 @@ function ehRuido(texto: string): boolean {
   return RUIDO_DE_REDE.some((p) => texto.includes(p));
 }
 
+/**
+ * O que conta como "a tela ainda está carregando".
+ *
+ * `[role="progressbar"]` sozinho é largo demais: o Radix dá esse papel
+ * também à barra de progresso comum, que é CONTEÚDO permanente — a barra
+ * de créditos do /dashboard ("0 usados de 33 restante(s)") mantinha o
+ * robô esperando pra sempre por algo que nunca ia sumir. Medido: 11 das
+ * 11 ações do /dashboard voltaram como "tela travada" sem nada travado.
+ *
+ * A distinção é `aria-valuenow`: barra determinada tem valor e é
+ * conteúdo; indicador indeterminado não tem e é espera.
+ */
+export const SELETOR_CARREGANDO =
+  '.animate-spin, [role="progressbar"]:not([aria-valuenow])';
+
 export interface ConsoleErrorMonitor {
   errors: string[];
   /** O que foi filtrado — visível pra ninguém confundir filtro com ausência. */
@@ -129,8 +144,8 @@ export async function expectNoOrphanLoading(
   timeout: number = 5000,
 ): Promise<void> {
   await page.waitForFunction(
-    () => !document.querySelector('[role="progressbar"], .animate-spin'),
-    null,
+    (seletor) => !document.querySelector(seletor),
+    SELETOR_CARREGANDO,
     { timeout },
   );
 }
