@@ -7,6 +7,30 @@
 @theme inline {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Escala tipográfica. Existe porque a cor virou sistema e o tamanho não:
+   * eram 2.856 `text-[Npx]` escritos à mão em 33 valores distintos, e o que
+   * ficou no menor deles era o que mais importa — o selo "2º grau?" e o
+   * PRAZO saíam em 9px na lista de Processos.
+   *
+   * Piso de 11px: abaixo disso não entra nada. Quem lê é advogado, lê o dia
+   * inteiro, e boa parte usa óculos. Onde faltar contraste entre dois
+   * elementos, a saída é PESO e COR — não inventar mais um tamanho.
+   *
+   * Trocar caixa alta de 9px por caixa normal de 11px sai de graça em
+   * largura (medido na Inter real: "prazo vence hoje" ENCOLHE 5,7px, porque
+   * maiúscula é mais larga que minúscula). A exceção são siglas já em
+   * maiúscula — TJCE cresce 3,4px, não tem minúscula a ganhar.
+   *
+   * Sem line-height de propósito: `text-[10px]` também só mexia no
+   * font-size, então trocar por token não pode arrastar o espaçamento
+   * vertical junto e mudar layout que ninguém pediu para mudar. */
+  --text-micro: 11px;   /* rótulo em caixa alta, cabeçalho de coluna, selo  */
+  --text-apoio: 11.5px; /* meta, carimbo de tempo, texto de ajuda           */
+  --text-corpo: 13px;   /* texto de lista, controle, valor                  */
+  --text-secao: 15px;   /* título de card                                   */
+  --text-titulo: 20px;  /* título de aba / subpágina                        */
+  --text-numero: 22px;  /* número de cartão (KPI), com tabular-nums         */
+  --text-pagina: 26px;  /* título da tela                                   */
   /* Escala de raio. `--radius-2xl` está declarado de propósito: sem ele o
    * `rounded-2xl` — que é o que a maioria dos cards do app usa — caía no
    * padrão do Tailwind (16px) e ignorava o token, deixando a tela mais

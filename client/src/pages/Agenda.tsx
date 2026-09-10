@@ -233,7 +233,7 @@ function ConfirmarExclusaoButton({ onConfirm, titulo, variant = "card" }: {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-[10.5px] rounded-lg text-muted-foreground hover:bg-muted px-2.5"
+          className="h-7 text-apoio rounded-lg text-muted-foreground hover:bg-muted px-2.5"
           onClick={(e) => {
             e.stopPropagation();
             setOpen(true);
@@ -301,7 +301,7 @@ function ComparecimentoBadge({ valor }: { valor: string | null | undefined }) {
   if (!valor || !COMPARECIMENTO_CFG[valor]) return null;
   const { label, cls, Icon } = COMPARECIMENTO_CFG[valor];
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${cls}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-micro font-semibold ${cls}`}>
       <Icon className="h-2.5 w-2.5" /> {label}
     </span>
   );
@@ -401,15 +401,15 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
         >
           {ev.diaInteiro ? (
             <>
-              <p className={`text-[10px] font-bold leading-none tracking-wider ${horaTextCls}`}>DIA</p>
-              <p className={`text-[10px] font-bold leading-none tracking-wider mt-1 ${horaTextCls}`}>INTEIRO</p>
+              <p className={`text-micro font-bold leading-none tracking-wider ${horaTextCls}`}>DIA</p>
+              <p className={`text-micro font-bold leading-none tracking-wider mt-1 ${horaTextCls}`}>INTEIRO</p>
             </>
           ) : (
             <>
               <p className={`text-xl font-extrabold leading-none tabular-nums tracking-tight ${horaTextCls}`}>{hh}</p>
-              <p className={`text-[11px] font-bold leading-none mt-0.5 tabular-nums ${horaTextCls} opacity-80`}>{mm}</p>
+              <p className={`text-apoio font-bold leading-none mt-0.5 tabular-nums ${horaTextCls} opacity-80`}>{mm}</p>
               {horaFim && (
-                <p className={`text-[8.5px] font-semibold leading-none mt-1.5 tabular-nums ${horaTextCls} opacity-60`}>
+                <p className={`text-micro font-semibold leading-none mt-1.5 tabular-nums ${horaTextCls} opacity-60`}>
                   → {horaFim}
                 </p>
               )}
@@ -422,15 +422,15 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {/* Linha 1: badges de status/tipo/prioridade */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {statusBadge && (
-              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusBadge.cls}`}>
+              <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full border ${statusBadge.cls}`}>
                 {statusBadge.txt}
               </span>
             )}
-            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
+            <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
               {tipoLabel}
             </span>
             {prioridade !== "normal" && (
-              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
+              <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
                 {PRIOR_LABEL[prioridade] || prioridade}
               </span>
             )}
@@ -450,7 +450,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
             <div className="mt-1.5 space-y-1">
               {ev.comparecimento && <ComparecimentoBadge valor={ev.comparecimento} />}
               {ev.observacaoAtendimento && (
-                <p className="text-[11.5px] text-muted-foreground bg-muted/50 border border-border/60 rounded-lg px-2 py-1.5 flex gap-1.5">
+                <p className="text-apoio text-muted-foreground bg-muted/50 border border-border/60 rounded-lg px-2 py-1.5 flex gap-1.5">
                   <MessageSquareText className="h-3.5 w-3.5 text-muted-foreground/80 mt-0.5 shrink-0" />
                   <span className="whitespace-pre-wrap break-words line-clamp-2">{ev.observacaoAtendimento}</span>
                 </p>
@@ -460,11 +460,11 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
 
           {/* Linha 2: cliente + processo */}
           {(contato || cnj || ev.local || ev.contatoTelefone) && (
-            <div className="flex items-center gap-2 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-2 mt-1.5 text-apoio text-muted-foreground flex-wrap">
               {contato && (
                 <span className="inline-flex items-center gap-1.5">
                   <span
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(contato)}`}
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white shrink-0 bg-gradient-to-br ${gradientAvatar(contato)}`}
                   >
                     {gerarIniciais(contato)}
                   </span>
@@ -502,8 +502,8 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                   {(contato || ev.contatoTelefone) && <span className="text-muted-foreground/50">·</span>}
                   <span className="inline-flex items-center gap-1">
                     <Scale className="w-3 h-3 text-info" />
-                    <span className="font-mono text-info-fg text-[10.5px]">{cnj}</span>
-                    {tribunal && <span className="text-muted-foreground/80 text-[10px] uppercase">{tribunal}</span>}
+                    <span className="font-mono text-info-fg text-apoio">{cnj}</span>
+                    {tribunal && <span className="text-muted-foreground/80 text-micro uppercase">{tribunal}</span>}
                   </span>
                 </>
               )}
@@ -523,9 +523,9 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {(responsavel || (ev.lembretes && ev.lembretes.length > 0)) && (
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               {responsavel && (
-                <span className="inline-flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 text-apoio text-muted-foreground">
                   <span
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(responsavel)}`}
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(responsavel)}`}
                     title={responsavel}
                   >
                     {gerarIniciais(responsavel)}
@@ -534,7 +534,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
                 </span>
               )}
               {ev.lembretes && ev.lembretes.length > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-[10px] font-medium">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg text-micro font-medium">
                   <Bell className="w-2.5 h-2.5" />
                   {ev.lembretes.length} lembrete{ev.lembretes.length === 1 ? "" : "s"}
                 </span>
@@ -548,7 +548,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
           {!concluido && !cancelado && podeEditar !== false && (
             <Button
               size="sm"
-              className="h-7 text-[10.5px] rounded-lg bg-success hover:bg-success text-success-on shadow-sm px-2.5"
+              className="h-7 text-apoio rounded-lg bg-success hover:bg-success text-success-on shadow-sm px-2.5"
               onClick={(e) => {
                 e.stopPropagation();
                 if (onConcluir) onConcluir(ev);
@@ -563,7 +563,7 @@ function EventoCard({ ev, onStatusChange, onConcluir, onDelete, onEdit, onCardCl
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-[10.5px] rounded-lg border-border hover:bg-muted/50 px-2.5"
+              className="h-7 text-apoio rounded-lg border-border hover:bg-muted/50 px-2.5"
               onClick={(e) => {
                 e.stopPropagation();
                 onEdit(ev);
@@ -838,7 +838,7 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
         {["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"].map((d) => (
           <div
             key={d}
-            className="py-2 text-center text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground/80"
+            className="py-2 text-center text-apoio font-bold uppercase tracking-[0.06em] text-muted-foreground/80"
           >
             {d}
           </div>
@@ -879,18 +879,18 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
             >
               <div className="flex items-center gap-1">
                 {isToday(dia.date) ? (
-                  <span className="w-5 h-5 rounded-full bg-info text-info-on text-[11px] font-bold flex items-center justify-center">
+                  <span className="w-5 h-5 rounded-full bg-info text-info-on text-apoio font-bold flex items-center justify-center">
                     {dia.date.getDate()}
                   </span>
                 ) : (
                   <span
-                    className={`text-[11.5px] font-semibold ${dia.outroMes ? "text-muted-foreground/50" : "text-foreground/90"}`}
+                    className={`text-apoio font-semibold ${dia.outroMes ? "text-muted-foreground/50" : "text-foreground/90"}`}
                   >
                     {dia.date.getDate()}
                   </span>
                 )}
                 {diaInteiroBloq && (
-                  <span className="text-[9px] font-bold text-danger-fg truncate flex items-center gap-0.5">
+                  <span className="text-micro font-bold text-danger-fg truncate flex items-center gap-0.5">
                     <CalendarOff className="h-2.5 w-2.5 shrink-0" />
                     {motivoBloq?.slice(0, 10) || "bloqueado"}
                   </span>
@@ -916,18 +916,18 @@ function CalendarioMensal({ eventos, onCriarEvento, onCardClick, podeCriar, onRa
                       onCardClick?.(ev);
                     }}
                     style={{ background: cor }}
-                    className={`w-full mt-[3px] rounded-[5px] px-1.5 py-[3px] text-white text-[10px] font-semibold flex items-center gap-1 overflow-hidden ${
+                    className={`w-full mt-[3px] rounded-[5px] px-1.5 py-[3px] text-white text-micro font-semibold flex items-center gap-1 overflow-hidden ${
                       concluido ? "opacity-60 line-through" : ""
                     }`}
                   >
-                    {hora && <span className="text-[8.5px] font-extrabold opacity-75 shrink-0">{hora}</span>}
+                    {hora && <span className="text-micro font-extrabold opacity-75 shrink-0">{hora}</span>}
                     <span className="truncate">{ev.titulo}</span>
                   </button>
                 );
               })}
 
               {resto > 0 && (
-                <p className="mt-[3px] text-[9.5px] font-semibold text-muted-foreground/80">
+                <p className="mt-[3px] text-micro font-semibold text-muted-foreground/80">
                   +{resto} {resto === 1 ? "evento" : "eventos"}
                 </p>
               )}
@@ -1040,14 +1040,14 @@ function PainelDoDia({
     <div className={`bg-card flex flex-col overflow-hidden ${className}`}>
       <div className="flex items-start justify-between gap-2.5 px-4 py-3 border-b border-border/60 shrink-0">
         <div className="min-w-0">
-          <p className="text-[19px] font-bold tracking-tight leading-tight truncate">{diaSemana}</p>
-          <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground truncate">
+          <p className="text-titulo font-bold tracking-tight leading-tight truncate">{diaSemana}</p>
+          <p className="mt-0.5 text-apoio font-medium text-muted-foreground truncate">
             {dataLonga}
             {ehHoje && " · hoje"}
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="rounded-full bg-info-bg border border-info/30 text-info-fg px-2.5 py-1 text-[11px] font-bold whitespace-nowrap">
+          <span className="rounded-full bg-info-bg border border-info/30 text-info-fg px-2.5 py-1 text-apoio font-bold whitespace-nowrap">
             {ordenados.length === 0
               ? "livre"
               : `${ordenados.length} ${ordenados.length === 1 ? "compromisso" : "compromissos"}`}
@@ -1068,7 +1068,7 @@ function PainelDoDia({
           {bloqueios.map((b: any) => (
             <div
               key={b.id}
-              className="flex items-center gap-1.5 text-[11px] font-semibold bg-danger-bg border border-danger/30 rounded-lg px-2.5 py-1.5 text-danger-fg"
+              className="flex items-center gap-1.5 text-apoio font-semibold bg-danger-bg border border-danger/30 rounded-lg px-2.5 py-1.5 text-danger-fg"
             >
               <CalendarOff className="h-3 w-3 shrink-0" />
               <span className="shrink-0">
@@ -1092,16 +1092,16 @@ function PainelDoDia({
 
       <div className="flex-1 min-h-0 overflow-y-auto px-1.5 pb-1">
         {ordenados.length === 0 ? (
-          <p className="py-12 text-center text-[12.5px] text-muted-foreground">Dia livre.</p>
+          <p className="py-12 text-center text-corpo text-muted-foreground">Dia livre.</p>
         ) : (
           grupos.map((g) => (
             <div key={g.titulo}>
               <div className="flex items-center gap-2 px-2 pt-2.5 pb-1">
-                <span className="text-[10px] font-bold uppercase tracking-[0.07em] text-muted-foreground/80">
+                <span className="text-micro font-bold uppercase tracking-[0.07em] text-muted-foreground/80">
                   {g.titulo}
                 </span>
                 <span className="flex-1 h-px bg-border/60" />
-                <span className="text-[10px] font-bold text-muted-foreground/80">{g.itens.length}</span>
+                <span className="text-micro font-bold text-muted-foreground/80">{g.itens.length}</span>
               </div>
               {g.itens.map((ev: any) => {
                 const cor =
@@ -1122,25 +1122,25 @@ function PainelDoDia({
                     className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded-lg text-left hover:bg-muted/50 transition-colors"
                   >
                     <span className="w-[3px] self-stretch rounded-sm shrink-0" style={{ background: cor }} />
-                    <span className="text-[10.5px] font-bold text-foreground/80 tabular-nums w-[34px] shrink-0 pt-px">
+                    <span className="text-apoio font-bold text-foreground/80 tabular-nums w-[34px] shrink-0 pt-px">
                       {hora}
                     </span>
                     <span className="flex-1 min-w-0">
                       <span
-                        className={`flex items-center gap-1.5 text-[12.5px] font-semibold leading-tight ${
+                        className={`flex items-center gap-1.5 text-corpo font-semibold leading-tight ${
                           concluido ? "line-through text-muted-foreground font-medium" : ""
                         }`}
                       >
                         <span className="truncate">{ev.titulo}</span>
                         {marca && (
                           <span
-                            className={`shrink-0 rounded px-1 py-px text-[9px] font-extrabold uppercase tracking-[0.04em] ${marca.cls}`}
+                            className={`shrink-0 rounded px-1 py-px text-micro font-extrabold uppercase tracking-[0.04em] ${marca.cls}`}
                           >
                             {marca.rotulo}
                           </span>
                         )}
                       </span>
-                      <span className="block mt-0.5 text-[10.5px] text-muted-foreground truncate">
+                      <span className="block mt-0.5 text-apoio text-muted-foreground truncate">
                         {[TIPO_LABELS[ev.tipo] ?? ev.tipo, ev.responsavelNome, ev.contatoNome, ev.local]
                           .filter(Boolean)
                           .join(" · ")}
@@ -1339,10 +1339,10 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
       <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-warning-bg/30 blur-3xl" />
       <div className="relative flex items-start gap-4 flex-wrap">
         <div className="flex flex-col">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-warning-fg mb-1">Próximo evento</p>
+          <p className="text-micro font-bold uppercase tracking-[0.18em] text-warning-fg mb-1">Próximo evento</p>
           <div className="flex items-baseline gap-2">
             <p className="text-3xl font-extrabold text-foreground tabular-nums leading-none tracking-tight">{horaStr}</p>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning text-warning-on text-[10px] font-bold animate-pulse">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-warning text-warning-on text-micro font-bold animate-pulse">
               ⏳ {countdownTxt}
             </span>
           </div>
@@ -1350,22 +1350,22 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
         <div className="flex-1 min-w-[200px]">
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
             <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-white"
+              className="inline-flex items-center px-1.5 py-0.5 rounded-full text-micro font-bold uppercase tracking-wider text-white"
               style={{ background: cor }}
             >
               {tipoLabel}
             </span>
             {ev.prioridade && ev.prioridade !== "normal" && (
-              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[ev.prioridade] || PRIOR_BADGE.normal}`}>
+              <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full ${PRIOR_BADGE[ev.prioridade] || PRIOR_BADGE.normal}`}>
                 {PRIOR_LABEL[ev.prioridade] || ev.prioridade}
               </span>
             )}
           </div>
           <p className="text-base font-bold tracking-tight text-foreground">{ev.titulo}</p>
-          <div className="flex items-center gap-2.5 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-2.5 mt-1.5 text-apoio text-muted-foreground flex-wrap">
             {ev.contatoNome && (
               <span className="inline-flex items-center gap-1.5">
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.contatoNome)}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.contatoNome)}`}>
                   {gerarIniciais(ev.contatoNome)}
                 </span>
                 {ev.contatoNome}
@@ -1384,7 +1384,7 @@ function ProximoEventoHero({ ev, onStatusChange, onConcluir, onEdit, onCardClick
               <>
                 <span className="text-muted-foreground/50">·</span>
                 <span className="inline-flex items-center gap-1.5">
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}>
                     {gerarIniciais(ev.responsavelNome)}
                   </span>
                   {ev.responsavelNome}
@@ -1478,7 +1478,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
             const top = (i / TOTAL_HORAS) * ALTURA_PX;
             return (
               <div key={h} style={{ position: "absolute", top, left: 0, right: 0 }}>
-                <span className="absolute left-0 -translate-y-1/2 text-[10px] font-semibold text-muted-foreground/80 tabular-nums w-12 text-right pr-2">
+                <span className="absolute left-0 -translate-y-1/2 text-micro font-semibold text-muted-foreground/80 tabular-nums w-12 text-right pr-2">
                   {String(h).padStart(2, "0")}:00
                 </span>
                 <div className="ml-12 border-t border-dashed border-border" />
@@ -1493,7 +1493,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
               style={{ top: nowOffset, height: 2 }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-warning via-warning to-transparent" />
-              <span className="absolute -left-12 top-0 -translate-y-1/2 bg-warning text-warning-on text-[9px] font-bold px-1.5 py-0.5 rounded-full tabular-nums">
+              <span className="absolute -left-12 top-0 -translate-y-1/2 bg-warning text-warning-on text-micro font-bold px-1.5 py-0.5 rounded-full tabular-nums">
                 AGORA · {String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}
               </span>
             </div>
@@ -1535,7 +1535,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
                       {ev.titulo}
                     </p>
                     {altura > 36 && (
-                      <p className="text-[10px] text-muted-foreground tabular-nums truncate">
+                      <p className="text-micro text-muted-foreground tabular-nums truncate">
                         {horaStr} · {tipoLabel}
                         {ev.local && ` · ${ev.local}`}
                       </p>
@@ -1543,7 +1543,7 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
                   </div>
                   {ev.responsavelNome && (
                     <span
-                      className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-[0_0_0_2px_white] shrink-0 bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}
+                      className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white shadow-[0_0_0_2px_white] shrink-0 bg-gradient-to-br ${gradientAvatar(ev.responsavelNome)}`}
                       title={ev.responsavelNome}
                     >
                       {gerarIniciais(ev.responsavelNome)}
@@ -1649,7 +1649,7 @@ function FiltroResponsaveis({
           }}
         >
           <SelectTrigger className="w-40 h-10 text-xs bg-card rounded-lg">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80 mr-1">
+            <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground/80 mr-1">
               Equipe
             </span>
             <SelectValue />
@@ -1675,7 +1675,7 @@ function FiltroResponsaveis({
                 : "bg-card border-border text-muted-foreground hover:border-foreground/25"
             }`}
           >
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+            <span className="text-micro font-semibold uppercase tracking-wide text-muted-foreground/80">
               Responsáveis
             </span>
             {escolhidos.length > 0 ? (
@@ -1683,14 +1683,14 @@ function FiltroResponsaveis({
                 {escolhidos.slice(0, 4).map((p, i) => (
                   <span
                     key={p.id}
-                    className="w-[22px] h-[22px] rounded-full border-2 border-white flex items-center justify-center text-white text-[9px] font-bold"
+                    className="w-[22px] h-[22px] rounded-full border-2 border-white flex items-center justify-center text-white text-micro font-bold"
                     style={{ backgroundColor: corDaPessoa(p.id, ordem), marginLeft: i === 0 ? 0 : -7 }}
                   >
                     {iniciaisDe(p.nome)}
                   </span>
                 ))}
                 {escolhidos.length > 4 && (
-                  <span className="ml-1 text-[11px] text-info-fg">+{escolhidos.length - 4}</span>
+                  <span className="ml-1 text-apoio text-info-fg">+{escolhidos.length - 4}</span>
                 )}
               </span>
             ) : (
@@ -1715,12 +1715,12 @@ function FiltroResponsaveis({
               porSetor.map(([nomeSetor, lista]) => (
                 <div key={nomeSetor}>
                   <div className="flex items-center justify-between mt-2 mb-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                    <span className="text-micro font-bold uppercase tracking-wider text-muted-foreground/80">
                       {nomeSetor}
                     </span>
                     <button
                       type="button"
-                      className="text-[10.5px] font-bold text-info-fg hover:underline"
+                      className="text-apoio font-bold text-info-fg hover:underline"
                       onClick={() => {
                         const ids = lista.map((p) => p.id);
                         const todosMarcados = ids.every((id) => selecionados.includes(id));
@@ -1753,15 +1753,15 @@ function FiltroResponsaveis({
                           {on && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3.5} />}
                         </span>
                         <span
-                          className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0"
+                          className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-white text-micro font-bold shrink-0"
                           style={{ backgroundColor: corDaPessoa(p.id, ordem) }}
                         >
                           {iniciaisDe(p.nome)}
                         </span>
-                        <span className="flex-1 text-[12.8px] font-medium text-foreground truncate">
+                        <span className="flex-1 text-corpo font-medium text-foreground truncate">
                           {p.nome}
                         </span>
-                        <span className="text-[11px] font-semibold text-muted-foreground/80 shrink-0">
+                        <span className="text-apoio font-semibold text-muted-foreground/80 shrink-0">
                           {p.eventos}
                         </span>
                       </button>
@@ -1773,14 +1773,14 @@ function FiltroResponsaveis({
           </div>
 
           <div className="border-t mt-2 pt-2 flex items-center justify-between">
-            <span className="text-[11.5px] font-semibold text-muted-foreground">
+            <span className="text-apoio font-semibold text-muted-foreground">
               {selecionados.length === 0
                 ? "Mostrando todos"
                 : `${selecionados.length} de ${pessoas.length}`}
             </span>
             <button
               type="button"
-              className="text-[11.5px] font-bold text-muted-foreground hover:text-foreground"
+              className="text-apoio font-bold text-muted-foreground hover:text-foreground"
               onClick={() => {
                 setSelecionados([]);
                 setSetorId(null);
@@ -1830,7 +1830,7 @@ function LegendaPessoas({
   if (mostrar.length === 0) return null;
   return (
     <div className="flex items-center gap-4 flex-wrap px-3.5 py-2.5 bg-card border border-border rounded-[11px]">
-      <span className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground/80">
+      <span className="text-apoio font-bold uppercase tracking-[0.06em] text-muted-foreground/80">
         Cor por responsável
       </span>
       {mostrar.map((p) => (
@@ -1840,7 +1840,7 @@ function LegendaPessoas({
             style={{ backgroundColor: corDaPessoa(p.id, ordem) }}
           />
           {p.nome}
-          <span className="text-[11px] font-semibold text-muted-foreground/80">{p.eventos}</span>
+          <span className="text-apoio font-semibold text-muted-foreground/80">{p.eventos}</span>
         </span>
       ))}
       {typeof total === "number" && (
@@ -2021,7 +2021,7 @@ function ListaView({
               key={opt.id}
               type="button"
               onClick={() => setFiltroTipo(opt.id)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-apoio font-medium border transition-all ${
                 active ? ativoCls[opt.cor] : "bg-card text-muted-foreground border-border hover:border-foreground/25 hover:bg-muted/50"
               }`}
             >
@@ -2044,7 +2044,7 @@ function ListaView({
               key={opt.id}
               type="button"
               onClick={() => setFiltroStatus(opt.id)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-apoio font-medium border transition-all ${
                 active ? "bg-foreground text-background border-foreground shadow-sm" : "bg-card text-muted-foreground border-border hover:border-foreground/25 hover:bg-muted/50"
               }`}
             >
@@ -2056,7 +2056,7 @@ function ListaView({
       </div>
 
       {/* Contador */}
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-apoio text-muted-foreground">
         <b className="font-semibold text-foreground/90 tabular-nums">{totalFiltrado}</b> {totalFiltrado === 1 ? "evento" : "eventos"}
         {grupos.atrasado.length > 0 && (
           <> · <b className="font-semibold text-danger-fg tabular-nums">{grupos.atrasado.length}</b> atrasado{grupos.atrasado.length === 1 ? "" : "s"}</>
@@ -2109,7 +2109,7 @@ function ListaView({
                 <div className="flex items-center gap-2">
                   <Icon className={`h-4 w-4 ${secao.color}`} />
                   <h3 className={`text-sm font-semibold tracking-tight ${secao.color}`}>{tituloFinal}</h3>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-[10px] font-bold tabular-nums">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground text-micro font-bold tabular-nums">
                     {lista.length}
                   </span>
                 </div>
@@ -2238,15 +2238,15 @@ function DetalhesEventoDialog({
             />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
+                <span className={`inline-flex items-center text-micro font-semibold px-2 py-0.5 rounded-full border ${TIPO_BADGE[tipoKey] || TIPO_BADGE.outro}`}>
                   {tipoLabel}
                 </span>
                 {prioridade !== "normal" && (
-                  <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
+                  <span className={`inline-flex items-center text-micro font-semibold px-2 py-0.5 rounded-full ${PRIOR_BADGE[prioridade] || PRIOR_BADGE.normal}`}>
                     {PRIOR_LABEL[prioridade] || prioridade}
                   </span>
                 )}
-                <span className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_CORES[evento.status] || "bg-muted text-muted-foreground border-border"}`}>
+                <span className={`inline-flex items-center text-micro font-semibold px-2 py-0.5 rounded-full border ${STATUS_CORES[evento.status] || "bg-muted text-muted-foreground border-border"}`}>
                   {overdue && !concluido && !cancelado ? "⚠ Atrasado" : statusLabel}
                 </span>
               </div>
@@ -2263,14 +2263,14 @@ function DetalhesEventoDialog({
           <div className="flex items-start gap-2.5 text-sm">
             <CalendarDays className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+              <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">
                 {evento.fonte === "tarefa" ? "Prazo" : "Data e hora"}
               </p>
               <p className="text-sm text-foreground capitalize">
                 {formatDateTimeFull(evento.dataInicio, evento.diaInteiro)}
               </p>
               {evento.dataFim && (
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <p className="text-apoio text-muted-foreground mt-0.5">
                   até {formatDateTimeFull(evento.dataFim, evento.diaInteiro)}
                 </p>
               )}
@@ -2282,7 +2282,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <MapPin className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Local</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Local</p>
                 <p className="text-sm text-foreground break-words">{evento.local}</p>
               </div>
             </div>
@@ -2293,9 +2293,9 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Users className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Cliente</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Cliente</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.contatoNome)}`}>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.contatoNome)}`}>
                     {gerarIniciais(evento.contatoNome)}
                   </span>
                   <span className="text-sm font-medium text-foreground truncate">{evento.contatoNome}</span>
@@ -2309,7 +2309,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <PhoneCall className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Telefone / WhatsApp</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Telefone / WhatsApp</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* O número leva pro atendimento dentro do sistema: é lá que
                       está o histórico da conversa. O WhatsApp Web continua a um
@@ -2327,7 +2327,7 @@ function DetalhesEventoDialog({
                     href={telefoneParaWaMe(String(evento.contatoTelefone)) ?? undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10.5px] font-medium text-success-fg border border-success/30 bg-success-bg rounded px-1.5 py-0.5 inline-flex items-center gap-1"
+                    className="text-apoio font-medium text-success-fg border border-success/30 bg-success-bg rounded px-1.5 py-0.5 inline-flex items-center gap-1"
                     title="Abrir no WhatsApp Web"
                   >
                     WhatsApp Web
@@ -2343,9 +2343,9 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Scale className="h-4 w-4 text-info shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Processo</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Processo</p>
                 <p className="text-sm font-mono font-semibold text-info-fg truncate">{evento.cnj}</p>
-                {evento.tribunal && <p className="text-[11px] text-muted-foreground">{evento.tribunal}</p>}
+                {evento.tribunal && <p className="text-apoio text-muted-foreground">{evento.tribunal}</p>}
               </div>
             </div>
           )}
@@ -2355,9 +2355,9 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Briefcase className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Responsável</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Responsável</p>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.responsavelNome)}`}>
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(evento.responsavelNome)}`}>
                     {gerarIniciais(evento.responsavelNome)}
                   </span>
                   <span className="text-sm text-foreground truncate">{evento.responsavelNome}</span>
@@ -2371,7 +2371,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <FileText className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Descrição</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Descrição</p>
                 <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words">{evento.descricao}</p>
               </div>
             </div>
@@ -2382,7 +2382,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <MessageSquareText className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Resultado do atendimento</p>
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground">Resultado do atendimento</p>
                 {evento.comparecimento && <div className="mt-1"><ComparecimentoBadge valor={evento.comparecimento} /></div>}
                 {evento.observacaoAtendimento && (
                   <p className="text-sm text-foreground/90 whitespace-pre-wrap break-words mt-1">{evento.observacaoAtendimento}</p>
@@ -2396,7 +2396,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Paperclip className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                   Arquivos · {anexos.length}
                 </p>
                 <div className="space-y-1">
@@ -2412,8 +2412,8 @@ function DetalhesEventoDialog({
                       >
                         <span className="text-base shrink-0">{isImg ? "🖼️" : a.mimeType?.includes?.("pdf") ? "📄" : "📎"}</span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11.5px] font-medium text-info-fg truncate" title={a.nome}>{a.nome}</p>
-                          <p className="text-[10px] text-muted-foreground">{formatTamanho(a.tamanho || 0)}</p>
+                          <p className="text-apoio font-medium text-info-fg truncate" title={a.nome}>{a.nome}</p>
+                          <p className="text-micro text-muted-foreground">{formatTamanho(a.tamanho || 0)}</p>
                         </div>
                         <ExternalLink className="h-3 w-3 text-info-fg shrink-0" />
                       </a>
@@ -2429,7 +2429,7 @@ function DetalhesEventoDialog({
             <div className="flex items-start gap-2.5 text-sm">
               <Bell className="h-4 w-4 text-muted-foreground/80 shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+                <p className="text-micro uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                   Lembretes · {lembretes.length}
                 </p>
                 <div className="space-y-1.5">
@@ -2443,10 +2443,10 @@ function DetalhesEventoDialog({
                     return (
                       <div key={l.id} className="px-2.5 py-1.5 bg-info-bg/60 border border-info/30 rounded-lg">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[11px] font-semibold text-info-fg">{qdo}</span>
+                          <span className="text-apoio font-semibold text-info-fg">{qdo}</span>
                           <span className="text-info">·</span>
                           {canais.map((c) => (
-                            <span key={c} className="text-[10px] text-info-fg">
+                            <span key={c} className="text-micro text-info-fg">
                               {CANAL_LABEL[c]?.icon} {CANAL_LABEL[c]?.nome || c}
                             </span>
                           ))}
@@ -2456,11 +2456,11 @@ function DetalhesEventoDialog({
                             {dests.map((id) => {
                               const col = colaboradoresMap[id];
                               if (!col) return (
-                                <span key={id} className="text-[10px] text-muted-foreground">Colaborador #{id}</span>
+                                <span key={id} className="text-micro text-muted-foreground">Colaborador #{id}</span>
                               );
                               return (
-                                <span key={id} className="inline-flex items-center gap-1 text-[10px] text-foreground/90">
-                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                                <span key={id} className="inline-flex items-center gap-1 text-micro text-foreground/90">
+                                  <span className={`w-4 h-4 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
                                     {gerarIniciais(col.nome)}
                                   </span>
                                   {col.nome.split(" ")[0]}
@@ -2954,17 +2954,17 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
             <div className="mt-1 rounded-xl border border-info/30 bg-info-bg/60 p-2.5">
               <div className="flex items-center justify-between gap-2">
                 {responsavelEscolhido ? (
-                  <span className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-info text-info-on text-[11.5px] font-semibold">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(responsavelEscolhido.nome)}`}>
+                  <span className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-info text-info-on text-apoio font-semibold">
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(responsavelEscolhido.nome)}`}>
                       {gerarIniciais(responsavelEscolhido.nome)}
                     </span>
                     <span className="truncate max-w-[190px]">{responsavelEscolhido.nome}</span>
                     {responsavelEscolhido.souEu && (
-                      <span className="px-1.5 py-px rounded-full bg-white/20 text-[8.5px] font-bold tracking-wider">VOCÊ</span>
+                      <span className="px-1.5 py-px rounded-full bg-white/20 text-micro font-bold tracking-wider">VOCÊ</span>
                     )}
                   </span>
                 ) : (
-                  <span className="text-[11.5px] text-muted-foreground italic">
+                  <span className="text-apoio text-muted-foreground italic">
                     Sem responsável — vai pro dono do cliente, se você vincular um
                   </span>
                 )}
@@ -2972,7 +2972,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   <button
                     type="button"
                     onClick={() => setResponsavelId(null)}
-                    className="text-[11px] font-semibold text-info-fg hover:underline shrink-0"
+                    className="text-apoio font-semibold text-info-fg hover:underline shrink-0"
                   >
                     Limpar
                   </button>
@@ -2988,7 +2988,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                     className="h-8 text-xs bg-card rounded-lg mt-2"
                   />
                   {colaboradores.length === 0 ? (
-                    <p className="text-[10.5px] text-muted-foreground italic mt-1.5">Carregando colaboradores…</p>
+                    <p className="text-apoio text-muted-foreground italic mt-1.5">Carregando colaboradores…</p>
                   ) : (
                     <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-info/30 divide-y divide-border mt-1.5">
                       {colaboradores
@@ -3004,15 +3004,15 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                                 ativo ? "bg-info-bg hover:bg-info-bg" : "hover:bg-muted/50"
                               }`}
                             >
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
                                 {gerarIniciais(col.nome)}
                               </span>
                               <div className="flex-1 min-w-0">
-                                <p className="text-[11px] font-semibold truncate" title={col.nome}>
+                                <p className="text-apoio font-semibold truncate" title={col.nome}>
                                   {col.nome}
                                   {col.souEu && <span className="text-info-fg font-normal"> (você)</span>}
                                 </p>
-                                {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
+                                {col.cargo && <p className="text-micro text-muted-foreground truncate">{col.cargo}</p>}
                               </div>
                               {ativo && <Check className="h-3.5 w-3.5 text-info-fg shrink-0" />}
                             </button>
@@ -3020,13 +3020,13 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         })}
                     </div>
                   )}
-                  <p className="text-[10px] text-info-fg/80 leading-relaxed mt-1.5">
+                  <p className="text-micro text-info-fg/80 leading-relaxed mt-1.5">
                     Vinculou um cliente e limpou o campo? O evento vai pro responsável daquele
                     cliente — regra que já existe, agora visível antes de salvar.
                   </p>
                 </>
               ) : (
-                <p className="text-[10px] text-info-fg/80 leading-relaxed mt-1.5">
+                <p className="text-micro text-info-fg/80 leading-relaxed mt-1.5">
                   Você cria para si. Atribuir a um colega é do gestor.
                 </p>
               )}
@@ -3064,7 +3064,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 </div>
                 <p className="text-xs font-bold text-info-fg tracking-tight">Lembretes</p>
                 {lembreteMinutos.length > 0 && lembreteDestinatarios.length > 0 && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-micro font-bold uppercase tracking-wider">
                     {lembreteMinutos.length} ativo{lembreteMinutos.length === 1 ? "" : "s"}
                   </span>
                 )}
@@ -3072,7 +3072,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
               {/* Quando avisar (toggle) */}
               <div>
-                <p className="text-[10px] font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Quando avisar</p>
+                <p className="text-micro font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Quando avisar</p>
                 <div className="flex gap-1.5 flex-wrap">
                   {PRESETS_LEMBRETE.map((p) => {
                     const ativo = lembreteMinutos.includes(p.id);
@@ -3081,7 +3081,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         key={p.id}
                         type="button"
                         onClick={() => setLembreteMinutos(ativo ? lembreteMinutos.filter((m) => m !== p.id) : [...lembreteMinutos, p.id])}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                        className={`px-2.5 py-1 rounded-full text-apoio font-medium border transition-all ${
                           ativo ? "bg-info text-info-on border-info/30" : "bg-card text-muted-foreground border-border hover:border-info/30"
                         }`}
                       >
@@ -3095,13 +3095,13 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               {/* Quem avisar — seletor melhorado */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-semibold text-info-fg/85 uppercase tracking-wider">
+                  <p className="text-micro font-semibold text-info-fg/85 uppercase tracking-wider">
                     Quem avisar
                     {lembreteDestinatarios.length > 0 && (
                       <span className="text-info-fg normal-case font-bold ml-1">· {lembreteDestinatarios.length} selecionado{lembreteDestinatarios.length === 1 ? "" : "s"}</span>
                     )}
                   </p>
-                  <div className="flex gap-1.5 text-[10px]">
+                  <div className="flex gap-1.5 text-micro">
                     <button
                       type="button"
                       onClick={() => setLembreteDestinatarios(colaboradores.map((c) => c.id))}
@@ -3129,9 +3129,9 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                       return (
                         <span
                           key={id}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info text-info-on text-[10px] font-medium"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info text-info-on text-micro font-medium"
                         >
-                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[7px] font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
+                          <span className={`w-4 h-4 rounded-full flex items-center justify-center text-micro font-bold text-white ring-1 ring-white/40 bg-gradient-to-br ${gradientAvatar(col.nome)}`}>
                             {gerarIniciais(col.nome)}
                           </span>
                           <span className="truncate max-w-[100px]">{col.nome.split(" ")[0]}</span>
@@ -3156,7 +3156,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   className="h-8 text-xs bg-card rounded-lg mb-1.5"
                 />
                 {colaboradores.length === 0 ? (
-                  <p className="text-[10.5px] text-muted-foreground italic">Carregando colaboradores…</p>
+                  <p className="text-apoio text-muted-foreground italic">Carregando colaboradores…</p>
                 ) : (
                   <div className="max-h-40 overflow-y-auto bg-card rounded-lg border border-info/30 divide-y divide-border">
                     {colaboradores
@@ -3174,12 +3174,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                               ativo ? "bg-info-bg hover:bg-info-bg" : "hover:bg-muted/50"
                             }`}
                           >
-                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(col.nome)} ${ativo ? "ring-2 ring-info ring-offset-1" : ""}`}>
                               {gerarIniciais(col.nome)}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-semibold truncate" title={col.nome}>{col.nome}</p>
-                              {col.cargo && <p className="text-[9.5px] text-muted-foreground truncate">{col.cargo}</p>}
+                              <p className="text-apoio font-semibold truncate" title={col.nome}>{col.nome}</p>
+                              {col.cargo && <p className="text-micro text-muted-foreground truncate">{col.cargo}</p>}
                             </div>
                             {ativo && (
                               <Check className="h-3.5 w-3.5 text-info-fg shrink-0" />
@@ -3193,7 +3193,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
 
               {/* Canais */}
               <div>
-                <p className="text-[10px] font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Canais</p>
+                <p className="text-micro font-semibold text-info-fg/85 mb-1.5 uppercase tracking-wider">Canais</p>
                 <div className="flex gap-1.5 flex-wrap">
                   {CANAIS_LEMBRETE.map((c) => {
                     const ativo = lembreteCanais.includes(c.id);
@@ -3204,7 +3204,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         type="button"
                         disabled={disabled}
                         onClick={() => !disabled && setLembreteCanais(ativo ? lembreteCanais.filter((k) => k !== c.id) : [...lembreteCanais, c.id])}
-                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                        className={`px-2.5 py-1 rounded-full text-apoio font-medium border transition-all ${
                           ativo
                             ? "bg-info text-info-on border-info/30"
                             : disabled
@@ -3221,7 +3221,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               </div>
 
               {lembreteMinutos.length > 0 && lembreteDestinatarios.length === 0 && (
-                <p className="text-[10px] text-warning-fg italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
+                <p className="text-micro text-warning-fg italic">Selecione pelo menos 1 destinatário pra ativar os lembretes.</p>
               )}
             </div>
           )}
@@ -3231,14 +3231,14 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
             <Label className="text-xs">Cliente / contato (opcional)</Label>
             {contatoId && contatoNome ? (
               <div className="mt-1 flex items-center gap-2 px-2.5 py-1.5 bg-info-bg border border-info/30 rounded-lg">
-                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(contatoNome)}`}>
+                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(contatoNome)}`}>
                   {gerarIniciais(contatoNome)}
                 </span>
                 <span className="flex-1 text-xs font-semibold truncate" title={contatoNome}>{contatoNome}</span>
                 <button
                   type="button"
                   onClick={() => { setContatoId(null); setContatoNome(""); setContatoBusca(""); }}
-                  className="text-[10px] text-info-fg hover:underline"
+                  className="text-micro text-info-fg hover:underline"
                 >
                   Trocar
                 </button>
@@ -3262,12 +3262,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         onClick={() => { setContatoId(c.id); setContatoNome(c.nome); setContatoMenuOpen(false); }}
                         className="w-full flex items-center gap-2 px-2.5 py-2 hover:bg-info-bg text-left"
                       >
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-br ${gradientAvatar(c.nome)}`}>
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white bg-gradient-to-br ${gradientAvatar(c.nome)}`}>
                           {gerarIniciais(c.nome)}
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">{c.nome}</p>
-                          {c.cpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{c.cpfCnpj}</p>}
+                          {c.cpfCnpj && <p className="text-micro text-muted-foreground font-mono">{c.cpfCnpj}</p>}
                         </div>
                       </button>
                     ))}
@@ -3293,14 +3293,14 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   href={telefoneParaWaMe(contatoTelefone) ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-success-fg hover:text-success-fg inline-flex items-center gap-1"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-micro font-semibold text-success-fg hover:text-success-fg inline-flex items-center gap-1"
                   title="Abrir no WhatsApp"
                 >
                   💬 wa.me
                 </a>
               )}
             </div>
-            <p className="text-[10px] text-muted-foreground/80 mt-1">Útil pra contato rápido antes/durante a reunião — não vincula contato do CRM.</p>
+            <p className="text-micro text-muted-foreground/80 mt-1">Útil pra contato rápido antes/durante a reunião — não vincula contato do CRM.</p>
           </div>
 
           {/* Processo monitorado */}
@@ -3313,7 +3313,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                 <button
                   type="button"
                   onClick={() => { setProcessoId(null); setProcessoLabel(""); setProcessoBusca(""); }}
-                  className="text-[10px] text-info-fg hover:underline"
+                  className="text-micro text-info-fg hover:underline"
                 >
                   Trocar
                 </button>
@@ -3344,7 +3344,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                         <Scale className="h-4 w-4 text-info-fg shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-mono font-bold truncate">{m.searchKey}</p>
-                          {m.apelido && <p className="text-[10px] text-muted-foreground truncate">{m.apelido}</p>}
+                          {m.apelido && <p className="text-micro text-muted-foreground truncate">{m.apelido}</p>}
                         </div>
                       </button>
                     ))}
@@ -3369,12 +3369,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                   </div>
                   <p className="text-xs font-bold text-info-fg tracking-tight">Arquivos da reunião</p>
                   {anexos.length > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-[9px] font-bold uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-info text-info-on text-micro font-bold uppercase tracking-wider">
                       {anexos.length}
                     </span>
                   )}
                 </div>
-                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-info text-info-on text-[10.5px] font-semibold cursor-pointer hover:bg-info transition-colors">
+                <label className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-info text-info-on text-apoio font-semibold cursor-pointer hover:bg-info transition-colors">
                   {uploadingAnexo ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
                   {uploadingAnexo ? "Enviando…" : "Adicionar"}
                   <input
@@ -3391,7 +3391,7 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
               </div>
 
               {anexos.length === 0 ? (
-                <p className="text-[10.5px] text-info-fg/70 italic">PDF, imagens ou documentos pra ter à mão durante a reunião.</p>
+                <p className="text-apoio text-info-fg/70 italic">PDF, imagens ou documentos pra ter à mão durante a reunião.</p>
               ) : (
                 <div className="space-y-1">
                   {anexos.map((a, i) => {
@@ -3405,12 +3405,12 @@ function CriarEventoDialog({ open, onOpenChange, onSuccess, eventoEdit }: {
                             href={a.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-[11px] font-medium text-info-fg hover:underline truncate block"
+                            className="text-apoio font-medium text-info-fg hover:underline truncate block"
                             title={a.nome}
                           >
                             {a.nome}
                           </a>
-                          <p className="text-[9.5px] text-muted-foreground">{sizeKB}</p>
+                          <p className="text-micro text-muted-foreground">{sizeKB}</p>
                         </div>
                         <button
                           type="button"
@@ -3554,16 +3554,16 @@ function ResultadoAtendimentoDialog({ evento, open, onOpenChange, onConcluido }:
 
           {remarcou && (
             <div className="rounded-xl bg-warning-bg border border-warning/30 p-3 space-y-3">
-              <p className="text-[11px] font-bold text-warning-fg uppercase tracking-wide flex items-center gap-1">
+              <p className="text-apoio font-bold text-warning-fg uppercase tracking-wide flex items-center gap-1">
                 <CalendarClock className="h-3.5 w-3.5" /> Retorno remarcado
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-[11px] text-muted-foreground">Nova data *</Label>
+                  <Label className="text-apoio text-muted-foreground">Nova data *</Label>
                   <Input type="date" value={dataRetorno} onChange={(e) => setDataRetorno(e.target.value)} className="mt-1 bg-card" />
                 </div>
                 <div>
-                  <Label className="text-[11px] text-muted-foreground">Hora</Label>
+                  <Label className="text-apoio text-muted-foreground">Hora</Label>
                   <Input type="time" value={horaRetorno} onChange={(e) => setHoraRetorno(e.target.value)} className="mt-1 bg-card" />
                 </div>
               </div>
@@ -3632,14 +3632,14 @@ function PastilhaContador({
       }`}
     >
       <span
-        className={`text-[15px] font-bold tabular-nums leading-none ${
+        className={`text-secao font-bold tabular-nums leading-none ${
           alerta ? "text-danger-fg" : "text-foreground"
         }`}
       >
         {valor}
       </span>
       <span
-        className={`text-[11.5px] font-medium ${alerta ? "text-danger-fg" : "text-muted-foreground"}`}
+        className={`text-apoio font-medium ${alerta ? "text-danger-fg" : "text-muted-foreground"}`}
       >
         {rotulo}
       </span>
@@ -3750,8 +3750,8 @@ export default function Agenda() {
       {/* ═══════════ CABEÇALHO ═══════════ */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[27px] font-bold tracking-tight leading-none">Agenda</h1>
-          <p className="text-[13.5px] text-muted-foreground mt-1.5">
+          <h1 className="text-pagina font-bold tracking-tight leading-none">Agenda</h1>
+          <p className="text-corpo text-muted-foreground mt-1.5">
             Compromissos, prazos e tarefas do escritório
           </p>
         </div>

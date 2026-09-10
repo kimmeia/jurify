@@ -548,7 +548,7 @@ export default function Kanban() {
                     {totalFunisAtivos}
                   </span>
                   {totaisEscritorio.emProducao > 0 && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-apoio font-medium bg-white/15 text-white border border-white/20">
                       {totaisEscritorio.emProducao} cards em produção
                     </span>
                   )}
@@ -568,7 +568,7 @@ export default function Kanban() {
 
               {listaFunis.length > 0 && (
                 <div className="lg:col-span-6">
-                  <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Atenção</p>
+                  <p className="text-micro text-white/65 uppercase tracking-wider mb-2">Atenção</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
                       <p className="text-xs text-white/70 mb-1">Atrasados</p>
@@ -711,7 +711,7 @@ export default function Kanban() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h2 className="text-xl font-bold tracking-tight">{funilNome}</h2>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/15 text-white border border-white/20">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-apoio font-medium bg-white/15 text-white border border-white/20">
                   {colunas.length} coluna{colunas.length !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -754,17 +754,17 @@ export default function Kanban() {
           {/* 4 KPIs do funil */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Total cards</p>
+              <p className="text-micro text-white/65 uppercase tracking-wider mb-1">Total cards</p>
               <p className="text-2xl font-bold tabular-nums leading-none">{totalCardsAtivos}</p>
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Em produção</p>
+              <p className="text-micro text-white/65 uppercase tracking-wider mb-1">Em produção</p>
               <p className="text-2xl font-bold tabular-nums leading-none text-info">
                 {totalEmProducao}
               </p>
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">⚠ Atrasados</p>
+              <p className="text-micro text-white/65 uppercase tracking-wider mb-1">⚠ Atrasados</p>
               <p
                 className={`text-2xl font-bold tabular-nums leading-none ${totalAtrasados > 0 ? "text-danger" : ""}`}
               >
@@ -772,7 +772,7 @@ export default function Kanban() {
               </p>
             </div>
             <div className="bg-white/10 rounded-lg px-3 py-2.5 border border-white/15">
-              <p className="text-[10px] text-white/65 uppercase tracking-wider mb-1">Concluídos</p>
+              <p className="text-micro text-white/65 uppercase tracking-wider mb-1">Concluídos</p>
               <p className="text-2xl font-bold tabular-nums leading-none text-success">
                 {totalConcluidos}
               </p>
@@ -867,7 +867,7 @@ export default function Kanban() {
           </div>
 
           {buscaTexto.trim() && (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-apoio text-muted-foreground">
               <b className="text-foreground tabular-nums">{totalCardsFiltrados}</b>
               {" de "}
               <b className="tabular-nums">{totalCardsBase}</b> card(s)
@@ -912,10 +912,10 @@ export default function Kanban() {
                   }}
                   onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 />
-                <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">{col.cards?.length || 0}</Badge>
+                <Badge variant="outline" className="text-micro h-4 px-1 shrink-0">{col.cards?.length || 0}</Badge>
                 {col.tipo === "conclusao" && (
                   <Badge
-                    className="text-[9px] h-4 px-1 bg-success-bg text-success-fg border-success/30 shrink-0"
+                    className="text-micro h-4 px-1 bg-success-bg text-success-fg border-success/30 shrink-0"
                     title="Cards nesta coluna são considerados concluídos"
                   >
                     ✓ conclusão
@@ -1058,19 +1058,19 @@ export default function Kanban() {
 
                       {/* Cliente */}
                       {card.clienteNome && (
-                        <div className="flex items-center gap-1.5 mb-2 text-[11px] text-foreground">
+                        <div className="flex items-center gap-1.5 mb-2 text-apoio text-foreground">
                           <Briefcase className="w-3 h-3 text-muted-foreground/70 shrink-0" />
                           <span className="font-medium truncate">{card.clienteNome}</span>
                         </div>
                       )}
                       {(card as any).acaoApelido && (
-                        <div className="flex items-center gap-1.5 mb-2 text-[10px] text-info-fg">
+                        <div className="flex items-center gap-1.5 mb-2 text-micro text-info-fg">
                           <Scale className="w-3 h-3 text-info shrink-0" />
                           <span className="font-medium truncate">{(card as any).acaoApelido}</span>
                         </div>
                       )}
                       {card.cnj && !(card as any).acaoApelido && (
-                        <p className="text-[10px] font-mono text-muted-foreground mb-2 truncate">{card.cnj}</p>
+                        <p className="text-micro font-mono text-muted-foreground mb-2 truncate">{card.cnj}</p>
                       )}
 
                       {/* Tags outline */}
@@ -1082,7 +1082,7 @@ export default function Kanban() {
                             return (
                               <span
                                 key={i}
-                                className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border bg-card"
+                                className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded-full border bg-card"
                                 style={{ color: cor, borderColor: cor }}
                               >
                                 <span className="inline-block w-1 h-1 rounded-full" style={{ background: cor }} />
@@ -1091,7 +1091,7 @@ export default function Kanban() {
                             );
                           })}
                           {cardTags.length > 3 && (
-                            <span className="text-[9px] text-muted-foreground/70 font-medium">
+                            <span className="text-micro text-muted-foreground/70 font-medium">
                               +{cardTags.length - 3}
                             </span>
                           )}
@@ -1099,26 +1099,26 @@ export default function Kanban() {
                       )}
 
                       {/* Rodapé: prazo/status + tempo na coluna */}
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <div className="flex items-center gap-2 text-apoio text-muted-foreground">
                         {isAtrasado ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg">
+                          <span className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg">
                             ⚠ Atrasado
                           </span>
                         ) : col.tipo === "conclusao" && !card.asaasPaymentId ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
+                          <span className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
                             <Wallet className="w-2.5 h-2.5" /> Lançar cobrança
                           </span>
                         ) : col.tipo === "conclusao" && card.asaasPaymentId ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg">
+                          <span className="inline-flex items-center gap-1 text-micro font-semibold px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg">
                             <CheckCircle2 className="w-2.5 h-2.5" /> Cobrança lançada
                           </span>
                         ) : card.prazo ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg">
+                          <span className="inline-flex items-center gap-1 text-micro font-medium px-1.5 py-0.5 rounded-full bg-info-bg text-info-fg">
                             <Calendar className="w-2.5 h-2.5" />
                             {formatarDataCalendario(card.prazo, { ano: false, mes: "curto" })}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground/70">Sem prazo</span>
+                          <span className="text-micro text-muted-foreground/70">Sem prazo</span>
                         )}
                         <TempoColuna updatedAt={card.updatedAt} createdAt={card.createdAt} />
                       </div>
@@ -1143,7 +1143,7 @@ export default function Kanban() {
                     {restantes > 0 && (
                       <button
                         onClick={() => toggleExpandirColuna(col.id)}
-                        className="w-full py-1.5 text-[11px] text-muted-foreground hover:text-foreground border border-dashed rounded-md hover:border-solid transition-colors"
+                        className="w-full py-1.5 text-apoio text-muted-foreground hover:text-foreground border border-dashed rounded-md hover:border-solid transition-colors"
                       >
                         Ver mais {restantes} {restantes === 1 ? "card" : "cards"} →
                       </button>
@@ -1151,7 +1151,7 @@ export default function Kanban() {
                     {expandida && todos.length > CARDS_INICIAIS && (
                       <button
                         onClick={() => toggleExpandirColuna(col.id)}
-                        className="w-full py-1.5 text-[11px] text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                        className="w-full py-1.5 text-apoio text-muted-foreground hover:text-foreground rounded-md transition-colors"
                       >
                         ← Recolher
                       </button>
@@ -1200,8 +1200,8 @@ export default function Kanban() {
               {clienteSelecionado ? (
                 <div className="flex items-center gap-2 p-2 rounded-lg bg-success-bg border border-success/30 mt-1">
                   <User className="h-4 w-4 text-success-fg" />
-                  <div className="flex-1"><p className="text-xs font-medium">{clienteSelecionado.nome}</p>{clienteSelecionado.cpfCnpj && <p className="text-[9px] text-muted-foreground">{clienteSelecionado.cpfCnpj}</p>}</div>
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}>Trocar</Button>
+                  <div className="flex-1"><p className="text-xs font-medium">{clienteSelecionado.nome}</p>{clienteSelecionado.cpfCnpj && <p className="text-micro text-muted-foreground">{clienteSelecionado.cpfCnpj}</p>}</div>
+                  <Button variant="ghost" size="sm" className="h-6 text-micro" onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}>Trocar</Button>
                 </div>
               ) : (
                 <div className="mt-1">
@@ -1210,7 +1210,7 @@ export default function Kanban() {
                     <div className="border rounded-lg mt-1 max-h-32 overflow-y-auto divide-y">
                       {(clientesBusca.clientes || []).map((c: any) => (
                         <button key={c.id} onClick={() => { setClienteSelecionado(c); setBuscaCliente(""); setCardForm({ ...cardForm, tags: unirTags(cardForm.tags, c.tags) ?? "" }); }} className="w-full flex items-center gap-2 p-2 hover:bg-muted/50 text-left text-xs">
-                          <User className="h-3 w-3 text-info" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-[9px] text-muted-foreground">{c.cpfCnpj}</span>}
+                          <User className="h-3 w-3 text-info" /><span className="font-medium">{c.nome}</span>{c.cpfCnpj && <span className="text-micro text-muted-foreground">{c.cpfCnpj}</span>}
                         </button>
                       ))}
                     </div>
@@ -1234,7 +1234,7 @@ export default function Kanban() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[10px] text-muted-foreground mt-1">Recebe notificação quando o card é criado.</p>
+              <p className="text-micro text-muted-foreground mt-1">Recebe notificação quando o card é criado.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1253,17 +1253,17 @@ export default function Kanban() {
                           const novas = selecionada ? atuais.filter((n: string) => n !== t.nome) : [...atuais, t.nome];
                           setCardForm({ ...cardForm, tags: novas.join(", ") });
                         }}
-                        className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-all ${selecionada ? "text-white ring-2 ring-offset-1" : "opacity-50 hover:opacity-80"}`}
+                        className={`text-micro px-2 py-0.5 rounded-full font-medium transition-all ${selecionada ? "text-white ring-2 ring-offset-1" : "opacity-50 hover:opacity-80"}`}
                         style={{ background: t.cor }}
                       >
                         {t.nome}
                       </button>
                     );
                   })}
-                  {(!tags || tags.length === 0) && <p className="text-[10px] text-muted-foreground">Nenhuma tag criada. Use o botão "Tags" no board.</p>}
+                  {(!tags || tags.length === 0) && <p className="text-micro text-muted-foreground">Nenhuma tag criada. Use o botão "Tags" no board.</p>}
                 </div>
                 {clienteSelecionado?.tags && (
-                  <p className="text-[10px] text-muted-foreground mt-1">As tags do cadastro já vêm marcadas; o que você marcar é somado a elas.</p>
+                  <p className="text-micro text-muted-foreground mt-1">As tags do cadastro já vêm marcadas; o que você marcar é somado a elas.</p>
                 )}
               </div>
             </div>
@@ -1273,7 +1273,7 @@ export default function Kanban() {
               <input type="checkbox" checked={cardForm.urgente} onChange={(e) => setCardForm({ ...cardForm, urgente: e.target.checked, prioridade: e.target.checked ? "alta" : "media" })} className="accent-danger h-4 w-4" />
               <div className="flex items-center gap-2">
                 <span className="relative flex h-3 w-3"><span className={`${cardForm.urgente ? "animate-ping" : ""} absolute inline-flex h-full w-full rounded-full bg-danger opacity-75`} /><span className="relative inline-flex rounded-full h-3 w-3 bg-danger" /></span>
-                <div><p className="text-xs font-medium">Marcar como urgente</p><p className="text-[10px] text-muted-foreground">Indicador vermelho pulsante no card</p></div>
+                <div><p className="text-xs font-medium">Marcar como urgente</p><p className="text-micro text-muted-foreground">Indicador vermelho pulsante no card</p></div>
               </div>
             </label>
 
@@ -1287,7 +1287,7 @@ export default function Kanban() {
                 onChange={(e) => setCardForm({ ...cardForm, valorEstimado: e.target.value })}
                 placeholder="Ex: 3500,00"
               />
-              <p className="text-[10px] text-muted-foreground mt-1">
+              <p className="text-micro text-muted-foreground mt-1">
                 Quando mover pra coluna "Concluído/Ganho", o sistema oferece lançar cobrança com este valor.
               </p>
             </div>
@@ -1357,7 +1357,7 @@ export default function Kanban() {
                     </span>
                   )}
                   <h3 className="text-lg font-bold">{cardDetalhe.titulo}</h3>
-                  {cardDetalhe.atrasado && <Badge className="bg-danger/15 text-danger-fg border-danger/30 text-[10px]">Atrasado</Badge>}
+                  {cardDetalhe.atrasado && <Badge className="bg-danger/15 text-danger-fg border-danger/30 text-micro">Atrasado</Badge>}
                 </div>
                 <div className="flex items-center gap-1">
                   {cardDetalhe.arquivado ? (
@@ -1394,13 +1394,13 @@ export default function Kanban() {
 
               {/* Edição inline */}
               <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
-                <p className="text-[10px] font-semibold text-muted-foreground">EDITAR</p>
-                <div><Label className="text-[10px]">Título</Label><Input defaultValue={cardDetalhe.titulo} onBlur={(e) => { if (e.target.value !== cardDetalhe.titulo) editarCardMut.mutate({ id: cardDetalhe.id, titulo: e.target.value }); }} /></div>
+                <p className="text-micro font-semibold text-muted-foreground">EDITAR</p>
+                <div><Label className="text-micro">Título</Label><Input defaultValue={cardDetalhe.titulo} onBlur={(e) => { if (e.target.value !== cardDetalhe.titulo) editarCardMut.mutate({ id: cardDetalhe.id, titulo: e.target.value }); }} /></div>
                 {/* Campo esvaziado vai como "" — undefined some do JSON e o servidor
                     não mexia, mas o toast dizia "atualizado". */}
-                <div><Label className="text-[10px]">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value })} /></div>
+                <div><Label className="text-micro">CNJ</Label><Input defaultValue={cardDetalhe.cnj || ""} className="font-mono" onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value })} /></div>
                 <div>
-                  <Label className="text-[10px]">Valor estimado (R$)</Label>
+                  <Label className="text-micro">Valor estimado (R$)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1413,9 +1413,9 @@ export default function Kanban() {
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div><Label className="text-[10px]">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? dataCalendarioISO(cardDetalhe.prazo) : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || null })} /></div>
+                  <div><Label className="text-micro">Prazo</Label><Input type="date" defaultValue={cardDetalhe.prazo ? dataCalendarioISO(cardDetalhe.prazo) : ""} onChange={(e) => editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || null })} /></div>
                   <div>
-                    <Label className="text-[10px]">Tags</Label>
+                    <Label className="text-micro">Tags</Label>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {(tags || []).map((t: any) => {
                         const atuais = (cardDetalhe.tags || "").split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -1424,7 +1424,7 @@ export default function Kanban() {
                           <button key={t.id} type="button" onClick={() => {
                             const novas = sel ? atuais.filter((n: string) => n !== t.nome) : [...atuais, t.nome];
                             editarCardMut.mutate({ id: cardDetalhe.id, tags: novas.join(", ") });
-                          }} className={`text-[9px] px-2 py-0.5 rounded-full font-medium transition-all ${sel ? "text-white ring-2 ring-offset-1" : "opacity-40 hover:opacity-70"}`} style={{ background: t.cor }}>
+                          }} className={`text-micro px-2 py-0.5 rounded-full font-medium transition-all ${sel ? "text-white ring-2 ring-offset-1" : "opacity-40 hover:opacity-70"}`} style={{ background: t.cor }}>
                             {t.nome}
                           </button>
                         );
@@ -1432,7 +1432,7 @@ export default function Kanban() {
                     </div>
                   </div>
                 </div>
-                <div><Label className="text-[10px]">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value })} /></div>
+                <div><Label className="text-micro">Descrição</Label><Textarea defaultValue={cardDetalhe.descricao || ""} rows={2} onBlur={(e) => editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value })} /></div>
 
                 {/* Toggle urgente */}
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1445,7 +1445,7 @@ export default function Kanban() {
                     frente. Atendente que não tinha esse card antes passa
                     a ver; quem perdeu deixa de ver no próximo refresh. */}
                 <div>
-                  <Label className="text-[10px]">Responsável</Label>
+                  <Label className="text-micro">Responsável</Label>
                   <Select
                     value={(cardDetalhe as any).responsavelId ? String((cardDetalhe as any).responsavelId) : "_nenhum"}
                     onValueChange={(v) => editarCardMut.mutate({
@@ -1471,19 +1471,19 @@ export default function Kanban() {
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {cardDetalhe.tags.split(",").map((t: string, i: number) => {
                     const tagObj = (tags || []).find((tg: any) => tg.nome === t.trim());
-                    return <span key={i} className="text-[9px] px-2 py-0.5 rounded-full text-white font-medium" style={{ background: tagObj?.cor || "#6b7280" }}>{t.trim()}</span>;
+                    return <span key={i} className="text-micro px-2 py-0.5 rounded-full text-white font-medium" style={{ background: tagObj?.cor || "#6b7280" }}>{t.trim()}</span>;
                   })}
                 </div>
               )}
 
               {/* Cliente vinculado */}
               <div className="rounded-lg border p-3">
-                <p className="text-[10px] font-semibold text-muted-foreground mb-2">CLIENTE</p>
+                <p className="text-micro font-semibold text-muted-foreground mb-2">CLIENTE</p>
                 {cardDetalhe.clienteNome ? (
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-medium">{cardDetalhe.clienteNome}</p>
-                      {cardDetalhe.clienteCpfCnpj && <p className="text-[10px] text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
+                      {cardDetalhe.clienteCpfCnpj && <p className="text-micro text-muted-foreground font-mono">{cardDetalhe.clienteCpfCnpj}</p>}
                     </div>
                     <Button size="sm" className="h-8 text-xs bg-info hover:bg-info text-white" onClick={() => { setCardAberto(null); setFunilAtivo(null); setLocation(`/clientes?id=${cardDetalhe.clienteId}`); }}>
                       <ExternalLink className="h-3 w-3 mr-1" /> Ver cadastro do cliente
@@ -1517,7 +1517,7 @@ export default function Kanban() {
               {/* Timeline completa (movimentações + responsáveis + comentários + conclusão) */}
               <TimelineCard cardId={cardDetalhe.id} prazo={cardDetalhe.prazo} />
 
-              <div className="text-[10px] text-muted-foreground pt-2 border-t">
+              <div className="text-micro text-muted-foreground pt-2 border-t">
                 Criado em {new Date(cardDetalhe.createdAt).toLocaleDateString("pt-BR")}
               </div>
             </div>
@@ -1591,7 +1591,7 @@ export default function Kanban() {
                     ) : (
                       <p>Este funil não tem outra coluna para guardar os cards arquivados.</p>
                     )}
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-apoio text-muted-foreground">
                       A contagem vem do servidor e ignora o filtro do quadro.
                     </p>
                   </>
@@ -1721,12 +1721,12 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-bold truncate">{funil.nome}</p>
-            <p className="text-[11px] text-muted-foreground truncate">
+            <p className="text-apoio text-muted-foreground truncate">
               {funil.totalColunas ?? 0} coluna{funil.totalColunas !== 1 ? "s" : ""}
               {funil.descricao ? ` · ${funil.descricao}` : ""}
             </p>
           </div>
-          <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${status.cls}`}>
+          <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full ${status.cls}`}>
             {status.label}
           </span>
         </div>
@@ -1736,19 +1736,19 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
             <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-info-fg">
               {emProducao}
             </p>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-1">Em produção</p>
+            <p className="text-micro text-muted-foreground uppercase tracking-wider mt-1">Em produção</p>
           </div>
           <div className="rounded-lg p-2 bg-muted">
             <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-success-fg">
               {concluidos}
             </p>
-            <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-1">Concluídos</p>
+            <p className="text-micro text-muted-foreground uppercase tracking-wider mt-1">Concluídos</p>
           </div>
           <div className={`rounded-lg p-2 ${atrasados > 0 ? "bg-danger-bg ring-1 ring-danger" : "bg-muted"}`}>
             <p className="text-xl font-bold tracking-tight tabular-nums leading-none text-danger-fg">
               {atrasados}
             </p>
-            <p className={`text-[9px] uppercase tracking-wider mt-1 ${atrasados > 0 ? "text-danger-fg font-semibold" : "text-muted-foreground"}`}>
+            <p className={`text-micro uppercase tracking-wider mt-1 ${atrasados > 0 ? "text-danger-fg font-semibold" : "text-muted-foreground"}`}>
               Atrasados
             </p>
           </div>
@@ -1756,7 +1756,7 @@ function FunilCard({ funil, onAbrir }: { funil: any; onAbrir: () => void }) {
 
         {totalParaProgresso > 0 && (
           <>
-            <div className="mb-1 flex justify-between text-[10px] text-muted-foreground">
+            <div className="mb-1 flex justify-between text-micro text-muted-foreground">
               <span>Progresso geral</span>
               <span className="font-semibold text-foreground">{progresso.toFixed(0)}%</span>
             </div>
@@ -1804,7 +1804,7 @@ function PrioDot({
 function AvatarResp({ nome }: { nome: string }) {
   return (
     <span
-      className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-[0_0_0_2px_white] shrink-0 bg-gradient-to-br ${gradientAvatar(nome)}`}
+      className={`w-6 h-6 rounded-full flex items-center justify-center text-micro font-bold text-white shadow-[0_0_0_2px_white] shrink-0 bg-gradient-to-br ${gradientAvatar(nome)}`}
       title={nome}
     >
       {gerarIniciais(nome)}
@@ -1823,13 +1823,13 @@ function TempoColuna({
   const ref = updatedAt || createdAt;
   if (!ref) return null;
   const dias = Math.floor((Date.now() - new Date(ref).getTime()) / (1000 * 60 * 60 * 24));
-  if (dias < 1) return <span className="ml-auto text-[10px] text-muted-foreground/70">hoje</span>;
-  if (dias === 1) return <span className="ml-auto text-[10px] text-muted-foreground/70">há 1d</span>;
+  if (dias < 1) return <span className="ml-auto text-micro text-muted-foreground/70">hoje</span>;
+  if (dias === 1) return <span className="ml-auto text-micro text-muted-foreground/70">há 1d</span>;
   const quente = dias > 7;
   const texto = dias < 7 ? `há ${dias}d` : dias < 30 ? `há ${Math.floor(dias / 7)}sem` : `há ${Math.floor(dias / 30)}mês`;
   return (
     <span
-      className={`ml-auto text-[10px] tabular-nums ${
+      className={`ml-auto text-micro tabular-nums ${
         quente ? "text-warning-fg font-semibold" : "text-muted-foreground/70"
       }`}
       title={`Última atividade ${new Date(ref).toLocaleString("pt-BR")}`}
