@@ -460,7 +460,8 @@ describe("clientes.possiveisDuplicadosTelefone / mesclarDuplicados — a faxina"
 
 describe("crm.unificarContatos / desfazerUnificacao / unificacaoRecente", () => {
   it("o “Mesclar” manual da ficha passou a deixar registro desfazível", async () => {
-    filas["contatos"] = [[COMPLETA], [MAGRA]];
+    // A 1ª consulta é a trava dos CPFs (10/09): aqui só a COMPLETA tem CPF, então passa.
+    filas["contatos"] = [[COMPLETA, MAGRA], [COMPLETA], [MAGRA]];
     const r = await caller().crm.unificarContatos({ principalId: 41, duplicadoId: 40 });
     expect(r.unificacaoId).toBeGreaterThan(0);
     expect(unificarContatosMock).toHaveBeenCalledWith(1, 41, 40);

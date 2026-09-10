@@ -1572,6 +1572,36 @@ export async function retomarExecucao(execId: number): Promise<{ retomada: boole
       return { retomada: false, erro: "Execução já retomada por outro ciclo" };
     }
 
+    // Humano assumiu a conversa enquanto o fluxo esperava? Não retoma.
+    //
+    // As outras duas portas já barram o bot pausado (o `dispararMensagemCanal`
+    // no topo e o laço de envio do whatsapp-handler), mas as duas são
+    // MOVIDAS POR MENSAGEM DO CLIENTE. Esta é movida pelo relógio: quando o
+    // scheduler retoma, `__retomadaPorTimeout` faz o engine enviar DIRETO pelo
+    // canal (`enviarWhatsApp`, proativo) em vez de devolver `resposta` pro
+    // handler — e assim o robô falava por cima do atendente que já tinha
+    // assumido. É preciso conferir aqui, depois do claim, senão a execução
+    // fica com `retomarEm` no passado e o ciclo tenta de novo pra sempre.
+    if (exec.conversaId) {
+      const { conversas } = await import("../../drizzle/schema");
+      const [conv] = await db
+        .select({ status: conversas.status })
+        .from(conversas)
+        .where(and(eq(conversas.id, exec.conversaId), eq(conversas.escritorioId, exec.escritorioId)))
+        .limit(1);
+      if (conv?.status === "em_atendimento") {
+        await db
+          .update(smartflowExecucoes)
+          .set({ status: "cancelado", retomarEm: null, erro: "Atendente assumiu a conversa" })
+          .where(eq(smartflowExecucoes.id, execId));
+        log.info(
+          { execId, conversaId: exec.conversaId },
+          "SmartFlow: atendente assumiu — retomada cancelada, bot não fala por cima",
+        );
+        return { retomada: false, erro: "Atendente assumiu a conversa" };
+      }
+    }
+
     const cenario = await carregarCenarioPorId(exec.escritorioId, exec.cenarioId);
     if (!cenario) return { retomada: false, erro: "Cenário não encontrado" };
 
