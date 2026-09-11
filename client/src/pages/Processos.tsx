@@ -27,6 +27,7 @@ import { EstadosPicker } from "@/components/EstadosPicker";
 import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
 import { formatarDataCalendario } from "@shared/data-calendario";
 import { GAVETAS, type GavetaPolo } from "@shared/nova-acao-polo";
+import { ROTULO_FONTE_CAPA, type FonteCapa } from "@shared/nova-acao-capa";
 
 /** Estados vigiados de um monitoramento (coluna nova; legado = `tribunal`). */
 function lerTribunaisDoMonitorCliente(m: { tribunais?: string | null; tribunal?: string }): string[] {
@@ -2834,6 +2835,11 @@ type CapaDoCard = {
   poloDoCliente: string;
   /** Veio junto com a detecção (grátis) ou de uma consulta paga sob demanda? */
   daDeteccao: boolean;
+  /**
+   * De onde saiu o que está escrito: a página do processo, a lista do tribunal
+   * ou o DataJud. Capa antiga não tem — aí o card segue com o texto de antes.
+   */
+  fonte: FonteCapa | null;
 };
 
 /**
@@ -2877,6 +2883,7 @@ function capaDoCard(a: any, detalhes: any): CapaDoCard | null {
       partes: a.capa.partes ?? [],
       poloDoCliente: a.capa.poloDoCliente ?? "desconhecido",
       daDeteccao: true,
+      fonte: a.capa.fonte ?? null,
     };
   }
   if (!detalhes) return null;
@@ -2894,6 +2901,7 @@ function capaDoCard(a: any, detalhes: any): CapaDoCard | null {
     partes,
     poloDoCliente: "desconhecido",
     daDeteccao: false,
+    fonte: null,
   };
 }
 
@@ -3080,15 +3088,16 @@ function NovasAcoesTab() {
     },
   });
 
-  // `as any`: passamos `acaoId` extra no input do mutate só pra recuperá-lo
-  // em onSuccess (vars.acaoId) e casar o resultado com a ação certa — não é
-  // campo do input da procedure. Tipar exigiria mover o onSuccess pra opção
-  // por-chamada; mantido como cast documentado.
+  // `acaoId` vai no input da procedure (é ela que grava a capa no card) e
+  // volta em `vars` pra casar o resultado com a ação certa na tela.
   const carregarDetalhesMut = (trpc.processos as any).consultarCNJSincrono.useMutation({
     onSuccess: (d: any, vars: { cnj: string; acaoId: number }) => {
       if (d?.lawsuit) {
         setDetalhesPorAcaoId((prev) => ({ ...prev, [vars.acaoId]: d.lawsuit }));
-        toast.success("Detalhes carregados (1 cred)");
+        toast.success("Detalhes carregados e guardados no card");
+        // O servidor gravou a capa no evento: recarregar traz o card já com
+        // ela, e a próxima pessoa não paga outra consulta pelo mesmo dado.
+        refetch();
       } else {
         toast.warning("Tribunal não retornou detalhes pra esse CNJ");
       }
@@ -3108,6 +3117,29 @@ function NovasAcoesTab() {
     if (carregandoAcaoId !== null) return;
     setCarregandoAcaoId(acaoId);
     carregarDetalhesMut.mutate({ cnj, credencialId: credIdMon ?? undefined, acaoId });
+  };
+
+  // Reserva pública do CNJ: preenche a natureza sem gastar consulta do plano
+  // nem credencial do Cofre. Não traz as partes — o polo continua com quem
+  // marca no card.
+  const dataJudMut = (trpc.processos as any).completarCapaPeloDataJud.useMutation({
+    onSuccess: () => {
+      toast.success("Natureza preenchida pelo DataJud", {
+        description: "O CNJ não publica as partes — diga de que lado o cliente está pra o card sair daqui.",
+      });
+      setCarregandoAcaoId(null);
+      refetch();
+    },
+    onError: (e: any) => {
+      toast.error("O DataJud não devolveu este processo", { description: e.message });
+      setCarregandoAcaoId(null);
+    },
+  });
+
+  const buscarNoDataJud = (acaoId: number) => {
+    if (carregandoAcaoId !== null) return;
+    setCarregandoAcaoId(acaoId);
+    dataJudMut.mutate({ id: acaoId });
   };
 
   /** Pega credencialId do monitoramento parent (do cliente). Cada nova ação
@@ -3775,6 +3807,12 @@ function NovasAcoesTab() {
                           <div className="pt-2 mt-1 border-t border-border/70">
                             <p className="text-[9px] font-bold text-muted-foreground/70 mb-0.5 tracking-wider">NATUREZA DA AÇÃO</p>
                             <p className="text-xs text-foreground leading-snug">{natureza}</p>
+                            {capa?.fonte && (
+                              <span className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-[9px] font-semibold ${capa.fonte === "datajud" ? "bg-info-bg text-info-fg border-info/30" : "bg-success-bg text-success-fg border-success/30"}`}>
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                {ROTULO_FONTE_CAPA[capa.fonte]}
+                              </span>
+                            )}
                           </div>
                         )}
                         {(ativos.length > 0 || passivos.length > 0 || outras.length > 0) && (
@@ -3809,7 +3847,7 @@ function NovasAcoesTab() {
                           <p className="text-[10.5px] text-muted-foreground flex items-center gap-1 pt-2 mt-1 border-t border-border/70">
                             <MapPin className="h-2.5 w-2.5" />
                             {corte}
-                            {capa?.daDeteccao && (
+                            {capa?.daDeteccao && !capa.fonte && (
                               <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-[9px] font-semibold">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 Capa lida na detecção — sem crédito extra
@@ -3821,11 +3859,26 @@ function NovasAcoesTab() {
                           <div className="pt-2 mt-1 border-t border-border/70">
                             <div className="rounded-lg bg-warning-bg border border-warning/30 p-2.5 flex gap-2">
                               <AlertTriangle className="h-3.5 w-3.5 text-warning-fg shrink-0 mt-px" />
-                              <p className="text-[11px] text-warning-fg leading-relaxed">
-                                <b>O tribunal não devolveu a capa deste processo.</b>{" "}
-                                Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
-                                e por isso o card veio pra cá em vez de ser silenciado.
-                              </p>
+                              <div className="min-w-0">
+                                <p className="text-[11px] text-warning-fg leading-relaxed">
+                                  <b>O tribunal não devolveu a capa deste processo.</b>{" "}
+                                  Não dá pra dizer se {a.clienteApelido || "o cliente"} é autor ou réu,
+                                  e por isso o card veio pra cá em vez de ser silenciado.
+                                </p>
+                                {!capa && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="mt-2 h-7 text-[10.5px] rounded-lg bg-card border-warning/40 hover:bg-warning-bg text-warning-fg"
+                                    disabled={carregandoAcaoId !== null}
+                                    onClick={() => buscarNoDataJud(a.id)}
+                                  >
+                                    {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Globe className="h-3 w-3 mr-1" />}
+                                    Buscar a natureza no DataJud
+                                    <span className="ml-1 text-[9.5px] opacity-70">grátis</span>
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -3906,11 +3959,11 @@ function NovasAcoesTab() {
                             >
                               {carregando ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Search className="h-3 w-3 mr-1" />}
                               {a.capaFalhou && !capa
-                                ? "Tentar de novo"
+                                ? "Tentar no tribunal de novo"
                                 : capa?.daDeteccao
                                   ? "Ver movimentações"
                                   : "Carregar detalhes"}
-                              <span className="ml-1 text-[9.5px] opacity-70">1 cred</span>
+                              <span className="ml-1 text-[9.5px] opacity-70">1 consulta</span>
                             </Button>
                           </div>
                         )}

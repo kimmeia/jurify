@@ -873,7 +873,67 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     é prefixo de "/termos" — o caso que discrimina é "/termos-de-uso").
   - **Continuam NÃO corrigidos** (itens (a) e (b) do bloco acima): disparo
     proativo de verdade não confere conversa, e as bolhas da mesma resposta
-    não se reconferem entre si.
+    não se reconferem entre si. **11/09 o dono fechou o (a)**: disparo
+    proativo NUNCA acontece sozinho — tudo que sai é fluxo criado por ele.
+    O (b) foi corrigido em 11/09 (bolhas param quando o atendente assume).
+- **Entregue 11/09, "Polo ativo" na natureza da ação e card sem nada —
+  mockup `mockup-novas-acoes-capa-errada.html`, "pode fazer" do dono com as
+  3 decisões (lista do tribunal vale como fonte, DataJud entra como reserva,
+  "Carregar detalhes" passa a guardar).** Print dele: 2 buscas e apreensões
+  chegaram com NATUREZA DA AÇÃO = "Polo ativo", sem partes, sem vara, na
+  gaveta "Não identificado". Causa única: `consultarPorCnj` clica no
+  resultado e, se a página do processo NÃO abre, o adapter extraía da
+  **tabela de resultados** que ficou na tela — `lerEmListaDefinicao` casava
+  o `<th>Classe judicial</th>`, não achava `<td>` na linha de cabeçalho e
+  o XPath `following-sibling::*[1]` devolvia o `<th>` vizinho: "Polo ativo".
+  Como `conseguiuExtrair = capa.classe || …`, o lixo passava por sucesso
+  (e, no poll de movimentações, `hashUltimasMovs` era regravado com o hash
+  de ZERO movs — avalanche de "novas" no ciclo seguinte).
+  - **Adapter**: `estaNaPaginaDoProcesso` (recusa só o caso certo — tem
+    grade `[id*='processosTable']` e nenhum marcador de detalhe; layout
+    desconhecido passa), 2 tentativas de clique e, sem abrir,
+    `categoriaErro: "detalhe_nao_abriu"` em vez de ler a tela errada; o
+    XPath de fallback aceita só `dd`/`td`; valor igual a rótulo é recusado
+    (lista inline no `evaluate`, espelho do shared).
+  - **`shared/nova-acao-capa.ts`**: `ROTULOS_DE_TABELA` + `ehRotuloDeTabela`
+    (sem acento/caixa/":"), `valorDeCampo` em classe/órgão/assuntos na
+    GRAVAÇÃO e na LEITURA (limpa retroativamente o que já está gravado),
+    `capaTemConteudo` decide o `return null` de `lerCapaNovaAcao`, e
+    `lerFalhaDeCapa` passou a contar capa que não sobrevive à leitura como
+    falha — é o que devolve o aviso âmbar aos 2 cards do print. Campo novo
+    `fonte` ("processo" | "lista" | "datajud", null em capa antiga).
+  - **Lista do tribunal como fonte**: `extrairLinhasDaBusca` lê a grade
+    pelos TÍTULOS das colunas (título mudou = vem vazio, nunca campo
+    trocado); `consultarPorCpf` devolve `linhas` e `consultarPorCnj` também
+    (inclusive no erro). `server/processos/capa-da-lista.ts` (`linhaDoCnj`,
+    `capaBrutaDaLinha`, `capaDoScraperTemConteudo`) é puro. O CPF escrito
+    dentro do nome ("NOME - CPF: …") já era casado pelo polo-matcher, então
+    a cliente cai sozinha na gaveta Réu.
+  - **DataJud como reserva** (`server/processos/capa-datajud.ts`): mesma
+    chave pública/BASE que a JurisIA usa, índice derivado do próprio CNJ
+    (`api_publica_<codigoTribunal>`), traz classe/assuntos/órgão/data e
+    NUNCA partes. Não cobra consulta nem usa credencial; nunca lança.
+  - **Cron**: ordem processo → lista → DataJud (`montar` devolve
+    `{capa, polo, data}`; capa sem conteúdo não é escolhida), e o UPDATE de
+    `capaJson`/`partesJson` virou `...camposDaCapa` — **capa vazia não
+    apaga capa boa** de processo vigiado (era o mesmo defeito com raio
+    maior).
+  - **Tela/procedures**: `consultarCNJSincrono` aceita `acaoId` e GRAVA a
+    capa no card (`gravarCapaNoCard`; `conteudoComCapaNova` protege
+    marcação manual e polo já conhecido — leitura sem partes não zera
+    polo); `completarCapaPeloDataJud` (grátis, escopada) no botão "Buscar a
+    natureza no DataJud" do aviso âmbar; selo de procedência embaixo da
+    natureza; "1 cred" virou "1 consulta" e "Tentar de novo" virou "Tentar
+    no tribunal de novo".
+  - Amarra: `capa-da-pagina-certa` (36 testes) — 40 mutações vermelhas
+    (`scratchpad/mutar-capa.py`; a do escopo de escritório só morreu depois
+    de a amarra CONTAR as 2 ocorrências, porque escapar só na leitura
+    deixava o literal de pé no UPDATE). Dois `expect` atualizados:
+    `novas-acoes-polo-gavetas` (opções de `montarCapaNovaAcao` cresceram) e
+    `novas-acoes-capa` (texto do botão).
+  - **Não conferido daqui**: o ambiente bloqueia os portais dos tribunais e
+    o `api-publica.datajud.cnj.jus.br` (proxy 403). O desenho saiu do código;
+    o teste real é o dono abrir a aba.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
