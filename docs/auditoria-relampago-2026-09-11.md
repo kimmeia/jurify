@@ -57,6 +57,43 @@ acesso a banco da função).
 (ver rodapé), testes dos 5 routers de cálculo + o novo caso passando
 isoladamente.
 
+### Os 5 routers de cálculo prometiam comprar créditos que não existem mais
+
+**Achado pelo dono**, ao ler o primeiro relatório: "Mas não usamos mais
+créditos" — e ele tinha razão, o fix acima não bastava.
+
+`consumirCredito` sinalizava limite atingido só com um `boolean`, e os 7
+pontos de chamada (`router-trabalhista.ts` ×2, `router-imobiliario.ts`,
+`router-previdenciario.ts` ×3, `router-financiamento.ts`) inventavam CADA
+UM o próprio texto de erro quando `false` voltava:
+
+```
+"Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano."
+"Créditos esgotados."
+```
+
+Isso é exatamente o texto do desenho ANTIGO — e contradiz a decisão já
+registrada em `shared/limites-uso.ts`: "Não oferece compra avulsa de
+propósito (decisão do dono): quem libera mais é o escritório falando com a
+gente, e o painel aumenta o limite do mês." Ou seja: mesmo sem o bug do
+`!esc`, todo usuário que baixesse legitimamente no teto mensal de cálculos
+via um convite pra comprar crédito que o sistema não vende mais.
+
+**Fix:** `consumirCredito` deixou de devolver `boolean` e passou a devolver
+`void`, lançando a MESMA mensagem que `verificarUso`/`mensagemLimiteAtingido`
+já monta pra processos ("Você usou N cálculos deste mês. Fale com a gente
+para liberar mais.") — uma régua só, um texto só. Os 7 pontos de chamada
+perderam o `if (!temCredito) throw new Error(...)` particular; agora é só
+`await consumirCredito(ctx.user.id);`. Confirmado que nada no client lida
+com o texto antigo por string (`grep` em `client/src` por essas frases: zero
+ocorrências) — trocar o texto não quebra nenhuma tela.
+
+**Testes novos** em `creditos-viram-limites.test.ts`: a mensagem lançada é a
+do `verificarUso` (não contém "adquira"/"upgrade"), e nenhum dos 4 arquivos
+de router de cálculo ainda contém o texto antigo ou a variável `temCredito`.
+
+**Validado:** `pnpm check` limpo, suíte inteira verde de novo (ver rodapé).
+
 ## Achados anotados, NÃO corrigidos (fora do pedido desta rotina ou pedem decisão do dono)
 
 Nada aqui é "quebrado" no sentido de perder dinheiro ou vazar dado entre

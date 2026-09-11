@@ -65,10 +65,7 @@ export const trabalhistaRouter = router({
   calcularRescisao: protectedProcedure
     .input(rescisaoSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
-      }
+      await consumirCredito(ctx.user.id);
 
       const params: ParametrosRescisao = {
         ...input,
@@ -113,10 +110,7 @@ export const trabalhistaRouter = router({
   calcularHorasExtras: protectedProcedure
     .input(horasExtrasSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
-      }
+      await consumirCredito(ctx.user.id);
 
       const params: ParametrosHorasExtras = {
         ...input,

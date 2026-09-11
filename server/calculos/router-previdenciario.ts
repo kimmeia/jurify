@@ -48,8 +48,7 @@ export const previdenciarioRouter = router({
   simular: protectedProcedure
     .input(simulacaoSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      await consumirCredito(ctx.user.id);
 
       const resultado = simularAposentadoria({ ...input, continuaContribuindo: input.continuaContribuindo ?? true });
       resultado.parecerTecnico = gerarParecerSimulacao(input, resultado);
@@ -78,8 +77,7 @@ export const previdenciarioRouter = router({
   calcularRMI: protectedProcedure
     .input(rmiSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      await consumirCredito(ctx.user.id);
       const resultado = calcularRMI(input);
       await registarCalculo({
         userId: ctx.user.id, tipo: "previdenciario",
@@ -93,8 +91,7 @@ export const previdenciarioRouter = router({
   calcularGPS: protectedProcedure
     .input(gpsSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      await consumirCredito(ctx.user.id);
       const resultado = calcularGPSAtraso(input);
       await registarCalculo({
         userId: ctx.user.id, tipo: "previdenciario",

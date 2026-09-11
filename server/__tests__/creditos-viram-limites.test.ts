@@ -202,11 +202,39 @@ describe("as operações passaram a contar no limite", () => {
     // não resolvido" liberam — mas o `if (!esc) return false` sobrevivia do
     // desenho antigo (saldo de crédito, onde negar sem escritório fazia
     // sentido) e barrava exatamente o caso que o próprio comentário descreve
-    // como liberado. Sem este `return true`, quem cai aqui via a mensagem
-    // errada "Seus créditos acabaram" nos 5 routers de cálculo.
+    // como liberado. `return` sem valor (void) é o liberado agora; só quem
+    // bate no teto real lança erro.
     const db = ler("server/db.ts");
     const trecho = db.slice(db.indexOf("export async function consumirCredito"));
-    expect(trecho).toContain("const esc = await getEscritorioPorUsuario(userId);\n    if (!esc) return true;");
+    expect(trecho).toContain("const esc = await getEscritorioPorUsuario(userId);\n    if (!esc) return;");
+  });
+
+  it("consumirCredito lança a MESMA mensagem que verificarUso monta, não um texto de 'adquira créditos' à parte", () => {
+    // Não existe mais saldo pra vender: `shared/limites-uso.ts` decide de
+    // propósito não oferecer compra avulsa. Um router que inventa "Seus
+    // créditos acabaram. Adquira mais créditos..." promete algo que o
+    // sistema não faz mais.
+    const db = ler("server/db.ts");
+    const trecho = db.slice(db.indexOf("export async function consumirCredito"));
+    expect(trecho).toContain("mensagemBloqueio = aval.mensagem");
+    expect(trecho).toContain("if (mensagemBloqueio) throw new Error(mensagemBloqueio);");
+    expect(trecho).not.toMatch(/adquira|upgrade/i);
+  });
+
+  it("nenhum router de cálculo inventa texto próprio de crédito esgotado", () => {
+    const arquivos = [
+      "server/calculos/router-trabalhista.ts",
+      "server/calculos/router-imobiliario.ts",
+      "server/calculos/router-previdenciario.ts",
+      "server/calculos/router-financiamento.ts",
+    ];
+    for (const arq of arquivos) {
+      const conteudo = ler(arq);
+      expect(conteudo).not.toMatch(/créditos acabaram|créditos esgotados|adquira mais créditos/i);
+      // Chamada direta, sem `if (!temCredito)` reintroduzindo um texto próprio.
+      expect(conteudo).not.toContain("temCredito");
+      expect(conteudo).toContain("await consumirCredito(ctx.user.id);");
+    }
   });
 });
 

@@ -1070,29 +1070,39 @@ export async function getUserCreditsInfo(userId: number) {
  * mudou em 11/09/2026 (decisão do dono) foi a régua: em vez de debitar do
  * saldo de créditos do escritório — que era o mesmo bolso de consultar
  * processo e vigiar CNJ, com preços diferentes por operação —, o cálculo
- * conta no teto de "cálculos por mês" escrito no plano.
+ * conta no teto de "cálculos por mês" escrito no plano. Não existe mais
+ * saldo de crédito pra oferecer comprar — por isso o erro, quando bate no
+ * teto, é a MESMA mensagem que `verificarUso` já monta pra processos
+ * (`mensagemLimiteAtingido`), não um texto de "adquira mais créditos"
+ * inventado no router.
  *
- * `false` = o mês acabou (o router devolve o erro ao usuário). Dúvida nossa
- * (sem banco, sem escritório, plano não resolvido) libera.
+ * Lança quando o mês acabou — quem chama não precisa ter o seu próprio
+ * texto de erro. Fail-open (sem banco, sem escritório, plano não resolvido,
+ * erro de leitura) nunca lança.
  */
-export async function consumirCredito(userId: number): Promise<boolean> {
+export async function consumirCredito(userId: number): Promise<void> {
   const db = await getDb();
-  if (!db) return true;
+  if (!db) return;
+
+  let mensagemBloqueio: string | null = null;
 
   try {
     const { getEscritorioPorUsuario } = await import("./escritorio/db-escritorio");
     const esc = await getEscritorioPorUsuario(userId);
-    if (!esc) return true;
+    if (!esc) return;
 
     const { verificarUso, registrarUso } = await import("./billing/limites-uso");
     const aval = await verificarUso(esc.escritorio.id, "calculo");
-    if (!aval.permitido) return false;
-    await registrarUso(esc.escritorio.id, "calculo");
+    if (!aval.permitido) {
+      mensagemBloqueio = aval.mensagem || "Limite de cálculos do mês atingido.";
+    } else {
+      await registrarUso(esc.escritorio.id, "calculo");
+    }
   } catch (err: any) {
     log.warn({ err: err?.message, userId }, "Falha ao contar cálculo no limite do mês — liberando");
   }
 
-  return true;
+  if (mensagemBloqueio) throw new Error(mensagemBloqueio);
 }
 
 /**

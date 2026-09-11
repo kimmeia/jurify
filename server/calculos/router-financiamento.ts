@@ -115,10 +115,7 @@ export const financiamentoRouter = router({
   calcular: protectedProcedure
     .input(parametrosSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
-      }
+      await consumirCredito(ctx.user.id);
 
       const params = toParametros(input);
 
