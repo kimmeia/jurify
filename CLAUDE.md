@@ -1023,6 +1023,24 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
   pedido, anotado: estorno do Asaas continua sumindo do Recebido em
   silêncio (não fala com o cancelamento).
 
+**Auditoria de saúde 11/09/2026** (rotina agendada, `pnpm check` +
+`pnpm test` limpos antes e depois — 374 arquivos/5417 testes) — relatório
+em `docs/auditoria-2026-09-11.md`. Dois achados corrigidos nesta passada
+(sem tela, cobertos por teste, aguardando autorização pra mesclar):
+`cancelarContratosDoContato` (cancelar-contrato.ts) aplicava a MESMA data
+escolhida a todos os contratos do cliente sem validar contra o fechamento
+de CADA um (o cancelamento individual sempre validou; o em lote, usado por
+"cancelar também os contratos" na Situação do serviço, só checava o
+formato) — cliente com dois contratos em datas diferentes podia gravar um
+cancelamento antes do próprio fechamento; agora recusa futuro e filtra por
+contrato, igual ao caminho individual. E `unificarComRegistro`
+(reconhecer-cadastro.ts) aplicava a escolha de campo a campo do Mesclar
+sem reconferir se o lado escolhido tinha valor — a tela só deixa clicar no
+lado preenchido, mas uma chamada direta da procedure com o lado vazio
+apagaria email/cpf/observações/**responsável** (o campo que decide
+acesso/comissão/rodízio) de quem sobrevive; agora ignora escolha de lado
+vazio, mesma regra que decide se a tela oferece a linha.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;

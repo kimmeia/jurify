@@ -805,6 +805,7 @@ export const clientesRouter = router({
           motivo: input.tipo === "cancelado" ? "desistencia" : "outro",
           detalhe: input.motivo?.trim() || (input.tipo === "rescindido" ? "Rescindido pelo escritório" : null),
           canceladoPor: perm.colaboradorId ?? null,
+          tz,
         });
       }
       return { success: true, situacaoServico: input.tipo, contratosCancelados };

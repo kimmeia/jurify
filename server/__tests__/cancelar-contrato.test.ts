@@ -133,8 +133,8 @@ describe("cancelarContrato / reativarContrato (banco falso)", () => {
   });
 
   it("cancelarContratosDoContato: só os Ganho ainda abertos; devolve quantos", async () => {
-    const db = makeDb({ leads: [[{ id: 1 }, { id: 2 }]] });
-    const n = await cancelarContratosDoContato(db, { escritorioId: 1, contatoId: 3, data: "2026-09-08", motivo: "desistencia", detalhe: "cliente pediu", canceladoPor: 5 });
+    const db = makeDb({ leads: [[{ id: 1, fechadoEm: D("2026-09-01"), createdAt: D("2026-08-20") }, { id: 2, fechadoEm: D("2026-09-02"), createdAt: D("2026-08-21") }]] });
+    const n = await cancelarContratosDoContato(db, { escritorioId: 1, contatoId: 3, data: "2026-09-08", motivo: "desistencia", detalhe: "cliente pediu", canceladoPor: 5, tz: TZ });
     expect(n).toBe(2);
     expect(db.updates[0].set).toMatchObject({ motivoCancelamento: "desistencia", detalheCancelamento: "cliente pediu", canceladoPor: 5 });
     // A seleção tem que pular quem já está cancelado (senão sobrescreve
@@ -145,8 +145,30 @@ describe("cancelarContrato / reativarContrato (banco falso)", () => {
     expect(where).toMatch(/`escritorioIdLead` = \?/);
     expect(where).toMatch(/`contatoIdLead` = \?/);
     const vazio = makeDb({ leads: [[]] });
-    expect(await cancelarContratosDoContato(vazio, { escritorioId: 1, contatoId: 3, data: "2026-09-08", motivo: "outro", canceladoPor: 5 })).toBe(0);
+    expect(await cancelarContratosDoContato(vazio, { escritorioId: 1, contatoId: 3, data: "2026-09-08", motivo: "outro", canceladoPor: 5, tz: TZ })).toBe(0);
     expect(vazio.updates).toHaveLength(0);
+  });
+
+  it("cancelarContratosDoContato recusa data no futuro, como o cancelamento individual", async () => {
+    const db = makeDb({ leads: [[{ id: 1, fechadoEm: D("2026-09-01"), createdAt: D("2026-08-20") }]] });
+    await expect(cancelarContratosDoContato(db, { escritorioId: 1, contatoId: 3, data: "2099-01-01", motivo: "outro", canceladoPor: 5, tz: TZ }))
+      .rejects.toThrow(/futuro/);
+    expect(db.updates).toHaveLength(0);
+  });
+
+  it("cancelarContratosDoContato deixa de fora o contrato cujo fechamento é DEPOIS da data escolhida (dois contratos, datas diferentes)", async () => {
+    // Cliente com dois contratos: um fechado 01/09 (a data de cancelamento 05/09
+    // serve) e outro fechado 10/09 (a mesma data 05/09 é ANTES desse fechamento
+    // — sem a validação por contrato, um cancelamento ficaria marcado antes de
+    // o contrato sequer ter fechado).
+    const db = makeDb({
+      leads: [[
+        { id: 1, fechadoEm: D("2026-09-01"), createdAt: D("2026-08-20") },
+        { id: 2, fechadoEm: D("2026-09-10"), createdAt: D("2026-08-25") },
+      ]],
+    });
+    const n = await cancelarContratosDoContato(db, { escritorioId: 1, contatoId: 3, data: "2026-09-05", motivo: "outro", canceladoPor: 5, tz: TZ });
+    expect(n).toBe(1);
   });
 });
 

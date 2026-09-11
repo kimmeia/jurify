@@ -239,15 +239,22 @@ export async function unificarComRegistro(
   const depois: Record<string, unknown> = {};
   const tagsUnidas = unirTags(principal.tags, duplicado.tags);
   if (tagsUnidas !== (principal.tags ?? null)) depois.tags = tagsUnidas;
+  // Uma escolha só faz sentido quando o lado escolhido TEM valor — é a mesma
+  // regra que decide se a tela oferece a linha como "escolha"/"um_lado"
+  // (linhasDaMesclagem). Chamada direta da procedure (fora da tela) não é
+  // revalidada contra as linhas reais, então aplicar `?? null` aqui apagaria
+  // um campo preenchido se o lado escolhido estiver vazio — inclusive
+  // responsavelId, que decide acesso/comissão/rodízio.
   for (const [campo, lado] of Object.entries(opts.escolhas ?? {})) {
     const fonte = lado === "duplicado" ? duplicado : principal;
     if (campo === "nome") {
       const n = String(fonte.nome ?? "").trim();
       if (n) depois.nome = n;
     } else if (campo === "responsavelId") {
-      depois.responsavelId = fonte.responsavelId ?? null;
+      if (fonte.responsavelId != null) depois.responsavelId = fonte.responsavelId;
     } else if (campo === "email" || campo === "cpfCnpj" || campo === "observacoes") {
-      depois[campo] = (fonte as Record<string, unknown>)[campo] ?? null;
+      const v = (fonte as Record<string, unknown>)[campo];
+      if (v != null && String(v).trim()) depois[campo] = v;
     }
   }
   if (Object.keys(depois).length > 0) {

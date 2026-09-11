@@ -118,7 +118,12 @@ export async function reativarContrato(db: any, args: { escritorioId: number; le
 
 /** Cancela todos os contratos fechados (e ainda não cancelados) de um
  *  cliente — usado quando o serviço é encerrado pela ficha com a opção
- *  "cancelar também os contratos". Devolve quantos foram cancelados. */
+ *  "cancelar também os contratos". Mesma validação de data do cancelamento
+ *  individual (não no futuro, não antes do PRÓPRIO fechamento de cada
+ *  contrato) — um cliente pode ter contratos fechados em datas diferentes,
+ *  e uma única data escolhida na tela não serve pra todos. Contrato cuja
+ *  data não passa fica de fora (não cancela, não lança erro) — dá pra
+ *  cancelar ele à parte com a data certa. Devolve quantos foram cancelados. */
 export async function cancelarContratosDoContato(db: any, args: {
   escritorioId: number;
   contatoId: number;
@@ -126,10 +131,13 @@ export async function cancelarContratosDoContato(db: any, args: {
   motivo: MotivoCancelamento;
   detalhe?: string | null;
   canceladoPor: number | null;
+  tz: string;
 }): Promise<number> {
   if (!REGEX_DATA.test(args.data)) throw new Error("Data do cancelamento inválida.");
+  const hoje = dataHojeBR(args.tz);
+  if (args.data > hoje) throw new Error("A data do cancelamento não pode ser no futuro.");
   const abertos = await db
-    .select({ id: leads.id })
+    .select({ id: leads.id, fechadoEm: leads.fechadoEm, createdAt: leads.createdAt })
     .from(leads)
     .where(and(
       eq(leads.escritorioId, args.escritorioId),
@@ -137,7 +145,13 @@ export async function cancelarContratosDoContato(db: any, args: {
       eq(leads.etapaFunil, "fechado_ganho"),
       isNull(leads.canceladoEm),
     ));
-  const ids = abertos.map((l: { id: number }) => Number(l.id));
+  const ids = abertos
+    .filter((l: { fechadoEm: Date | null; createdAt: Date | null }) => {
+      const quandoFechou = (l.fechadoEm ?? l.createdAt) as Date | null;
+      const diaFechamento = quandoFechou ? dataHojeBR(args.tz, quandoFechou) : null;
+      return !validarDataCancelamento({ data: args.data, hoje, diaFechamento });
+    })
+    .map((l: { id: number }) => Number(l.id));
   if (ids.length === 0) return 0;
   await db
     .update(leads)

@@ -220,6 +220,31 @@ describe("as escolhas chegam no banco", () => {
     expect(updates.find((u) => u.table === "contatos")?.set?.responsavelId).toBe(9);
   });
 
+  it("escolher um lado SEM valor não apaga o que o outro lado já tinha — só a tela filtra isso, a procedure precisa filtrar de novo", async () => {
+    // Chamada direta (fora da tela, que só deixa clicar em lado preenchido):
+    // duplicado não tem cpfCnpj nem observações, e o principal (que fica) tem
+    // os dois. `?? null` sem essa guarda apagaria o que já estava certo.
+    filas["contatos"] = [[PRINCIPAL], [{ ...DUPLICADO, cpfCnpj: null, observacoes: null }]];
+    await unificarComRegistro(dbFalso as any, {
+      escritorioId: 1, principalId: 41, duplicadoId: 40,
+      origem: "manual", executadoPor: 10,
+      escolhas: { cpfCnpj: "duplicado", observacoes: "duplicado" } as any,
+    });
+    const set = updates.find((u) => u.table === "contatos")?.set ?? {};
+    expect(set.cpfCnpj).toBeUndefined();
+    expect(set.observacoes).toBeUndefined();
+  });
+
+  it("escolher um responsável em branco não desliga o responsável de quem fica", async () => {
+    filas["contatos"] = [[{ ...PRINCIPAL, responsavelId: null }], [DUPLICADO]];
+    await unificarComRegistro(dbFalso as any, {
+      escritorioId: 1, principalId: 41, duplicadoId: 40,
+      origem: "manual", executadoPor: 10,
+      escolhas: { responsavelId: "principal" } as any,
+    });
+    expect(updates.find((u) => u.table === "contatos")?.set?.responsavelId).toBeUndefined();
+  });
+
   it("nome vazio na origem escolhida NÃO apaga o nome de quem fica (a coluna é obrigatória)", async () => {
     filas["contatos"] = [[PRINCIPAL], [{ ...DUPLICADO, nome: "   " }]];
     await unificarComRegistro(dbFalso as any, {
