@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
@@ -20,7 +21,9 @@ import {
   obterMetricasDashboard, distribuirLead, obterMetricasDetalhadas,
 } from "./db-crm";
 import { conversas, contatos, leads, canaisIntegrados } from "../../drizzle/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import { cpfsConflitam, MENSAGEM_CPFS_DIFERENTES } from "../../shared/conferencia-cadastros";
+import { CAMPOS_ESCOLHIVEIS } from "../../shared/mesclar-campos";
 import { toIsoString } from "../_core/dates";
 import { registrarAuditoria } from "../_core/audit";
 import { FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
@@ -218,6 +221,10 @@ export const crmRouter = router({
     .input(z.object({
       principalId: z.number(),
       duplicadoId: z.number(),
+      /** A tela mostrou os dois CPFs e a pessoa escolheu seguir mesmo assim. */
+      confirmarCpfDiferente: z.boolean().optional(),
+      /** Só o que a pessoa mudou no passo "o que fica na ficha final". */
+      escolhas: z.record(z.enum(CAMPOS_ESCOLHIVEIS), z.enum(["principal", "duplicado"])).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermissionAdminOuMatriz(ctx.user.id, "clientes", "excluir");
@@ -226,6 +233,19 @@ export const crmRouter = router({
       }
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+      if (!input.confirmarCpfDiferente) {
+        const fichas: Array<{ id: number; cpfCnpj: string | null }> = await db
+          .select({ id: contatos.id, cpfCnpj: contatos.cpfCnpj })
+          .from(contatos)
+          .where(and(
+            eq(contatos.escritorioId, perm.escritorioId),
+            inArray(contatos.id, [input.principalId, input.duplicadoId]),
+          ));
+        const cpfDe = (id: number) => fichas.find((f) => f.id === id)?.cpfCnpj ?? null;
+        if (cpfsConflitam(cpfDe(input.principalId), cpfDe(input.duplicadoId))) {
+          throw new TRPCError({ code: "PRECONDITION_FAILED", message: MENSAGEM_CPFS_DIFERENTES });
+        }
+      }
       // Com registro: o "Mesclar" manual também fica desfazível por 7 dias.
       const { unificarComRegistro } = await import("./reconhecer-cadastro");
       const r = await unificarComRegistro(db, {
@@ -234,6 +254,7 @@ export const crmRouter = router({
         duplicadoId: input.duplicadoId,
         origem: "manual",
         executadoPor: perm.colaboradorId,
+        escolhas: input.escolhas,
       });
       return { tabelasAtualizadas: r.tabelasAtualizadas, unificacaoId: r.id };
     }),

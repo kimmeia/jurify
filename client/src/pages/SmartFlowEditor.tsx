@@ -95,6 +95,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { validarGrafo } from "@shared/smartflow-graph-validation";
+import { LIMITES_POR_CONTATO, ROTULO_LIMITE_CONTATO, type LimitePorContato } from "@shared/limite-por-contato";
 import { FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import { formatarTelefone } from "@shared/validacoes";
 import { VariableInput, VariableTrigger } from "@/components/VariableInput";
@@ -1288,7 +1289,7 @@ function SmartFlowEditorInner() {
   // Dados gerais do cenário (gatilho vive como nó no canvas)
   const [nome, setNome] = useState("");
   const [descricao, setDescricao] = useState("");
-  const [limitePorContato, setLimitePorContato] = useState<"sempre" | "dia" | "semana" | "mes" | "vida">("sempre");
+  const [limitePorContato, setLimitePorContato] = useState<LimitePorContato>("sempre");
 
   // Estado de "alterações não salvas". Cada handler de mutação no canvas
   // chama `marcarDirty()`. Reseta ao carregar o cenário e após save OK.
@@ -2170,11 +2171,9 @@ function SmartFlowEditorInner() {
           <Select value={limitePorContato} onValueChange={(v) => { setLimitePorContato(v as any); marcarDirty(); }}>
             <SelectTrigger className="h-6 w-[140px] text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="sempre">Sempre (sem limite)</SelectItem>
-              <SelectItem value="dia">1x por dia</SelectItem>
-              <SelectItem value="semana">1x por semana</SelectItem>
-              <SelectItem value="mes">1x por mês</SelectItem>
-              <SelectItem value="vida">1x na vida</SelectItem>
+              {LIMITES_POR_CONTATO.map((l) => (
+                <SelectItem key={l} value={l}>{ROTULO_LIMITE_CONTATO[l]}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

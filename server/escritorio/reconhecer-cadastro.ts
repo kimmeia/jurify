@@ -20,6 +20,8 @@ import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { clienteProcessos, contatos, contatosUnificacoes, conversas } from "../../drizzle/schema";
 import { isLidJid } from "../../shared/whatsapp-types";
 import { chaveTelefoneBR } from "../../shared/telefone";
+import { unirTags } from "../../shared/kanban-tags";
+import type { EscolhasMesclagem } from "../../shared/mesclar-campos";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("reconhecer-cadastro");
@@ -186,6 +188,8 @@ export async function unificarComRegistro(
     duplicadoId: number;
     origem: "automatica" | "manual";
     executadoPor: number | null;
+    /** Só as escolhas que DIFEREM do padrão (a tela manda o resto de graça). */
+    escolhas?: EscolhasMesclagem;
   },
 ): Promise<{ id: number; tabelasAtualizadas: string[] }> {
   if (opts.principalId === opts.duplicadoId) throw new Error("IDs iguais");
@@ -214,14 +218,42 @@ export async function unificarComRegistro(
     }
   }
 
+  // Fotografia do que a ficha sobrevivente tinha ANTES. Precisa cobrir todo
+  // campo que a mesclagem (ou uma escolha da tela) possa sobrescrever, senão o
+  // Desfazer devolve a ficha absorvida e deixa esta com o nome trocado.
   const principalAntes = {
+    nome: principal.nome ?? null,
     email: principal.email ?? null,
     cpfCnpj: principal.cpfCnpj ?? null,
     observacoes: principal.observacoes ?? null,
     telefonesSecundarios: principal.telefonesSecundarios ?? null,
+    tags: principal.tags ?? null,
+    responsavelId: principal.responsavelId ?? null,
   };
 
   const { tabelasAtualizadas } = await unificarContatos(opts.escritorioId, opts.principalId, opts.duplicadoId);
+
+  // As tags do absorvido somem na mesclagem de sempre; aqui elas somam às da
+  // ficha que ficou. É aditivo, e o Desfazer devolve as originais.
+  // As escolhas vêm da tela e só chegam com o que DIFERE do padrão.
+  const depois: Record<string, unknown> = {};
+  const tagsUnidas = unirTags(principal.tags, duplicado.tags);
+  if (tagsUnidas !== (principal.tags ?? null)) depois.tags = tagsUnidas;
+  for (const [campo, lado] of Object.entries(opts.escolhas ?? {})) {
+    const fonte = lado === "duplicado" ? duplicado : principal;
+    if (campo === "nome") {
+      const n = String(fonte.nome ?? "").trim();
+      if (n) depois.nome = n;
+    } else if (campo === "responsavelId") {
+      depois.responsavelId = fonte.responsavelId ?? null;
+    } else if (campo === "email" || campo === "cpfCnpj" || campo === "observacoes") {
+      depois[campo] = (fonte as Record<string, unknown>)[campo] ?? null;
+    }
+  }
+  if (Object.keys(depois).length > 0) {
+    await db.update(contatos).set(depois)
+      .where(and(eq(contatos.id, opts.principalId), eq(contatos.escritorioId, opts.escritorioId)));
+  }
 
   const [ins] = await db.insert(contatosUnificacoes).values({
     escritorioId: opts.escritorioId,
@@ -290,15 +322,24 @@ export async function desfazerUnificacao(
   }
 
   const antes = (reg.principalAntes ?? {}) as {
-    email?: string | null; cpfCnpj?: string | null; observacoes?: string | null; telefonesSecundarios?: string | null;
+    nome?: string | null; email?: string | null; cpfCnpj?: string | null; observacoes?: string | null;
+    telefonesSecundarios?: string | null; tags?: string | null; responsavelId?: number | null;
   };
+  // Os quatro primeiros existem desde o começo; nome, tags e responsável só
+  // aparecem em registro novo. Registro antigo não tem essas chaves, e escrever
+  // `?? null` neles apagaria o que ninguém tocou — por isso só entram no UPDATE
+  // quando foram fotografados.
+  const volta: Record<string, unknown> = {
+    email: antes.email ?? null,
+    cpfCnpj: antes.cpfCnpj ?? null,
+    observacoes: antes.observacoes ?? null,
+    telefonesSecundarios: antes.telefonesSecundarios ?? null,
+  };
+  if ("nome" in antes && String(antes.nome ?? "").trim()) volta.nome = antes.nome;
+  if ("tags" in antes) volta.tags = antes.tags ?? null;
+  if ("responsavelId" in antes) volta.responsavelId = antes.responsavelId ?? null;
   await db.update(contatos)
-    .set({
-      email: antes.email ?? null,
-      cpfCnpj: antes.cpfCnpj ?? null,
-      observacoes: antes.observacoes ?? null,
-      telefonesSecundarios: antes.telefonesSecundarios ?? null,
-    })
+    .set(volta)
     .where(and(eq(contatos.id, reg.principalId), eq(contatos.escritorioId, opts.escritorioId)));
 
   await db.update(contatosUnificacoes)

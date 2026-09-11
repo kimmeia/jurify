@@ -709,6 +709,172 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     `[cliente.id, cliente.updatedAt]` (`camposExtrasDe` extraído). Se
     voltar a acontecer, o próximo passo é gravar no Sentry o par
     (id pedido, id recebido) no momento do esqueleto.
+  - **Entregue 10/09, "Mesclar com outro cliente" da ficha — mockup
+    `mockup-mesclar-cpf-diferente.html`, "pode fazer" do dono.** Duas coisas
+    no mesmo diálogo. (1) Ele prometia "operação definitiva" e "não há como
+    desfazer": falso desde 09/09, porque o Mesclar manual passa por
+    `unificarComRegistro` e fica desfazível por 7 dias — os dois textos
+    passaram a dizer o prazo real, e o comentário do componente (que
+    documentava a premissa velha, "rollback no futuro precisaria de
+    migration") foi corrigido junto. (2) `unificarContatos` só copia o CPF
+    quando o principal está VAZIO (db-crm), então duas fichas com CPF
+    diferente mesclavam caladas e o da absorvida sumia: `cpfsConflitam`
+    (shared, dois lados preenchidos e dígitos diferentes — máscara não
+    conta) alimenta a trava em `crm.unificarContatos`
+    (PRECONDITION_FAILED + `MENSAGEM_CPFS_DIFERENTES`, escapa com
+    `confirmarCpfDiferente`, consulta escopada por escritório) e a tela:
+    selo "CPF diferente" por candidato, aviso âmbar nomeando quem fica e
+    quem é descartado, botão que vira "Mesclar mesmo assim" e o CPF
+    descartado escrito na confirmação final. `mesclarDuplicados` da
+    Conferência passou a usar o MESMO helper (era cópia local da conta —
+    comportamento idêntico, teste antigo confirma). **"Vincular a cliente"
+    NÃO ganhou a trava**, de propósito: chama `unificarContatos` do db-crm
+    direto e não foi pedido; há teste travando isso.
+    O aviso com **Desfazer** passou a aparecer também na ficha do cliente
+    (`crm.unificacaoRecente`/`desfazerUnificacao`, hooks ANTES da saída
+    antecipada) — só existia no Atendimento, e quem mescla pela ficha sem
+    conversa de WhatsApp não achava a saída que o texto novo promete; o
+    aviso do Atendimento ficou intacto. Amarra:
+    `mesclar-cpf-diferente` (25 testes) — 27 mutações vermelhas
+    (`scratchpad/mutar-mesclar-cpf.py`; uma delas MOVE o hook para depois
+    do `return` antecipado, o React #310 que o remendo de hooks não pega).
+  - **Entregue 10/09, escolher campo a campo o que fica ao mesclar — mockups
+    `mockup-mesclar-escolher-campos.html` + `mockup-mesclar-decisoes.html`,
+    com as duas decisões do dono: 1 = A (a escolha aparece nos DOIS lugares
+    que mesclam um par por vez: o Mesclar da ficha e o Mesclar da linha na
+    Conferência; o lote "Mesclar todos" NÃO pergunta) e 2 = B (o responsável
+    ENTRA na lista de campos escolhíveis).** Regras puras em
+    `shared/mesclar-campos.ts` (`linhasDaMesclagem` monta as linhas —
+    `escolha` quando os dois lados têm valor e discordam, `um_lado` quando só
+    um tem, `somam` pra telefone e tags; campo igual ou vazio dos dois lados
+    não vira linha). O padrão de cada linha é o que a mesclagem faria sozinha
+    — e-mail/CPF/observações preenchem buraco vazio, nome e responsável NÃO —,
+    então quem não mexer termina com o resultado de antes; a tela manda só
+    `escolhasQueMudam`. `crm.unificarContatos` e `clientes.mesclarDuplicados`
+    aceitam `escolhas`; `clientes.camposParaMesclar` (permissão
+    `clientes.excluir`, escopada, nome do responsável por join em `users`)
+    serve as duas telas. Aplicação em `unificarComRegistro`, DEPOIS do
+    `unificarContatos` de sempre (antes, a mesclagem sobrescreveria a
+    decisão). **Tags passaram a SOMAR** (`unirTags`) em toda mesclagem
+    registrada, inclusive a automática — é aditivo e o Desfazer devolve as
+    originais; se o dono não quiser, é aqui que se tira.
+    **O ponto sensível**: `principalAntes` passou a fotografar nome, tags e
+    responsável além dos quatro de sempre, e `desfazerUnificacao` restaura o
+    que estiver fotografado (`"campo" in antes`) — registro antigo não tem
+    essas chaves e escrever `?? null` neles apagaria o que ninguém tocou.
+    Client: `clientes/mesclar-escolher-campos.tsx` (hook + tabela, usado pelas
+    duas telas); a ficha ganhou o passo do meio (`passo` substituiu o booleano
+    `confirmacao`, com Voltar) e a Conferência abre `MesclarComEscolhaDialog`,
+    que caminha par a par quando o grupo tem 3+ fichas e pula sozinho o par
+    sem divergência. Amarra: `mesclar-escolher-campos` (23 testes) — 28
+    mutações vermelhas (`scratchpad/mutar-mesclar-campos.py`; uma só morreu
+    depois de a amarra olhar a CHAMADA em vez do import).
+  - **Proposta original (superada pela entrega acima)
+    `mockup-mesclar-escolher-campos.html`:**
+    Ideia do dono ("quando dados divergentes, poder escolher quais serão
+    mesclados"). O estudo mapeou a regra silenciosa de hoje: telefone do
+    absorvido vira secundário (não perde); e-mail/CPF/observações só
+    entram se o principal estiver vazio; nome e responsável nunca mudam;
+    tags, endereço e campos extras nunca entram. Proposta: passo entre
+    escolher a ficha e confirmar, só quando os dois lados têm valor
+    diferente, com o padrão já marcado no que o sistema faria sozinho, e a
+    ficha final escrita antes de confirmar. **Cuidado achado**: o
+    `principalAntes` do registro só guarda 4 campos (email, cpfCnpj,
+    observacoes, telefonesSecundarios), então trocar nome/responsável/tags
+    exige guardar esses também, senão o Desfazer devolve a ficha absorvida
+    e deixa a sobrevivente com o nome trocado (cabe no JSON que já existe,
+    sem migration). Duas decisões pendentes: a escolha vale também no
+    Mesclar um-a-um da Conferência? e o responsável entra na lista (mexe
+    no padrão de comissão e no rodízio do atendimento)?
+- **Entregue 10/09 (URGENTE do dono): o robô falava por cima do atendente.**
+  Print dele: mensagens do atendente às 10:12 e uma do bot às 10:15, com a
+  conversa marcada "Em atendimento · Bot pausado". "Bot pausado" não é flag
+  próprio — é `conversas.status === "em_atendimento"`. Havia duas portas
+  conferindo isso, e **as duas são movidas por mensagem do cliente**:
+  `dispararMensagemCanal` no topo e o laço de envio do whatsapp-handler
+  (que re-checa antes de cada resposta). A terceira porta é movida pelo
+  RELÓGIO e não conferia nada: `retomarExecucao` (scheduler, timeout do
+  `whatsapp_aguardar_resposta` ou `esperar` vencido). Nessa retomada o
+  engine marca `__retomadaPorTimeout`, o que zera `temCanal` e faz o texto
+  sair DIRETO pelo canal (`exec.enviarWhatsApp`, proativo) em vez de voltar
+  como `resposta` pro handler — pulando as duas travas. Era esse o caminho
+  do print. Fix: `retomarExecucao` lê a conversa da execução (escopada por
+  escritório) e, se estiver `em_atendimento`, **cancela a execução**
+  (`status: "cancelado"`, erro "Atendente assumiu a conversa") sem rodar
+  cenário nenhum. A conferência fica DEPOIS do claim atômico de propósito:
+  antes dele a execução ficaria com `retomarEm` no passado e o ciclo
+  tentaria de novo pra sempre; cancelada, ela sai da fila (o scheduler só
+  busca `rodando`). Execução SEM conversa (lembrete de cobrança,
+  agendamento) não é afetada. Amarra: `bot-pausado-retomada` (9 testes) —
+  9 mutações vermelhas (`scratchpad/mutar-bot-pausado.py`; duas delas só
+  ficaram vermelhas depois de ancorar a busca, porque o trecho aparece
+  mais de uma vez no dispatcher e o mutante caía no guard vizinho).
+  **Achados NÃO corrigidos (fora do pedido, decisão do dono)**: (a)
+  `enviarWhatsApp` do executor não confere conversa nenhuma — disparo
+  proativo de verdade (pagamento vencido, lembrete de agendamento) ainda
+  entra numa conversa que o atendente está tocando; (b) dentro de
+  `enviarResposta` as bolhas da mesma resposta não re-checam o status
+  entre si (janela de segundos); (c) conversa `resolvido`/`fechado` NÃO
+  barra a retomada — só `em_atendimento`, que é o que o dono relatou.
+  E fica registrado que a correção **encerra** o fluxo: reativar o bot
+  depois não retoma de onde parou.
+  Conferido de passagem: `retomarExecucao` só é chamada pelo scheduler, e
+  execução com `conversaId` só nasce em `dispararMensagemCanal` (os fluxos
+  de cobrança não passam por lá) — a trava não alcança lembrete nenhum.
+- **Entregue 10/09, "encerrei a conversa e o robô voltou a falar" + convite
+  de instalar o app no link de assinatura — mockup
+  `mockup-robo-encerrada-e-app.html`, "pode fazer" do dono; fiz pelas quatro
+  opções recomendadas (1-A, 2-A, 3-A e A no app).** Origem: print dele — o
+  fluxo marcado "1x por dia" voltou a falar depois de ele encerrar a
+  conversa e o cliente escrever de novo; e um cliente que recebeu link de
+  assinatura ganhou junto o botão de baixar o app. **Não reiniciou:
+  RETOMOU.** Três coisas se somavam — roteiro que espera resposta fica
+  `rodando` com prazo por até 24h; encerrar a conversa mexia só no status
+  (quem cancelava roteiro parado era só `excluirConversa`, e o comentário de
+  lá já dizia por quê: "a conversa ressuscita"); e `atingiuLimitePorContato`
+  só é consultado quando um roteiro COMEÇA — retomada é a mesma passagem.
+  - `encerrarRoteirosParadosDaConversa` (db-crm, exportada) cancela as
+    execuções `rodando` da conversa **que estejam paradas** (`retomarEm` OU
+    `aguardandoMensagemContatoId` não nulos), chamada por `atualizarConversa`
+    quando o status vira `resolvido`/`fechado`. O filtro de "parada" existe
+    pra não sobrescrever o desfecho da execução que está rodando naquele
+    instante — inclusive a do próprio bloco "Encerrar conversa", que escreve
+    na conversa por `aplicarEfeitosNaConversa`, fora deste caminho.
+    `excluirConversa` continua cancelando TUDO dela (mais amplo, de
+    propósito). Efeito colateral bom: o scheduler não tem mais o que acordar,
+    então some o "você ainda está aí?" horas depois numa conversa encerrada
+    (era o item (c) da lista de não-corrigidos acima).
+  - **Recado interno** (decisão 2): quando o limite cala o robô,
+    `registrarRoboSilenciado` grava na conversa uma `mensagens` tipo
+    `sistema` com o texto de `shared/limite-por-contato.ts`
+    (`recadoRoboSilenciado`) e o marcador `robo_silenciado` no payload —
+    **um por atendimento** (dedup pela janela `atendimentoIniciadoEm ??
+    createdAt` + `like` no marcador), silencioso em caso de falha. Ninguém
+    escrevia `mensagens` tipo `sistema` até agora (o enum existia e os
+    leitores já pulavam), então o Atendimento ganhou o desenho: nota cinza
+    centralizada com "Recado interno — o cliente não vê."
+  - **Rótulos** (decisão 3-A, nada muda de comportamento): a conta continua
+    janela deslizante de 24h/7d/30d; os textos passaram a dizer isso
+    (`ROTULO_LIMITE_CONTATO`: "1x a cada 24h"…), e editor + zod do router
+    leem a MESMA lista (`LIMITES_POR_CONTATO`).
+  - **Convite de instalar o app**: `<InstallPWA />` é montado fora do
+    `<Switch>` (segue lá — nada foi tirado do App.tsx) e no iPhone aparece
+    sozinho 3s depois do load, sem depender de `beforeinstallprompt`. Agora
+    consulta `conviteInstalarAppPermitido` (shared, via `useLocation`,
+    DEPOIS de todos os hooks): fica no login/cadastro/convite/esqueci/
+    redefinir/confirmar-email/checkout e dentro do app; **sai de `/assinar`,
+    da página inicial, dos termos, da privacidade e do /404**. A tela de
+    assinatura NÃO manda link de app na mensagem — era só o banner.
+  - Amarras: `encerrar-conversa-encerra-roteiro` (31) e
+    `convite-instalar-app` (31; as duas listas de rotas são conferidas
+    contra `rotasPublicas()`, derivada do App.tsx em `_paginas-publicas.ts`
+    — rota pública nova quebra o teste até ser classificada). 37 mutações
+    vermelhas (`scratchpad/mutar-encerrar-e-app.py`; duas só morreram depois
+    de ajustar a amarra: o `z.enum` aparece 2× no router, e "/termometro" não
+    é prefixo de "/termos" — o caso que discrimina é "/termos-de-uso").
+  - **Continuam NÃO corrigidos** (itens (a) e (b) do bloco acima): disparo
+    proativo de verdade não confere conversa, e as bolhas da mesma resposta
+    não se reconferem entre si.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do

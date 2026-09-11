@@ -426,11 +426,9 @@ export const importarProcessosRouter = router({
         erros: [] as { linhaNum: number; motivo: string }[],
       };
 
-      // `consumirCreditosEscritorio` é dinâmico pra evitar import circular
-      // do billing (que importa o schema, que importa este router).
-      const { consumirCreditosEscritorio } = input.monitorar
-        ? await import("../billing/escritorio-creditos")
-        : { consumirCreditosEscritorio: null as any };
+      // Vigiar processo é VAGA do plano: o limite é conferido linha a linha
+      // logo abaixo. O débito de crédito saiu daqui em 11/09/2026 — medir a
+      // mesma coisa duas vezes era a confusão que os créditos criavam.
 
       for (const linha of input.linhas) {
         try {
@@ -539,13 +537,6 @@ export const importarProcessosRouter = router({
                     motivo: `Limite do plano (${maximoMonitoramento} processos vigiados): monitor não criado, sem cobrança.`,
                   });
                 } else {
-                  await consumirCreditosEscritorio(
-                    perm.escritorioId,
-                    ctx.user.id,
-                    CUSTO_MONITORAMENTO_MES,
-                    "monitorar_processo_mes",
-                    `Import Advbox CNJ ${linha.cnj} (${linha.tribunal ?? "?"})`,
-                  );
                   const cnjMascarado = mascararCnj(linha.cnj);
                   await db.insert(motorMonitoramentos).values({
                     escritorioId: perm.escritorioId,

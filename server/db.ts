@@ -1064,44 +1064,32 @@ export async function getUserCreditsInfo(userId: number) {
 }
 
 /**
- * Consumir um crédito ao realizar um cálculo.
+ * Conta um cálculo no limite mensal do plano.
  *
- * Após migration 0073: usa saldo unificado por escritório
- * (escritorio_creditos). user_credits fica deprecated mas é
- * atualizado em paralelo pra preservar dashboards legados que
- * ainda lêem dele (até refator de UI passar todos pro novo helper).
+ * O nome ficou por compatibilidade com os cinco routers de cálculo. O que
+ * mudou em 11/09/2026 (decisão do dono) foi a régua: em vez de debitar do
+ * saldo de créditos do escritório — que era o mesmo bolso de consultar
+ * processo e vigiar CNJ, com preços diferentes por operação —, o cálculo
+ * conta no teto de "cálculos por mês" escrito no plano.
+ *
+ * `false` = o mês acabou (o router devolve o erro ao usuário). Dúvida nossa
+ * (sem banco, sem escritório, plano não resolvido) libera.
  */
 export async function consumirCredito(userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return true;
 
-  // 1. Cobra do saldo unificado do escritório (fonte de verdade)
   try {
     const { getEscritorioPorUsuario } = await import("./escritorio/db-escritorio");
-    const { consumirCreditosEscritorio } = await import("./billing/escritorio-creditos");
-
     const esc = await getEscritorioPorUsuario(userId);
     if (!esc) return false;
 
-    await consumirCreditosEscritorio(esc.escritorio.id, userId, 1, "calculo", "Cálculo jurídico");
+    const { verificarUso, registrarUso } = await import("./billing/limites-uso");
+    const aval = await verificarUso(esc.escritorio.id, "calculo");
+    if (!aval.permitido) return false;
+    await registrarUso(esc.escritorio.id, "calculo");
   } catch (err: any) {
-    // PRECONDITION_FAILED = sem saldo
-    if (err?.code === "PRECONDITION_FAILED") return false;
-    throw err;
-  }
-
-  // 2. Espelha em user_credits pro UI legado mostrar coerente
-  // (creditsUsed += 1). Não bloqueia: se falhar, log e segue.
-  try {
-    const credits = await getUserCreditsInfo(userId);
-    if (credits) {
-      await db
-        .update(userCredits)
-        .set({ creditsUsed: sql`${userCredits.creditsUsed} + 1` })
-        .where(eq(userCredits.userId, userId));
-    }
-  } catch {
-    /* legado, não-bloqueante */
+    log.warn({ err: err?.message, userId }, "Falha ao contar cálculo no limite do mês — liberando");
   }
 
   return true;

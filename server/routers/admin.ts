@@ -64,6 +64,7 @@ import { MODULOS_APP, ehModuloValido } from "@shared/modulos-app";
 import { MENSAGEM_WHATSAPP_OBRIGATORIO, normalizarWhatsappCadastro } from "@shared/telefone";
 import { MODULO_JURISIA } from "@shared/addon-jurisia";
 import { PLANOS_PADRAO_SLUGS } from "@shared/planos-types";
+import { OPERACOES_LIMITADAS, ROTULO_OPERACAO } from "@shared/limites-uso";
 import { isAsaasBillingConfigured } from "../billing/asaas-billing-client";
 import {
   users,
@@ -737,6 +738,53 @@ export const adminRouter = router({
       });
 
       return { success: true, mensagem: `${input.quantidade} créditos adicionados` };
+    }),
+
+  /**
+   * Aumenta o limite de uma operação para ESTE mês, neste escritório.
+   *
+   * É o que substitui "dar créditos" desde 11/09/2026: o escritório bateu no
+   * teto do plano, pediu, e o painel libera mais — sem checkout e sem pacote
+   * avulso (decisão do dono). Não vira saldo: na virada do mês o extra some
+   * junto com a contagem.
+   */
+  aumentarLimiteDoMes: adminProcedure
+    .input(
+      z.object({
+        userId: z.number(),
+        operacao: z.enum(OPERACOES_LIMITADAS),
+        quantidade: z.number().min(1).max(100000),
+        motivo: z.string().max(255).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      const esc = await getEscritorioPorUsuario(input.userId);
+      if (!esc) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "User não pertence a um escritório." });
+      }
+
+      const { concederExtra, competenciaAtual } = await import("../billing/limites-uso");
+      await concederExtra(esc.escritorio.id, input.operacao, input.quantidade);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "admin_aumentou_limite_mes",
+        alvoTipo: "user",
+        alvoId: input.userId,
+        detalhes: {
+          operacao: input.operacao,
+          quantidade: input.quantidade,
+          competencia: competenciaAtual(),
+          motivo: input.motivo,
+          escritorioId: esc.escritorio.id,
+        },
+      });
+
+      return {
+        success: true,
+        mensagem: `+${input.quantidade} em ${ROTULO_OPERACAO[input.operacao]} neste mês`,
+      };
     }),
 
   /** Retirar créditos de um cliente (reverso de concederCreditos).
@@ -1600,6 +1648,9 @@ export const adminRouter = router({
         maxAgentesIa: row.maxAgentesIa,
         maxMonitoramentosProcessos: row.maxMonitoramentosProcessos,
         maxMonitoramentosCpf: row.maxMonitoramentosCpf,
+        maxConsultasProcessoMes: row.maxConsultasProcessoMes,
+        maxBuscasDocumentoMes: row.maxBuscasDocumentoMes,
+        maxResumosIaMes: row.maxResumosIaMes,
         creditosCalculosMes: row.creditosCalculosMes,
         jurisiaMensagensMes: row.jurisiaMensagensMes,
         precoSobConsulta: row.precoSobConsulta,
@@ -1863,6 +1914,9 @@ export const adminRouter = router({
       creditosCalculosMes: z.number().int().min(0).optional(),
       jurisiaMensagensMes: z.number().int().min(0).optional(),
       maxMonitoramentosCpf: z.number().int().min(0).nullable().optional(),
+      maxConsultasProcessoMes: z.number().int().min(0).nullable().optional(),
+      maxBuscasDocumentoMes: z.number().int().min(0).nullable().optional(),
+      maxResumosIaMes: z.number().int().min(0).nullable().optional(),
       precoSobConsulta: z.boolean().optional(),
       ctaDemonstracao: z.boolean().optional(),
       atendentesInclusos: z.number().int().min(0).nullable().optional(),
@@ -1899,6 +1953,9 @@ export const adminRouter = router({
       if (input.creditosCalculosMes !== undefined) dadosUpdate.creditosCalculosMes = input.creditosCalculosMes;
       if (input.jurisiaMensagensMes !== undefined) dadosUpdate.jurisiaMensagensMes = input.jurisiaMensagensMes;
       if (input.maxMonitoramentosCpf !== undefined) dadosUpdate.maxMonitoramentosCpf = input.maxMonitoramentosCpf;
+      if (input.maxConsultasProcessoMes !== undefined) dadosUpdate.maxConsultasProcessoMes = input.maxConsultasProcessoMes;
+      if (input.maxBuscasDocumentoMes !== undefined) dadosUpdate.maxBuscasDocumentoMes = input.maxBuscasDocumentoMes;
+      if (input.maxResumosIaMes !== undefined) dadosUpdate.maxResumosIaMes = input.maxResumosIaMes;
       if (input.precoSobConsulta !== undefined) dadosUpdate.precoSobConsulta = input.precoSobConsulta;
       if (input.ctaDemonstracao !== undefined) dadosUpdate.ctaDemonstracao = input.ctaDemonstracao;
       if (input.atendentesInclusos !== undefined) dadosUpdate.atendentesInclusos = input.atendentesInclusos;

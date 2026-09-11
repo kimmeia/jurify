@@ -11,8 +11,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mascararTelefoneBR } from "@shared/telefone";
-import { FALTA_TIPOS, ROTULO_FALTA, type FaltaTipo } from "@shared/conferencia-cadastros";
+import { FALTA_TIPOS, ROTULO_FALTA, cpfsConflitam, type FaltaTipo } from "@shared/conferencia-cadastros";
 import { PossiveisDuplicadosButton } from "./clientes/possiveis-duplicados";
+import { useEscolhasMesclagem, TabelaEscolhaCampos, EsqueletoEscolhaCampos } from "./clientes/mesclar-escolher-campos";
+import type { EscolhasMesclagem } from "@shared/mesclar-campos";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -213,7 +215,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
             </AlertDialogDescription>
           </AlertDialogHeader>
           <EstadosPicker selecionados={tribunais} onChange={setTribunais} />
-          <p className="text-[12px] text-muted-foreground leading-relaxed">
+          <p className="text-corpo text-muted-foreground leading-relaxed">
             <span className="text-foreground font-medium">Cobrança: 15 créditos/mês</span>, independente
             dos estados escolhidos — renovada automaticamente, cancela quando quiser. A varredura usa a
             credencial nacional do Cofre.
@@ -741,7 +743,7 @@ export default function Clientes() {
                       {stats?.clientesAtivos ?? "—"}
                     </span>
                     {stats?.novosHoje ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-success-bg text-success-fg border border-success/30">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-apoio font-medium bg-success-bg text-success-fg border border-success/30">
                         <Plus className="w-3 h-3" />
                         {stats.novosHoje} hoje
                       </span>
@@ -762,7 +764,7 @@ export default function Clientes() {
 
                 {/* Mini stats à direita */}
                 <div className="lg:col-span-6">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">Atenção</p>
+                  <p className="text-micro text-muted-foreground uppercase tracking-wider mb-2">Atenção</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-muted/40 rounded-lg px-3 py-2 border border-border">
                       <p className="text-xs text-muted-foreground mb-1">Aguardando docs</p>
@@ -804,7 +806,7 @@ export default function Clientes() {
               className={`relative flex items-center gap-2 px-4 py-2.5 text-sm font-semibold transition-colors -mb-px border-b-2 ${aba === "lead" ? "border-info/30 text-info-fg" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             >
               Leads
-              <span className="text-[11px] font-normal text-muted-foreground/70 hidden sm:inline">em atendimento</span>
+              <span className="text-apoio font-normal text-muted-foreground/70 hidden sm:inline">em atendimento</span>
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full tabular-nums ${aba === "lead" ? "bg-info text-info-on" : "bg-muted text-muted-foreground"}`}>
                 {stats?.totalLeads ?? "—"}
               </span>
@@ -828,7 +830,7 @@ export default function Clientes() {
               <span className="mx-1 h-[17px] w-px bg-border" />
               <FiltroClientes filtros={filtros} onFiltros={setFiltros} responsaveis={responsaveis} />
             </div>
-            <div className="mt-2.5 flex items-center gap-1.5 border-t pt-2.5 text-[11.5px] text-muted-foreground">
+            <div className="mt-2.5 flex items-center gap-1.5 border-t pt-2.5 text-apoio text-muted-foreground">
               <span>
                 Mostrando <b className="font-semibold text-foreground">{clientesFiltrados.length}</b> de{" "}
                 <b className="font-semibold text-foreground">{(data as any)?.total ?? clientesFiltrados.length}</b>
@@ -848,7 +850,7 @@ export default function Clientes() {
                 )}
               </span>
               {conferencia && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info-bg px-2 py-0.5 text-[11px] font-semibold text-info-fg">
+                <span className="inline-flex items-center gap-1 rounded-full border border-info/30 bg-info-bg px-2 py-0.5 text-apoio font-semibold text-info-fg">
                   Conferência: {ROTULO_FALTA[conferencia]}
                   <button type="button" onClick={() => setConferencia(null)} aria-label="Tirar o filtro da conferência">
                     <X className="h-3 w-3" />
@@ -933,7 +935,7 @@ export default function Clientes() {
           ) : (
             <div className="bg-card border border-border rounded-2xl overflow-hidden">
               {/* Header */}
-              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-muted border-b border-border text-[11px] uppercase tracking-wider font-semibold text-muted-foreground`}>
+              <div className={`grid ${aba === "lead" ? "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_150px]" : "grid-cols-[24px_48px_1fr_160px_180px_140px_100px_40px]"} gap-[14px] items-center px-4 py-2.5 bg-muted border-b border-border text-apoio uppercase tracking-wider font-semibold text-muted-foreground`}>
                 <Checkbox
                   checked={
                     selecionados.size > 0 &&
@@ -1150,7 +1152,7 @@ function BotaoFiltro({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={`h-[29px] rounded-md border px-2.5 text-[11.5px] font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+          className={`h-[29px] rounded-md border px-2.5 text-apoio font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
             valor
               ? "border-info bg-info-bg text-info-fg"
               : "border-border bg-card text-foreground/85 hover:border-muted-foreground/60 hover:bg-muted"
@@ -1195,7 +1197,7 @@ function OpcaoMarcavel({
       </span>
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {contagem !== undefined && (
-        <span className="tabular-nums text-[10.5px] font-bold text-muted-foreground/70">{contagem}</span>
+        <span className="tabular-nums text-apoio font-bold text-muted-foreground/70">{contagem}</span>
       )}
     </button>
   );
@@ -1300,7 +1302,7 @@ function FiltroClientes({
         onAberto={(v) => setAberto(v ? "cadastro" : null)}
         largo
       >
-        <p className="px-2 pb-1 pt-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">Atalhos</p>
+        <p className="px-2 pb-1 pt-1.5 text-micro font-bold uppercase tracking-[0.08em] text-muted-foreground">Atalhos</p>
         <div className="grid grid-cols-2 gap-0.5">
           {ATALHOS_CADASTRO.map(([id, r, dias]) => {
             const de = dias < 0 ? `${new Date().getFullYear()}-01-01` : isoMenosDias(dias);
@@ -1310,7 +1312,7 @@ function FiltroClientes({
                 key={id}
                 type="button"
                 onClick={() => aplicarAtalho(id, dias)}
-                className={`whitespace-nowrap rounded-md px-2 py-1.5 text-left text-[11.5px] transition-colors ${
+                className={`whitespace-nowrap rounded-md px-2 py-1.5 text-left text-apoio transition-colors ${
                   ativo ? "bg-info-bg font-semibold text-info-fg" : "text-foreground/85 hover:bg-muted"
                 }`}
               >
@@ -1319,7 +1321,7 @@ function FiltroClientes({
             );
           })}
         </div>
-        <p className="px-2 pb-1 pt-2.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="px-2 pb-1 pt-2.5 text-micro font-bold uppercase tracking-[0.08em] text-muted-foreground">
           Período personalizado
         </p>
         <div className="flex gap-2 px-2 pb-2">
@@ -1327,7 +1329,7 @@ function FiltroClientes({
             const texto = rascunho[qual];
             const invalido = texto.length === 10 && !brParaIso(texto);
             return (
-              <label key={qual} className="flex flex-1 flex-col gap-1 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+              <label key={qual} className="flex flex-1 flex-col gap-1 text-micro font-bold uppercase tracking-[0.08em] text-muted-foreground">
                 {qual === "de" ? "De" : "Até"}
                 {/* Texto mascarado, não `input type=date`: o campo nativo
                     desenha no idioma do NAVEGADOR, e num Chrome em inglês
@@ -1339,7 +1341,7 @@ function FiltroClientes({
                   placeholder="dd/mm/aaaa"
                   value={texto}
                   onChange={(e) => digitarData(qual, e.target.value)}
-                  className={`h-[29px] w-full rounded-md border bg-card px-2 text-[11.5px] font-medium normal-case tracking-normal outline-none focus:ring-2 focus:ring-ring/30 ${
+                  className={`h-[29px] w-full rounded-md border bg-card px-2 text-apoio font-medium normal-case tracking-normal outline-none focus:ring-2 focus:ring-ring/30 ${
                     invalido ? "border-danger text-danger-fg" : "border-border text-foreground focus:border-ring"
                   }`}
                 />
@@ -1347,7 +1349,7 @@ function FiltroClientes({
             );
           })}
         </div>
-        <p className="border-t px-2 pb-1 pt-2 text-[10.5px] leading-snug text-muted-foreground">
+        <p className="border-t px-2 pb-1 pt-2 text-apoio leading-snug text-muted-foreground">
           Conta pela data de cadastro do contato.
         </p>
       </BotaoFiltro>
@@ -1358,7 +1360,7 @@ function FiltroClientes({
         aberto={aberto === "marcas"}
         onAberto={(v) => setAberto(v ? "marcas" : null)}
       >
-        <p className="px-2 pb-1 pt-1.5 text-[9px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="px-2 pb-1 pt-1.5 text-micro font-bold uppercase tracking-[0.08em] text-muted-foreground">
           Marcas do cadastro
         </p>
         {OPCOES_MARCA.map(([id, r]) => (
@@ -1375,7 +1377,7 @@ function FiltroClientes({
  *  vira sopa, e o que o selo diz já está no texto. */
 function SeloHero({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/25 bg-white/15 px-2 py-0.5 text-[11px] font-semibold">
+    <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/25 bg-white/15 px-2 py-0.5 text-apoio font-semibold">
       {children}
     </span>
   );
@@ -1464,21 +1466,21 @@ function CountPill({
   tom?: "amber" | "rose";
 }) {
   if (ativo)
-    return <span className="bg-white/20 px-1.5 rounded-full text-[10px] tabular-nums">{children}</span>;
+    return <span className="bg-white/20 px-1.5 rounded-full text-micro tabular-nums">{children}</span>;
   if (tom === "amber")
     return (
-      <span className="bg-warning-bg text-warning-fg px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-warning-bg text-warning-fg px-1.5 rounded-full text-micro tabular-nums">
         {children}
       </span>
     );
   if (tom === "rose")
     return (
-      <span className="bg-danger-bg text-danger-fg px-1.5 rounded-full text-[10px] tabular-nums">
+      <span className="bg-danger-bg text-danger-fg px-1.5 rounded-full text-micro tabular-nums">
         {children}
       </span>
     );
   return (
-    <span className="bg-muted text-muted-foreground px-1.5 rounded-full text-[10px] tabular-nums">
+    <span className="bg-muted text-muted-foreground px-1.5 rounded-full text-micro tabular-nums">
       {children}
     </span>
   );
@@ -1525,7 +1527,7 @@ function LinhaCliente({
         <Checkbox checked={selecionado} onCheckedChange={onToggle} />
       </div>
       <div
-        className={`w-10 h-10 rounded-full bg-gradient-to-br ${gradientAvatar(c.nome || "?")} text-white flex items-center justify-center font-semibold text-[13px] tracking-tight shadow-sm`}
+        className={`w-10 h-10 rounded-full bg-gradient-to-br ${gradientAvatar(c.nome || "?")} text-white flex items-center justify-center font-semibold text-corpo tracking-tight shadow-sm`}
       >
         {gerarIniciais(c.nome || "?")}
       </div>
@@ -1535,28 +1537,28 @@ function LinhaCliente({
             {c.nome}
           </p>
           {situacaoInfo && (
-            <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${situacaoInfo.badge}`}>
+            <span className={`inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full border ${situacaoInfo.badge}`}>
               {situacaoInfo.icon} {situacaoInfo.label}
             </span>
           )}
           {isVip && <Star className="h-3.5 w-3.5 text-warning shrink-0 fill-warning" />}
           {c.documentacaoPendente && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
+            <span className="inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg">
               ⚠ Aguardando docs
             </span>
           )}
           {vencido > 0 && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg tabular-nums">
+            <span className="inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full bg-danger-bg text-danger-fg tabular-nums">
               ⚠ {fmtBRLShort(vencido)} vencido
             </span>
           )}
           {inativoDias != null && (
-            <span className="inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+            <span className="inline-flex items-center text-micro font-semibold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
               Inativo {inativoDias}d
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-3 text-apoio text-muted-foreground">
           {c.telefone && (
             <span className="flex items-center gap-1">
               <Phone className="h-3 w-3" /> {mascararTelefoneBR(c.telefone)}
@@ -1579,13 +1581,13 @@ function LinhaCliente({
       <div className="min-w-0">
         {c.responsavelNome ? (
           <span className="inline-flex items-center gap-2 min-w-0">
-            <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${gradientAvatar(c.responsavelNome)} text-white flex items-center justify-center text-[9px] font-bold shrink-0`}>
+            <span className={`w-6 h-6 rounded-full bg-gradient-to-br ${gradientAvatar(c.responsavelNome)} text-white flex items-center justify-center text-micro font-bold shrink-0`}>
               {gerarIniciais(c.responsavelNome)}
             </span>
             <span className="text-xs font-medium text-foreground truncate">{c.responsavelNome}</span>
           </span>
         ) : (
-          <span className="text-[11px] italic text-muted-foreground/70">sem atendente</span>
+          <span className="text-apoio italic text-muted-foreground/70">sem atendente</span>
         )}
       </div>
 
@@ -1594,35 +1596,35 @@ function LinhaCliente({
         {vencido > 0 ? (
           <>
             <p className="text-sm font-semibold text-danger-fg tabular-nums">{fmtBRLShort(vencido)}</p>
-            <p className="text-[10px] text-danger">vencido</p>
+            <p className="text-micro text-danger">vencido</p>
           </>
         ) : pendente > 0 ? (
           <>
             <p className="text-sm font-semibold text-warning-fg tabular-nums">{fmtBRLShort(pendente)}</p>
-            <p className="text-[10px] text-warning">pendente</p>
+            <p className="text-micro text-warning">pendente</p>
           </>
         ) : recebido > 0 ? (
           <>
             <p className="text-sm font-semibold text-success-fg tabular-nums">{fmtBRLShort(recebido)}</p>
-            <p className="text-[10px] text-muted-foreground">recebido</p>
+            <p className="text-micro text-muted-foreground">recebido</p>
           </>
         ) : (
           <>
             <p className="text-sm font-semibold text-muted-foreground/70">—</p>
-            <p className="text-[10px] text-muted-foreground/70">sem cobrança</p>
+            <p className="text-micro text-muted-foreground/70">sem cobrança</p>
           </>
         )}
       </div>
 
       <div className="text-right text-xs">
         <p className="text-foreground">{timeAgo(c.ultimaConversaAt || c.createdAt)}</p>
-        <p className="text-[10px] text-muted-foreground/70">
+        <p className="text-micro text-muted-foreground/70">
           {c.ultimaConversaAt ? "conversa" : "cadastro"}
         </p>
       </div>
 
       <div className="text-right">
-        <Badge variant="outline" className="text-[10px] font-normal">{c.origem}</Badge>
+        <Badge variant="outline" className="text-micro font-normal">{c.origem}</Badge>
       </div>
 
       {/* Ações. No modo Lead, o "Fechar contrato" fica sempre visível
@@ -1788,7 +1790,7 @@ function KanbanClienteTab({ contatoId }: { contatoId: number }) {
                   <div className="h-2 w-2 rounded-full shrink-0" style={{ background: c.colunaCor || "#6b7280" }} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{c.titulo}</p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-apoio text-muted-foreground">
                       {c.funilNome} · {c.colunaNome}
                       {c.prazo && ` · prazo ${new Date(c.prazo).toLocaleDateString("pt-BR")}`}
                       {c.atrasado && <span className="ml-1 text-danger-fg font-medium">(atrasado)</span>}
@@ -2077,7 +2079,7 @@ function FinanceiroClienteTab({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="min-w-0">
           <p className="text-sm font-medium">Cobranças deste cliente</p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-micro text-muted-foreground">
             Inclui pagamentos no nome de terceiros vinculados a este cliente.
           </p>
         </div>
@@ -2131,15 +2133,15 @@ function FinanceiroClienteTab({
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
           <p className="text-base font-bold leading-tight text-success-fg">{fmtMoeda(totais.pago)}</p>
-          <p className="text-[10px] text-muted-foreground">Pago</p>
+          <p className="text-micro text-muted-foreground">Pago</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
           <p className="text-base font-bold leading-tight text-warning-fg">{fmtMoeda(totais.pendente)}</p>
-          <p className="text-[10px] text-muted-foreground">Pendente</p>
+          <p className="text-micro text-muted-foreground">Pendente</p>
         </div>
         <div className="rounded-lg border bg-card px-3 py-2 text-center">
           <p className="text-base font-bold leading-tight text-danger-fg">{fmtMoeda(totais.vencido)}</p>
-          <p className="text-[10px] text-muted-foreground">Vencido</p>
+          <p className="text-micro text-muted-foreground">Vencido</p>
         </div>
       </div>
 
@@ -2154,9 +2156,9 @@ function FinanceiroClienteTab({
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{c.descricao || "Cobrança"}</p>
-                      <Badge variant="outline" className={`text-[9px] ${meta.cor}`}>{meta.label}</Badge>
+                      <Badge variant="outline" className={`text-micro ${meta.cor}`}>{meta.label}</Badge>
                       {c.origem === "manual" && (
-                        <Badge className="text-[9px] h-4 px-1 border-0 bg-warning-bg text-warning-fg">
+                        <Badge className="text-micro h-4 px-1 border-0 bg-warning-bg text-warning-fg">
                           manual
                         </Badge>
                       )}
@@ -2166,7 +2168,7 @@ function FinanceiroClienteTab({
                       {c.contatoBeneficiarioId === contatoId && c.contatoId !== contatoId && (
                         <Badge
                           variant="outline"
-                          className="text-[9px] h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
+                          className="text-micro h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
                           title="Esta cobrança foi paga no nome de outra pessoa e vinculada como pagamento deste cliente"
                         >
                           pago por terceiro
@@ -2175,14 +2177,14 @@ function FinanceiroClienteTab({
                       {c.contatoBeneficiarioId !== null && c.contatoBeneficiarioId !== contatoId && (
                         <Badge
                           variant="outline"
-                          className="text-[9px] h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
+                          className="text-micro h-4 px-1 bg-info-bg text-info-fg border-info/30 dark:text-info"
                           title="Esta cobrança foi atribuída a outro cliente (beneficiário lógico) — não conta no caixa deste contato"
                         >
                           atribuída a outro
                         </Badge>
                       )}
                       {c.formaPagamento && (
-                        <Badge variant="secondary" className="text-[9px] font-normal">
+                        <Badge variant="secondary" className="text-micro font-normal">
                           {c.formaPagamento === "PIX" ? "Pix"
                             : c.formaPagamento === "BOLETO" ? "Boleto"
                             : c.formaPagamento === "CREDIT_CARD" ? "Cartão"
@@ -2193,7 +2195,7 @@ function FinanceiroClienteTab({
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-0.5">
+                    <div className="flex items-center gap-3 text-apoio text-muted-foreground mt-0.5">
                       <span>Vence {fmtData(c.vencimento)}</span>
                       {c.dataPagamento && <span>Pago {fmtData(c.dataPagamento)}</span>}
                       {c.tipo && <span className="uppercase">{c.tipo}</span>}
@@ -2207,7 +2209,7 @@ function FinanceiroClienteTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 text-[10px] px-2 text-success-fg hover:text-success-fg"
+                            className="h-6 text-micro px-2 text-success-fg hover:text-success-fg"
                             onClick={() => marcarPagaMut.mutate({ id: c.id })}
                             disabled={marcarPagaMut.isPending}
                             title="Marcar como recebida (cobrança manual)"
@@ -2220,7 +2222,7 @@ function FinanceiroClienteTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 text-[10px] px-2"
+                            className="h-6 text-micro px-2"
                             onClick={() => copiarLink(c.invoiceUrl)}
                             title="Copiar link de pagamento"
                           >
@@ -2231,7 +2233,7 @@ function FinanceiroClienteTab({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 text-[10px] px-2"
+                            className="h-6 text-micro px-2"
                             onClick={() => copiarPix(c)}
                             disabled={obterPixMut.isPending}
                             title={c.formaPagamento === "UNDEFINED"
@@ -2253,12 +2255,12 @@ function FinanceiroClienteTab({
                     <p className="text-sm font-semibold">{fmtMoeda(c.valor)}</p>
                     {/* Indicador do override de comissão (quando setado) */}
                     {c.comissionavelOverride === true && (
-                      <Badge className="text-[9px] h-4 px-1 border-0 bg-success-bg text-success-fg">
+                      <Badge className="text-micro h-4 px-1 border-0 bg-success-bg text-success-fg">
                         comissionável
                       </Badge>
                     )}
                     {c.comissionavelOverride === false && (
-                      <Badge className="text-[9px] h-4 px-1 border-0 bg-neutral-bg text-neutral-fg">
+                      <Badge className="text-micro h-4 px-1 border-0 bg-neutral-bg text-neutral-fg">
                         não comissionável
                       </Badge>
                     )}
@@ -2268,7 +2270,7 @@ function FinanceiroClienteTab({
                           href={`https://www.asaas.com/payment/${c.asaasPaymentId}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[10px] text-info-fg hover:underline"
+                          className="text-micro text-info-fg hover:underline"
                         >
                           Abrir no Asaas
                         </a>
@@ -2286,7 +2288,7 @@ function FinanceiroClienteTab({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="text-xs">
-                          <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                          <DropdownMenuLabel className="text-micro uppercase tracking-wide">
                             Comissão
                           </DropdownMenuLabel>
                           <DropdownMenuItem
@@ -2298,7 +2300,7 @@ function FinanceiroClienteTab({
                             <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                             Marcar comissionável
                             {c.comissionavelOverride === true && (
-                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                              <span className="ml-auto text-micro text-muted-foreground">atual</span>
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -2310,7 +2312,7 @@ function FinanceiroClienteTab({
                             <X className="h-3.5 w-3.5 text-neutral-fg" />
                             Marcar NÃO comissionável
                             {c.comissionavelOverride === false && (
-                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                              <span className="ml-auto text-micro text-muted-foreground">atual</span>
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
@@ -2323,7 +2325,7 @@ function FinanceiroClienteTab({
                             <RotateCcw className="h-3.5 w-3.5" />
                             Voltar pro padrão
                             {c.comissionavelOverride === null && (
-                              <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                              <span className="ml-auto text-micro text-muted-foreground">atual</span>
                             )}
                           </DropdownMenuItem>
                           {/* Forma de pagamento: corrige quando o operador lançou
@@ -2331,7 +2333,7 @@ function FinanceiroClienteTab({
                           {c.origem === "manual" && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                              <DropdownMenuLabel className="text-micro uppercase tracking-wide">
                                 Forma de pagamento
                               </DropdownMenuLabel>
                               {([
@@ -2350,7 +2352,7 @@ function FinanceiroClienteTab({
                                 >
                                   {label}
                                   {c.formaPagamento === val && (
-                                    <span className="ml-auto text-[10px] text-muted-foreground">atual</span>
+                                    <span className="ml-auto text-micro text-muted-foreground">atual</span>
                                   )}
                                 </DropdownMenuItem>
                               ))}
@@ -2361,7 +2363,7 @@ function FinanceiroClienteTab({
                           {c.contatoBeneficiarioId !== null && (
                             <>
                               <DropdownMenuSeparator />
-                              <DropdownMenuLabel className="text-[10px] uppercase tracking-wide">
+                              <DropdownMenuLabel className="text-micro uppercase tracking-wide">
                                 Beneficiário
                               </DropdownMenuLabel>
                               <DropdownMenuItem
@@ -2470,36 +2472,36 @@ function ProcessoCard({
               ) : (
                 <p className="text-sm font-medium">{p.apelido || `Processo #${p.id}`}</p>
               )}
-              <Badge variant="outline" className={`text-[9px] ${tipoMeta.cor}`}>
+              <Badge variant="outline" className={`text-micro ${tipoMeta.cor}`}>
                 {tipoMeta.label}
               </Badge>
               {p.polo && (
-                <Badge variant="outline" className="text-[9px]">
+                <Badge variant="outline" className="text-micro">
                   {p.polo === "ativo" ? "Polo Ativo" : p.polo === "passivo" ? "Polo Passivo" : "Interessado"}
                 </Badge>
               )}
               {p.monitoramentoId && (
-                <Badge className="bg-success/15 text-success-fg border-success/30 text-[9px]">
+                <Badge className="bg-success/15 text-success-fg border-success/30 text-micro">
                   <Radar className="h-2.5 w-2.5 mr-0.5" /> Monitorado
                 </Badge>
               )}
               {/* Judicial sem CNJ ainda — aguardando protocolo */}
               {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && (
-                <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-[9px]">
+                <Badge className="bg-warning/15 text-warning-fg border-warning/30 text-micro">
                   Aguardando CNJ
                 </Badge>
               )}
             </div>
             {/* Apelido só aparece como subtítulo se há CNJ (senão já é o título). */}
             {p.apelido && p.numeroCnj && <p className="text-xs text-muted-foreground">{p.apelido}</p>}
-            {p.tribunal && <p className="text-[10px] text-muted-foreground">{p.tribunal}</p>}
+            {p.tribunal && <p className="text-micro text-muted-foreground">{p.tribunal}</p>}
           </div>
           {/* Adicionar CNJ depois do protocolo (só pra judicial sem CNJ) */}
           {!p.numeroCnj && (p.tipo === "litigioso" || !p.tipo) && onAdicionarCnj && (
             <Button
               variant="outline"
               size="sm"
-              className="h-7 text-[10px] px-2"
+              className="h-7 text-micro px-2"
               title="Adicionar CNJ após protocolo"
               onClick={(e) => { e.stopPropagation(); onAdicionarCnj(); }}
             >
@@ -2556,12 +2558,12 @@ function ProcessoCard({
                       <button
                         type="button"
                         onClick={() => setExcluirAnotAlvo(a.id)}
-                        className="text-[10px] text-muted-foreground hover:text-destructive"
+                        className="text-micro text-muted-foreground hover:text-destructive"
                       >
                         ×
                       </button>
                     </div>
-                    <p className="text-[10px] text-muted-foreground mt-1">
+                    <p className="text-micro text-muted-foreground mt-1">
                       {a.autorNome} · {new Date(a.createdAt).toLocaleString("pt-BR", {
                         day: "2-digit", month: "2-digit", year: "2-digit",
                         hour: "2-digit", minute: "2-digit",
@@ -2571,7 +2573,7 @@ function ProcessoCard({
                 ))}
               </div>
             ) : (
-              <p className="text-[11px] text-muted-foreground italic text-center py-2">
+              <p className="text-apoio text-muted-foreground italic text-center py-2">
                 Nenhuma anotação ainda. Use o campo acima pra registrar andamentos.
               </p>
             )}
@@ -2760,7 +2762,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 </SelectContent>
               </Select>
               {novoModo === "judicial_aguardando" && (
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-micro text-muted-foreground mt-1">
                   Use quando o cliente te contratou pra ajuizar mas o processo ainda não foi protocolado.
                   Depois do protocolo, você adiciona o CNJ direto no card do processo.
                 </p>
@@ -2786,7 +2788,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                   onChange={(e) => setNovoCnj(e.target.value)}
                   className="font-mono"
                 />
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-micro text-muted-foreground mt-1">
                   Caso seu processo tenha algum número identificador (não-CNJ), pode incluir aqui.
                 </p>
               </div>
@@ -2802,7 +2804,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 onChange={(e) => setNovoApelido(e.target.value)}
               />
               {novoModo !== "judicial" && (
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-micro text-muted-foreground mt-1">
                   Sem CNJ, a descrição é o que identifica esse processo nas listas e cobranças vinculadas.
                 </p>
               )}
@@ -2830,7 +2832,7 @@ function ProcessosClienteTab({ contatoId }: { contatoId: number }) {
                 />
                 <div>
                   <p className="text-xs font-medium">Quero monitorar este processo</p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-micro text-muted-foreground">
                     Após vincular, abriremos a tela de monitoramento (módulo Processos) com este CNJ
                     pré-preenchido pra você escolher a credencial e confirmar (2 créditos/mês).
                   </p>
@@ -2992,7 +2994,7 @@ function LeadAtendenteInline({
       <button
         type="button"
         onClick={() => setEditando(true)}
-        className="text-[10px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+        className="text-micro text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
         title="Trocar atendente responsável"
       >
         {responsavelAtualNome ? `por ${responsavelAtualNome}` : "sem atendente — atribuir"}
@@ -3003,7 +3005,7 @@ function LeadAtendenteInline({
   return (
     <div className="flex items-center gap-1">
       <select
-        className="text-[10px] border rounded px-1 py-0.5 bg-background"
+        className="text-micro border rounded px-1 py-0.5 bg-background"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
         disabled={mut.isPending}
@@ -3017,7 +3019,7 @@ function LeadAtendenteInline({
       </select>
       <Button
         size="sm"
-        className="h-6 px-2 text-[10px]"
+        className="h-6 px-2 text-micro"
         disabled={mut.isPending || !valor}
         onClick={() => mut.mutate({ id: leadId, responsavelId: Number(valor) })}
       >
@@ -3026,7 +3028,7 @@ function LeadAtendenteInline({
       <Button
         size="sm"
         variant="ghost"
-        className="h-6 px-2 text-[10px]"
+        className="h-6 px-2 text-micro"
         disabled={mut.isPending}
         onClick={() => { setEditando(false); setValor(responsavelAtualId ? String(responsavelAtualId) : ""); }}
       >
@@ -3140,7 +3142,7 @@ function EditarLeadDialog({
                 disabled={atualizarMut.isPending}
               />
               {valor.trim() && valorNormalizado != null && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-micro text-muted-foreground">
                   Será gravado como{" "}
                   <span className="font-mono">
                     {new Intl.NumberFormat("pt-BR", {
@@ -3169,7 +3171,7 @@ function EditarLeadDialog({
                   </option>
                 ))}
               </select>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-micro text-muted-foreground">
                 Gerencie as opções em Configurações → Origens de lead.
               </p>
             </div>
@@ -3254,7 +3256,7 @@ function ChipCompacto({
   destaque?: "amber" | "rose";
 }) {
   const base =
-    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] font-medium transition-colors";
+    "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-apoio font-medium transition-colors";
   const tom = ativo
     ? "bg-foreground/80 text-background border-border"
     : destaque === "amber"
@@ -3321,7 +3323,7 @@ function ListaCompactaClientes({
 
       <div className="min-h-0 flex-1 overflow-auto">
         {clientes.length === 0 ? (
-          <p className="p-6 text-center text-[12.5px] text-muted-foreground">
+          <p className="p-6 text-center text-corpo text-muted-foreground">
             Nenhum cliente bate com a busca.
           </p>
         ) : (
@@ -3339,15 +3341,15 @@ function ListaCompactaClientes({
                 }`}
               >
                 <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-[11px] font-semibold text-white ${gradientAvatar(c.nome || "?")}`}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-apoio font-semibold text-white ${gradientAvatar(c.nome || "?")}`}
                 >
                   {gerarIniciais(c.nome || "?")}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-[12.5px] ${ativo ? "font-semibold" : "font-medium"}`}>
+                  <span className={`block truncate text-corpo ${ativo ? "font-semibold" : "font-medium"}`}>
                     {c.nome}
                   </span>
-                  <span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground">
+                  <span className="mt-0.5 block truncate text-apoio text-muted-foreground">
                     {c.telefone || c.email || c.cpfCnpj || "sem contato"}
                   </span>
                 </span>
@@ -3361,13 +3363,13 @@ function ListaCompactaClientes({
           fora da lista. Sem dizer isso, a coluna fica sem nada marcado e o
           ↑↓ parece quebrado. */}
       {posicao < 0 && clientes.length > 0 && (
-        <p className="shrink-0 border-t bg-warning-bg px-3 py-1.5 text-[10px] leading-snug text-warning-fg dark:text-warning">
+        <p className="shrink-0 border-t bg-warning-bg px-3 py-1.5 text-micro leading-snug text-warning-fg dark:text-warning">
           O cliente aberto não está neste filtro.
         </p>
       )}
-      <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2 text-[10px] text-muted-foreground">
-        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↑</kbd>
-        <kbd className="rounded border bg-muted px-1 py-px font-mono text-[9.5px]">↓</kbd>
+      <div className="flex shrink-0 items-center gap-2 border-t px-3 py-2 text-micro text-muted-foreground">
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-micro">↑</kbd>
+        <kbd className="rounded border bg-muted px-1 py-px font-mono text-micro">↓</kbd>
         trocar de cliente
         <span className="ml-auto tabular-nums">
           {posicao >= 0 ? `${posicao + 1} de ${clientes.length}` : `${clientes.length} na lista`}
@@ -3493,6 +3495,22 @@ function ClienteDetalhe({
     onError: (err: any) =>
       toast.error("Erro ao mesclar", { description: err.message }),
   });
+  // A mesclagem fica desfazível por 7 dias, mas o aviso com o botão só existia
+  // na conversa do Atendimento — quem mescla pela ficha e não conversa com o
+  // cliente pelo WhatsApp não achava a saída que o texto promete.
+  const { data: unificacao, refetch: refetchUnificacao } = (trpc as any).crm.unificacaoRecente.useQuery(
+    { contatoId: id },
+    { enabled: !!id, retry: false, staleTime: 60_000 },
+  );
+  const desfazerUnificacaoMut = (trpc as any).crm.desfazerUnificacao.useMutation({
+    onSuccess: () => {
+      toast.success("Unificação desfeita — a ficha voltou como estava.");
+      refetchUnificacao();
+      refetch();
+      onUpdate();
+    },
+    onError: (e: any) => toast.error("Não deu pra desfazer", { description: e.message }),
+  });
   // Editor de lead na aba Histórico — abre quando user clica no lápis do card.
   // null = fechado. Quando o lead muda (mutation), o key={alvo.id} no Dialog
   // garante remount com valores frescos.
@@ -3573,7 +3591,7 @@ function ClienteDetalhe({
                 {cliente.documentacaoObservacoes}
               </p>
             )}
-            <p className="text-[11px] text-warning-fg/70 mt-1">
+            <p className="text-apoio text-warning-fg/70 mt-1">
               Após receber e arquivar, desmarque em &ldquo;Visão Geral &gt; Documentação pendente&rdquo;.
             </p>
           </div>
@@ -3650,7 +3668,7 @@ function ClienteDetalhe({
               {/* O motivo do encerramento é longo demais pro selo — fica na
                   linha de baixo, mas só quando existe. */}
               {foraDeServico && ((cliente as any).servicoEncerradoPorNome || (cliente as any).servicoEncerradoMotivo) && (
-                <p className="mt-2 text-[11.5px] text-hero-fg/70">
+                <p className="mt-2 text-apoio text-hero-fg/70">
                   {(cliente as any).servicoEncerradoPorNome ? `Por ${(cliente as any).servicoEncerradoPorNome}` : ""}
                   {(cliente as any).servicoEncerradoMotivo ? ` — ${(cliente as any).servicoEncerradoMotivo}` : ""}
                 </p>
@@ -3781,8 +3799,8 @@ function ClienteDetalhe({
         open={mesclarOpen}
         onOpenChange={setMesclarOpen}
         clienteAtual={cliente}
-        onConfirmar={(principalId) =>
-          mesclarMut.mutate({ principalId, duplicadoId: id })
+        onConfirmar={(principalId, confirmarCpfDiferente, escolhas) =>
+          mesclarMut.mutate({ principalId, duplicadoId: id, confirmarCpfDiferente, escolhas })
         }
         isPending={mesclarMut.isPending}
       />
@@ -3812,6 +3830,30 @@ function ClienteDetalhe({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {unificacao && (
+        <div className="mb-3 rounded-lg border border-info/30 bg-info-bg px-3 py-2 text-apoio text-info-fg leading-snug" data-testid="aviso-unificacao-ficha">
+          <p>
+            <strong>Duas fichas foram unificadas.</strong>{" "}
+            "{unificacao.duplicadoNome}" ({unificacao.duplicadoOrigem === "whatsapp" ? "contato do WhatsApp" : "cadastro"}
+            {unificacao.duplicadoCriadoEm ? `, ${new Date(unificacao.duplicadoCriadoEm).toLocaleDateString("pt-BR")}` : ""}) entrou
+            neste cadastro e foi excluída.
+            {unificacao.duplicadoTelefone ? ` O número ${mascararTelefoneBR(unificacao.duplicadoTelefone)} ficou como telefone secundário.` : ""}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-apoio"
+              disabled={desfazerUnificacaoMut.isPending}
+              onClick={() => desfazerUnificacaoMut.mutate({ id: unificacao.id })}
+            >
+              {desfazerUnificacaoMut.isPending ? "Desfazendo…" : "Desfazer"}
+            </Button>
+            <span className="text-micro text-muted-foreground">este aviso some 7 dias depois da mesclagem</span>
+          </div>
+        </div>
+      )}
 
       {/* 6 abas consolidadas — pill style igual Dashboard */}
       <Tabs value={tab} onValueChange={setTab}>
@@ -3913,10 +3955,10 @@ function ClienteDetalhe({
                           {c.ultimaMensagemPreview}
                         </p>
                       </div>
-                      <Badge variant="outline" className="text-[9px]">
+                      <Badge variant="outline" className="text-micro">
                         {c.status}
                       </Badge>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-micro text-muted-foreground">
                         {timeAgo(c.createdAt)}
                       </span>
                     </div>
@@ -3946,24 +3988,24 @@ function ClienteDetalhe({
                       <div className="flex-1 min-w-0">
                         <p className="text-sm">
                           {l.canceladoEm ? (
-                            <span className="inline-flex items-center rounded-full bg-danger-bg text-danger-fg border border-danger/30 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide mr-1.5">
+                            <span className="inline-flex items-center rounded-full bg-danger-bg text-danger-fg border border-danger/30 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide mr-1.5">
                               Cancelado
                             </span>
                           ) : null}
                           {LEAD_ETAPAS.find((e) => e.value === l.etapaFunil)?.label || l.etapaFunil}
                           {l.origemLead && (
-                            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                            <span className="ml-2 text-micro text-muted-foreground font-normal">
                               · {l.origemLead}
                             </span>
                           )}
                           {l.fechadoEm && l.etapaFunil === "fechado_ganho" && (
-                            <span className="ml-2 text-[10px] text-muted-foreground font-normal">
+                            <span className="ml-2 text-micro text-muted-foreground font-normal">
                               · fechado em {new Date(l.fechadoEm).toLocaleDateString("pt-BR")}
                             </span>
                           )}
                         </p>
                         {l.canceladoEm && (
-                          <p className="text-[10px] text-danger-fg">
+                          <p className="text-micro text-danger-fg">
                             cancelado em {new Date(l.canceladoEm).toLocaleDateString("pt-BR")} · {descricaoCancelamento(l.motivoCancelamento, l.detalheCancelamento)}
                             {l.canceladoPorNome ? ` · por ${l.canceladoPorNome}` : ""}
                           </p>
@@ -3981,14 +4023,14 @@ function ClienteDetalhe({
                           {fmtMoeda(parseValorBR(l.valorEstimado))}
                         </span>
                       )}
-                      <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                      <span className="text-micro text-muted-foreground whitespace-nowrap">
                         {timeAgo(l.createdAt)}
                       </span>
                       {l.etapaFunil === "fechado_ganho" && !l.canceladoEm && (
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-6 px-2 text-[10px] text-danger-fg border-danger/30 hover:bg-danger-bg"
+                          className="h-6 px-2 text-micro text-danger-fg border-danger/30 hover:bg-danger-bg"
                           title="Cancelar contrato (o fechamento continua contando no mês em que fechou)"
                           onClick={() => setCancelarAlvo({
                             id: l.id,
@@ -4005,7 +4047,7 @@ function ClienteDetalhe({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-6 px-2 text-[10px]"
+                          className="h-6 px-2 text-micro"
                           title="Volta pra Ganho e apaga data e motivo do cancelamento"
                           disabled={reativarContratoMut.isPending}
                           onClick={() => reativarContratoMut.mutate({ id: l.id })}
@@ -4107,7 +4149,7 @@ function ClienteDetalhe({
               return (
                 <div key={o.tipo}>
                   {o.grupo && (
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
+                    <p className="text-micro font-bold uppercase tracking-wide text-muted-foreground mt-2 mb-1">
                       {o.grupo}
                     </p>
                   )}
@@ -4140,7 +4182,7 @@ function ClienteDetalhe({
               />
             </div>
             {(encerrarTipo === "cancelado" || encerrarTipo === "rescindido") && contratosAbertos > 0 && (
-              <label className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-bg/40 px-2.5 py-2 text-[12px] leading-snug cursor-pointer">
+              <label className="flex items-start gap-2 rounded-lg border border-danger/30 bg-danger-bg/40 px-2.5 py-2 text-corpo leading-snug cursor-pointer">
                 <Checkbox
                   checked={encerrarCancelarContratos}
                   onCheckedChange={(v) => setEncerrarCancelarContratos(v === true)}
@@ -4210,7 +4252,7 @@ function KPIClienteHero({
           : "text-foreground";
   return (
     <div className="bg-muted/40 rounded-lg px-3 py-2.5 border border-border">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-micro text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
       <p
         className={`${small ? "text-sm" : "text-xl"} font-bold tabular-nums leading-none ${numColor}`}
       >
@@ -4230,9 +4272,10 @@ function KPIClienteHero({
  * anotações, arquivos, assinaturas e smartflow. Telefones/emails/CPF
  * complementares do duplicado também são copiados pro principal.
  *
- * NOTA: hard delete do contato duplicado é definitivo. Pra suportar
- * rollback no futuro, precisaria de migration adicionando `ativo` em
- * `contatos` e filtro nas queries (não está no escopo deste PR).
+ * O contato absorvido é apagado, mas a mesclagem fica registrada e desfazível
+ * por 7 dias (`unificarComRegistro`) — por isso a tela NÃO promete que é
+ * definitivo. O que se perde de verdade sem aviso é o CPF do absorvido quando
+ * o que sobrevive já tem um: daí a trava, que o servidor repete.
  */
 function MesclarClienteDialog({
   open,
@@ -4243,21 +4286,30 @@ function MesclarClienteDialog({
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  clienteAtual: { id: number; nome: string };
-  onConfirmar: (principalId: number) => void;
+  clienteAtual: { id: number; nome: string; cpfCnpj?: string | null };
+  onConfirmar: (principalId: number, confirmarCpfDiferente?: boolean, escolhas?: EscolhasMesclagem) => void;
   isPending: boolean;
 }) {
   const [busca, setBusca] = useState("");
-  const [selecionado, setSelecionado] = useState<{ id: number; nome: string } | null>(
+  const [selecionado, setSelecionado] = useState<{ id: number; nome: string; cpfCnpj?: string | null } | null>(
     null,
   );
-  const [confirmacao, setConfirmacao] = useState(false);
+  // "escolher" é o passo do meio: só aparece quando as duas fichas discordam
+  // em algum campo. Sem divergência, mesclar continua com dois cliques.
+  const [passo, setPasso] = useState<"escolher-ficha" | "campos" | "confirmar">("escolher-ficha");
+  const confirmacao = passo === "confirmar";
+  const campos = useEscolhasMesclagem(selecionado?.id, clienteAtual.id, open && !!selecionado);
+  // Fechar e reabrir tem que voltar pro começo: sem isso o diálogo reabria no
+  // passo da confirmação do cliente anterior.
+  useEffect(() => { if (!open) setPasso("escolher-ficha"); }, [open]);
   const { data: contatos = [] } = (trpc as any).crm?.listarContatos?.useQuery?.(
     { busca: busca || undefined },
     { staleTime: 30_000, enabled: open },
   ) ?? { data: [] };
 
   const candidatos = (contatos as any[]).filter((c) => c.id !== clienteAtual.id);
+  const conflitaCom = (cpf: string | null | undefined) => cpfsConflitam(clienteAtual.cpfCnpj, cpf);
+  const conflito = !!selecionado && conflitaCom(selecionado.cpfCnpj);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -4271,11 +4323,11 @@ function MesclarClienteDialog({
             Vai mover <b>todas</b> as cobranças, conversas, processos e
             histórico de <b>{clienteAtual.nome}</b> pro cliente selecionado.
             Depois,&nbsp;<b className="text-danger-fg">{clienteAtual.nome}</b>
-            &nbsp;será <b>excluído</b> deste CRM (operação definitiva).
+            &nbsp;será <b>excluído</b> deste CRM — <b>dá para desfazer por 7 dias</b>.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        {!confirmacao ? (
+        {passo === "escolher-ficha" ? (
           <div className="space-y-3 py-2">
             <Label className="text-xs">Cliente principal (vai receber os dados)</Label>
             <Input
@@ -4294,19 +4346,59 @@ function MesclarClienteDialog({
                 <button
                   type="button"
                   key={c.id}
-                  onClick={() => setSelecionado({ id: c.id, nome: c.nome })}
+                  onClick={() => setSelecionado({ id: c.id, nome: c.nome, cpfCnpj: c.cpfCnpj })}
                   className={
-                    "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 " +
+                    "w-full text-left p-2 text-xs hover:bg-accent border-b last:border-b-0 flex items-center gap-2 " +
                     (selecionado?.id === c.id ? "bg-info-bg" : "")
                   }
                 >
-                  <div className="font-medium">{c.nome}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
-                  </div>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium truncate">{c.nome}</span>
+                    <span className="block text-micro text-muted-foreground truncate">
+                      {c.cpfCnpj || c.telefone || "sem CPF/telefone"}
+                    </span>
+                  </span>
+                  {conflitaCom(c.cpfCnpj) && (
+                    <span className="shrink-0 rounded-full bg-warning-bg text-warning-fg border border-warning/30 px-1.5 py-0.5 text-micro font-bold uppercase tracking-wide">
+                      CPF diferente
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            {conflito && (
+              <div className="rounded-lg border-2 border-warning/40 bg-warning-bg p-3 text-xs space-y-1.5" data-testid="aviso-cpf-diferente">
+                <p className="font-semibold text-warning-fg flex items-center gap-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  As duas fichas têm CPF, e eles são diferentes
+                </p>
+                <p className="text-warning-fg">
+                  <b>{selecionado?.nome}</b> ({selecionado?.cpfCnpj}) <b>fica</b>.{" "}
+                  O CPF de <b>{clienteAtual.nome}</b> ({clienteAtual.cpfCnpj}) <b>será descartado</b>.
+                </p>
+                <p className="text-warning-fg">
+                  Se forem duas pessoas com o mesmo telefone, o certo não é mesclar: marque
+                  "Não é duplicado" na Conferência de cadastros.
+                </p>
+              </div>
+            )}
+          </div>
+        ) : passo === "campos" ? (
+          <div className="py-1">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Os dois cadastros têm <b>valor diferente</b> em alguns campos. Escolha o que fica em cada um.
+            </p>
+            {campos.carregando || !campos.principal || !campos.duplicado ? (
+              <EsqueletoEscolhaCampos />
+            ) : (
+              <TabelaEscolhaCampos
+                linhas={campos.linhas}
+                escolhas={campos.escolhas}
+                setEscolha={campos.setEscolha}
+                nomePrincipal={campos.principal.nome}
+                nomeDuplicado={campos.duplicado.nome}
+              />
+            )}
           </div>
         ) : (
           <div className="rounded-lg border-2 border-danger/30 bg-danger-bg p-3 text-xs space-y-2">
@@ -4317,20 +4409,41 @@ function MesclarClienteDialog({
             <p className="text-danger-fg">
               Vai mover dados de <b>{clienteAtual.nome}</b> pra{" "}
               <b>{selecionado?.nome}</b> e <b>excluir</b>{" "}
-              <b>{clienteAtual.nome}</b> deste CRM. Não há como desfazer.
+              <b>{clienteAtual.nome}</b> deste CRM.
+            </p>
+            {conflito && (
+              <p className="text-danger-fg">
+                O CPF <b>{clienteAtual.cpfCnpj}</b> ({clienteAtual.nome}) <b>será descartado</b>:
+                a ficha que sobrevive fica com o CPF de {selecionado?.nome}.
+              </p>
+            )}
+            <p className="text-danger-fg border-t border-danger/20 pt-1.5">
+              <b>Dá para desfazer por 7 dias</b>, pelo aviso na ficha de {selecionado?.nome}.
             </p>
           </div>
         )}
 
         <AlertDialogFooter>
+          {passo !== "escolher-ficha" && (
+            <Button
+              variant="ghost"
+              disabled={isPending}
+              onClick={() => setPasso(passo === "confirmar" && campos.precisaEscolher ? "campos" : "escolher-ficha")}
+            >
+              Voltar
+            </Button>
+          )}
           <AlertDialogCancel disabled={isPending}>Cancelar</AlertDialogCancel>
           {!confirmacao ? (
             <Button
-              variant="default"
-              disabled={!selecionado}
-              onClick={() => setConfirmacao(true)}
+              variant={conflito && passo === "escolher-ficha" ? "outline" : "default"}
+              className={conflito && passo === "escolher-ficha" ? "border-danger/40 bg-danger-bg text-danger-fg hover:bg-danger-bg" : undefined}
+              disabled={!selecionado || campos.carregando}
+              onClick={() =>
+                setPasso(passo === "escolher-ficha" && campos.precisaEscolher ? "campos" : "confirmar")
+              }
             >
-              Continuar
+              {conflito && passo === "escolher-ficha" ? "Mesclar mesmo assim" : "Continuar"}
             </Button>
           ) : (
             <AlertDialogAction
@@ -4338,7 +4451,7 @@ function MesclarClienteDialog({
               disabled={isPending || !selecionado}
               onClick={(e) => {
                 e.preventDefault();
-                if (selecionado) onConfirmar(selecionado.id);
+                if (selecionado) onConfirmar(selecionado.id, conflito || undefined, campos.mudancas);
               }}
             >
               {isPending ? (

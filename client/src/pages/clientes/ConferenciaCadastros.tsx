@@ -13,7 +13,7 @@
  * aponta — "Ver na lista" abre Clientes filtrado, a correção é na ficha.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ArrowLeft, ClipboardCheck, Download, Loader2, Lock } from "lucide-react";
 import { mascararTelefoneBR } from "@shared/telefone";
+import type { EscolhasMesclagem } from "@shared/mesclar-campos";
+import { useEscolhasMesclagem, TabelaEscolhaCampos, EsqueletoEscolhaCampos } from "./mesclar-escolher-campos";
 import {
   COMO_DECIDE_FALTA, FALTA_TIPOS, FILTROS_GRUPO, ROTULO_DIVERGENCIA, ROTULO_FALTA, ROTULO_FILTRO,
   type ClasseGrupo, type Divergencia, type FaltaTipo, type FiltroGrupo, type TipoGrupo,
@@ -117,10 +119,94 @@ function vinculos(f: Ficha): string {
   ].filter(Boolean).join(" · ") || "—";
 }
 
-function paresDoGrupo(g: Grupo, confirmarCpfDiferente = false) {
+function paresDoGrupo(
+  g: Grupo,
+  confirmarCpfDiferente = false,
+  escolhasPorFicha: Record<number, EscolhasMesclagem> = {},
+) {
   return g.fichas
     .filter((f) => f.id !== g.sobreviventeId)
-    .map((f) => ({ principalId: g.sobreviventeId, duplicadoId: f.id, ...(confirmarCpfDiferente ? { confirmarCpfDiferente: true } : {}) }));
+    .map((f) => ({
+      principalId: g.sobreviventeId,
+      duplicadoId: f.id,
+      ...(confirmarCpfDiferente ? { confirmarCpfDiferente: true } : {}),
+      ...(escolhasPorFicha[f.id] && Object.keys(escolhasPorFicha[f.id]).length > 0
+        ? { escolhas: escolhasPorFicha[f.id] }
+        : {}),
+    }));
+}
+
+/**
+ * O grupo pode ter mais de duas fichas, e a escolha é sempre entre DUAS: a que
+ * sobrevive e uma absorvida. Por isso o diálogo caminha par a par, e pula
+ * sozinho o par em que os dois lados não discordam de nada.
+ */
+function MesclarComEscolhaDialog({
+  grupo, pendente, onCancelar, onConfirmar,
+}: {
+  grupo: Grupo;
+  pendente: boolean;
+  onCancelar: () => void;
+  onConfirmar: (escolhasPorFicha: Record<number, EscolhasMesclagem>) => void;
+}) {
+  const absorvidas = grupo.fichas.filter((f) => f.id !== grupo.sobreviventeId);
+  const [i, setI] = useState(0);
+  const [acumulado, setAcumulado] = useState<Record<number, EscolhasMesclagem>>({});
+  const atual = absorvidas[i];
+  const campos = useEscolhasMesclagem(grupo.sobreviventeId, atual?.id, !!atual);
+
+  const guardar = (escolhas: EscolhasMesclagem) => {
+    const juntas = atual && Object.keys(escolhas).length > 0
+      ? { ...acumulado, [atual.id]: escolhas }
+      : acumulado;
+    if (i + 1 < absorvidas.length) {
+      setAcumulado(juntas);
+      setI(i + 1);
+    } else {
+      onConfirmar(juntas);
+    }
+  };
+
+  // Par sem nada a decidir não vira tela.
+  useEffect(() => {
+    if (!atual || campos.carregando || campos.precisaEscolher) return;
+    guardar({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atual?.id, campos.carregando, campos.precisaEscolher]);
+
+  return (
+    <AlertDialog open onOpenChange={(o) => { if (!o) onCancelar(); }}>
+      <AlertDialogContent className="max-w-2xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle>O que fica na ficha final</AlertDialogTitle>
+          <AlertDialogDescription>
+            {absorvidas.length > 1 ? `Ficha ${i + 1} de ${absorvidas.length}. ` : ""}
+            Os dois cadastros têm valor diferente em alguns campos. Escolha o que fica em cada um.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="max-h-[60vh] overflow-y-auto pr-1">
+          {campos.carregando || !campos.principal || !campos.duplicado ? (
+            <EsqueletoEscolhaCampos />
+          ) : (
+            <TabelaEscolhaCampos
+              linhas={campos.linhas}
+              escolhas={campos.escolhas}
+              setEscolha={campos.setEscolha}
+              nomePrincipal={campos.principal.nome}
+              nomeDuplicado={campos.duplicado.nome}
+            />
+          )}
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pendente}>Cancelar</AlertDialogCancel>
+          <Button disabled={pendente || campos.carregando} onClick={() => guardar(campos.mudancas)}>
+            {pendente ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+            {i + 1 < absorvidas.length ? "Continuar" : "Mesclar"}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 function baixarBase64(r: { filename: string; base64: string; mimeType: string }) {
@@ -250,6 +336,7 @@ export default function ConferenciaCadastros() {
   const [pagina, setPagina] = useState(1);
   const [confirmacao, setConfirmacao] = useState<Confirmacao | null>(null);
   const [emLote, setEmLote] = useState(false);
+  const [escolhendo, setEscolhendo] = useState<Grupo | null>(null);
 
   const utils = trpc.useUtils();
   const { data, isLoading, refetch } = (trpc as any).clientes.conferenciaCadastros.useQuery(undefined, {
@@ -453,7 +540,7 @@ export default function ConferenciaCadastros() {
                 key={`${g.tipo}:${g.chave}`}
                 g={g}
                 pendente={pendente}
-                onMesclar={(grupo) => mesclar.mutate({ pares: paresDoGrupo(grupo) })}
+                onMesclar={(grupo) => setEscolhendo(grupo)}
                 onMesclarMesmoAssim={(grupo) => setConfirmacao({ tipo: "cpf", grupo })}
                 onNaoDuplicado={(grupo) => marcar.mutate({ tipo: grupo.tipo, contatoId: grupo.sobreviventeId })}
               />
@@ -529,6 +616,20 @@ export default function ConferenciaCadastros() {
           ))
         )}
       </div>
+
+      {escolhendo && (
+        <MesclarComEscolhaDialog
+          key={escolhendo.chave}
+          grupo={escolhendo}
+          pendente={mesclar.isPending}
+          onCancelar={() => setEscolhendo(null)}
+          onConfirmar={(escolhasPorFicha) => {
+            const g = escolhendo;
+            setEscolhendo(null);
+            mesclar.mutate({ pares: paresDoGrupo(g, false, escolhasPorFicha) });
+          }}
+        />
+      )}
 
       <AlertDialog open={!!confirmacao} onOpenChange={(o) => { if (!o) setConfirmacao(null); }}>
         <AlertDialogContent>

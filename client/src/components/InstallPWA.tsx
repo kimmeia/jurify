@@ -13,7 +13,9 @@
  * O registro do service worker fica em pwa.ts (chamado no main.tsx).
  */
 import { useEffect, useState } from "react";
+import { useLocation } from "wouter";
 import { X, Share } from "lucide-react";
+import { conviteInstalarAppPermitido } from "@shared/convite-instalar-app";
 
 const CHAVE_DISPENSA = "jurify:pwa:dispensadoEm";
 const DISPENSA_MS = 30 * 24 * 60 * 60 * 1000; // 30 dias
@@ -58,6 +60,7 @@ export function InstallPWA() {
   const [evento, setEvento] = useState<PromptEvent | null>(null);
   const [mostrarIOS, setMostrarIOS] = useState(false);
   const [visivel, setVisivel] = useState(false);
+  const [rota] = useLocation();
 
   useEffect(() => {
     if (jaInstalado() || dispensadoRecentemente()) return;
@@ -101,7 +104,9 @@ export function InstallPWA() {
     };
   }, []);
 
-  if (!visivel) return null;
+  // Depois de todos os hooks, de propósito: a contagem de hooks não pode
+  // mudar entre um render e outro (React #310).
+  if (!visivel || !conviteInstalarAppPermitido(rota)) return null;
 
   const dispensar = () => {
     localStorage.setItem(CHAVE_DISPENSA, String(Date.now()));

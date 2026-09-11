@@ -331,7 +331,11 @@ describe("kanban-4 · esvaziar um campo no painel grava vazio", () => {
   });
 
   it("a tela manda o valor cru, não `|| undefined`", () => {
-    const painel = tela.slice(tela.indexOf('<p className="text-[10px] font-semibold text-muted-foreground">EDITAR</p>'));
+    // Ancorado no RÓTULO, não na classe de estilo: a âncora anterior era
+    // `text-[10px]`, e a migração da escala tipográfica trocou o tamanho solto
+    // por `text-micro` — o slice virava a tela inteira e o teste passava a
+    // olhar o lugar errado. O que este teste quer é o payload do mutate.
+    const painel = tela.slice(tela.indexOf(">EDITAR</p>"));
     expect(painel).toContain("editarCardMut.mutate({ id: cardDetalhe.id, cnj: e.target.value })");
     expect(painel).toContain("editarCardMut.mutate({ id: cardDetalhe.id, descricao: e.target.value })");
     expect(painel).toContain("editarCardMut.mutate({ id: cardDetalhe.id, prazo: e.target.value || null })");
