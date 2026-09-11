@@ -265,8 +265,9 @@ Convertidos de OKLCH com `scratchpad/ok2hex.mjs`. Tema claro:
   produção** — foi mergeada com essa ressalva dita na mensagem. Olhar
   primeiro: lista de Processos, cartões do Kanban, painel do cliente no
   Atendimento.
-- **Escolher a próxima fatia** (2 · cara de produto único, 3 · celular,
-  4 · resto do sistema).
+- **Aprovar a Fatia 2.** Mockup `mockup-cara-unica.html` entregue em 11/09
+  (seção 10). Nada foi codado.
+- **Escolher o que vem depois** (3 · celular, 4 · resto do sistema).
 - **O selo "CPF diferente"** (Clientes, "Vincular a cliente") continua em
   caixa alta. Veio de `develop` durante o merge da Fatia 1 e tem o MESMO
   papel dos dois selos da lista de Processos que viraram caixa normal.
@@ -462,3 +463,60 @@ torna a comparação honesta, e é como deve ser refeito se mudarem.
      isso, estouro vira erro visível em vez de corte mudo.
 - O olho pegou o que o script não pegou nas duas vezes. Não pular o passo 3
   da skill (ler o PNG com o Read).
+
+---
+
+## 10. Fatia 2 — mockup entregue 11/09, aguardando aprovação
+
+`mockup-cara-unica.html` (gerador: `scratchpad/mockup-tipografia/gera-cara-unica.mjs`).
+**Nada foi codado** — a regra do mockup vale.
+
+### O que o estudo mediu (números do mockup, todos reproduzíveis)
+
+| O que | Medida |
+|---|---|
+| Variantes distintas de `className` em `<h1>` | **18** |
+| Tamanhos de título em uso | `text-2xl` (16×), `text-pagina`, `text-xl`, `text-lg`, `text-3xl`, `text-4xl`, `text-[22px]`, `text-[42px]`, `text-base` — e um `text-sm` |
+| Ritmos de container distintos | **9** (`space-y-` 1 · 1.5 · 2 · 2.5 · 3 · 3.5 · 4 · 5 · 6), alguns com padding, outros sem |
+| Telas com `Loader2` × com `Skeleton` | 99 × 47 |
+| Telas que usam **os dois ao mesmo tempo** | **30** |
+| Usos do primitivo `ui/empty.tsx` que já existe | **0** (em 81 telas com estado vazio) |
+| Grafias de "carregando" no código | 2 — `Carregando...` e `Carregando…` |
+
+Os três cabeçalhos do "antes" no mockup são fiéis ao código: Processos
+(`text-pagina font-bold tracking-tight leading-none`, `space-y-4 min-w-0`),
+Relatórios (`text-2xl font-bold tracking-tight`, `space-y-4`) e Acordos
+(**sem `<h1>`** — a tela começa no conteúdo, `space-y-3.5 p-4 md:p-6`).
+
+### O que a Fatia 2 propõe
+
+1. **`<PageHeader />`** com quatro fatias, sempre nesta ordem: título
+   (`pagina`) · uma linha dizendo o que a tela resolve (`corpo`) · pastilhas
+   com o número que importa (opcional) · ações à direita, uma azul só. O que
+   a tela não tiver, some — **nunca vira outra estrutura**.
+2. **Um respiro só** no lugar dos nove.
+3. **Uma lista vazia**: adotar o `ui/empty.tsx` (ícone + o que está vazio +
+   por que importa + o botão que sai dali).
+4. **Um "carregando"**: esqueleto com a forma da lista que vem (nada pula
+   quando os dados entram); girinho só dentro do botão clicado.
+
+### Decisões que o dono precisa tomar
+
+- **Subtítulo em toda tela.** O `PageHeader` pede uma linha explicando a
+  tela. Hoje a maioria não tem. Escrever ~40 subtítulos é trabalho de texto,
+  não de código — ele aprova os textos ou prefere subtítulo opcional?
+- **Telas sem `<h1>` hoje** (Acordos, Movimentações e outras) **ganham
+  título.** Isso é adicionar, não remover, mas muda o que ele vê.
+- **Ordem de aplicação.** As 47 telas de uma vez, ou as 6 do dia a dia
+  primeiro (mesmo recorte da Fatia 1) e o resto depois?
+
+### Risco e verificação
+
+Menor que o da Fatia 1: é extração de padrão, não redesenho, e o
+`PageHeader` é aditivo — cada tela troca o próprio cabeçalho pelo
+componente, uma por vez. Continua valendo a ressalva da seção 9: **daqui não
+dá para ver o app rodando**, então a conferência visual final é do dono.
+
+Amarra prevista: um teste que exige `<PageHeader` nas telas migradas e
+proíbe `<h1` solto nelas — mesma mecânica de `TELAS_MIGRADAS` da
+`escala-tipografica.test.ts`, que já provou pegar regressão vinda por merge.
