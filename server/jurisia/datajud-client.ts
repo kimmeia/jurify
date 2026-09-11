@@ -20,7 +20,7 @@ import { createLogger } from "../_core/logger";
 
 const log = createLogger("datajud");
 
-const BASE = "https://api-publica.datajud.cnj.jus.br";
+export const BASE = "https://api-publica.datajud.cnj.jus.br";
 
 /** Chave pública documentada em datajud-wiki.cnj.jus.br/api-publica/acesso. */
 const CHAVE_PUBLICA_CNJ =

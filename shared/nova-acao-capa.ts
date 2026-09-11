@@ -22,6 +22,28 @@ export type ParteDaCapa = {
   documento: string | null;
 };
 
+/**
+ * De onde veio o que está no card.
+ *
+ * "processo" é a página do processo (traz tudo). "lista" é a tabela de
+ * resultados da busca, que tem menos campos mas é de graça. "datajud" é o
+ * banco público do CNJ, reserva das duas — ele não publica as partes.
+ */
+export const FONTES_CAPA = ["processo", "lista", "datajud"] as const;
+export type FonteCapa = (typeof FONTES_CAPA)[number];
+
+export const ROTULO_FONTE_CAPA: Record<FonteCapa, string> = {
+  processo: "Lido no processo",
+  lista: "Lido na lista do tribunal",
+  datajud: "Natureza pelo DataJud (CNJ)",
+};
+
+export function lerFonteCapa(v: unknown): FonteCapa | null {
+  return typeof v === "string" && (FONTES_CAPA as readonly string[]).includes(v)
+    ? (v as FonteCapa)
+    : null;
+}
+
 export type CapaNovaAcao = {
   classe: string | null;
   assuntos: string[];
@@ -30,6 +52,8 @@ export type CapaNovaAcao = {
   valorCausa: number | null;
   dataDistribuicao: string | null;
   partes: ParteDaCapa[];
+  /** Ausente em capa antiga, gravada antes de existir procedência. */
+  fonte: FonteCapa | null;
   /** Onde o cliente monitorado está. "desconhecido" é resposta legítima. */
   poloDoCliente: PoloParte;
   /**
@@ -62,11 +86,81 @@ function texto(v: unknown, limite = LIMITE_NOME): string | null {
   return s ? s.slice(0, limite) : null;
 }
 
+/**
+ * Títulos de coluna e de seção que o tribunal escreve na tela.
+ *
+ * O scraper procura um campo pelo nome e lê o que está do lado. Quando a
+ * página aberta é a TABELA DE RESULTADOS da busca em vez da página do
+ * processo, o que está do lado de "Classe judicial" é o título da coluna
+ * seguinte — e foi assim que "Polo ativo" virou a natureza da ação num card.
+ * Valor que É um desses títulos não é valor de campo nenhum: não entra na
+ * gravação e é descartado também na leitura, pra limpar o que já está gravado.
+ */
+const ROTULOS_DE_TABELA = [
+  "polo ativo",
+  "polo passivo",
+  "outros interessados",
+  "terceiros",
+  "terceiro interessado",
+  "partes",
+  "classe judicial",
+  "classe",
+  "orgao julgador",
+  "vara",
+  "juizo",
+  "numero do processo",
+  "processo",
+  "autuado em",
+  "autuacao",
+  "ultima distribuicao",
+  "distribuicao",
+  "data de distribuicao",
+  "assunto",
+  "assuntos",
+  "valor da causa",
+  "situacao",
+  "advogado",
+  "advogados",
+  "acoes",
+];
+
+/** Sem acento, sem caixa e sem os dois-pontos que o tribunal cola no rótulo. */
+function chaveDeRotulo(v: string): string {
+  return v
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/[:\s]+$/, "")
+    .toLowerCase();
+}
+
+export function ehRotuloDeTabela(v: string | null | undefined): boolean {
+  if (typeof v !== "string") return false;
+  return ROTULOS_DE_TABELA.includes(chaveDeRotulo(v));
+}
+
+/** `texto`, mas recusando título de coluna travestido de valor. */
+function valorDeCampo(v: unknown, limite = LIMITE_NOME): string | null {
+  const s = texto(v, limite);
+  return s && ehRotuloDeTabela(s) ? null : s;
+}
+
+/**
+ * Sobrou alguma coisa pra mostrar?
+ *
+ * Depois de descartar os rótulos, uma capa pode ficar sem nada dentro — e capa
+ * vazia não pode nem virar card nem sobrescrever capa boa de processo vigiado.
+ */
+export function capaTemConteudo(capa: CapaNovaAcao | null | undefined): boolean {
+  if (!capa) return false;
+  return !!capa.classe || !!capa.orgaoJulgador || capa.partes.length > 0 || capa.assuntos.length > 0;
+}
+
 export function montarCapaNovaAcao(
   capa: CapaBruta,
   poloDoCliente: PoloParte,
   agoraIso: string,
-  opcoes: { oabEscritorio?: string | null } = {},
+  opcoes: { oabEscritorio?: string | null; fonte?: FonteCapa } = {},
 ): CapaNovaAcao {
   const partesBrutas = Array.isArray(capa.partes) ? capa.partes : [];
   const partes: ParteDaCapa[] = [];
@@ -87,20 +181,21 @@ export function montarCapaNovaAcao(
   }
 
   const assuntos = (Array.isArray(capa.assuntos) ? capa.assuntos : [])
-    .map((a) => texto(a))
+    .map((a) => valorDeCampo(a))
     .filter((a): a is string => !!a)
     .slice(0, LIMITE_ASSUNTOS);
 
   return {
-    classe: texto(capa.classe),
+    classe: valorDeCampo(capa.classe),
     assuntos,
-    orgaoJulgador: texto(capa.orgaoJulgador),
+    orgaoJulgador: valorDeCampo(capa.orgaoJulgador),
     valorCausa:
       typeof capa.valorCausaCentavos === "number" && Number.isFinite(capa.valorCausaCentavos)
         ? capa.valorCausaCentavos / 100
         : null,
     dataDistribuicao: texto(capa.dataDistribuicao, 40),
     partes,
+    fonte: opcoes.fonte ?? null,
     poloDoCliente,
     advogadoDoEscritorio,
     coletadaEm: agoraIso,
@@ -123,16 +218,13 @@ export function lerCapaNovaAcao(conteudoJson: string | null | undefined): CapaNo
   const capa = (bruto as { capa?: unknown })?.capa;
   if (!capa || typeof capa !== "object") return null;
   const o = capa as Record<string, unknown>;
-  // Capa sem nada dentro não é capa: mostrar um bloco vazio na tela é pior
-  // que mostrar o botão de carregar detalhes.
   const partes = Array.isArray(o.partes) ? o.partes : [];
-  if (!o.classe && !o.orgaoJulgador && partes.length === 0) return null;
-  return {
-    classe: texto(o.classe),
+  const lida: CapaNovaAcao = {
+    classe: valorDeCampo(o.classe),
     assuntos: (Array.isArray(o.assuntos) ? o.assuntos : [])
-      .map((a) => texto(a))
+      .map((a) => valorDeCampo(a))
       .filter((a): a is string => !!a),
-    orgaoJulgador: texto(o.orgaoJulgador),
+    orgaoJulgador: valorDeCampo(o.orgaoJulgador),
     valorCausa: typeof o.valorCausa === "number" ? o.valorCausa : null,
     dataDistribuicao: texto(o.dataDistribuicao, 40),
     partes: partes.slice(0, LIMITE_PARTES).map((p) => {
@@ -143,10 +235,16 @@ export function lerCapaNovaAcao(conteudoJson: string | null | undefined): CapaNo
         documento: texto(q?.documento, 32),
       };
     }).filter((p) => !!p.nome),
+    fonte: lerFonteCapa(o.fonte),
     poloDoCliente: lerPolo(o.poloDoCliente),
     advogadoDoEscritorio: o.advogadoDoEscritorio === true,
     coletadaEm: texto(o.coletadaEm, 40) ?? "",
   };
+  // Capa sem nada dentro não é capa: mostrar um bloco vazio na tela é pior
+  // que mostrar o botão de carregar detalhes. A conta é feita DEPOIS de
+  // descartar os rótulos — senão um "Polo ativo" gravado na classe mantinha
+  // de pé uma capa que não tem mais nada.
+  return capaTemConteudo(lida) ? lida : null;
 }
 
 /**
@@ -157,12 +255,22 @@ export function lerCapaNovaAcao(conteudoJson: string | null | undefined): CapaNo
  * sempre ofereceu. Aqui houve tentativa e o tribunal não devolveu — e isso
  * é uma informação, não um vazio. Era o caso que antes virava "polo ativo"
  * por omissão e sumia da caixa de pendentes.
+ *
+ * Capa gravada que não sobrevive à leitura (só tinha rótulo de coluna dentro)
+ * conta como falha também: o robô achou que tinha lido, mas não leu nada. É o
+ * que devolve o aviso âmbar e os botões de recuperar pros cards que já estão
+ * gravados errados.
  */
 export function lerFalhaDeCapa(conteudoJson: string | null | undefined): boolean {
   if (!conteudoJson) return false;
+  let bruto: unknown;
   try {
-    return (JSON.parse(conteudoJson) as { capaFalhou?: unknown })?.capaFalhou === true;
+    bruto = JSON.parse(conteudoJson);
   } catch {
     return false;
   }
+  if ((bruto as { capaFalhou?: unknown })?.capaFalhou === true) return true;
+  const capa = (bruto as { capa?: unknown })?.capa;
+  if (!capa || typeof capa !== "object") return false;
+  return lerCapaNovaAcao(conteudoJson) === null;
 }
