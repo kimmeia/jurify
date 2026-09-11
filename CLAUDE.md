@@ -4,14 +4,15 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 4.696 verdes em 03/09/2026 (327 arquivos, ~4 min)
+pnpm test               # vitest (server/**/*.test.ts) — 5.526 verdes em 11/09/2026 (378 arquivos, ~2 min)
+pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
 ```
 
 ## Branches e deploy
 
-- Branch de trabalho: `claude/platform-audit-failures-jbb66j` (a sessão recebe a sua; esta é a de 03/09)
+- Branch de trabalho: `claude/scraping-bot-error-detection-45eq8o` (a sessão recebe a sua; esta é a de 08–10/09)
 - Fluxo: feature branch → PR → merge em `develop` → PR `develop → main` → deploy production via Railway
 - `develop` dispara deploy de **staging**; `main` dispara **production**
 - Migrations em `drizzle/NNNN_*.sql` (numeração sequencial, ALTER TABLE com defaults pra ser non-destrutivo)
@@ -1023,6 +1024,102 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
   pedido, anotado: estorno do Asaas continua sumindo do Recebido em
   silêncio (não fala com o cancelamento).
 
+- **Entregue 08–10/09, robô de ação + o que ele achou.** Origem: "quero um
+  robô que acessa meu sistema pra procurar erros e inconsistências", depois
+  refinado por ele pra "agir como usuário e cruzar o mesmo número entre
+  telas". Mockup `mockup-robo-de-acao.html`.
+  - **O robô** (`tests/e2e/robo/`, sob demanda com `ROBO_ACAO=1
+    pnpm test:e2e`; `ROBO_ACAO_ROTAS=/a,/b` fatia). Duas decisões carregam o
+    resto. (1) A superfície NÃO é lista de seletor à mão — foi isso que
+    deixou metade dos specs deste diretório em `fixme`, e catálogo fixo mede
+    o que alguém lembrou de cadastrar, nunca o que o app tem; `descoberta.ts`
+    conta controles visíveis, habilitados e com nome acessível, fora da
+    navegação, marcando cada um com `data-robo-acao`. (2) `ok` EXIGE prova:
+    "nada explodiu" e "fez o que promete" são afirmações diferentes, então
+    clique sem prova registrada vira `nao_verificada` com o motivo escrito.
+    O relatório nasce quase todo âmbar de propósito — esse número é a dívida
+    de instrumentação e só cai quando alguém escreve prova em `catalogo.ts`.
+    `cercas.ts` guarda o que a conta isolada não protege (integração que
+    dispara no mundo real, credencial de tribunal que bloqueia OAB, painel
+    admin, logout). Escritório descartável do robô nasce com termos aceitos
+    (`escritorio-descartavel.ts`) — sem isso o `TermosGate` cobre a tela e
+    **48 ações de 4 rotas voltaram como falha, todas o mesmo bloqueio**.
+  - **Três falhas do próprio robô, achadas rodando contra o app** (subi
+    MariaDB + app do zero no container): prontidão era ausência e não
+    afirmação — no `domcontentloaded` a SPA tem 0 botões E 0 spinners, e ele
+    varria a tela em branco fechando com "0 de 0, nenhum problema";
+    identidade dependia de dado (abas colam contador no rótulo, "Clientes5"
+    virava "Clientes" na 2ª carga); e `[role="progressbar"]` é o papel que o
+    Radix dá à barra de créditos do /dashboard, **conteúdo permanente lido
+    como spinner** — 11 de 11 ações da rota voltaram "tela travada" sem nada
+    travado. A régua virou `aria-valuenow` em `SELETOR_CARREGANDO`
+    (page-helpers), fonte única — **o robô de jornada carregava a mesma
+    heurística ruim** (é candidato a explicar a varredura de 32s do item 1).
+  - **Provisionamento de banco novo** (achado ao subir do zero): primeiro
+    boot deixava o schema incompleto e o app subia com health check VERDE —
+    `contatos.telefonesSecundarios` não era criada e todo INSERT de contato
+    morria com "Unknown column". Só se curava no restart seguinte.
+    `runMigrations` agora REPASSA o que falhou (até `MAX_PASSADAS_MIGRATION`
+    = 3, para quando uma passada não aplica nada) porque ordem alfabética
+    não é ordem de dependência; o alerta ao Sentry saiu de dentro do laço
+    (falha que se resolve na passada seguinte virava incidente). `0022`
+    perdeu o `AFTER telefonesAnteriores` (posição de coluna é cosmética e
+    criava dependência real de um `ensureContatoColumns` que roda DEPOIS do
+    laço); `0035` e `0084` indexavam `escritorioId` em tabelas cujo nome
+    físico é `escritorioIdContato`/`escritorioIdModCt` — a propriedade TS se
+    chama `escritorioId` nas duas, então quem escreveu olhando o código
+    acertou a propriedade e errou a coluna, e as migrations acusavam FATAL em
+    todo boot de todo ambiente desde sempre; `0196` fixou o COLLATE do
+    `CONVERT(0xEFBFBD USING utf8mb4)`, que herda o padrão DO BANCO e quebra
+    onde o default é `general_ci`. Medido com banco vazio e um só boot: de
+    187/192 com 5 erros para **222/222 com zero**. Amarra:
+    `migrations-colunas-de-indice.test.ts` (confere todo índice de migration
+    contra o nome físico em schema.ts).
+  - **Vazamento entre escritórios (10/09, autorizado e mergeado)**:
+    `agentesIa.listarCapturadosDoContato` é `protectedProcedure` e passava o
+    `contatoId` cru pra leitura SEM `escritorioId` — **qualquer usuário
+    logado lia os campos capturados de qualquer contato da plataforma**, e o
+    filtro por definições do próprio escritório não protege (chave que os
+    dois definem passa); a agenda gravava `contatoId` sem conferir dono nas
+    três procedures (a leitura escopada que existia só rodava dentro do
+    `if (!responsavelId && input.contatoId)`), e depois toda tela que junta
+    agendamento e contato exibia o nome alheio sem bug nenhum nessas telas;
+    `getEscritorioPorUsuario` decidia o escritório da sessão INTEIRA com
+    `LIMIT 1` sem `ORDER BY` — dois vínculos ativos (removido de um, abriu o
+    próprio, restaurado no primeiro) davam escritório indefinido. O portão
+    `contatoEhDoEscritorio` estava copiado e privado em `router-crm` e
+    `router-kanban` e faltava na agenda: virou fonte única em
+    `contato-do-escritorio.ts`, usada pela agenda — **as duas cópias
+    continuam lá** (dedup não foi autorizado, e não era troca justa na
+    véspera). Amarras: `tenancy-vinculo-por-id` (5) +
+    `numero-whatsapp-um-escritorio` (6), conferidas por mutação.
+  - **Um número de WhatsApp, um escritório**: a dedup de canal só olhava
+    DENTRO do escritório, então o mesmo `phoneNumberId` entrava em dois — e
+    `findCanalByPhoneNumberId` devolvia o primeiro do scan, sem olhar status:
+    a mensagem do cliente de uma banca caindo na caixa de outra. Agora os
+    TRÊS caminhos que criam canal (Embedded Signup, CoEx, manual via
+    `criarCanal`) recusam número já CONECTADO em outro escritório
+    (`numero-whatsapp-unico.ts`; só o que está no ar barra — abandonado lá
+    libera, é a migração de quem troca de sistema), e o webhook junta todos
+    os candidatos: um resolve, empate com um único conectado roteia com
+    aviso, **dois conectados não são roteados** e viram alerta no Sentry
+    (mensagem que não chega é problema; chegar na banca errada é pior e
+    silencioso).
+  - **Caso "Pedro Yuri" — investigado e FECHADO, não reabrir.** O dono viu um
+    cadastro em outro escritório com os dados de um cliente do Boyadjian e
+    suspeitou de vazamento. Não era: `loginMethod=google`, conta criada
+    05/09 15:18 BRT, termos aceitos 15:44 (26 min depois, clique humano),
+    nenhuma impersonação nossa em 05 ou 06/09, e ele não é nem foi
+    colaborador do Boyadjian. É o SOBRINHO do cliente, que fechou contrato
+    lá, chegou ao site (o link `juridflow.com.br/assinar/<token>` que ele
+    recebeu pra assinar é a única superfície do produto que põe o domínio na
+    mão do cliente final), entrou com Google e cadastrou o tio. CPFs
+    DIFERENTES nas duas fichas, caixa e acentuação diferentes — digitação
+    independente, não cópia. **O dono CONFIRMOU em 11/09 que foi ele mesmo
+    quem se cadastrou** — assunto encerrado. Conclusão de produto, não de
+    bug: o cadastro self-service está aberto pra quem é CLIENTE de
+    escritório, não advogado.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
@@ -1441,9 +1538,13 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    whatsapp-optout.ts; comparação ESTRITA (a mensagem do próprio SAIR não
    reabre; registro sem data não reabre). Qualidade RED/teto/rate/restrito
    seguem valendo sempre. Amarras em whatsapp-envio-guard.test.ts.
-1. **Robô de jornada varre em 32s** — dono já disse que está errado. A
-   instrumentação (tempos por tela + "X de 19 mostraram esqueleto") já grava;
-   olhar a primeira medição real e agir.
+1. **Robô de jornada varre em 32s** — dono já disse que está errado. Pista
+   forte de 10/09: ele usava `[role="progressbar"], .animate-spin` como "está
+   carregando", e `role=progressbar` é o papel que o Radix dá à barra de
+   créditos do /dashboard — CONTEÚDO permanente. O seletor virou fonte única
+   (`SELETOR_CARREGANDO` em page-helpers, régua = `aria-valuenow`) e o
+   jornada já aponta pra ela; falta rodar e conferir se os 32s eram isso.
+   Os achados do último run se perderam num `tail -30` do script — rerodar.
 2. **Termos v2 publicados SEM revisão jurídica final (24/08) — 03/09: o dono
    deu a revisão por resolvida; não cobrar de novo.** Histórico: aceite
    versionado entregue: `shared/termos.ts` (TERMOS_VERSAO=2), trilha
@@ -1455,11 +1556,31 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    RESOLVIDA). O teor é minuta técnica: **dono revisa o texto jurídico**;
    mudança relevante no texto = bump em TERMOS_VERSAO (dispara re-aceite).
 3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
-   aceita com warning. Endurecer em produção.
+   ACEITA a requisição e só loga aviso (`verif.mode === "no-secret"` em
+   whatsapp-cloud-webhook.ts): qualquer um na internet forja mensagem
+   recebida, cria conversa falsa e dispara SmartFlow. Conferido ainda aberto
+   em 10/09, no dia do lançamento — o dono foi avisado pra checar
+   /admin → Integrações → WhatsApp Cloud. Endurecer em produção.
 4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no
    executor do painel. Depois: cron de staging de hora em hora.
 5. **CSP desligado** no Helmet; **body-parser 3GB em memória** (OOM) — sai
    junto com a migração S3.
+6. **Histórico de buscas de Processos vaza entre escritórios** (10/09) — a
+   chave é `jurify:processos:history`, sem escritório nenhum
+   (`client/src/pages/processos/search-history.tsx`). Quem impersona o dia
+   inteiro (o dono) vê no dropdown de um escritório os CNJs e nomes que
+   pesquisou dentro de outro. Solução desenhada e NÃO implementada: chave
+   por `escritorioId` + migração da chave antiga só em sessão NÃO
+   impersonada (senão a migração despeja as buscas de um no outro — o
+   próprio vazamento) + impersonação nunca grava. **Trava numa decisão do
+   dono**: sessão impersonada deve gravar histórico? (recomendei que não).
+   Com a migração a mudança fica invisível pro advogado, o que dispensaria
+   mockup; sem ela, esvazia o histórico de todo mundo e vira remoção.
+7. **Portão `contatoEhDoEscritorio` duplicado** (10/09) — a fonte única está
+   em `server/escritorio/contato-do-escritorio.ts` e só a agenda usa; as
+   cópias privadas em `router-crm.ts:70` e `router-kanban.ts:60` continuam.
+   Apontar as duas pra ela é higiene, não segurança (as três funcionam) — e
+   é remoção de código, então precisa de autorização.
 
 Corrigidos na auditoria (não re-flagrar): lembretes cross-tenant, canais Meta
 sem gate, financeiro no customer360 sem permissão, SSRF no webhook do
@@ -1512,7 +1633,13 @@ no dia 1 — é o número que diz se o anúncio vai pagar.
 - ❌ Frontend lendo `c.customerKey` ou `c.username` da view do cofre (não existem)
 - ❌ Procedure mostrar erro só no response sem persistir
 - ❌ Hardcode `cargo === "dono"` (use checkPermission)
-- ❌ confirm() nativo do browser pra ações destrutivas (use AlertDialog)
+- ❌ confirm() nativo do browser pra ações destrutivas (use AlertDialog) —
+  catraca em `robo-acao-cercas.test.ts` com a dívida por arquivo: a lista só
+  encolhe. Além do padrão, o robô de ação NÃO consegue responder confirm(),
+  então cada um é uma ação destrutiva que nenhum teste alcança
+- ❌ Ler `contatos` (ou qualquer tabela de tenant) por um `id` que veio do
+  client sem amarrar `escritorioId` na MESMA cláusula — `protectedProcedure`
+  só checa login. Use `exigirContatoDoEscritorio` (contato-do-escritorio.ts)
 - ❌ Gate admin em procedure usada por dropdown user-level
 - ❌ Hook (`useEffect`/`useState`/…) DEPOIS de `return` antecipado no
   componente — a contagem muda entre renders e o React derruba a tela
