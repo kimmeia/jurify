@@ -37,6 +37,8 @@ import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
+import { capaPorCnjNoDataJud } from "../processos/capa-datajud";
+import { gravarCapaNoCard } from "../processos/gravar-capa-no-card";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
@@ -799,6 +801,12 @@ export const processosRouter = router({
     .input(z.object({
       cnj: z.string().min(15).max(30),
       credencialId: z.number().int().positive().optional(),
+      /**
+       * Card de nova ação que pediu a consulta. Com ele, o que vier fica
+       * GRAVADO no card em vez de viver só na tela aberta — sem isso, a
+       * mesma consulta era cobrada de novo no próximo acesso.
+       */
+      acaoId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -893,6 +901,18 @@ export const processosRouter = router({
           code: "PRECONDITION_FAILED",
           message: resultado.mensagemErro ?? "Erro desconhecido",
           cause: { categoria: resultado.categoriaErro },
+        });
+      }
+
+      // A consulta já foi cobrada: vindo capa com conteúdo, ela fica GRAVADA
+      // no card em vez de viver só na tela que o usuário tem aberta.
+      if (input.acaoId && resultado.capa) {
+        await gravarCapaNoCard({
+          db,
+          escritorioId: esc.escritorio.id,
+          acaoId: input.acaoId,
+          bruta: resultado.capa,
+          fonte: "processo",
         });
       }
 
@@ -2280,6 +2300,66 @@ export const processosRouter = router({
         nextCursor: hasMore ? input.cursor + input.limite : input.cursor + acoesValidas.length,
         contagemPorPolo,
       };
+    }),
+
+  /**
+   * Preenche a natureza do processo pelo banco público do CNJ.
+   *
+   * É a reserva de quando o tribunal não devolveu a capa: não gasta consulta
+   * do plano nem credencial do Cofre, e o que vier fica gravado no card com a
+   * procedência à vista. O DataJud não publica as partes — por isso esta
+   * consulta nunca muda o polo de quem já tem polo, e quem estava sem polo
+   * continua sem, com os botões de marcar à mão no card.
+   */
+  completarCapaPeloDataJud: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const [evento] = await db
+        .select({ id: eventosProcesso.id, cnj: eventosProcesso.cnjAfetado })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ))
+        .limit(1);
+      if (!evento?.cnj) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      const doCnj = await capaPorCnjNoDataJud(evento.cnj);
+      if (!doCnj) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "O DataJud ainda não tem este processo. Ele atualiza em lote e pode levar alguns dias.",
+        });
+      }
+
+      const gravado = await gravarCapaNoCard({
+        db,
+        escritorioId: esc.escritorio.id,
+        acaoId: input.id,
+        bruta: {
+          classe: doCnj.classe,
+          assuntos: doCnj.assuntos,
+          orgaoJulgador: doCnj.orgaoJulgador,
+          valorCausaCentavos: null,
+          dataDistribuicao: doCnj.dataAjuizamento,
+          partes: [],
+        },
+        fonte: "datajud",
+      });
+      if (!gravado.gravou) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "O DataJud respondeu sem a natureza deste processo.",
+        });
+      }
+      return { ok: true, capa: gravado.capa };
     }),
 
   /**

@@ -30,6 +30,7 @@ import type { Browser, BrowserContext, Page } from "@playwright/test";
 import { chromium } from "@playwright/test";
 import { gerarCodigoTotp, gerarCodigosVizinhos, type CodigosVizinhos } from "./tjce-totp";
 import type {
+  LinhaDaBusca,
   MovimentacaoProcesso,
   ParteProcesso,
   ProcessoCapa,
@@ -489,6 +490,7 @@ export class PjeTjceScraper {
     // PJe TJCE abre o detalhe em nova aba (estratégia abaixo).
     let page = await context.newPage();
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
+    let linhasDaBusca: LinhaDaBusca[] = [];
 
     try {
       // PJe TJCE 1º grau usa JSF/Seam. URL inicial confirmada via teste real:
@@ -619,6 +621,11 @@ export class PjeTjceScraper {
 
       const linkVisible = await linkProcesso.isVisible({ timeout: 3000 }).catch(() => false);
       if (linkVisible) {
+        // A grade de resultados é lida ANTES do clique: ela tem classe, órgão,
+        // data e os dois polos por coluna. É a rede de segurança de quando a
+        // página do processo não abre — e é de graça, já está na tela.
+        linhasDaBusca = await this.extrairLinhasDaBusca(page);
+
         // INSIGHT CRÍTICO: no PJe TJCE, click no link de processo
         // ABRE NOVA ABA (window.open/target=_blank). Por isso TODOS
         // os detectores anteriores em `page.on("request")` retornavam
@@ -627,31 +634,68 @@ export class PjeTjceScraper {
         //
         // Estratégia correta: context.waitForEvent("page") captura a
         // nova aba quando ela abre. Aí trabalhamos nela.
-        const newPagePromise = context.waitForEvent("page", { timeout: 15_000 });
-
-        // Dispara click natural com force:true (ignora overlays).
-        // Se PJe usa target="_blank" ou window.open, nova page é criada.
-        await page
-          .locator(seletorLinkResultado)
-          .first()
-          .click({ force: true, timeout: 5000 })
-          .catch(() => {});
-
+        const pageBusca = page;
         let pageDetalhe: Page | null = null;
-        const newPage = await newPagePromise.catch(() => null);
-        if (newPage) {
-          await newPage.waitForLoadState("domcontentloaded", { timeout: 12_000 }).catch(() => {});
-          await newPage.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
-          await newPage.waitForTimeout(1000);
-          pageDetalhe = newPage;
-          // Substitui referência da page principal pra extrair daqui
-          page = newPage;
+        let abriuDetalhe = false;
+
+        // Duas tentativas: o clique no RichFaces falha sozinho quando um
+        // overlay de AJAX ainda está no ar, e a segunda costuma pegar.
+        for (let tentativa = 1; tentativa <= 2 && !abriuDetalhe; tentativa++) {
+          const newPagePromise = context.waitForEvent("page", { timeout: 15_000 });
+
+          // Dispara click natural com force:true (ignora overlays).
+          // Se PJe usa target="_blank" ou window.open, nova page é criada.
+          await pageBusca
+            .locator(seletorLinkResultado)
+            .first()
+            .click({ force: true, timeout: 5000 })
+            .catch(() => {});
+
+          const newPage = await newPagePromise.catch(() => null);
+          if (newPage) {
+            await newPage.waitForLoadState("domcontentloaded", { timeout: 12_000 }).catch(() => {});
+            await newPage.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
+            await newPage.waitForTimeout(1000);
+          }
+          const candidata = newPage ?? pageBusca;
+          if (await this.estaNaPaginaDoProcesso(candidata)) {
+            pageDetalhe = newPage;
+            page = candidata;
+            abriuDetalhe = true;
+            break;
+          }
+          // Aba que abriu e não é o processo não pode ficar de pé: na próxima
+          // volta o `waitForEvent` pegaria essa mesma em vez da nova.
+          if (newPage) await newPage.close().catch(() => {});
         }
 
         // Stash diag pra logging em caso de falha
         const urlNova = pageDetalhe?.url() ?? "(nenhuma nova aba)";
         (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag =
-          `clickAbriuNovaAba=${!!pageDetalhe} | urlNova=${urlNova}`;
+          `clickAbriuNovaAba=${!!pageDetalhe} | urlNova=${urlNova} | abriuDetalhe=${abriuDetalhe}`;
+
+        // A página do processo não abriu. Extrair daqui seria ler a TABELA DE
+        // RESULTADOS: "Classe judicial", "Polo ativo" e "Polo passivo" estão
+        // lá como TÍTULOS DE COLUNA, e o scraper devolvia o título vizinho
+        // como se fosse o valor do campo. Melhor falhar dizendo o que houve —
+        // quem chama tem a grade em mãos pra se virar.
+        if (!abriuDetalhe) {
+          const screenshotPath = await this.tirarScreenshotErro(
+            pageBusca,
+            `pje-tjce-detalhe-nao-abriu-${cnjLimpo}`,
+          );
+          return {
+            ...baseResultado,
+            latenciaMs: Date.now() - inicio,
+            categoriaErro: "detalhe_nao_abriu",
+            mensagemErro:
+              "O processo apareceu na busca, mas a página dele não abriu. " +
+              `URL: ${pageBusca.url()}`,
+            linhasDaBusca,
+            screenshotPath,
+            finalizadoEm: new Date().toISOString(),
+          };
+        }
       }
       // tentando extrair da página atual.
 
@@ -822,6 +866,7 @@ export class PjeTjceScraper {
         ok: true,
         capa: capaFinal,
         movimentacoes,
+        linhasDaBusca,
         latenciaMs: Date.now() - inicio,
         finalizadoEm: new Date().toISOString(),
       };
@@ -867,6 +912,12 @@ export class PjeTjceScraper {
     ok: boolean;
     tribunal: string;
     cnjs: string[];
+    /**
+     * O que a grade de resultados mostrava de cada processo (classe, órgão,
+     * data e os dois polos), lido pelos títulos das colunas. Vem de graça na
+     * mesma tela e é o que salva o card quando a página do processo não abre.
+     */
+    linhas: LinhaDaBusca[];
     total: number;
     latenciaMs: number;
     categoriaErro: string | null;
@@ -881,6 +932,7 @@ export class PjeTjceScraper {
       ok: false,
       tribunal: this.tribunal,
       cnjs: [] as string[],
+      linhas: [] as LinhaDaBusca[],
       total: 0,
       latenciaMs: 0,
       categoriaErro: null as string | null,
@@ -1040,11 +1092,13 @@ export class PjeTjceScraper {
       // extrairCnjs valida DV; new Set deduplica (PJe repete o CNJ em
       // link e em texto da linha).
       const cnjsUnicos = Array.from(new Set(extrairCnjs(tabelaHtml)));
+      const linhas = await this.extrairLinhasDaBusca(page);
 
       return {
         ...baseResultado,
         ok: true,
         cnjs: cnjsUnicos,
+        linhas,
         total: cnjsUnicos.length,
         latenciaMs: Date.now() - inicio,
         finalizadoEm: new Date().toISOString(),
@@ -1060,6 +1114,131 @@ export class PjeTjceScraper {
     } finally {
       await context.close().catch(() => {});
     }
+  }
+
+  /**
+   * A página aberta é a do processo, ou ainda é a lista de resultados?
+   *
+   * Só recusa o caso que se sabe errado: tem a grade de resultados e NÃO tem
+   * nenhum marcador de detalhe. Layout desconhecido (sem grade e sem marcador)
+   * passa — o custo de recusar uma página boa é perder o processo inteiro, e
+   * o de aceitar é conhecido e coberto pela recusa de rótulos na extração.
+   */
+  private async estaNaPaginaDoProcesso(page: Page): Promise<boolean> {
+    // O marcador do detalhe chega por AJAX; sem esta espera a conferência
+    // acontece antes da página terminar de se montar.
+    await page
+      .locator("#panelDetalhesProcesso, #divTimeLine, [id*='timeLine' i]")
+      .first()
+      .waitFor({ state: "attached", timeout: 8_000 })
+      .catch(() => {});
+    return page
+      .evaluate(() => {
+        const temDetalhe = !!document.querySelector(
+          "#panelDetalhesProcesso, #divTimeLine, [id*='timeLine' i], [id*='panelDetalhes' i]",
+        );
+        const temGrade = !!document.querySelector("[id*='processosTable']");
+        return temDetalhe || !temGrade;
+      })
+      .catch(() => true);
+  }
+
+  /**
+   * Lê a tabela de resultados da busca pelo TÍTULO de cada coluna.
+   *
+   * Aqui estão classe, órgão, data e os dois polos — de graça, na tela que o
+   * robô já abriu pra chegar no processo. Ler por título (e não por posição)
+   * é o que garante que mudança de layout devolva vazio em vez de campo
+   * trocado: foi um valor lido "do lado" que colocou "Polo ativo" na natureza
+   * da ação de um card.
+   */
+  private async extrairLinhasDaBusca(page: Page): Promise<LinhaDaBusca[]> {
+    return page
+      .evaluate(() => {
+        const trim = (s: string | null | undefined) => (s ?? "").trim();
+        const chave = (s: string) =>
+          s
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim()
+            .replace(/[:\s]+$/, "")
+            .replace(/\s+/g, " ")
+            .toLowerCase();
+
+        const REGEX_CNJ = /\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}/;
+        // Cada campo aceita mais de um título porque o PJe varia entre graus
+        // e entre tribunais do mesmo sistema.
+        const COLUNAS: Record<string, string[]> = {
+          cnj: ["numero do processo", "processo", "numero"],
+          classe: ["classe judicial", "classe"],
+          orgaoJulgador: ["orgao julgador", "vara", "juizo"],
+          autuadoEm: ["autuado em", "autuacao", "data de autuacao", "distribuicao", "ultima distribuicao"],
+          poloAtivo: ["polo ativo", "autor", "requerente", "exequente"],
+          poloPassivo: ["polo passivo", "reu", "requerido", "executado"],
+        };
+
+        const linhaDeCabecalho = (t: HTMLTableElement): HTMLTableRowElement | null => {
+          const linhas = Array.from(t.querySelectorAll("tr"));
+          for (const tr of linhas) {
+            const ths = Array.from(tr.querySelectorAll("th"));
+            if (ths.length >= 2) return tr;
+          }
+          return null;
+        };
+
+        const nomesDaCelula = (txt: string): string[] =>
+          txt
+            .split(/\n+/)
+            .map((l) => trim(l))
+            .filter((l) => l.length > 2 && l.length < 200)
+            .slice(0, 6);
+
+        const saida: Array<{
+          cnj: string;
+          classe: string | null;
+          orgaoJulgador: string | null;
+          autuadoEm: string | null;
+          poloAtivo: string[];
+          poloPassivo: string[];
+        }> = [];
+
+        for (const table of Array.from(document.querySelectorAll("table"))) {
+          const cabecalho = linhaDeCabecalho(table as HTMLTableElement);
+          if (!cabecalho) continue;
+          const titulos = Array.from(cabecalho.querySelectorAll("th")).map((th) =>
+            chave(trim(th.textContent)),
+          );
+          const indice: Record<string, number> = {};
+          for (const campo of Object.keys(COLUNAS)) {
+            const i = titulos.findIndex((t) => COLUNAS[campo].indexOf(t) >= 0);
+            if (i >= 0) indice[campo] = i;
+          }
+          // Sem classe e sem polo, essa tabela não é a grade de resultados.
+          if (indice.classe === undefined && indice.poloAtivo === undefined) continue;
+
+          for (const tr of Array.from(table.querySelectorAll("tr"))) {
+            const tds = Array.from(tr.querySelectorAll("td"));
+            if (tds.length === 0) continue;
+            const celula = (campo: string): string =>
+              indice[campo] !== undefined && tds[indice[campo]]
+                ? trim(tds[indice[campo]].textContent)
+                : "";
+            const doCampo = celula("cnj");
+            const cnj = (doCampo.match(REGEX_CNJ) ?? trim(tr.textContent).match(REGEX_CNJ))?.[0];
+            if (!cnj) continue;
+            saida.push({
+              cnj,
+              classe: celula("classe") || null,
+              orgaoJulgador: celula("orgaoJulgador") || null,
+              autuadoEm: celula("autuadoEm") || null,
+              poloAtivo: nomesDaCelula(celula("poloAtivo")),
+              poloPassivo: nomesDaCelula(celula("poloPassivo")),
+            });
+          }
+        }
+        return saida;
+      })
+      .catch(() => [] as LinhaDaBusca[]);
   }
 
   /**
@@ -1084,6 +1263,25 @@ export class PjeTjceScraper {
         // em <dt>/<th>/<label>, retorna conteúdo do irmão/célula adjacente.
         // Mais preciso que `procurarValorPorLabel` (que pegava qualquer
         // ocorrência de "Valor" e podia capturar "Valor do bem", etc).
+        // Títulos de coluna e de seção do PJe. Um deles NUNCA é valor de
+        // campo: numa tabela de cabeçalhos ("Classe judicial | Polo ativo |
+        // Polo passivo") o vizinho de "Classe judicial" é o título seguinte,
+        // e era assim que "Polo ativo" virava a natureza da ação no card.
+        // Espelha `ROTULOS_DE_TABELA` em shared/nova-acao-capa.ts, que faz a
+        // mesma recusa do lado do servidor.
+        const ROTULOS = [
+          "polo ativo", "polo passivo", "outros interessados", "terceiros",
+          "terceiro interessado", "partes", "classe judicial", "classe",
+          "orgao julgador", "vara", "juizo", "numero do processo", "processo",
+          "autuado em", "autuacao", "ultima distribuicao", "distribuicao",
+          "data de distribuicao", "assunto", "assuntos", "valor da causa",
+          "situacao", "advogado", "advogados", "acoes",
+        ];
+        const chave = (s: string) =>
+          s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
+            .replace(/[:\s]+$/, "").toLowerCase();
+        const ehRotulo = (s: string) => ROTULOS.indexOf(chave(s)) >= 0;
+
         const lerEmListaDefinicao = (labels: string[]): string | null => {
           // <dl><dt>...</dt><dd>...</dd>
           const dts = Array.from(document.querySelectorAll("dt, th, label"));
@@ -1099,12 +1297,15 @@ export class PjeTjceScraper {
                 }
                 if (next) {
                   const v = trim(next.textContent);
-                  if (v) return v;
+                  if (v && !ehRotulo(v)) return v;
                 }
                 // Fallback: alguns layouts têm dt e dd no mesmo <tr>
-                // ou wrappers — procura por irmão posicional via XPath
+                // ou wrappers — procura o irmão posicional via XPath, mas só
+                // aceita CÉLULA DE VALOR (dd/td). O `following-sibling::*[1]`
+                // de um <th> numa linha de cabeçalho é outro <th>: título de
+                // coluna, não valor.
                 const xpath = document.evaluate(
-                  `following-sibling::*[1] | ../following-sibling::td[1] | ../following-sibling::dd[1]`,
+                  `following-sibling::dd[1] | following-sibling::td[1] | ../following-sibling::td[1] | ../following-sibling::dd[1]`,
                   dt,
                   null,
                   XPathResult.FIRST_ORDERED_NODE_TYPE,
@@ -1113,7 +1314,7 @@ export class PjeTjceScraper {
                 const node = xpath.singleNodeValue as HTMLElement | null;
                 if (node) {
                   const v = trim(node.textContent);
-                  if (v) return v;
+                  if (v && !ehRotulo(v)) return v;
                 }
               }
             }

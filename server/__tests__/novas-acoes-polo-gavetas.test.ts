@@ -265,7 +265,9 @@ describe("OAB do escritório entre as partes", () => {
   it("o cron busca a OAB do escritório e manda pra capa", () => {
     const cron = ler("server/processos/cron-monitoramento.ts");
     expect(cron).toContain("select({ oab: escritorios.oab })");
-    expect(cron).toContain("{ oabEscritorio },");
+    // A capa ganhou a procedência junto, então o objeto de opções cresceu —
+    // o que a amarra trava é a OAB continuar chegando lá.
+    expect(cron).toMatch(/montarCapaNovaAcao\([\s\S]{0,200}?oabEscritorio,/);
   });
 });
 

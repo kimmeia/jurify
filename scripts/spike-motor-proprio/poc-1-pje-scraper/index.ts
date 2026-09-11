@@ -165,6 +165,7 @@ function estatisticasVazias(tribunal: string): EstatisticasPoc {
       parse_falhou: 0,
       tribunal_indisponivel: 0,
       sessao_expirada: 0,
+      detalhe_nao_abriu: 0,
       outro: 0,
     },
   };
@@ -186,6 +187,7 @@ function computarEstatisticas(
     parse_falhou: 0,
     tribunal_indisponivel: 0,
     sessao_expirada: 0,
+    detalhe_nao_abriu: 0,
     outro: 0,
   };
 

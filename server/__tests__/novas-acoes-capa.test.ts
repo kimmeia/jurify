@@ -209,7 +209,9 @@ describe("a tela", () => {
 
   it("o card que falhou explica e oferece nova tentativa", () => {
     expect(tela).toContain("O tribunal não devolveu a capa deste processo");
-    expect(tela).toContain('"Tentar de novo"');
+    // O botão ganhou o "no tribunal" desde que existe a reserva gratuita do
+    // DataJud ao lado: as duas tentativas precisam se distinguir no texto.
+    expect(tela).toContain('"Tentar no tribunal de novo"');
   });
 
   it("card com capa não pede crédito de novo pelo que já tem", () => {
