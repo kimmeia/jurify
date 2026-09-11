@@ -466,7 +466,54 @@ torna a comparação honesta, e é como deve ser refeito se mudarem.
 
 ---
 
-## 10. Fatia 2 — mockup entregue 11/09, aguardando aprovação
+## 10. Fatia 2 — REPROVADA em 11/09. Diagnóstico refeito.
+
+> **Estado: a proposta da Fatia 2 está SUSPENSA.** O dono reprovou os
+> mockups: *"para poder sugerir melhoria você precisa saber como é o sistema
+> hoje, seus mockups não retratam o de uso real hoje, fez uma cópia barata e
+> muito mal feita"*. Ele está certo. Leia
+> `docs/rodar-o-app-localmente.md` **antes** de retomar este assunto.
+
+### O que deu errado
+
+Desenhei as telas a partir de `grep` no código, sem nunca ter visto o sistema
+rodando. O `grep '<h1'` mede a TAG, não o título — e foi sobre essa medição
+que a Fatia 2 inteira foi construída. Subindo o app (dá para fazer neste
+ambiente em ~5 min, receita no arquivo acima) as fotos mostraram que:
+
+- **Clientes e Financeiro têm cabeçalho, e bom.** Não têm `<h1>`, mas têm
+  *hero* com nome da tela, subtítulo, KPI grande e bloco de atenção. O
+  `PageHeader` que propus seria um **downgrade** nas duas.
+- **Dashboard e Atendimento abrem com saudação** ("Bom dia, Dono"). Trocar
+  isso pelo nome da tela é remoção — precisa de autorização expressa.
+- **`/movimentacoes` é a mesma tela de Processos.** Qualquer contagem de
+  "N telas" que some as duas está inflada.
+- Acordos **tem** título (`text-[22px]`); o navegável afirmava que não.
+
+Detalhe do que cada tela realmente tem: tabela no fim de
+`docs/rodar-o-app-localmente.md`.
+
+### Os artefatos reprovados (ficam para histórico, não são referência)
+
+`mockup-cara-unica.html` e `mockup-cara-unica-navegavel.html`. **Não usar
+como base.** Os números que eles exibem (18 variantes de `<h1>`, 9 ritmos)
+medem a tag, não o que o usuário vê.
+
+### Como retomar
+
+1. Subir o app e fotografar o "antes" **real** de cada tela em questão.
+2. Para o "depois", mudar o código de verdade numa branch descartável e
+   fotografar o resultado — nada de desenhar a mão.
+3. Só então levar ao dono.
+
+O que sobra de pé do diagnóstico original, porque foi medido no código e não
+na aparência: as duas linguagens de "carregando" (99 `Loader2` × 47
+`Skeleton`, 30 arquivos com os dois) e o `ui/empty.tsx` com zero usos. Isso
+continua verdade — mas precisa ser visto em tela antes de virar proposta.
+
+---
+
+## 10-bis. Registro do mockup reprovado (11/09)
 
 `mockup-cara-unica.html` (gerador: `scratchpad/mockup-tipografia/gera-cara-unica.mjs`).
 **Nada foi codado** — a regra do mockup vale.
