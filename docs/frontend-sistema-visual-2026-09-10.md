@@ -121,12 +121,17 @@ Substitui os 33 valores. Nomes em português, no padrão do repo.
 | `micro` | **11** | 700, caps, `.06em` | rótulo de seção, cabeçalho de coluna, selo | 7 · 7,5 · 8 · 8,5 · 9 · 9,5 · 10 · 10,5 |
 | `apoio` | **11,5** | 500 | meta, carimbo de tempo, ajuda | 10 · 10,5 · 11 · 11,5 |
 | `corpo` | **13** | 500/600 | texto de lista, controle, valor | 12 · 12,5 · 12,8 · 13 · 13,5 · `text-xs` · `text-sm` |
-| `secao` | **15** | 700 Poppins | título de card | 14 · 14,5 · 15 · `text-base` · `text-lg` |
-| `titulo` | **20** | 700 Poppins | título de aba / subpágina | 17 · 18 · 19 · 20 · `text-xl` |
-| `pagina` | **26** | 700 Poppins | título da tela | 22 · 24 · 26 · 27 · 28 · `text-2xl` · `text-3xl` |
+| `secao` | **15** | 700 | título de card | 14 · 14,5 · 15 · `text-base` · `text-lg` |
+| `titulo` | **20** | 700 | título de aba / subpágina | 17 · 18 · 19 · 20 · `text-xl` |
+| `pagina` | **26** | 700 | título da tela | 22 · 24 · 26 · 27 · 28 · `text-2xl` · `text-3xl` |
 | `numero` | **22** | 700 tabular | KPI de cartão | 19 · 22 · 26 · 30 · 34 · 38 · 42 |
 
 **A regra que resolve o problema de verdade: nada abaixo de 11px.**
+
+> **Correção (11/09):** a coluna "Peso" dizia "700 Poppins" em três
+> degraus. Medido no app rodando, os `<h1>` saem em **Inter 700** — o token
+> só define tamanho, a família vem do `body`. Poppins (`--font-display`)
+> quase não é usada nos títulos. Ver `docs/estudo-frontend-telas-reais-2026-09-11.md`.
 
 ### A descoberta que faz o piso sair quase de graça
 
