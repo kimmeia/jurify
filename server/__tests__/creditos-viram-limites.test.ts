@@ -196,6 +196,18 @@ describe("as operações passaram a contar no limite", () => {
     expect(ler("server/billing/escritorio-creditos.ts")).toContain("export async function consumirCreditosEscritorio");
     expect(ler("drizzle/0221_limites_uso_mensal.sql")).not.toMatch(/DROP TABLE|DELETE FROM/i);
   });
+
+  it("sem escritório resolvido, consumirCredito libera (fail-open, igual ao resto da régua)", () => {
+    // O docstring de consumirCredito promete "sem banco, sem escritório, plano
+    // não resolvido" liberam — mas o `if (!esc) return false` sobrevivia do
+    // desenho antigo (saldo de crédito, onde negar sem escritório fazia
+    // sentido) e barrava exatamente o caso que o próprio comentário descreve
+    // como liberado. Sem este `return true`, quem cai aqui via a mensagem
+    // errada "Seus créditos acabaram" nos 5 routers de cálculo.
+    const db = ler("server/db.ts");
+    const trecho = db.slice(db.indexOf("export async function consumirCredito"));
+    expect(trecho).toContain("const esc = await getEscritorioPorUsuario(userId);\n    if (!esc) return true;");
+  });
 });
 
 describe("a tela mostra barra de uso no lugar do saldo", () => {

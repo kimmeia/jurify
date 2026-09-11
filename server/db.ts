@@ -1082,7 +1082,7 @@ export async function consumirCredito(userId: number): Promise<boolean> {
   try {
     const { getEscritorioPorUsuario } = await import("./escritorio/db-escritorio");
     const esc = await getEscritorioPorUsuario(userId);
-    if (!esc) return false;
+    if (!esc) return true;
 
     const { verificarUso, registrarUso } = await import("./billing/limites-uso");
     const aval = await verificarUso(esc.escritorio.id, "calculo");
