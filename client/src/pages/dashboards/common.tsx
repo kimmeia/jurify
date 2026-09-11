@@ -11,18 +11,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, TrendingUp, TrendingDown, Info } from "lucide-react";
 import type { ReactNode } from "react";
+import { moedaBR, moedaCurtaBR } from "@shared/formato-numero";
 
 // ─── Formatadores ────────────────────────────────────────────────────────────
 
-export function formatBRL(v: number): string {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-}
-
-export function formatBRLShort(v: number): string {
-  if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (Math.abs(v) >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
-  return formatBRL(v);
-}
+export const formatBRL = moedaBR;
+export const formatBRLShort = moedaCurtaBR;
 
 /**
  * Rótulo de eixo Y, sem unidade.
