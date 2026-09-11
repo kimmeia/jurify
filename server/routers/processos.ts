@@ -69,6 +69,7 @@ const PACOTES_CREDITOS = [
 
 export { CUSTOS } from "../processos/custos-creditos";
 import { CUSTOS } from "../processos/custos-creditos";
+import type { OperacaoLimitada } from "../../shared/limites-uso";
 
 function safeParse(json: string): unknown {
   try {
@@ -150,18 +151,18 @@ function adaptarParaJuditShape(r: any, cnj: string) {
   };
 }
 
-async function consumirCreditos(
-  escritorioId: number,
-  userId: number,
-  custo: number,
-  operacao: string,
-  detalhes?: string,
-): Promise<void> {
-  // Saldo unificado por escritório (migration 0073).
-  // Helper trata: garante registro existe (cria com cota do plano se não),
-  // valida saldo, debita, registra transação. Lança TRPCError se sem saldo.
-  const { consumirCreditosEscritorio } = await import("../billing/escritorio-creditos");
-  await consumirCreditosEscritorio(escritorioId, userId, custo, operacao, detalhes);
+/**
+ * Conta a operação no limite do mês do plano.
+ *
+ * Substituiu o débito de créditos (decisão do dono, 11/09/2026: uma régua só).
+ * O saldo de créditos e o histórico continuam no banco — pararam de decidir,
+ * não foram apagados. Vigiar processo e vigiar CPF saíram daqui: eles já têm
+ * limite de VAGA, conferido antes, e cobrar duas vezes pela mesma coisa era
+ * justamente a confusão.
+ */
+async function contarUso(escritorioId: number, operacao: OperacaoLimitada): Promise<void> {
+  const { consumirUso } = await import("../billing/limites-uso");
+  await consumirUso(escritorioId, operacao);
 }
 
 
@@ -359,13 +360,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, storageState, credId);
       log.info(
@@ -518,13 +513,7 @@ export const processosRouter = router({
       // Cobra antes do gasto externo (mesmo padrão de consultarCNJ).
       // Se IA falhar depois, o crédito já foi debitado — preferimos
       // "cobrança consistente" vs "evitar 1 cred perdido em raros falhas".
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        1,
-        "resumo_ia",
-        `Resumo IA: ${mon.searchKey}`,
-      );
+      await contarUso(esc.escritorio.id, "resumo_ia");
 
       const capaTyped = capa as Record<string, any>;
       const movsTexto = movs
@@ -774,13 +763,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_documento,
-        "consulta_documento",
-        `${input.tipo.toUpperCase()}: ${docLimpo.slice(0, 3)}*** (${codigoTribunal.toUpperCase()})`,
-      );
+      await contarUso(esc.escritorio.id, "busca_documento");
 
       const { requestId, status } = iniciarConsultaDocumentoMotorProprio(
         input.tipo,
@@ -881,13 +864,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `Detalhe CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const cfgTribunal = getConfigTribunal(tribunal.codigoTribunal);
       if (!cfgTribunal) {
@@ -1326,13 +1303,9 @@ export const processosRouter = router({
       }
 
       // Cobra primeira mensalidade
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.monitorar_processo_mes,
-        "monitorar_processo_mes",
-        `Monitor CNJ ${input.numeroCnj} (${tribunal.siglaTribunal})`,
-      );
+      // Vigiar processo não conta no limite mensal: quem manda é a VAGA do
+      // plano (verificarLimiteMonitoramentos, acima). Medir duas vezes a mesma
+      // coisa era a confusão que os créditos criavam.
 
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
@@ -1827,13 +1800,7 @@ export const processosRouter = router({
       }
 
       // Cobra 1 cred (mesma tarifa de consultarCNJ direta)
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `Histórico monitoramento ${mon.searchKey}`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const cfgTribunal = getConfigTribunal(mon.tribunal);
       let resultado;
@@ -2049,13 +2016,8 @@ export const processosRouter = router({
       }
 
       // Cobra primeira mensalidade (15 cred)
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.monitorar_pessoa_mes,
-        "monitorar_pessoa_mes",
-        `Monitor ${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
-      );
+      // Vigiar CPF/CNPJ também é VAGA do plano, não consumo mensal: o
+      // verificarLimiteMonitoramentos acima já decidiu se cabe mais um.
 
       // "Desde quando alertar": busca um contato no escritório com o
       // mesmo CPF/CNPJ. Se achar, usa `createdAt` dele — só CNJs ajuizados

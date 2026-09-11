@@ -60,7 +60,144 @@ export const assinaturasRouter = router({
         assinadoAt: toIsoString(r.assinadoAt),
         expiracaoAt: toIsoString(r.expiracaoAt),
         createdAt: toIsoString(r.createdAt) ?? "",
+        // O que separa "assinado com comprovante" de "assinado sem" — e de um
+        // registro que ninguém assinou. A ficha deriva o estado com isto.
+        comprovanteErro: r.comprovanteErro || null,
+        temDesenhoAssinatura: !!r.assinaturaImagemUrl,
+        temIpAssinatura: !!r.ipAssinatura,
+        documentoExterno: !!(r.documentoUrl && !caminhoInterno(r.documentoUrl)),
       }));
+    }),
+
+  /**
+   * O que EXISTE gravado da assinatura de um documento.
+   *
+   * É a resposta para "esse documento foi mesmo assinado?": nome, CPF, IP,
+   * data e o desenho ficam guardados desde sempre e não apareciam em lugar
+   * nenhum da tela — quem olhava a ficha só via o selo e tinha que adivinhar
+   * pelo ícone de download que faltava.
+   */
+  dadosDaAssinatura: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [doc] = await db.select().from(assinaturasDigitais)
+        .where(and(
+          eq(assinaturasDigitais.id, input.id),
+          eq(assinaturasDigitais.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+
+      return {
+        id: doc.id,
+        titulo: doc.titulo,
+        status: doc.status,
+        assinadoAt: toIsoString(doc.assinadoAt),
+        assinantNome: doc.assinantNome,
+        assinanteCpf: doc.assinanteCpf,
+        ipAssinatura: doc.ipAssinatura,
+        assinaturaImagemUrl: doc.assinaturaImagemUrl,
+        documentoAssinadoUrl: doc.documentoAssinadoUrl,
+        comprovanteErro: doc.comprovanteErro || null,
+        documentoExterno: !!(doc.documentoUrl && !caminhoInterno(doc.documentoUrl)),
+        temDesenhoAssinatura: !!doc.assinaturaImagemUrl,
+        temIpAssinatura: !!doc.ipAssinatura,
+        enviadoAt: toIsoString(doc.enviadoAt),
+        visualizadoAt: toIsoString(doc.visualizadoAt),
+      };
+    }),
+
+  /**
+   * Refaz o PDF carimbado de uma assinatura que já aconteceu.
+   *
+   * Usa o desenho e os dados guardados — não pede nada de novo ao cliente,
+   * que já assinou. Serve quando a estampa falhou na hora (arquivo original
+   * fora do ar, por exemplo) e o documento voltou a estar disponível.
+   */
+  gerarComprovante: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "FORBIDDEN", message: "Escritório não encontrado." });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+
+      const [doc] = await db.select().from(assinaturasDigitais)
+        .where(and(
+          eq(assinaturasDigitais.id, input.id),
+          eq(assinaturasDigitais.escritorioId, esc.escritorio.id),
+        ))
+        .limit(1);
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: "Documento não encontrado." });
+      if (doc.status !== "assinado" || !doc.assinadoAt) {
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Este documento ainda não foi assinado." });
+      }
+      if (!doc.assinaturaImagemUrl) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Não há desenho de assinatura guardado — sem ele não dá para refazer o comprovante.",
+        });
+      }
+
+      const interno = doc.documentoUrl ? caminhoInterno(doc.documentoUrl) : null;
+      if (!interno) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "O documento original é um link externo: não existe arquivo nosso para carimbar.",
+        });
+      }
+
+      try {
+        const pngPath = path.resolve("." + doc.assinaturaImagemUrl);
+        if (!fs.existsSync(pngPath)) throw new Error("Desenho da assinatura não encontrado em disco.");
+        const docPath = path.resolve("." + interno);
+        if (!fs.existsSync(docPath)) throw new Error(`PDF original não encontrado em ${interno}`);
+        const ext = docPath.toLowerCase().split(".").pop() || "";
+        const pdfOriginal = ext === "docx" || ext === "doc"
+          ? await converterDocxParaPdf(fs.readFileSync(docPath))
+          : fs.readFileSync(docPath);
+
+        const campos = await db.select().from(assinaturaCampos)
+          .where(eq(assinaturaCampos.assinaturaId, doc.id))
+          .orderBy(asc(assinaturaCampos.id));
+
+        const pdfAssinado = await estamparAssinatura({
+          pdfOriginal,
+          assinaturaImagem: fs.readFileSync(pngPath),
+          nomeCompleto: doc.assinantNome || "",
+          cpf: doc.assinanteCpf || undefined,
+          ip: doc.ipAssinatura || undefined,
+          assinadoAt: new Date(doc.assinadoAt),
+          campos: campos.length > 0 ? (campos as any) : undefined,
+        });
+
+        const sigDir = path.resolve(`./uploads/assinaturas/escritorio_${doc.escritorioId}`);
+        ensureDir(sigDir);
+        const pdfFilename = `assinado_${doc.id}_${Date.now()}.pdf`;
+        fs.writeFileSync(path.join(sigDir, pdfFilename), pdfAssinado);
+        const documentoAssinadoUrl = `/uploads/assinaturas/escritorio_${doc.escritorioId}/${pdfFilename}`;
+
+        // Auto-cura: com o comprovante no lugar, o motivo da falha some.
+        await db.update(assinaturasDigitais)
+          .set({ documentoAssinadoUrl, comprovanteErro: null })
+          .where(eq(assinaturasDigitais.id, doc.id));
+
+        log.info({ assinaturaId: doc.id }, "Comprovante de assinatura regerado");
+        return { success: true, documentoAssinadoUrl };
+      } catch (err: unknown) {
+        const motivo = err instanceof Error ? err.message : String(err);
+        // Persiste a tentativa que falhou: sem isto o botão "não faz nada" e
+        // o motivo volta a existir só no log.
+        await db.update(assinaturasDigitais)
+          .set({ comprovanteErro: motivo })
+          .where(eq(assinaturasDigitais.id, doc.id));
+        throw new TRPCError({ code: "PRECONDITION_FAILED", message: `Não deu para gerar o comprovante: ${motivo}` });
+      }
     }),
 
   /** Cria documento para assinatura */
@@ -514,6 +651,9 @@ export const assinaturasRouter = router({
       // 2. Lê PDF original e estampa
       const assinadoAt = new Date();
       let documentoAssinadoUrl: string | null = null;
+      // Guardado no registro, não só no log: a ficha mostra "sem comprovante"
+      // com o motivo em vez de um selo verde igual ao de quem tem o PDF.
+      let comprovanteErro: string | null = null;
 
       // Carrega campos posicionais (Fase 1+). Sem campos = fluxo legado.
       // try/catch defensivo: tabela pode não existir em deploys antigos
@@ -561,9 +701,10 @@ export const assinaturasRouter = router({
         // Não bloqueia a assinatura se a estampa falhar — registra mesmo
         // assim com warning. Escritório pode regenerar o PDF assinado
         // depois quando o original estiver disponível.
+        comprovanteErro = err instanceof Error ? err.message : String(err);
         log.warn(
           {
-            err: err instanceof Error ? err.message : String(err),
+            err: comprovanteErro,
             assinaturaId: doc.id,
             documentoUrl: doc.documentoUrl,
           },
@@ -580,6 +721,7 @@ export const assinaturasRouter = router({
         ipAssinatura: input.ip || null,
         assinaturaImagemUrl,
         documentoAssinadoUrl,
+        comprovanteErro,
       }).where(eq(assinaturasDigitais.id, doc.id));
 
       // SSE notif

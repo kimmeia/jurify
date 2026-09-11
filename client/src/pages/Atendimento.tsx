@@ -62,6 +62,7 @@ import { AIRail } from "./atendimento/ai-rail";
 import { CentroDeComando } from "./atendimento/centro-de-comando";
 import { FilaChamadas } from "./atendimento/fila-chamadas";
 import { CartaoLigacao } from "./atendimento/cartao-ligacao";
+import { CliqueEmBotao, OpcoesEnviadas } from "./atendimento/opcoes-interativas";
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { IconeTwilio } from "@/components/IconeTwilio";
@@ -2490,7 +2491,9 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                 <div className={"flex " + (m.direcao === "saida" ? "justify-end" : "justify-start")}>
                   <div className={"max-w-[70%] rounded-2xl px-3.5 py-2 " + (m.direcao === "saida" ? "bg-primary text-primary-foreground rounded-br-md" : "bg-muted rounded-bl-md") + (m.direcao === "saida" && m.status === "falha" ? " ring-2 ring-destructive/60" : "")}>
                     {m.remetenteNome && m.direcao === "saida" && <p className="text-micro opacity-60 mb-0.5">{m.remetenteNome}</p>}
+                    <CliqueEmBotao payload={(m as any).payload} />
                     {renderMsgContent(m)}
+                    <OpcoesEnviadas payload={(m as any).payload} />
                     <div className={"flex items-center gap-1 justify-end mt-1 text-micro " + (m.direcao === "saida" ? "opacity-70" : "text-muted-foreground")}>
                       <span>{new Date(m.createdAt).toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}</span>
                       {m.direcao === "saida" && m.status === "pendente" && <Loader2 className="h-3 w-3 animate-spin" aria-label="Enviando" />}
