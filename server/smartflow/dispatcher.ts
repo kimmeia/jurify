@@ -21,6 +21,7 @@ import { eq, and, inArray, gte, isNotNull, lte } from "drizzle-orm";
 import { executarCenario, Passo, SmartflowContexto, ExecutarCenarioResultado } from "./engine";
 import { criarExecutoresReais } from "./executores";
 import { createLogger } from "../_core/logger";
+import type { LimitePorContato } from "../../shared/limite-por-contato";
 import {
   aceitaCanal,
   chaveDiaLocal,
@@ -57,7 +58,7 @@ interface CenarioCarregado {
   passos: Passo[];
   gatilho: GatilhoSmartflow;
   configGatilho: Record<string, unknown>;
-  limitePorContato: "sempre" | "dia" | "semana" | "mes" | "vida";
+  limitePorContato: LimitePorContato;
 }
 
 function safeParseJson(raw: string | null | undefined): Record<string, string> | null {
@@ -414,6 +415,70 @@ async function atingiuLimitePorContato(
 }
 
 /**
+ * Deixa na conversa o recado de que o robô calou por causa do limite "Roda
+ * por contato". Na tela, silêncio por regra e silêncio por defeito são
+ * idênticos — quem atende precisa da diferença pra saber que a bola é dele.
+ *
+ * Um recado por atendimento: o cliente que manda cinco mensagens seguidas
+ * bate no limite cinco vezes, e cinco avisos iguais viram ruído. A janela é o
+ * início do atendimento atual, então o cliente que volta amanhã (atendimento
+ * novo) recebe um recado novo.
+ *
+ * Silencioso de propósito: é um aviso de tela, não pode derrubar o disparo.
+ */
+async function registrarRoboSilenciado(
+  escritorioId: number,
+  cenario: CenarioCarregado,
+  conversaId: number,
+): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { conversas, mensagens } = await import("../../drizzle/schema");
+    const { like } = await import("drizzle-orm");
+
+    const [conv] = await db
+      .select({
+        createdAt: conversas.createdAt,
+        atendimentoIniciadoEm: conversas.atendimentoIniciadoEm,
+      })
+      .from(conversas)
+      .where(and(eq(conversas.id, conversaId), eq(conversas.escritorioId, escritorioId)))
+      .limit(1);
+    if (!conv) return;
+
+    const inicio = conv.atendimentoIniciadoEm ?? conv.createdAt;
+    if (inicio) {
+      const [jaAvisado] = await db
+        .select({ id: mensagens.id })
+        .from(mensagens)
+        .where(and(
+          eq(mensagens.conversaId, conversaId),
+          eq(mensagens.tipo, "sistema"),
+          like(mensagens.payload, "%robo_silenciado%"),
+          gte(mensagens.createdAt, inicio),
+        ))
+        .limit(1);
+      if (jaAvisado) return;
+    }
+
+    const { recadoRoboSilenciado } = await import("../../shared/limite-por-contato");
+    await db.insert(mensagens).values({
+      conversaId,
+      direcao: "saida",
+      tipo: "sistema",
+      conteudo: recadoRoboSilenciado(cenario.nome, cenario.limitePorContato),
+      status: "enviada",
+      payload: JSON.stringify({
+        sistema: { tipo: "robo_silenciado", cenarioId: cenario.cenarioId, limite: cenario.limitePorContato },
+      }),
+    });
+  } catch (err: any) {
+    log.warn({ err: err?.message, conversaId }, "SmartFlow: falha ao registrar recado de robô silenciado");
+  }
+}
+
+/**
  * Fuso do escritório, com cache de processo. As condições de dia/horário
  * consultam isso a cada execução de cenário; o valor muda por configuração
  * manual, raríssima, então um TTL curto já evita a query em todo disparo.
@@ -455,6 +520,7 @@ async function executarCenarioCarregado(
       { cenarioId: cenario.cenarioId, contatoId: refs?.contatoId, limite: cenario.limitePorContato },
       "[SmartFlow] Cenário PULADO — limite por contato atingido",
     );
+    if (refs?.conversaId) await registrarRoboSilenciado(escritorioId, cenario, refs.conversaId);
     return { executou: false, respostas: [] };
   }
 

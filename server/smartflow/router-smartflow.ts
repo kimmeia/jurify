@@ -14,6 +14,7 @@ import { TRPCError } from "@trpc/server";
 import { executarManual } from "./dispatcher";
 import { createLogger } from "../_core/logger";
 import { GATILHO_META, TIPO_PASSO_META, type GatilhoSmartflow, type TipoPasso } from "../../shared/smartflow-types";
+import { LIMITES_POR_CONTATO } from "../../shared/limite-por-contato";
 
 const log = createLogger("smartflow");
 
@@ -371,7 +372,7 @@ export const smartflowRouter = router({
       configGatilho: z.record(z.any()).optional(),
       layout: layoutSchema,
       passos: z.array(passoInputSchema),
-      limitePorContato: z.enum(["sempre", "dia", "semana", "mes", "vida"]).optional(),
+      limitePorContato: z.enum(LIMITES_POR_CONTATO).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "smartflow", "criar");
@@ -412,7 +413,7 @@ export const smartflowRouter = router({
       configGatilho: z.record(z.any()).optional(),
       layout: layoutSchema,
       passos: z.array(passoInputSchema),
-      limitePorContato: z.enum(["sempre", "dia", "semana", "mes", "vida"]).optional(),
+      limitePorContato: z.enum(LIMITES_POR_CONTATO).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "smartflow", "editar");

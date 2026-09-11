@@ -737,8 +737,39 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
     `mesclar-cpf-diferente` (25 testes) — 27 mutações vermelhas
     (`scratchpad/mutar-mesclar-cpf.py`; uma delas MOVE o hook para depois
     do `return` antecipado, o React #310 que o remendo de hooks não pega).
-  - **Escolher campo a campo o que fica ao mesclar — proposta entregue
-    10/09 (`mockup-mesclar-escolher-campos.html`), AGUARDANDO decisão.**
+  - **Entregue 10/09, escolher campo a campo o que fica ao mesclar — mockups
+    `mockup-mesclar-escolher-campos.html` + `mockup-mesclar-decisoes.html`,
+    com as duas decisões do dono: 1 = A (a escolha aparece nos DOIS lugares
+    que mesclam um par por vez: o Mesclar da ficha e o Mesclar da linha na
+    Conferência; o lote "Mesclar todos" NÃO pergunta) e 2 = B (o responsável
+    ENTRA na lista de campos escolhíveis).** Regras puras em
+    `shared/mesclar-campos.ts` (`linhasDaMesclagem` monta as linhas —
+    `escolha` quando os dois lados têm valor e discordam, `um_lado` quando só
+    um tem, `somam` pra telefone e tags; campo igual ou vazio dos dois lados
+    não vira linha). O padrão de cada linha é o que a mesclagem faria sozinha
+    — e-mail/CPF/observações preenchem buraco vazio, nome e responsável NÃO —,
+    então quem não mexer termina com o resultado de antes; a tela manda só
+    `escolhasQueMudam`. `crm.unificarContatos` e `clientes.mesclarDuplicados`
+    aceitam `escolhas`; `clientes.camposParaMesclar` (permissão
+    `clientes.excluir`, escopada, nome do responsável por join em `users`)
+    serve as duas telas. Aplicação em `unificarComRegistro`, DEPOIS do
+    `unificarContatos` de sempre (antes, a mesclagem sobrescreveria a
+    decisão). **Tags passaram a SOMAR** (`unirTags`) em toda mesclagem
+    registrada, inclusive a automática — é aditivo e o Desfazer devolve as
+    originais; se o dono não quiser, é aqui que se tira.
+    **O ponto sensível**: `principalAntes` passou a fotografar nome, tags e
+    responsável além dos quatro de sempre, e `desfazerUnificacao` restaura o
+    que estiver fotografado (`"campo" in antes`) — registro antigo não tem
+    essas chaves e escrever `?? null` neles apagaria o que ninguém tocou.
+    Client: `clientes/mesclar-escolher-campos.tsx` (hook + tabela, usado pelas
+    duas telas); a ficha ganhou o passo do meio (`passo` substituiu o booleano
+    `confirmacao`, com Voltar) e a Conferência abre `MesclarComEscolhaDialog`,
+    que caminha par a par quando o grupo tem 3+ fichas e pula sozinho o par
+    sem divergência. Amarra: `mesclar-escolher-campos` (23 testes) — 28
+    mutações vermelhas (`scratchpad/mutar-mesclar-campos.py`; uma só morreu
+    depois de a amarra olhar a CHAMADA em vez do import).
+  - **Proposta original (superada pela entrega acima)
+    `mockup-mesclar-escolher-campos.html`:**
     Ideia do dono ("quando dados divergentes, poder escolher quais serão
     mesclados"). O estudo mapeou a regra silenciosa de hoje: telefone do
     absorvido vira secundário (não perde); e-mail/CPF/observações só
@@ -789,6 +820,60 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   Conferido de passagem: `retomarExecucao` só é chamada pelo scheduler, e
   execução com `conversaId` só nasce em `dispararMensagemCanal` (os fluxos
   de cobrança não passam por lá) — a trava não alcança lembrete nenhum.
+- **Entregue 10/09, "encerrei a conversa e o robô voltou a falar" + convite
+  de instalar o app no link de assinatura — mockup
+  `mockup-robo-encerrada-e-app.html`, "pode fazer" do dono; fiz pelas quatro
+  opções recomendadas (1-A, 2-A, 3-A e A no app).** Origem: print dele — o
+  fluxo marcado "1x por dia" voltou a falar depois de ele encerrar a
+  conversa e o cliente escrever de novo; e um cliente que recebeu link de
+  assinatura ganhou junto o botão de baixar o app. **Não reiniciou:
+  RETOMOU.** Três coisas se somavam — roteiro que espera resposta fica
+  `rodando` com prazo por até 24h; encerrar a conversa mexia só no status
+  (quem cancelava roteiro parado era só `excluirConversa`, e o comentário de
+  lá já dizia por quê: "a conversa ressuscita"); e `atingiuLimitePorContato`
+  só é consultado quando um roteiro COMEÇA — retomada é a mesma passagem.
+  - `encerrarRoteirosParadosDaConversa` (db-crm, exportada) cancela as
+    execuções `rodando` da conversa **que estejam paradas** (`retomarEm` OU
+    `aguardandoMensagemContatoId` não nulos), chamada por `atualizarConversa`
+    quando o status vira `resolvido`/`fechado`. O filtro de "parada" existe
+    pra não sobrescrever o desfecho da execução que está rodando naquele
+    instante — inclusive a do próprio bloco "Encerrar conversa", que escreve
+    na conversa por `aplicarEfeitosNaConversa`, fora deste caminho.
+    `excluirConversa` continua cancelando TUDO dela (mais amplo, de
+    propósito). Efeito colateral bom: o scheduler não tem mais o que acordar,
+    então some o "você ainda está aí?" horas depois numa conversa encerrada
+    (era o item (c) da lista de não-corrigidos acima).
+  - **Recado interno** (decisão 2): quando o limite cala o robô,
+    `registrarRoboSilenciado` grava na conversa uma `mensagens` tipo
+    `sistema` com o texto de `shared/limite-por-contato.ts`
+    (`recadoRoboSilenciado`) e o marcador `robo_silenciado` no payload —
+    **um por atendimento** (dedup pela janela `atendimentoIniciadoEm ??
+    createdAt` + `like` no marcador), silencioso em caso de falha. Ninguém
+    escrevia `mensagens` tipo `sistema` até agora (o enum existia e os
+    leitores já pulavam), então o Atendimento ganhou o desenho: nota cinza
+    centralizada com "Recado interno — o cliente não vê."
+  - **Rótulos** (decisão 3-A, nada muda de comportamento): a conta continua
+    janela deslizante de 24h/7d/30d; os textos passaram a dizer isso
+    (`ROTULO_LIMITE_CONTATO`: "1x a cada 24h"…), e editor + zod do router
+    leem a MESMA lista (`LIMITES_POR_CONTATO`).
+  - **Convite de instalar o app**: `<InstallPWA />` é montado fora do
+    `<Switch>` (segue lá — nada foi tirado do App.tsx) e no iPhone aparece
+    sozinho 3s depois do load, sem depender de `beforeinstallprompt`. Agora
+    consulta `conviteInstalarAppPermitido` (shared, via `useLocation`,
+    DEPOIS de todos os hooks): fica no login/cadastro/convite/esqueci/
+    redefinir/confirmar-email/checkout e dentro do app; **sai de `/assinar`,
+    da página inicial, dos termos, da privacidade e do /404**. A tela de
+    assinatura NÃO manda link de app na mensagem — era só o banner.
+  - Amarras: `encerrar-conversa-encerra-roteiro` (31) e
+    `convite-instalar-app` (31; as duas listas de rotas são conferidas
+    contra `rotasPublicas()`, derivada do App.tsx em `_paginas-publicas.ts`
+    — rota pública nova quebra o teste até ser classificada). 37 mutações
+    vermelhas (`scratchpad/mutar-encerrar-e-app.py`; duas só morreram depois
+    de ajustar a amarra: o `z.enum` aparece 2× no router, e "/termometro" não
+    é prefixo de "/termos" — o caso que discrimina é "/termos-de-uso").
+  - **Continuam NÃO corrigidos** (itens (a) e (b) do bloco acima): disparo
+    proativo de verdade não confere conversa, e as bolhas da mesma resposta
+    não se reconferem entre si.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
