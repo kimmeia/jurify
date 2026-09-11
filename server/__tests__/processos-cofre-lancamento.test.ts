@@ -55,15 +55,16 @@ describe("processos-9 — um CNJ, um monitoramento", () => {
     expect(criar.indexOf("const cnjMascarado = mascararCnj(input.numeroCnj)")).toBeLessThan(criar.indexOf("const [existente]"));
   });
 
-  it("devolve o existente sem cobrar, ANTES do limite e do crédito", () => {
+  it("devolve o existente sem cobrar, ANTES do limite", () => {
+    // O débito de crédito saiu em 11/09/2026: vigiar é VAGA do plano, e
+    // medir a mesma coisa duas vezes era a confusão que se quis acabar.
     const iExistente = criar.indexOf("if (existente)");
     const iLimite = criar.indexOf("verificarLimiteMonitoramentos(esc.escritorio.id");
-    const iCobranca = criar.indexOf("consumirCreditos(");
     const iInsert = criar.indexOf("db.insert(motorMonitoramentos)");
     expect(iExistente).toBeGreaterThan(-1);
     expect(iExistente).toBeLessThan(iLimite);
-    expect(iLimite).toBeLessThan(iCobranca);
-    expect(iCobranca).toBeLessThan(iInsert);
+    expect(iLimite).toBeLessThan(iInsert);
+    expect(criar).not.toContain("consumirCreditos(");
     const retorno = recorte(criar, "if (existente)", "// Limite do plano");
     expect(retorno).toContain("custoCred: 0");
     expect(retorno).toContain("jaExistia: true");
@@ -124,8 +125,10 @@ describe("processos-8 — importação respeita o teto do plano sem cobrar o exc
     expect(ramo).not.toContain("db.insert(motorMonitoramentos)");
     expect(ramo).toContain("resultado.monitoramentosLimitePlano++");
     expect(ramo).toContain("Limite do plano (${maximoMonitoramento} processos vigiados): monitor não criado, sem cobrança.");
-    // A checagem vem ANTES do ramo que cobra.
-    expect(loop.indexOf("resultado.monitoramentosCriados >= vagasMonitoramento")).toBeLessThan(loop.indexOf("consumirCreditosEscritorio("));
+    // A checagem vem ANTES do insert (o débito de crédito saiu em 11/09/2026:
+    // vigiar é vaga do plano, e nada mais é cobrado por monitor criado).
+    expect(loop.indexOf("resultado.monitoramentosCriados >= vagasMonitoramento")).toBeLessThan(loop.indexOf("db.insert(motorMonitoramentos)"));
+    expect(loop).not.toContain("consumirCreditosEscritorio(");
     // `vagasMonitoramento !== null` é o que preserva o fail-open.
     expect(loop).toContain("vagasMonitoramento !== null &&");
   });

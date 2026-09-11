@@ -1508,6 +1508,27 @@ export type InsertPermissaoCargo = typeof permissoesCargo.$inferInsert;
 // FASE 7 — ASSINATURA DIGITAL DE DOCUMENTOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Quanto o escritório já usou de cada operação no mês.
+ *
+ * Substitui o saldo de créditos como régua: o contador zera na virada da
+ * competência (YYYY-MM no fuso de Brasília) e o limite vem do plano. O
+ * `extraConcedido` é o que o painel admin libera quando o escritório pede
+ * mais — some sozinho no mês seguinte, sem virar saldo acumulado.
+ */
+export const escritorioUsoMensal = mysqlTable("escritorio_uso_mensal", {
+  id: int("id").autoincrement().primaryKey(),
+  escritorioId: int("escritorioId").notNull(),
+  competencia: varchar("competencia", { length: 7 }).notNull(),
+  operacao: varchar("operacao", { length: 40 }).notNull(),
+  quantidade: int("quantidade").notNull().default(0),
+  extraConcedido: int("extraConcedido").notNull().default(0),
+  createdAt: timestamp("createdAtUso").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAtUso").defaultNow().onUpdateNow().notNull(),
+}, (t) => ({
+  unqUso: uniqueIndex("unq_uso_escritorio_competencia_operacao").on(t.escritorioId, t.competencia, t.operacao),
+}));
+
 export const assinaturasDigitais = mysqlTable("assinaturas_digitais", {
   id: int("id").autoincrement().primaryKey(),
   escritorioId: int("escritorioId").notNull(),
@@ -1530,6 +1551,12 @@ export const assinaturasDigitais = mysqlTable("assinaturas_digitais", {
   visualizadoAt: timestamp("visualizadoAt"),
   assinadoAt: timestamp("assinadoAt"),
   ipAssinatura: varchar("ipAssinatura", { length: 45 }),
+  /**
+   * Por que o PDF carimbado não saiu. NULL = nunca falhou. Preenchido quando
+   * a estampa dá erro (arquivo original sumido, link externo) e limpo quando
+   * "Gerar comprovante" consegue refazer.
+   */
+  comprovanteErro: text("comprovanteErro"),
   expiracaoAt: timestamp("expiracaoAt"),
   createdAt: timestamp("createdAtAssinatura").defaultNow().notNull(),
   updatedAt: timestamp("updatedAtAssinatura").defaultNow().onUpdateNow().notNull(),
@@ -2331,6 +2358,12 @@ export const planos = mysqlTable("planos", {
    *  Separado de maxMonitoramentosProcessos (movimentações por CNJ) — são
    *  serviços e custos diferentes. */
   maxMonitoramentosCpf: int("max_monitoramentos_cpf"),
+  /** Consultas de processo pelo número, por mês. NULL/0 = sem limite. */
+  maxConsultasProcessoMes: int("max_consultas_processo_mes"),
+  /** Buscas de processo por CPF/CNPJ, por mês. NULL/0 = sem limite. */
+  maxBuscasDocumentoMes: int("max_buscas_documento_mes"),
+  /** Resumos de processo com IA, por mês. NULL/0 = sem limite. */
+  maxResumosIaMes: int("max_resumos_ia_mes"),
   /** Card da LP com "Agendar demonstração" como botão principal (Completo). */
   ctaDemonstracao: boolean("cta_demonstracao").notNull().default(false),
   /** Assentos de atendente inclusos no pacote. NULL = plano sem cobrança
