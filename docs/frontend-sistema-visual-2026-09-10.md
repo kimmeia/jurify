@@ -510,6 +510,39 @@ Relatórios (`text-2xl font-bold tracking-tight`, `space-y-4`) e Acordos
 - **Ordem de aplicação.** As 47 telas de uma vez, ou as 6 do dia a dia
   primeiro (mesmo recorte da Fatia 1) e o resto depois?
 
+### O navegável (11/09, a pedido do dono)
+
+`mockup-cara-unica-navegavel.html` — o app inteiro, clicável, para ver a
+proposta "no mundo real". Gerador:
+`scratchpad/mockup-tipografia/gera-navegavel.mjs`.
+
+- Menu lateral real (4 grupos) que **troca de tela**: Processos, Clientes,
+  Agenda, Acordos, Financeiro, Relatórios. Os itens sem tela viram inertes.
+- Chave **Como está hoje ⟷ Proposto** — o modo "hoje" é fiel ao código:
+  Clientes, Acordos e Financeiro abrem **sem título nenhum**, Relatórios em
+  `text-2xl`, e cada tela com o seu `space-y-*` real (o respiro muda ao
+  trocar de tela, que é exatamente o defeito).
+- Chave **Com dados · Lista vazia · Carregando** — mostra as outras duas
+  peças da Fatia 2 dentro da tela, não num quadrinho à parte.
+
+**A skill de mockup pede "sem JavaScript".** Aqui o dono pediu navegável em
+palavras ("gere um navegável para eu visualizar como ficará no mundo real") e
+o projeto já tem precedente (`mockup-correcoes-p1.html`). O JS é só troca de
+classe no `<body>` — nenhum dado, nenhuma lógica de produto.
+
+**Conferido por script, não a olho** (`scratchpad/testa-navegavel.mjs` e
+`checa-coerencia.mjs`, no scratchpad da sessão): navegação, as duas chaves e
+zero erro de console; e as **36 combinações** (6 telas × 2 modos × 3 estados)
+conferidas uma a uma — em todas há exatamente um corpo visível, um conjunto
+de pastilhas, e nenhum número que contradiga o estado.
+
+Duas incoerências que essa checagem pegou e foram corrigidas:
+1. Na lista vazia o cabeçalho continuava dizendo "6 monitorados" e o card
+   "6 REGISTROS". Agora pastilha, contagem e rodapé acompanham o estado.
+2. O rodapé seguia visível sem dados: `.rodape{display:none}` tinha a mesma
+   especificidade (0,1,0) da definição de `.rodape`, que vem **depois** na
+   folha e ganhava. Resolvido com `body[data-estado] .rodape`.
+
 ### Risco e verificação
 
 Menor que o da Fatia 1: é extração de padrão, não redesenho, e o
