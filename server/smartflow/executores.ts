@@ -206,7 +206,17 @@ async function resolverContextoCliente(
  */
 async function persistirEnvioTemplate(
   escritorioId: number,
-  dados: { contatoId: number; canalId?: number; idExterno: string; conteudo: string; assunto?: string },
+  dados: {
+    contatoId: number;
+    canalId?: number;
+    idExterno: string;
+    conteudo: string;
+    assunto?: string;
+    /** Opções interativas enviadas — é o que a conversa desenha embaixo da bolha. */
+    payload?: Record<string, unknown> | null;
+    /** Recado interno (o cliente não recebe): explica na conversa por que nada saiu. */
+    tipo?: "texto" | "sistema";
+  },
 ): Promise<void> {
   try {
     const { getDb } = await import("../db");
@@ -266,10 +276,11 @@ async function persistirEnvioTemplate(
     await enviarMensagem({
       conversaId,
       direcao: "saida",
-      tipo: "texto",
+      tipo: dados.tipo ?? "texto",
       conteudo: dados.conteudo,
       status: "enviada",
       idExterno: dados.idExterno,
+      payload: dados.payload ?? null,
     });
   } catch (err: any) {
     log.warn({ err: err?.message, contatoId: dados.contatoId }, "SmartFlow: falha ao persistir envio de template (não-fatal)");
@@ -1151,17 +1162,37 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
         });
         if (!r.ok) {
           log.warn({ erro: r.erro, provider: r.provider, modo: p.modo }, "SmartFlow: envio WhatsApp interativo falhou");
+          // Sem isto o motivo vive só no registro técnico do fluxo: na conversa
+          // não aparece nada, e do lado de quem atende o robô apenas "não fez".
+          if (p.contatoId) {
+            await persistirEnvioTemplate(escritorioId, {
+              contatoId: p.contatoId,
+              canalId: r.canalId,
+              idExterno: "",
+              tipo: "sistema",
+              conteudo: `Os botões não foram enviados: ${r.erro || "o canal recusou o envio interativo (precisa ser WhatsApp oficial, Cloud API)"}.`,
+              payload: { sistema: { tipo: "interativo_falhou", modo: p.modo } },
+              assunto: "Automação (SmartFlow)",
+            });
+          }
         } else if (p.contatoId) {
           // Timeline: sem isto a pergunta interativa não existia na conversa —
           // o atendente via só a resposta do cliente, sem a pergunta (o corpo
           // parou de ser reenviado pelo handler quando o envio duplicado foi
           // eliminado).
+          const { opcoesDasSecoes } = await import("../../shared/mensagem-interativa");
+          const opcoes = p.modo === "lista"
+            ? opcoesDasSecoes(p.secoes)
+            : (p.botoes || []).map((b) => ({ id: String(b.id), titulo: String(b.titulo) }));
           await persistirEnvioTemplate(escritorioId, {
             contatoId: p.contatoId,
             canalId: r.canalId,
             idExterno: r.idExterno || "",
             conteudo: p.body,
             assunto: "Automação (SmartFlow)",
+            payload: opcoes.length > 0
+              ? { interativo: { modo: p.modo, opcoes, drawerLabel: p.drawerLabel } }
+              : null,
           });
         }
         return { ok: r.ok, erro: r.erro };
@@ -1195,11 +1226,15 @@ export function criarExecutoresReais(escritorioId: number, imagemAtual?: ImagemA
           // webhook `failed` posterior não acha linha por `idExterno` e o
           // motivo da não-entrega some — dava "executado" mentiroso. Agora o
           // template aparece na timeline E fica rastreável pelo status.
+          const botoesTpl = (template.botoes || []).map((b) => ({ id: String(b.id), titulo: String(b.titulo) }));
           await persistirEnvioTemplate(escritorioId, {
             contatoId: template.contatoId,
             canalId: r.canalId,
             idExterno: r.idExterno,
             conteudo: template.conteudoPreview || `[Template: ${template.nome}]`,
+            payload: botoesTpl.length > 0
+              ? { interativo: { modo: "botoes", opcoes: botoesTpl, template: template.nome } }
+              : null,
           });
         }
         return { ok: r.ok, erro: r.erro };

@@ -168,6 +168,9 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
   const [maxAgentesIa, setMaxAgentesIa] = useState("0");
   const [maxMonitoramentos, setMaxMonitoramentos] = useState("");
   const [maxMonitoramentosCpf, setMaxMonitoramentosCpf] = useState("");
+  const [maxConsultasMes, setMaxConsultasMes] = useState("");
+  const [maxBuscasMes, setMaxBuscasMes] = useState("");
+  const [maxResumosMes, setMaxResumosMes] = useState("");
   const [precoSobConsulta, setPrecoSobConsulta] = useState(false);
   const [ctaDemonstracao, setCtaDemonstracao] = useState(false);
   const [creditosCalculos, setCreditosCalculos] = useState("0");
@@ -196,6 +199,9 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
       setMaxAgentesIa(String(plano.maxAgentesIa));
       setMaxMonitoramentos(plano.maxMonitoramentosProcessos != null ? String(plano.maxMonitoramentosProcessos) : "");
       setMaxMonitoramentosCpf(plano.maxMonitoramentosCpf != null ? String(plano.maxMonitoramentosCpf) : "");
+      setMaxConsultasMes(plano.maxConsultasProcessoMes != null ? String(plano.maxConsultasProcessoMes) : "");
+      setMaxBuscasMes(plano.maxBuscasDocumentoMes != null ? String(plano.maxBuscasDocumentoMes) : "");
+      setMaxResumosMes(plano.maxResumosIaMes != null ? String(plano.maxResumosIaMes) : "");
       setPrecoSobConsulta(!!plano.precoSobConsulta);
       setCtaDemonstracao(!!plano.ctaDemonstracao);
       setCreditosCalculos(String(plano.creditosCalculosMes));
@@ -271,6 +277,9 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
       maxAgentesIa: parseInt(maxAgentesIa, 10) || 0,
       maxMonitoramentosProcessos: maxMonitoramentos.trim() ? parseInt(maxMonitoramentos, 10) : null,
       maxMonitoramentosCpf: maxMonitoramentosCpf.trim() ? parseInt(maxMonitoramentosCpf, 10) : null,
+      maxConsultasProcessoMes: maxConsultasMes.trim() ? parseInt(maxConsultasMes, 10) : null,
+      maxBuscasDocumentoMes: maxBuscasMes.trim() ? parseInt(maxBuscasMes, 10) : null,
+      maxResumosIaMes: maxResumosMes.trim() ? parseInt(maxResumosMes, 10) : null,
       precoSobConsulta,
       ctaDemonstracao,
       creditosCalculosMes: parseInt(creditosCalculos, 10) || 0,
@@ -435,6 +444,9 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 <CampoNumero label="Clientes ativos" valor={maxClientes} setValor={setMaxClientes} placeholder="vazio = ∞" />
                 <CampoNumero label="Processos vigiados" valor={maxMonitoramentos} setValor={setMaxMonitoramentos} placeholder="vazio = ∞" />
                 <CampoNumero label="CPFs/CNPJs vigiados" valor={maxMonitoramentosCpf} setValor={setMaxMonitoramentosCpf} placeholder="vazio = ∞" />
+                <CampoNumero label="Consultas de processo / mês" valor={maxConsultasMes} setValor={setMaxConsultasMes} placeholder="vazio = ∞" />
+                <CampoNumero label="Buscas por CPF/CNPJ / mês" valor={maxBuscasMes} setValor={setMaxBuscasMes} placeholder="vazio = ∞" />
+                <CampoNumero label="Resumos de IA / mês" valor={maxResumosMes} setValor={setMaxResumosMes} placeholder="vazio = ∞" />
                 <CampoNumero label="Conexões WhatsApp" valor={maxConexoesWhatsapp} setValor={setMaxConexoesWhatsapp} />
                 <CampoNumero label="Agentes IA" valor={maxAgentesIa} setValor={setMaxAgentesIa} />
                 <CampoNumero label="Créditos cálculo/mês" valor={creditosCalculos} setValor={setCreditosCalculos} />

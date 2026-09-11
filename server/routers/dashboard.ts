@@ -108,6 +108,25 @@ export const dashboardRouter = router({
     return getUserCreditsInfo(ctx.user.id);
   }),
 
+  /**
+   * Quanto o escritório já usou de cada operação neste mês.
+   *
+   * É o que a tela mostra no lugar do saldo de créditos: a pergunta que o
+   * advogado faz é "posso consultar mais um processo?", e saldo em crédito
+   * obrigava a saber de cabeça o preço de cada operação.
+   */
+  usoDoMes: protectedProcedure.query(async ({ ctx }) => {
+    try {
+      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) return [];
+      const { usoDoMes } = await import("../billing/limites-uso");
+      return usoDoMes(esc.escritorio.id);
+    } catch {
+      return [];
+    }
+  }),
+
   /** Resumo do escritório para dashboard inteligente.
    *  Respeita a permissão "dashboard" do colaborador:
    *  - verTodos → mostra tudo do escritório

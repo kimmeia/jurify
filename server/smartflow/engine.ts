@@ -419,6 +419,8 @@ export interface SmartflowExecutores {
       contatoId?: number;
       /** Prévia textual pra timeline (o corpo real vive aprovado na Meta). */
       conteudoPreview?: string;
+      /** Quick-replies do template — a conversa desenha os mesmos botões que o cliente recebeu. */
+      botoes?: Array<{ id: string; titulo: string }>;
     },
   ) => Promise<boolean | { ok: boolean; erro?: string }>;
   /**
@@ -1336,7 +1338,14 @@ async function enviarTemplateWhatsApp(
   }
   const contatoId = typeof ctx.contatoId === "number" ? ctx.contatoId : undefined;
   try {
-    const r = await exec.enviarWhatsAppTemplate(telefone, { nome, idioma, componentes, contatoId, conteudoPreview });
+    // Quick-replies do bloco "Enviar template" — a conversa desenha os mesmos
+    // botões que a Meta entrega. Bloco sem opções manda lista vazia.
+    const quickReplies: Array<{ id: string; titulo: string }> = (Array.isArray(cfg.opcoes) ? cfg.opcoes : [])
+      .filter((o: any) => o?.id && o?.titulo)
+      .map((o: any) => ({ id: String(o.id), titulo: String(o.titulo) }));
+    const r = await exec.enviarWhatsAppTemplate(telefone, {
+      nome, idioma, componentes, contatoId, conteudoPreview, botoes: quickReplies,
+    });
     // Aceita boolean (compat) ou { ok, erro }. Quando vem o erro real (da
     // Meta / resolução de canal), mostra ele — em vez da mensagem genérica
     // que confundia (dizia "confira canal/template" mesmo quando o motivo
