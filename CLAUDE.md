@@ -4,7 +4,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.288 verdes em 10/09/2026 (368 arquivos, ~2 min)
+pnpm test               # vitest (server/**/*.test.ts) — 5.526 verdes em 11/09/2026 (378 arquivos, ~2 min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1115,8 +1115,10 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
     recebeu pra assinar é a única superfície do produto que põe o domínio na
     mão do cliente final), entrou com Google e cadastrou o tio. CPFs
     DIFERENTES nas duas fichas, caixa e acentuação diferentes — digitação
-    independente, não cópia. Conclusão de produto, não de bug: o cadastro
-    self-service está aberto pra quem é CLIENTE de escritório.
+    independente, não cópia. **O dono CONFIRMOU em 11/09 que foi ele mesmo
+    quem se cadastrou** — assunto encerrado. Conclusão de produto, não de
+    bug: o cadastro self-service está aberto pra quem é CLIENTE de
+    escritório, não advogado.
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
