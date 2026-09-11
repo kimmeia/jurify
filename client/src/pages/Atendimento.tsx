@@ -2478,12 +2478,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
                   </div>
                 ) : m.tipo === "sistema" ? (
                   <div className="flex justify-center" data-testid="recado-sistema">
-                    <div className="max-w-[80%] rounded-lg border border-dashed bg-background px-3 py-1.5 text-center text-[11px] leading-snug text-muted-foreground">
+                    <div className="max-w-[80%] rounded-lg border border-dashed bg-background px-3 py-1.5 text-center text-apoio leading-snug text-muted-foreground">
                       {m.conteudo}
                       <span className="ml-1.5 opacity-70">
                         {new Date(m.createdAt).toLocaleTimeString("pt-BR", { timeZone: tz, hour: "2-digit", minute: "2-digit" })}
                       </span>
-                      <p className="mt-0.5 text-[10px] opacity-70">Recado interno — o cliente não vê.</p>
+                      <p className="mt-0.5 text-micro opacity-70">Recado interno — o cliente não vê.</p>
                     </div>
                   </div>
                 ) : (
