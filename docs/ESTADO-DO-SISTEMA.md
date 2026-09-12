@@ -97,16 +97,18 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 12. **Backup em dois níveis, os dois furados:** o da plataforma **nunca termina**
     em banco de tamanho real (**D-14**), e no do escritório **20 tabelas ficam de
     fora** porque a trava que deveria impedir isso tem um ponto cego (**D-2**).
-13. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
-    assinatura eletrônica (sem controle de permissão), Instagram e Messenger
-    conectáveis sem ingerir uma única mensagem, e telas que prometem "+90
-    tribunais" onde o servidor procura em um.
+13. **A venda promete o que o produto não entrega, e o pior é a cobertura de
+    tribunais: o motor conhece 16, e TJSP e todos os TRTs ficam de fora.** Um
+    escritório trabalhista ou paulista não vigia um único processo. Junto: Instagram
+    vendido em três lugares sem receber uma mensagem, armazenamento e número de
+    WhatsApp vendidos sem trava, e o plano "Sob medida" entregando menos que o
+    Escala. Seção 15.
 14. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
 
-## 1.1 Se for fazer só dez coisas, faça estas
+## 1.1 Se for fazer só onze coisas, faça estas
 
 Ordenado por dano × prazo × esforço, não por dificuldade.
 
@@ -120,8 +122,9 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 9 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
-| 10 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 9 | **Decidir o que fazer com a cobertura de tribunais** | a venda diz "monitora processos" sem ressalva e o motor não conhece TJSP nem nenhum TRT. Ou muda o texto, ou muda a cobertura — mas não dá pra vender assim (seção 15.1) |
+| 10 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
+| 11 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
 
@@ -1713,3 +1716,116 @@ arquivo e linha.
 A regra do topo deste documento resolve isso ao longo do tempo: cada entrega que
 tocar num item conferido aqui corrige o registro. O que está errado neste documento
 vai aparecer — e aí ele se conserta, em vez de envelhecer.
+
+---
+
+## 15. O que a venda promete × o que o produto entrega
+
+Esta seção é de risco **comercial e contratual**, não técnico. Cada linha confronta
+um texto que o cliente lê antes de pagar com o código que atende aquilo depois.
+
+### 15.1 O mais grave: a cobertura de tribunais
+
+A comparação da landing diz **"Monitora processos e novas ações por CPF/CNPJ com
+motor próprio"**, sem uma linha de ressalva. Os três cartões de plano vendem
+**"Vigia 300 / 1.000 / 2.500 processos"**.
+
+O motor conhece **16 tribunais**. Conferi contando o registro:
+
+| cobertos | quais |
+|---|---|
+| 12 estaduais | CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR |
+| 4 federais | TRF1, TRF2, TRF3, TRF6 |
+
+**Não estão na lista: TJSP e todos os TRTs.**
+
+Isso não é um detalhe de cobertura. São Paulo é o maior tribunal do país, e os TRTs
+são a Justiça do Trabalho inteira. Um escritório trabalhista que assinar o plano hoje
+**não consegue vigiar um único processo dele**. Um escritório de São Paulo idem. Nada
+na tela avisa, e a ressalva que existe nos cartões fala de outra coisa ("novas ações:
+TJCE por enquanto"), o que na prática dá a entender que o *resto* funciona em todo
+lugar.
+
+E há a camada de baixo, da seção 5.7: dos 16 que estão na lista, o endereço de seis
+deles é montado com o padrão do TJCE e provavelmente está errado. Então o número
+realmente comprovado continua sendo **um**.
+
+### 15.2 Limites vendidos que o código não impõe
+
+Três dos números impressos nos cartões não têm trava correspondente:
+
+| vendido | o que o código faz |
+|---|---|
+| **armazenamento** (2 GB / 10 GB / 50 GB) | a soma por escritório **existe e está pronta** (`verificarLimite` com o recurso `armazenamento`, em `plan-limits.ts`) — e **nenhum caminho de upload a chama**. O único consumidor dela é `obterResumoUso`, que só desenha a barrinha na tela. Pior: `salvarArquivo` recebe o tamanho **do navegador** (`tamanho` é um campo opcional do input), então o número que a soma usaria é informado por quem sobe o arquivo |
+| **número de WhatsApp** (1 / 2 / 5) | o limite existe e funciona nos **dois caminhos manuais** (`criarCanal` e `conectarWhatsappCloudManual`) e **não existe nos dois que o cliente realmente usa**: `connectWhatsApp` (o Embedded Signup, o botão "Conectar com a Meta") e `exchangeCode` (CoEx). Os dois gravam o canal direto, sem olhar o plano |
+| **usuários** (2 / 5 / 15) | a única trava é no **envio** do convite; `aceitarConvite` não confere nada. E o comentário em cima da trava diz "Conta ativos + convites pendentes pra dar feedback antes da pessoa aceitar" — a função que ele chama conta **só colaboradores ativos**. Mandar 10 convites com 2 vagas passa; os 10 entram |
+
+Isso é generosidade acidental, não fraude — mas é dinheiro na mesa e, pior, é um
+número que o comercial usa para diferenciar plano e que não diferencia nada.
+
+### 15.3 Recursos vendidos que não existem
+
+- **Instagram aparece em três lugares da venda** (a lista de integrações da landing,
+  o card "Atendimento omnichannel — WhatsApp, Instagram e e-mail num inbox só", e o
+  cartão do plano de entrada, que vende "Atendimento no WhatsApp oficial (API Meta) e
+  Instagram") e **o produto não recebe nem envia uma única mensagem de Instagram**.
+  - **Não recebe:** a primeira linha do processamento do webhook é
+    `if (body.object !== "whatsapp_business_account") return;` — descarte em silêncio,
+    e não existe nenhum outro endpoint no servidor que atenda `object: "instagram"`.
+  - **Não envia:** o despachante de canal recusa o tipo `instagram` explicitamente, e
+    **há teste travando a recusa** (`canal-envio.test.ts`, "recusa tipos não
+    suportados"). Ou seja: a ausência é deliberada e conhecida no código.
+  - **O que funciona é só conectar:** `connectInstagram` cria o canal e o botão de
+    testar bate na Graph API só pra ver se o token vive. O canal fica verde,
+    escrito "conectado", para sempre — sem nunca trocar uma mensagem.
+  O conserto barato aqui é o texto, não o código: tirar Instagram da venda enquanto
+  não existe. Isso é **remoção** e depende de autorização sua.
+- **O cartão "Sob medida" promete "Tudo do Escala, e mais"** — e entrega **menos**.
+  Conferido migration a migration: a 0217 transformou o antigo plano `completo` em
+  "Sob medida" mexendo **só** em nome, descrição, preço sob consulta, ordem e texto
+  dos cartões. Os limites dele continuam os da seed de 0108, de muito antes:
+  - **atendentes de IA: 5** (o Escala, que ele diz superar, tem 10);
+  - **JurisIA bloqueado**: a regra que libera exige o módulo na cesta **e** cota
+    maior que zero (`addon-jurisia.ts`). O módulo ele tem, herdado do grandfather da
+    0200; a cota nunca foi preenchida e continua no default 0 da 0172. O Escala tem
+    200. Ou seja, o cartão mais caro é o único dos quatro em que o JurisIA não abre;
+  - os tetos mensais da 0221 (consultas de processo, buscas de documento, resumos de
+    IA) foram preenchidos para `atende`, `escritorio` e `escala` — e **não** para ele.
+  Esse é o efeito colateral clássico de vender por dado editável: os três planos novos
+  nasceram completos na migration e o quarto ficou para trás sem ninguém notar, porque
+  nada no sistema compara o que um cartão promete com o que a linha dele contém.
+
+### 15.4 Uma cláusula dos Termos que o código contradiz
+
+A cláusula 5 dos Termos de Uso diz, com todas as letras:
+
+> "Ao cancelar a assinatura, o acesso permanece até o fim do período já pago."
+
+O cancelamento **corta o acesso no mesmo segundo**. Conferi o caminho inteiro:
+
+1. A procedure de cancelar (`cancel`, em `subscription.ts`) grava
+   `status: "canceled"` **e** `cancelAtPeriodEnd: true` na mesma linha. O comentário
+   dela até explica o porquê: "Asaas não tem cancel at period end".
+2. Quem decide se a conta tem acesso é `temAcessoAtivo`. Ela libera `active`,
+   `trialing` dentro do prazo e cortesia dentro do prazo. `canceled` cai no
+   `return false` final — **sem olhar `currentPeriodEnd` nem `cancelAtPeriodEnd`**.
+3. O campo `cancelAtPeriodEnd` é lido em **um único lugar** do sistema inteiro: a
+   listagem do painel admin, para exibir. Nenhuma regra de acesso o consulta.
+
+Então a coluna que existe justamente para cumprir a promessa do contrato é escrita
+com o valor certo e **ninguém a lê**. Não é um bug de tela: é o documento contratual
+dizendo uma coisa e o sistema fazendo outra, contra o cliente que já pagou o mês.
+É o item `auth-5` da seção 12, e aparece aqui porque a consequência é jurídica.
+
+**A boa notícia é que o conserto é pequeno**, porque a peça já está no lugar: bastaria
+`temAcessoAtivo` liberar `canceled` enquanto `cancelAtPeriodEnd` for verdadeiro e
+`currentPeriodEnd` estiver no futuro. É mudança de regra de negócio (mexe em dinheiro
+e acesso), então precisa da sua decisão antes — não de análise técnica.
+
+### 15.5 Por que isto está num documento de engenharia
+
+Porque todos os itens acima se consertam de dois jeitos — mudar o código ou mudar o
+texto — e **os dois são baratos**. O que custa caro é descobrir pela reclamação de
+um cliente que assinou esperando o TJSP, ou por um pedido de reembolso amparado na
+cláusula 5. Nenhum deles precisa de decisão técnica: precisam de uma decisão do dono
+sobre o que prometer.
