@@ -133,3 +133,6 @@ scripts/.sondagem/
 
 # Planilha do resgate de cards: leva nome de cliente, não versiona
 cards-sumidos-kanban.xlsx
+
+# worktrees temporários dos agentes de implementação
+.claude/worktrees/
