@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.701 testes verdes** (12/09, depois das entregas do dia e da correção da IA; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.746 testes verdes** (12/09, depois das entregas do dia, da correção da IA, das travas D-13/D-15 e do merge do develop; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -70,8 +70,10 @@ Não é burocracia. É o custo medido de não ter tido a regra:
    abertos, 8 parciais** — três de cada quatro seguem abertos. Mas **os 15
    bloqueadores de lançamento seguraram** (14 fechados, 1 parcial): o que sobrou é
    a cauda que ninguém fechou porque ninguém tinha a lista.
-5. **Segurança:** qualquer pessoa, **sem login**, apaga a conta de quem ainda não
-   criou escritório e fica com o e-mail — basta saber o endereço (**D-13**).
+5. **Segurança — corrigido em 12/09:** qualquer pessoa, **sem login**, apagava a
+   conta de quem ainda não criou escritório e ficava com o e-mail (**D-13**); e um
+   cargo de outro escritório podia ser atribuído e obedecido (**D-15**). Os dois
+   fechados no código, sem tela nova.
 6. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
    redondo (**D-1**); a faxina diária apaga parcelas de parcelamento longo; e
    chargeback e estorno do Asaas **não têm tratamento nenhum** — o dinheiro sai da
@@ -126,7 +128,7 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | # | o que | por quê agora |
 |---|---|---|
 | 1 | **Consertar o backup da plataforma** | ele **nunca termina** em banco de tamanho real, por um impasse de stream, e fica pendurado sem erro. É a última linha de defesa e ela não está lá (item **D-14**) |
-| 2 | **Fechar o cadastro que apaga conta alheia** | qualquer pessoa, **sem login**, apaga a conta de quem ainda não criou escritório e fica com o e-mail. Basta saber o endereço (item **D-13**) |
+| 2 | ~~Fechar o cadastro que apaga conta alheia~~ **feito 12/09** | o cadastro nunca mais apaga conta: confirmada recusa e manda pro "Esqueci a senha"; não confirmada só reenvia a confirmação ao dono do e-mail (item **D-13**) |
 | 3 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
 | 4 | **Testar o Atendente IA e o JurisIA em produção depois do deploy** | o erro 400 da Anthropic foi corrigido no código em 12/09 (seção 5.2); a prova é uma mensagem respondida, não o teste verde |
 | 5 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
@@ -135,7 +137,7 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
 | 9 | **Decidir o que fazer com a cobertura de tribunais** | a venda diz "monitora processos" sem ressalva e o motor não conhece TJSP nem nenhum TRT. Ou muda o texto, ou muda a cobertura — mas não dá pra vender assim (seção 15.1) |
 | 10 | **Completar o "excluir cliente"** | ele deixa 5 tabelas intactas — telefone, CNJ, acordo, pergunta à IA — e os arquivos no disco, dizendo que apagou. É a ferramenta com que o escritório cumpre pedido de exclusão do cliente dele (seções 16.1 e 16.2) |
-| 11 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
+| 11 | ~~Validar o cargo em `atribuirCargo`~~ **feito 12/09** | `atribuirCargo` recusa cargo de outro escritório (NOT_FOUND) e `checkPermission` ignora cargo alheio, caindo no cargo pelo nome (item **D-15**) |
 | 12 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
@@ -157,7 +159,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.701 verdes, 385 arquivos** (12/09, depois de Instagram, tribunais, Sob medida, cancelamento e helper da Anthropic; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.746 verdes, 390 arquivos** (12/09, depois de Instagram, tribunais, Sob medida, cancelamento, helper da Anthropic, D-13/D-15 e o merge do develop; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -329,8 +331,21 @@ documento com valor jurídico, é a lacuna mais desconfortável desta auditoria.
 *Histórico:* já constava como P2-11 no documento de 18/08. A parte de vazamento
 entre escritórios foi corrigida em 03/09; a de permissão, não.
 
-**D-13 · Qualquer pessoa, sem login, apaga a conta de quem ainda não criou
-escritório — e fica com o e-mail.** `auth.signup` é pública, como tem de ser. Só que
+**D-13 · CORRIGIDO em 12/09 — o cadastro nunca mais apaga conta.** `auth.signup`
+passou a recusar e-mail já confirmado com `MENSAGEM_EMAIL_JA_CADASTRADO` ("Já
+existe uma conta com este e-mail. Tente fazer login ou use Esqueci a senha") e,
+quando a conta existe mas nunca confirmou o e-mail, só reenvia a confirmação ao
+dono do endereço (helper `reenviarEmailDeConfirmacao`, o mesmo da procedure
+`reenviarConfirmacao`) e responde igual a um cadastro novo — nome, senha,
+WhatsApp e termos digitados pelo estranho são descartados; com `conviteToken`
+devolve `needsConfirmation` sem aceitar o convite. Nenhum ramo tem `delete`.
+Amarra: `cadastro-nao-apaga-conta.test.ts` (7 testes, 4 mutações vermelhas).
+Efeito colateral anotado: colaborador removido de todos os escritórios que
+tenta se cadastrar de novo cai na recusa e, no login, em "Você foi removido" —
+o caminho legítimo é o convite do novo escritório. O texto abaixo é o
+diagnóstico que motivou a correção.
+
+`auth.signup` é pública, como tem de ser. Só que
 quando o e-mail já existe, em vez de recusar, ela faz isto: procura um vínculo
 **ativo** de colaborador; se não achar, marca a conta como "órfã", **apaga as linhas
 de colaborador e apaga a linha do usuário**, e segue criando a conta nova com a
@@ -378,8 +393,16 @@ Isso vale para os dois caminhos que geram o backup completo da plataforma. É a
 *Confirmei lendo o arquivo:* o `done()` está depois da espera, e é a única chamada
 dele. O `abort()` do caminho de erro também nunca é alcançado num dump grande.
 
-**D-15 · Um cargo de outro escritório pode ser atribuído a um colaborador do seu —
-e a matriz obedece.** São dois descuidos que sozinhos não fazem nada e juntos viram
+**D-15 · CORRIGIDO em 12/09.** `atribuirCargo` procura o cargo com `id` E
+`escritorioId` na mesma cláusula e responde NOT_FOUND ("Cargo não encontrado
+neste escritório") sem gravar; `checkPermission` confere o escritório do cargo
+personalizado gravado e, se for alheio ou não existir mais, cai no cargo pelo
+nome (antes, cargo apagado negava tudo). `minhasPermissoes` (só o que a UI
+mostra) não ganhou a mesma conferência — higiene pendente. Amarra:
+`cargo-do-proprio-escritorio.test.ts` (6 testes, 3 mutações vermelhas). O
+diagnóstico original segue abaixo.
+
+Eram dois descuidos que sozinhos não fazem nada e juntos viravam
 elevação de acesso.
 
 `atribuirCargo` protege o **alvo**: o colaborador precisa ser do escritório de quem
@@ -1653,7 +1676,7 @@ elevação de acesso.
 | id | o que acontece |
 |---|---|
 | `assinaturas-2` | **o IP de quem assina nunca é registrado** — vem do navegador e o navegador não manda. A tela promete que registra |
-| `auth-8` | cadastro apaga conta de quem não tem escritório, sem login (é o **D-13**) |
+| `auth-8` | ~~cadastro apaga conta de quem não tem escritório~~ **fechado 12/09** (é o **D-13**) |
 | `auth-5` | os Termos prometem acesso até o fim do período pago; cancelar **corta na hora** |
 | `auth-6` | a cota mensal lê **uma assinatura qualquer** do dono, sem filtrar status |
 | `auth-4` | no trial de plano com preço, o botão do próprio plano fica desabilitado: **não dá pra assinar** |

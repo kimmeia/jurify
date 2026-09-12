@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.701 verdes em 12/09/2026 (385 arquivos, ~1min35)
+pnpm test               # vitest (server/**/*.test.ts) — 5.746 verdes em 12/09/2026 (390 arquivos, ~1min35)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
