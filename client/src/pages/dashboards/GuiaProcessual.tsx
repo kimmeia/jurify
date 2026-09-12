@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, KeyRound, Radar, UserPlus } from "lucide-react";
-import { TRIBUNAIS_PJE } from "@shared/tribunais-pje";
+import { textoCoberturaGuia } from "@shared/tribunais-pje";
 
 const FLAG_EM_ANDAMENTO = "guiaProcessualEmAndamento";
 
@@ -195,9 +195,14 @@ export default function GuiaProcessual({
         </div>
 
         <p className="text-[11px] text-muted-foreground">
-          Cobertura hoje: PJe em {TRIBUNAIS_PJE.length} estados (
-          {TRIBUNAIS_PJE.slice(0, 5).map((t) => t.uf).join(", ")}…) · novas ações por CPF/CNPJ: TJCE.
-          Seu tribunal não está na lista? Registre o interesse no Cofre — a gente avisa quando chegar.
+          {textoCoberturaGuia()} Seu tribunal não está na lista?{" "}
+          <button
+            type="button"
+            className="font-semibold text-info-fg underline underline-offset-2"
+            onClick={() => setLocation("/processos?tab=cofre&interesse=1")}
+          >
+            Avisar quando chegar
+          </button>
         </p>
       </CardContent>
     </Card>

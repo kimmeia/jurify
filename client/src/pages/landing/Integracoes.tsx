@@ -3,11 +3,13 @@
  * Reforça credibilidade logo após o hero.
  */
 
+import { chipPjeIntegracoes } from "@shared/tribunais-pje";
+
 const integracoes = [
   { nome: "Asaas", cor: "bg-success" },
   { nome: "WhatsApp", cor: "bg-[#25d366]" },
   { nome: "Instagram", cor: "bg-[#e1306c]" },
-  { nome: "PJe · TJCE", cor: "bg-info" },
+  { nome: chipPjeIntegracoes(), cor: "bg-info" },
   { nome: "BACEN", cor: "bg-warning" },
 ];
 

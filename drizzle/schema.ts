@@ -3715,6 +3715,8 @@ export const interesseTribunais = mysqlTable(
     userId: int("userIdIntTrib").notNull(),
     tribunal: varchar("tribunalIntTrib", { length: 120 }).notNull(),
     criadoEm: timestamp("criadoEmIntTrib").defaultNow().notNull(),
+    // Quando o interessado recebeu o e-mail "entrou na cobertura". NULL = ainda na fila.
+    avisadoEm: timestamp("avisadoEmIntTrib"),
   },
   (t) => ({
     porTribunal: index("idx_interesse_tribunais_trib").on(t.tribunal),

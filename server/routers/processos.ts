@@ -40,13 +40,12 @@ import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
 import { capaPorCnjNoDataJud } from "../processos/capa-datajud";
 import { gravarCapaNoCard } from "../processos/gravar-capa-no-card";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
-import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
-import { normalizarTribunais } from "../../shared/tribunais-pje";
+import { mensagemTribunalSemMotor, normalizarTribunais } from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -295,9 +294,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message:
-            `Consulta para ${tribunal.siglaTribunal} ainda está em desenvolvimento. ` +
-            `Tribunais cobertos hoje: TJCE 1º grau. Próximos: TJSP, TRT-7, TJRJ.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
           cause: { motivo: "tribunal_sem_motor", tribunal: tribunal.codigoTribunal },
         });
       }
@@ -306,7 +303,7 @@ export const processosRouter = router({
       if (!sistemaCofre) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Sistema cofre pra ${tribunal.siglaTribunal} ainda não mapeado`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -822,7 +819,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Consulta direta pra ${tribunal.siglaTribunal} ainda não disponível.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -830,7 +827,7 @@ export const processosRouter = router({
       if (!sistemaCofre) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Sistema cofre pra ${tribunal.siglaTribunal} ainda não mapeado`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -1253,9 +1250,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message:
-            `O robô ainda não entra no ${tribunal.siglaTribunal}. ` +
-            `Hoje ele cobre: ${siglasSuportadas()}.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
