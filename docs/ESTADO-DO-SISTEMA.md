@@ -1758,7 +1758,7 @@ lugar.
 
 E há a camada de baixo, da seção 5.7: dos 16 que estão na lista, o endereço de seis
 deles é montado com o padrão do TJCE e provavelmente está errado. Então o número
-realmente comprovado continua sendo **um**.
+realmente comprovado continua sendo **um** pelo código — **dois** contando o TJMT, que o dono validou com login real em 31/08 (relato dele no CLAUDE.md; o sistema não guarda esse resultado fora da grade do Cofre em produção, que é a fonte a conferir antes de publicar qualquer número).
 
 ### 15.2 Limites vendidos que o código não impõe
 
@@ -1819,8 +1819,10 @@ O cancelamento **corta o acesso no mesmo segundo**. Conferi o caminho inteiro:
 2. Quem decide se a conta tem acesso é `temAcessoAtivo`. Ela libera `active`,
    `trialing` dentro do prazo e cortesia dentro do prazo. `canceled` cai no
    `return false` final — **sem olhar `currentPeriodEnd` nem `cancelAtPeriodEnd`**.
-3. O campo `cancelAtPeriodEnd` é lido em **um único lugar** do sistema inteiro: a
-   listagem do painel admin, para exibir. Nenhuma regra de acesso o consulta.
+3. O campo `cancelAtPeriodEnd` **não é lido por tela nenhuma**: o servidor o devolve
+   no payload de `getAllSubscriptionsWithUsers` (listagem do painel admin), mas nenhum
+   arquivo do client o consome e nenhuma regra de acesso o consulta. (Corrigido em
+   12/09 pela crítica do mockup: a versão anterior deste item dizia "para exibir".)
 
 Então a coluna que existe justamente para cumprir a promessa do contrato é escrita
 com o valor certo e **ninguém a lê**. Não é um bug de tela: é o documento contratual
@@ -1845,6 +1847,48 @@ para ele entender e aprovar — ou não — antes de qualquer código.
 | Cobertura de tribunais (15.1) | **corrigir** | aguardando mockup (o mockup mostra os dois caminhos: corrigir o texto e ampliar a cobertura, com o custo de cada um) |
 | Acesso após cancelar (15.4) | não entendido | o mockup explica com datas, antes de pedir decisão |
 | "Sob medida" entrega menos (15.3) | sem decisão ainda | entra no mesmo mockup como aviso |
+
+**Mockup entregue em 12/09: `mockup-instagram-tribunais-cancelar.html`** (raiz do repo;
+HTML navegável, fontes embutidas, sem referência externa; 4 abas; revisado por seis
+leitores críticos contra o código antes da entrega). O que a crítica mudou na proposta,
+e que vale como fato para quem for implementar:
+
+- **Instagram**: são **8 lugares** (3 na venda + 5 telas do app — a 5ª é a descrição do
+  gatilho "Mensagem recebida" em `GATILHO_META`, `shared/smartflow-types.ts`). Em
+  Configurações → Canais, **quem abre o diálogo é o `onClick` do Card inteiro**, não o
+  botão "Conectar" (que não tem handler) — travar só o botão não resolve. E
+  `TIPO_CANAL_META` já marca `instagram`/`facebook` com `emBreve: true`, flag que nenhuma
+  tela lê: é a fonte única natural. O inbox **não tem canal de e-mail** (enum de
+  `canaisIntegrados.tipo`), então "WhatsApp, Instagram e e-mail num inbox só" promete
+  duas coisas que não existem — virou decisão 1c.
+- **Tribunais**: vigiar por número = **17** (16 com credencial + TRF5 público); vigiar por
+  CPF = 16; consultar na hora = **1** (`motor-proprio-runner.ts` só trata `tjce`; por
+  CNJ os outros 16 falham *depois* de `contarUso`; por CPF busca só TJCE em silêncio).
+  São **quatro** mensagens de erro divergentes, não três (a 4ª: "Sistema cofre pra TRF-5
+  ainda não mapeado" — o TRF5 não consulta na hora). Dos 16 com credencial, 6 têm
+  endereço confirmado com login que não passou (tjrj, tjrn, tjpa, tjro, tjpe, tjdf —
+  overrides no `REGISTRO`) e 8 são derivados nunca tentados. `adminTribunais.auditar` é
+  um GET **sem credencial** (só diz se o portal redireciona pro SSO do PDPJ), e o Cofre
+  **não aceita TRT** (`SISTEMAS_VALIDOS` deriva do REGISTRO; regex `tj|trf`) — o "teste
+  sem código" responde só se o login é o mesmo. Caminho mais barato para a Justiça do
+  Trabalho: **consulta pública TRT2/TRT15** (o `TRF5Scraper` de produção herda do
+  `TRT2Scraper` do spike) — dias, não semanas, só por CNJ. Fonte única de siglas
+  proposta: `TRIBUNAIS_PJE` (grafia TJDFT) + consulta pública.
+- **Cancelar**: **`cancel` faz DELETE da assinatura no Asaas** — "reativar" não é
+  religar, é criar assinatura nova com vencimento no fim do período (ou adiar o DELETE).
+  `subscriptions` **não guarda ciclo nem data do último pagamento**: honrar o período
+  exige dado novo (migration) ou consulta ao Asaas na hora. **Quatro** lugares gravam
+  `canceled`: `subscription.cancel` (único com o flag), `cancelarAssinaturaAdmin`,
+  `cancelarAssinaturaPorAsaasId` e o webhook `SUBSCRIPTION_DELETED`. A tela mostra
+  "Próxima cobrança em 30/09" para `dueDate` 01/09 + 30d por causa do fuso
+  (`toLocaleDateString` de meia-noite UTC). Efeitos colaterais de liberar `canceled` em
+  `temAcessoAtivo`: botão Cancelar deve sumir; `cancel` deve recusar; troca de plano na
+  carência e `encerrarOutrasAssinaturas` (que hoje só encerra
+  `STATUS_SUBSTITUIVEIS`); ordem em `getActiveSubscription`; o teste
+  `cortesia-acesso.test.ts` ("status='canceled' bloqueia") terá de mudar.
+
+Decisões abertas no mockup (aba 4): 1, 1b, 1c, 2, 3 (A/B/C/D), 4, 4b, 4c, 5.
+**Nada foi implementado.**
 
 ### 15.5 Por que isto está num documento de engenharia
 
