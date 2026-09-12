@@ -93,8 +93,9 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 11. **O opt-out que o cliente faz dentro do WhatsApp não é honrado**, e a origem do
     consentimento que gravamos ninguém consegue ler. Pesa, porque o projeto já
     levou dois avisos de spam da Meta.
-12. Uma lacuna de backup provada: **20 tabelas do escritório** ficam fora do
-    backup, e a trava que deveria impedir isso tem um ponto cego (**D-2**).
+12. **Backup em dois níveis, os dois furados:** o da plataforma **nunca termina**
+    em banco de tamanho real (**D-14**), e no do escritório **20 tabelas ficam de
+    fora** porque a trava que deveria impedir isso tem um ponto cego (**D-2**).
 13. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
     assinatura eletrônica (sem controle de permissão), Instagram e Messenger
     conectáveis sem ingerir uma única mensagem, e telas que prometem "+90
@@ -104,20 +105,21 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1.1 Se for fazer só oito coisas, faça estas
+## 1.1 Se for fazer só nove coisas, faça estas
 
 Ordenado por dano × prazo × esforço, não por dificuldade.
 
 | # | o que | por quê agora |
 |---|---|---|
-| 1 | **Fechar o cadastro que apaga conta alheia** | qualquer pessoa, **sem login**, apaga a conta de quem ainda não criou escritório e fica com o e-mail. Basta saber o endereço (item **D-13**) |
-| 2 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
-| 3 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
-| 4 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
-| 5 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
-| 6 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
-| 7 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 8 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 1 | **Consertar o backup da plataforma** | ele **nunca termina** em banco de tamanho real, por um impasse de stream, e fica pendurado sem erro. É a última linha de defesa e ela não está lá (item **D-14**) |
+| 2 | **Fechar o cadastro que apaga conta alheia** | qualquer pessoa, **sem login**, apaga a conta de quem ainda não criou escritório e fica com o e-mail. Basta saber o endereço (item **D-13**) |
+| 3 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
+| 4 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
+| 5 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
+| 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
+| 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
+| 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
+| 9 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
 
@@ -127,6 +129,8 @@ E três que são quase de graça, porque são só texto:
   (seção 9.2).
 - **Corrigir a nota de metodologia do PDF do DRE** — ela lista 3 status e o cálculo
   usa 4, e é um PDF que o escritório entrega e arquiva (seção 11.5).
+- **Trocar `api_publica_tjdf` por `api_publica_tjdft`** — uma letra, e a consulta ao
+  Distrito Federal passa a funcionar (seção 5.7).
 
 ---
 
@@ -334,6 +338,29 @@ por regra. As vazias, não.
 exatamente um cadastro self-service de quem não é advogado — ou seja, a população
 nessa situação não é hipotética.
 
+**D-14 · O backup do banco da plataforma nunca termina.** Este é o pior achado da
+auditoria, e é um impasse de programação, não uma configuração errada.
+
+A rotina faz, nesta ordem: cria o compactador, liga a saída do `mysqldump` nele,
+**constrói** o objeto de upload para o S3 com esse compactador como corpo, e então
+**espera o `mysqldump` fechar** — e só depois de fechar é que chama o `done()` que
+de fato inicia o upload.
+
+O problema é que o upload só começa a **consumir** o stream quando `done()` é
+chamado. Enquanto ninguém consome, o buffer do compactador enche; cheio, ele para de
+ler a saída do `mysqldump`; e o `mysqldump`, sem poder escrever, **nunca fecha**.
+A espera nunca termina.
+
+Consequência: **qualquer banco de tamanho real não é copiado.** Basta a saída
+comprimida passar de algumas dezenas de kilobytes. E não há timeout: a função fica
+pendurada para sempre, então nem erro aparece. Banco pequeno funciona, o que é a
+pior variante possível — testar com pouco dado dá verde.
+
+Isso vale para os dois caminhos que geram o backup completo da plataforma. É a
+última linha de defesa do produto, e ela não está lá.
+*Confirmei lendo o arquivo:* o `done()` está depois da espera, e é a única chamada
+dele. O `abort()` do caminho de erro também nunca é alcançado num dump grande.
+
 ### Gravidade média
 
 **D-6 · Resíduo da migração "crédito → teto mensal" (migration 0221).** O gate
@@ -469,6 +496,12 @@ bloqueia vários sites de documentação), está escrito.
 | Meta (cobrança) | não lê o objeto `pricing` do webhook | cobrança por mensagem passa a valer | **01/10/2026** | alto |
 | Meta (`user_preferences`) | evento ignorado | é como a Meta entrega o opt-out de marketing | já vale | **alto — histórico de spam** |
 | OpenAI (endpoints) | `chat/completions`, `embeddings`, `audio/transcriptions`, `models` | todos vigentes; **não usamos a Assistants API**, que foi desligada em 26/08/2026 | — | ok |
+| IA (erro retryável) | 25 chamadas, nenhuma trata 429 nem 529 | a Anthropic classifica os dois como "tente de novo" | já vale | alto |
+| DataJud | índice `api_publica_tjdf` | o oficial é `api_publica_tjdft` | já vale | consulta ao DF falha sempre |
+| Tribunais (URL) | padrão do TJCE (`/pje1grau/`) para todos | seis dos registrados usam `/pje/` | já vale | alto |
+| Resend | limite por segundo e cota diária tratados igual | os dois chegam como 429 | já vale | fila de reenvio nunca esvazia |
+| S3 (backup) | `Upload` construído antes de esperar o dump fechar | o upload só consome o stream no `done()` | já vale | **backup nunca termina** |
+| Sentry (Express) | sem tratador de erro de rota | a doc do Sentry exige | já vale | webhooks e uploads fora do monitoramento |
 
 ### 5.2 Anthropic — dois problemas que estão quebrando AGORA
 
@@ -686,7 +719,99 @@ header (não existe HMAC do lado deles), e o nosso endpoint não tem allowlist d
 nem rate limit. Isso é limitação do provedor, não nossa — mas significa que o token
 é a única defesa, e vale tratá-lo como segredo de primeira classe.
 
-### 5.5 O que só o dono pode conferir ou resolver
+### 5.6 IA: o resto do que a conferência achou
+
+- **Nenhuma das 25 chamadas de IA trata 429 (cota) nem 529 (sobrecarregado).** Erro
+  que a própria Anthropic classifica como "tente de novo" vira **erro definitivo**.
+  No cron de monitoramento, que é o caminho de maior volume, qualquer pico da
+  Anthropic perde o resumo daquela movimentação. `fonte: doc`
+- **"Testar conexão" da Anthropic aprova 404 e 429.** A função só reprova 401, 403 e
+  erros de servidor; qualquer outro status volta como "Anthropic (Claude)
+  conectado". E **404 é exatamente o que a Claude API devolve para modelo
+  retirado.** Ou seja: o botão que existe para detectar esse problema é cego para
+  ele. `fonte: doc`
+- **`gpt-4-turbo` e `gpt-3.5-turbo` seguem escolhíveis no painel admin**, e são
+  desligados em **23/10/2026**. Um agente salvo com eles para de responder nessa
+  data, e o erro só aparece em uso. `fonte: provável`
+- **A tela do escritório oferece `gpt-4.1`**, cujo corte de API é citado para
+  **14/10/2026**, e o servidor aceita qualquer texto como nome de modelo.
+  `fonte: provável`
+
+### 5.7 DataJud e tribunais
+
+- **O índice do Distrito Federal está montado errado:** o código pede
+  `api_publica_tjdf` e o índice oficial é `api_publica_tjdft`. Consulta ao TJDFT
+  falha sempre. `fonte: doc`
+- **A URL de consulta dos tribunais estaduais é derivada do padrão do TJCE**
+  (`/pje1grau/`), e **os outros seis tribunais registrados usam `/pje/`.** Este é o
+  detalhe que muda a leitura da seção 9.2: o desenho suporta 16 tribunais, mas o
+  endereço montado para seis deles está errado. `fonte: doc`
+- **A troca da chave do DataJud não tem caminho pela tela**, e o comentário do
+  código promete que tem. `fonte: doc`
+- **Risco regulatório no caminho principal do produto.** O motor abre sessão no PJe
+  com CPF, OAB, senha e segundo fator do advogado guardados no Cofre, e navega o
+  portal com um navegador automatizado, inclusive baixando o teor das peças. A
+  Resolução CNJ 185/2013, que regulamenta o PJe, determina que a **automação de
+  consultas** se dê pelo Modelo Nacional de Interoperabilidade, não por navegação
+  automatizada com a credencial do advogado.
+  **Não sou advogado e isto não é parecer jurídico** — é um risco que merece a
+  opinião de um, porque está no caminho principal e não num detalhe. Junto vem um
+  risco operacional concreto: o navegador se identifica como Chrome 130, de outubro
+  de 2024, **dois anos velho** — é assinatura fácil para o filtro de segurança do
+  tribunal bloquear. `fonte: doc`
+- **O acervo do JurisIA cobre 60 tribunais de uma API que expõe 182:** não há
+  Justiça Eleitoral, Justiça Militar, TSE nem STM, e **nada na tela diz isso.** Uma
+  busca de jurisprudência eleitoral volta vazia com a mesma cara de "não existe".
+  `fonte: provável`
+
+### 5.8 Resend (e-mail)
+
+- **O limite por segundo e a cota diária chegam com o MESMO código 429.** O lote de
+  reenvio aborta no primeiro 429 achando que a cota acabou, quando pode ter sido só
+  velocidade — **e a fila nunca esvazia.** `fonte: doc`
+- **A resposta do Resend já traz a cota real e o tempo de espera, e o código joga
+  tudo no lixo** e adivinha com o número 100 cravado. `fonte: doc`
+- **Não há chave de idempotência**, e o desenho do reenvio **fabrica cópias do mesmo
+  e-mail.** `fonte: doc`
+- **O Resend já suprime endereço com devolução e reclamação — o app reenvia para o
+  endereço suprimido e grava "sucesso".** `fonte: doc`
+
+### 5.9 Notificação no celular e captcha
+
+- **No iPhone, o nosso service worker engole a notificação, e a Apple cancela a
+  inscrição depois de três vezes.** Quem ativou push no iPhone para de receber sem
+  saber por quê. `fonte: doc`
+- **Se o par de chaves de push mudar, todo push existente morre com 403 — e o código
+  trata 403 como aviso**, não como inscrição morta a limpar. `fonte: doc`
+- **Não existe tratamento de `pushsubscriptionchange`:** quando o navegador renova a
+  inscrição sozinho, a nova nunca chega ao servidor. `fonte: doc`
+- **O token do captcha é de uso único e ninguém o reinicia**, então **a segunda
+  tentativa de cadastro na mesma tela é sempre recusada.** `fonte: doc`
+  (Hoje isso é acadêmico, porque o widget não chega a aparecer — seção 11.1.)
+
+### 5.10 BACEN, Sentry e arquivos no S3
+
+- **O backup da plataforma nunca termina** — é o item **D-14**, o mais grave da
+  auditoria.
+- **Metade do código monta a URL do BACEN com barra onde deveria ter ponto.**
+  Existem as duas formas no mesmo repositório. Se a forma com barra for a inválida, e
+  é o que a evidência aponta, tudo que passa por ela falha sempre — incluindo o botão
+  "Buscar BACEN" da tela Imobiliário. **Não confirmado em fonte oficial:** o proxy
+  deste ambiente bloqueia todos os endereços do Banco Central. `fonte: não confirmado`
+- **Erro em rota que não é tRPC nunca chega ao Sentry.** Não existe o tratador de
+  erro do Express que a documentação do Sentry exige. Ficam de fora: o webhook do
+  Asaas, o webhook de cobrança, a rota pública de assinatura e os uploads — ou seja,
+  **justamente as rotas por onde entra dinheiro e entra cliente.** `fonte: doc`
+- **A DSN colada no painel não liga nada** (é o item da seção 11.1), e o Sentry em
+  ESM é inicializado depois dos imports, então não há rastreamento de desempenho.
+- **O link de download do backup admin assina QUALQUER caminho do bucket.** A
+  operação recebe a chave do arquivo direto do navegador e assina sem conferir
+  prefixo. Uma conta de admin da plataforma emite um link de 15 minutos para ler
+  **qualquer objeto**, incluindo comprovantes e notas fiscais que os escritórios
+  anexaram no Financeiro. Exige ser admin, então não é "qualquer usuário" — mas o
+  link é portátil, sobrevive à sessão e não deixa registro. `fonte: doc`
+
+### 5.11 O que só o dono pode conferir ou resolver
 
 Coisas fora do código. Marcadas com o que muda se ficarem como estão.
 
