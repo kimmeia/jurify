@@ -29,6 +29,12 @@ vi.mock("../escritorio/cofre-helpers", () => ({
 }));
 
 // ─── Mock consumirCreditos ──────────────────────────────────────────────────
+const consumirUso = vi.fn();
+vi.mock("../billing/limites-uso", () => ({
+  consumirUso,
+  verificarUso: vi.fn(async () => ({ permitido: true, usado: 0, limite: null, mensagem: null })),
+  registrarUso: vi.fn(),
+}));
 const consumirCreditosEscritorio = vi.fn();
 vi.mock("../billing/escritorio-creditos", () => ({
   consumirCreditosEscritorio,
@@ -90,6 +96,8 @@ beforeEach(() => {
   iniciarConsultaDocumentoMotorProprio.mockClear();
   recuperarSessao.mockReset();
   consumirCreditosEscritorio.mockReset();
+  consumirUso.mockReset();
+  consumirUso.mockResolvedValue(undefined);
 });
 
 describe("processos.consultarDocumento — validação de input", () => {
@@ -175,13 +183,10 @@ describe("processos.consultarDocumento — sucesso", () => {
     );
 
     // Cobrou exatamente 3 créditos (CUSTOS.consulta_documento)
-    expect(consumirCreditosEscritorio).toHaveBeenCalledWith(
-      1, // escritorioId
-      100, // userId
-      3, // CUSTOS.consulta_documento
-      "consulta_documento",
-      expect.stringContaining("CPF"),
-    );
+    // Busca por CPF/CNPJ tem régua PRÓPRIA (decisão do dono: dois limites
+    // separados), e não sai mais do saldo de créditos.
+    expect(consumirUso).toHaveBeenCalledWith(1, "busca_documento");
+    expect(consumirCreditosEscritorio).not.toHaveBeenCalled();
   });
 
   it("aceita CNPJ com 14 dígitos", async () => {

@@ -553,6 +553,17 @@ async function enviarResposta(canalId: number, conversaId: number, chatIdExterno
       await new Promise((r) =>
         setTimeout(r, calcularDelayDigitacaoMs(partes[i], ctxConv?.dividir.ritmo)),
       );
+      // A pausa entre bolhas é justamente a janela em que o atendente digita.
+      // Quem chama já conferiu o status antes da resposta, mas uma resposta
+      // dividida leva segundos até a última bolha — sem reconferir aqui, o
+      // robô continuava falando por cima de quem acabou de assumir.
+      if ((await pegarStatusConversa(conversaId)) === "em_atendimento") {
+        log.info(
+          { conversaId, restantes: partes.length - i },
+          "[ChatBot] Atendente assumiu — bolhas restantes canceladas",
+        );
+        break;
+      }
     }
 
     const msgId = await salvarMensagem({

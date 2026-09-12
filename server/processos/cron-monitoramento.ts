@@ -42,7 +42,15 @@ import {
   identificarPoloDoCliente,
   type PoloIdentificado,
 } from "./polo-matcher";
-import { montarCapaNovaAcao, type CapaNovaAcao } from "../../shared/nova-acao-capa";
+import {
+  montarCapaNovaAcao,
+  capaTemConteudo,
+  type CapaNovaAcao,
+  type FonteCapa,
+} from "../../shared/nova-acao-capa";
+import { capaBrutaDaLinha, capaDoScraperTemConteudo, linhaDoCnj } from "./capa-da-lista";
+import { capaPorCnjNoDataJud } from "./capa-datajud";
+import type { LinhaDaBusca } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { lerDocumentoNoRotulo } from "../../shared/documento-no-rotulo";
 import { extrairAnoCnj } from "./cnj-parser";
 import { hashEvento as hashEventoNorm } from "../../scripts/spike-motor-proprio/lib/parser-utils";
@@ -404,10 +412,23 @@ export async function pollarUmMonitoramentoMovs(
     // aqui evita o user pagar 1 cred no botão "Histórico" só pra ver
     // dados que já chegaram. Auto-cura `status="ativo"` cobre o caso
     // de monitoramento que foi marcado como "erro" e voltou a funcionar.
-    const capaJson = resultado.capa ? JSON.stringify(resultado.capa) : null;
-    const partesJson = resultado.capa?.partes
-      ? JSON.stringify(resultado.capa.partes)
-      : null;
+    // Capa vazia NÃO entra no UPDATE: uma visita que voltou sem nada (página
+    // do processo não abriu, portal fora do ar) apagava a capa e as partes que
+    // uma visita boa já tinha trazido. Sem valor pra gravar, o campo fica de
+    // fora do `set` e o que está no banco continua lá.
+    const capaUtil = capaDoScraperTemConteudo(resultado.capa) ? resultado.capa : null;
+    const camposDaCapa = capaUtil
+      ? {
+          capaJson: JSON.stringify(capaUtil),
+          partesJson: Array.isArray(capaUtil.partes) ? JSON.stringify(capaUtil.partes) : null,
+        }
+      : {};
+    if (resultado.capa && !capaUtil) {
+      log.warn(
+        { monId: mon.id, cnj: mon.searchKey },
+        "[motor-cron] capa veio vazia — mantendo a que já estava gravada",
+      );
+    }
 
     if (isPrimeiraExecucao) {
       for (const mov of resultado.movimentacoes) {
@@ -453,8 +474,7 @@ export async function pollarUmMonitoramentoMovs(
           hashUltimasMovs: novoHash,
           ultimaMovimentacaoEm: ultimaMov ? new Date(ultimaMov.data) : null,
           ultimaMovimentacaoTexto: ultimaMov?.texto.slice(0, 500) ?? null,
-          capaJson,
-          partesJson,
+          ...camposDaCapa,
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
@@ -562,8 +582,7 @@ export async function pollarUmMonitoramentoMovs(
             ultimaMovimentacaoEm: new Date(ultimaMov.data),
             ultimaMovimentacaoTexto: ultimaMov.texto.slice(0, 500),
             totalAtualizacoes: mon.totalAtualizacoes + movsNovas.length,
-            capaJson,
-            partesJson,
+            ...camposDaCapa,
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
@@ -639,8 +658,7 @@ export async function pollarUmMonitoramentoMovs(
           .update(motorMonitoramentos)
           .set({
             hashUltimasMovs: novoHash,
-            capaJson,
-            partesJson,
+            ...camposDaCapa,
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
@@ -651,8 +669,7 @@ export async function pollarUmMonitoramentoMovs(
       await db
         .update(motorMonitoramentos)
         .set({
-          capaJson,
-          partesJson,
+          ...camposDaCapa,
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
@@ -873,6 +890,8 @@ export async function pollarUmMonitoramentoNovasAcoes(
       sessao: string;
       cfg: NonNullable<ReturnType<typeof getConfigTribunal>>;
       cnjs: string[];
+      /** O que a grade de resultados mostrava de cada processo. */
+      linhas: LinhaDaBusca[];
     };
     const consultas: ConsultaTribunal[] = [];
     const falhas: Array<{ tribunal: string; erro: string }> = [];
@@ -904,7 +923,13 @@ export async function pollarUmMonitoramentoNovasAcoes(
         falhas.push({ tribunal, erro: (resultado.mensagemErro ?? "Erro na consulta CPF").slice(0, 200) });
         continue;
       }
-      consultas.push({ tribunal, sessao, cfg: cfgTribunal, cnjs: resultado.cnjs });
+      consultas.push({
+        tribunal,
+        sessao,
+        cfg: cfgTribunal,
+        cnjs: resultado.cnjs,
+        linhas: resultado.linhas ?? [],
+      });
     }
 
     const varreduraJson = JSON.stringify({
@@ -938,7 +963,13 @@ export async function pollarUmMonitoramentoNovasAcoes(
     // silêncio (registra sem alarmar), senão todo o estoque antigo dele viraria
     // "ação nova" no dia seguinte à ampliação.
     const cnjsBaseline: Array<{ cnj: string; tribunal: string }> = [];
-    const cnjsNovos: Array<{ cnj: string; tribunal: string; sessao: string; cfg: ConsultaTribunal["cfg"] }> = [];
+    const cnjsNovos: Array<{
+      cnj: string;
+      tribunal: string;
+      sessao: string;
+      cfg: ConsultaTribunal["cfg"];
+      linha: LinhaDaBusca | null;
+    }> = [];
     // Baseline "novo" inclui a varredura que achou zero — ela também precisa
     // ficar registrada (cnjsConhecidos regravado + tribunal no baseline),
     // senão o primeiro processo futuro entraria mudo de novo.
@@ -949,7 +980,14 @@ export async function pollarUmMonitoramentoNovasAcoes(
       for (const cnj of c.cnjs) {
         if (cnjsConhecidos.includes(cnj)) continue;
         if (primeiraDoTribunal) cnjsBaseline.push({ cnj, tribunal: c.tribunal });
-        else cnjsNovos.push({ cnj, tribunal: c.tribunal, sessao: c.sessao, cfg: c.cfg });
+        else
+          cnjsNovos.push({
+            cnj,
+            tribunal: c.tribunal,
+            sessao: c.sessao,
+            cfg: c.cfg,
+            linha: linhaDoCnj(c.linhas, cnj),
+          });
       }
       baselineFeito.add(c.tribunal);
     }
@@ -1043,35 +1081,45 @@ export async function pollarUmMonitoramentoNovasAcoes(
       const cnjsRelevantes: string[] = [];
       const cnjsSilenciados: Array<{ cnj: string; motivo: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" }> = [];
 
-      for (const { cnj, tribunal, sessao, cfg } of cnjsNovos) {
+      for (const { cnj, tribunal, sessao, cfg, linha } of cnjsNovos) {
         let isRelevante = true;
         let motivoSilencio: "polo_ativo" | "anterior_cadastro" | "cnj_antigo" | null = null;
         let dataDistribuicao: Date | null = null;
         let poloDoCliente: PoloIdentificado = "desconhecido";
         let capaColetada: CapaNovaAcao | null = null;
 
+        // A capa tem três fontes, nesta ordem: a página do processo (traz
+        // tudo), a grade de resultados da busca (traz o essencial, de graça,
+        // e é o que salva o card quando a página não abre) e o DataJud
+        // (público, sem custo, sem as partes). A procedência fica gravada
+        // porque um card com meia capa não pode parecer um card completo.
+        const montar = (
+          bruta: Parameters<typeof montarCapaNovaAcao>[0],
+          fonte: FonteCapa,
+        ): { capa: CapaNovaAcao; polo: PoloIdentificado; data: Date | null } | null => {
+          const partes = Array.isArray(bruta.partes) ? bruta.partes : [];
+          const polo = identificarPoloDoCliente(mon.apelido, mon.searchKey, partes);
+          const capa = montarCapaNovaAcao(bruta, polo, new Date().toISOString(), {
+            oabEscritorio,
+            fonte,
+          });
+          if (!capaTemConteudo(capa)) return null;
+          const candidato = capa.dataDistribuicao ? new Date(capa.dataDistribuicao) : null;
+          return {
+            capa,
+            polo,
+            data: candidato && !Number.isNaN(candidato.getTime()) ? candidato : null,
+          };
+        };
+
+        let escolhida: ReturnType<typeof montar> = null;
         try {
           // O detail scrape roda no tribunal DO CNJ — sessão e config vieram
           // da consulta que o achou, não do tribunal-sede do monitoramento.
           const detalhe = await consultarTjce(cnj, sessao, cfg);
-          if (detalhe.ok && detalhe.capa) {
-            if (detalhe.capa.dataDistribuicao) {
-              const candidato = new Date(detalhe.capa.dataDistribuicao);
-              if (!Number.isNaN(candidato.getTime())) {
-                dataDistribuicao = candidato;
-              }
-            }
-            const partes = Array.isArray(detalhe.capa.partes) ? detalhe.capa.partes : [];
-            poloDoCliente = identificarPoloDoCliente(mon.apelido, mon.searchKey, partes);
-            // Este scrape é o único que acontece por CNJ novo. O que não for
-            // guardado aqui só volta pagando outra consulta.
-            capaColetada = montarCapaNovaAcao(
-              detalhe.capa,
-              poloDoCliente,
-              new Date().toISOString(),
-              { oabEscritorio },
-            );
-          }
+          // Este scrape é o único que acontece por CNJ novo. O que não for
+          // guardado aqui só volta pagando outra consulta.
+          if (detalhe.ok && detalhe.capa) escolhida = montar(detalhe.capa, "processo");
         } catch (err) {
           log.warn(
             {
@@ -1081,6 +1129,34 @@ export async function pollarUmMonitoramentoNovasAcoes(
             },
             "[motor-cron] detail scrape pra polo/data falhou — tratando como relevante",
           );
+        }
+
+        if (!escolhida && linha) escolhida = montar(capaBrutaDaLinha(linha), "lista");
+
+        if (!escolhida) {
+          // Reserva pública: preenche a natureza pra o card não nascer mudo.
+          // Não traz partes, então o polo continua "desconhecido" e a ação vai
+          // pra gaveta de não identificados, com os botões de marcar à mão.
+          const doCnj = await capaPorCnjNoDataJud(cnj);
+          if (doCnj) {
+            escolhida = montar(
+              {
+                classe: doCnj.classe,
+                assuntos: doCnj.assuntos,
+                orgaoJulgador: doCnj.orgaoJulgador,
+                valorCausaCentavos: null,
+                dataDistribuicao: doCnj.dataAjuizamento,
+                partes: [],
+              },
+              "datajud",
+            );
+          }
+        }
+
+        if (escolhida) {
+          capaColetada = escolhida.capa;
+          poloDoCliente = escolhida.polo;
+          dataDistribuicao = escolhida.data;
         }
 
         // Regra 1: polo ativo confirmado → silencia (cliente é o autor)

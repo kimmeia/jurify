@@ -10,6 +10,7 @@ import { checkPermission } from "./check-permission";
 import { cancelarContratosDoContato } from "./cancelar-contrato";
 import { validarCpfCnpj, validarEmail, validarTelefone } from "../../shared/validacoes";
 import { FALTA_TIPOS, FILTROS_GRUPO, MENSAGEM_CPFS_DIFERENTES, cpfsConflitam } from "../../shared/conferencia-cadastros";
+import { CAMPOS_ESCOLHIVEIS } from "../../shared/mesclar-campos";
 import { verificarLimite } from "../billing/plan-limits";
 import { dataHojeBR, inicioDoDiaNoFuso, FUSO_HORARIO_PADRAO } from "../../shared/escritorio-types";
 import { excluirClienteEmCascata } from "./excluir-cliente";
@@ -139,7 +140,7 @@ function contatosMeusPorLead(
  * arquivos, pastas, conversas, leads. Sem isso, atendente com verProprios
  * conseguia operar em qualquer cliente do escritório só conhecendo o ID.
  */
-async function podeVerCliente(
+export async function podeVerCliente(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   contatoId: number,
   escritorioId: number,
@@ -1848,6 +1849,59 @@ export const clientesRouter = router({
    * empate, a mais antiga) — a mesma regra da unificação automática. Só quem
    * pode excluir clientes vê a lista, que é a permissão do "Mesclar".
    */
+  /**
+   * Os dois lados de uma mesclagem, campo a campo, pro passo "o que fica na
+   * ficha final". Serve as duas telas que mesclam um par por vez (a ficha e a
+   * linha da Conferência) — o cálculo das linhas é o MESMO módulo compartilhado
+   * que o servidor usa pra aplicar, senão a tela prometeria uma coisa e o banco
+   * gravaria outra.
+   */
+  camposParaMesclar: protectedProcedure
+    .input(z.object({
+      principalId: z.number().int().positive(),
+      duplicadoId: z.number().int().positive(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
+      if (!perm.allowed) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Só quem pode excluir clientes mescla cadastros." });
+      }
+      const db = await getDb();
+      if (!db) throw new Error("Database indisponível");
+      const fichas = await db
+        .select({
+          id: contatos.id, nome: contatos.nome, telefone: contatos.telefone,
+          telefonesSecundarios: contatos.telefonesSecundarios, email: contatos.email,
+          cpfCnpj: contatos.cpfCnpj, observacoes: contatos.observacoes, tags: contatos.tags,
+          responsavelId: contatos.responsavelId,
+        })
+        .from(contatos)
+        .where(and(
+          eq(contatos.escritorioId, perm.escritorioId),
+          inArray(contatos.id, [input.principalId, input.duplicadoId]),
+        ));
+      const acha = (id: number) => fichas.find((f) => f.id === id);
+      const p = acha(input.principalId);
+      const d = acha(input.duplicadoId);
+      if (!p || !d) throw new TRPCError({ code: "NOT_FOUND", message: "Cadastro não encontrado." });
+
+      const idsResp = [p.responsavelId, d.responsavelId].filter((n): n is number => typeof n === "number");
+      const nomes = new Map<number, string>();
+      if (idsResp.length > 0) {
+        const rows = await db
+          .select({ id: colaboradores.id, nome: users.name })
+          .from(colaboradores)
+          .innerJoin(users, eq(users.id, colaboradores.userId))
+          .where(and(eq(colaboradores.escritorioId, perm.escritorioId), inArray(colaboradores.id, idsResp)));
+        for (const r of rows) if (r.nome) nomes.set(r.id, r.nome);
+      }
+      const comNome = (f: typeof p) => ({
+        ...f,
+        responsavelNome: f.responsavelId != null ? nomes.get(f.responsavelId) ?? null : null,
+      });
+      return { principal: comNome(p), duplicado: comNome(d) };
+    }),
+
   possiveisDuplicadosTelefone: protectedProcedure.query(async ({ ctx }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "excluir");
     if (!perm.allowed) return { podeVer: false, grupos: [] as PossivelDuplicadoGrupo[] };
@@ -1888,6 +1942,8 @@ export const clientesRouter = router({
         duplicadoId: z.number().int().positive(),
         /** Decisão 1 (09/09): duas fichas com CPFs diferentes só mesclam com confirmação explícita na tela. */
         confirmarCpfDiferente: z.boolean().optional(),
+        /** Só o que o usuário mudou em relação ao padrão; "Mesclar todos" não manda nada. */
+        escolhas: z.record(z.enum(CAMPOS_ESCOLHIVEIS), z.enum(["principal", "duplicado"])).optional(),
       })).min(1).max(50),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -1921,6 +1977,7 @@ export const clientesRouter = router({
             duplicadoId: par.duplicadoId,
             origem: "manual",
             executadoPor: perm.colaboradorId,
+            escolhas: par.escolhas,
           });
           feitos.push(par.duplicadoId);
         } catch (err: any) {

@@ -111,8 +111,31 @@ export interface ResultadoScraper {
   mensagemErro: string | null;
   /** Caminho do screenshot capturado em caso de erro (debug) */
   screenshotPath: string | null;
+  /**
+   * O que a TABELA DE RESULTADOS da busca mostrava, lida pelos títulos das
+   * colunas. Vem junto de graça e serve de rede quando a página do processo
+   * não abre — mas é resumo, não capa: sem valor da causa, sem advogados.
+   */
+  linhasDaBusca?: LinhaDaBusca[];
   /** Quando a raspagem terminou (ISO 8601) */
   finalizadoEm: string;
+}
+
+/**
+ * Uma linha da tabela de resultados da busca do tribunal.
+ *
+ * Lida pelo TÍTULO de cada coluna: se o tribunal mudar os títulos, não vem
+ * nada — nunca vem o campo errado. É a lição do card que mostrou "Polo ativo"
+ * como natureza da ação.
+ */
+export interface LinhaDaBusca {
+  cnj: string;
+  classe: string | null;
+  orgaoJulgador: string | null;
+  /** Como o tribunal escreveu (dd/mm/aaaa ou "11 ago 2025"). */
+  autuadoEm: string | null;
+  poloAtivo: string[];
+  poloPassivo: string[];
 }
 
 /**
@@ -123,6 +146,7 @@ export interface ResultadoScraper {
  *  - `timeout`: tribunal não respondeu dentro do limite
  *  - `parse_falhou`: HTML carregou mas seletores não bateram
  *  - `tribunal_indisponivel`: HTTP 5xx ou erro de rede
+ *  - `detalhe_nao_abriu`: o processo apareceu na busca mas a página dele não abriu
  *  - `outro`: qualquer outra coisa não classificada
  */
 export type CategoriaErro =
@@ -132,6 +156,7 @@ export type CategoriaErro =
   | "parse_falhou"
   | "tribunal_indisponivel"
   | "sessao_expirada"
+  | "detalhe_nao_abriu"
   | "outro";
 
 /**

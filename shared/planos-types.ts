@@ -30,7 +30,18 @@ export interface PlanoLimites {
   maxMonitoramentosProcessos: number | null;
   /** Monitoramentos por CPF/CNPJ (novas ações). null = sem limite. */
   maxMonitoramentosCpf: number | null;
+  /**
+   * Cálculos por mês. O nome da coluna é histórico ("créditos de cálculo"),
+   * mas o número virou limite direto: 0 ou null = sem limite, que é o que
+   * preserva os planos antigos, onde ninguém conferia isso.
+   */
   creditosCalculosMes: number;
+  /** Consultas de processo pelo número, por mês. null/0 = sem limite. */
+  maxConsultasProcessoMes: number | null;
+  /** Buscas de processos por CPF/CNPJ, por mês. null/0 = sem limite. */
+  maxBuscasDocumentoMes: number | null;
+  /** Resumos de processo com IA, por mês. null/0 = sem limite. */
+  maxResumosIaMes: number | null;
   /** Mensagens do JurisIA por mês. 0 = módulo desligado no plano. */
   jurisiaMensagensMes: number;
 }

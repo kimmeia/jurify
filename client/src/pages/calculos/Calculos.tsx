@@ -147,6 +147,16 @@ export default function Calculos() {
   const { data: stats } = trpc.dashboard.stats.useQuery();
   const { data: historico } = trpc.dashboard.historico.useQuery();
   const { data: credits } = trpc.dashboard.credits.useQuery();
+  // Uso do mês: cálculo passou a contar no teto do plano (11/09/2026), no
+  // lugar do saldo de créditos que era compartilhado com o motor de processos.
+  const { data: usoMes } = (trpc as any).dashboard.usoDoMes.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: 60_000,
+  });
+  const usoCalculo = Array.isArray(usoMes) ? usoMes.find((u: any) => u.operacao === "calculo") : null;
+  const limiteCalculo: number | null = usoCalculo?.limite ?? null;
+  const fracaoCalculo = limiteCalculo ? Math.min(1, (usoCalculo?.usado ?? 0) / limiteCalculo) : 0;
 
   const submoduloPorTipo = useMemo(() => {
     const map: Partial<Record<TipoCalculo, typeof SUBMODULOS[number]>> = {};
@@ -228,26 +238,32 @@ export default function Calculos() {
               </div>
 
               <div className="lg:col-span-6">
-                <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Créditos</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                    <p className="text-xs text-white/70 mb-1">Disponíveis</p>
-                    <p className="text-2xl font-bold tabular-nums leading-none text-success">
-                      {credits?.creditsRemaining ?? "—"}
-                    </p>
-                  </div>
-                  <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                    <p className="text-xs text-white/70 mb-1">Usados</p>
-                    <p className="text-2xl font-bold tabular-nums leading-none">
-                      {credits?.creditsUsed ?? "—"}
-                    </p>
-                  </div>
-                  <div className="bg-white/10 rounded-lg px-3 py-2 border border-white/15">
-                    <p className="text-xs text-white/70 mb-1">Renova em</p>
-                    <p className="text-2xl font-bold tabular-nums leading-none">
-                      {diasAteReset != null ? `${diasAteReset}d` : "—"}
-                    </p>
-                  </div>
+                <p className="text-[10px] text-white/65 uppercase tracking-wider mb-2">Cálculos deste mês</p>
+                <div className="rounded-lg border border-white/15 bg-white/10 px-3 py-2">
+                  {limiteCalculo ? (
+                    <>
+                      <p className="text-2xl font-bold tabular-nums leading-none">
+                        {usoCalculo?.usado ?? 0}
+                        <span className="text-base font-semibold text-white/70"> de {limiteCalculo}</span>
+                      </p>
+                      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20">
+                        <div
+                          className={"h-full rounded-full " + (fracaoCalculo >= 1 ? "bg-danger" : fracaoCalculo >= 0.8 ? "bg-warning" : "bg-success")}
+                          style={{ width: `${Math.round(fracaoCalculo * 100)}%` }}
+                        />
+                      </div>
+                      <p className="mt-1.5 text-xs text-white/70">
+                        {fracaoCalculo >= 1
+                          ? "Acabou por este mês. Fale com a gente para liberar mais."
+                          : "O contador zera na virada do mês."}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold leading-none text-success">Sem limite</p>
+                      <p className="mt-1.5 text-xs text-white/70">Seu plano não limita cálculos por mês.</p>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

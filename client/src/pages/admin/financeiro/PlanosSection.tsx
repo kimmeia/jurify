@@ -35,6 +35,9 @@ export interface PlanoEditavel {
   maxAgentesIa: number;
   maxMonitoramentosProcessos: number | null;
   maxMonitoramentosCpf: number | null;
+  maxConsultasProcessoMes: number | null;
+  maxBuscasDocumentoMes: number | null;
+  maxResumosIaMes: number | null;
   creditosCalculosMes: number;
   jurisiaMensagensMes: number;
   precoSobConsulta: boolean;

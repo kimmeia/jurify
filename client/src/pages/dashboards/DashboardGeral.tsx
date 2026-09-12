@@ -14,6 +14,7 @@ import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Progress } from "@/components/ui/progress";
+import { UsoDoMes } from "@/components/UsoDoMes";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, MessageCircle, Gavel, AlertTriangle, TrendingUp, CalendarDays } from "lucide-react";
 import { useLocation } from "wouter";
@@ -394,43 +395,12 @@ export default function DashboardGeral() {
 
         {/* Créditos */}
         <ListaCard
-          titulo="Créditos de cálculo"
-          subtitulo={isUnlimited ? "Plano sem limite" : "Consumo do saldo"}
-          rodape={
-            <>
-              <span>{isUnlimited ? "Sem limite de consumo" : `${percentCreditos}% do saldo consumido`}</span>
-              {credits?.resetAt && (
-                <span className="tabular-nums">
-                  Último reset em {formatDataCurta(new Date(credits.resetAt))}
-                </span>
-              )}
-            </>
-          }
+          titulo="Uso do plano neste mês"
+          subtitulo="Consultas, buscas, resumos e cálculos"
+          rodape={<span>O contador zera na virada do mês</span>}
         >
           <div className="space-y-3 px-2 pb-2 pt-3">
-            {isUnlimited ? (
-              <div className="flex items-center gap-3">
-                <div className="h-2 w-full rounded-full bg-success-bg">
-                  <div className="h-2 w-full rounded-full bg-success" />
-                </div>
-                <span className="whitespace-nowrap text-xs font-semibold text-success-fg">
-                  ∞ Ilimitado
-                </span>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between text-xs">
-                  <span className="tabular-nums text-muted-foreground">
-                    <b className="text-foreground">{creditsUsed}</b> usados de{" "}
-                    <b className="text-foreground">{creditsTotal}</b>
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">
-                    <b className="text-foreground">{creditsRemaining}</b> restante(s)
-                  </span>
-                </div>
-                <Progress value={percentCreditos} className="h-2" />
-              </>
-            )}
+            <UsoDoMes titulo="" />
           </div>
         </ListaCard>
       </div>

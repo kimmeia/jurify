@@ -1029,6 +1029,43 @@ export async function arquivarConversasDeCanaisDesativados(escritorioId: number)
   return Number((result as { affectedRows?: number })?.affectedRows ?? 0);
 }
 
+/**
+ * Encerra os roteiros do SmartFlow que ficaram PARADOS nesta conversa
+ * esperando o cliente responder.
+ *
+ * Sem isso, "encerrei o atendimento" não alcança o robô: a execução segue
+ * `rodando` apontando pro contato, e a próxima mensagem dele é casada por
+ * `acharExecucaoAguardando` e RETOMA o roteiro do ponto onde parou. Retomada
+ * não passa pelo "Roda por contato" — esse limite só é consultado quando um
+ * roteiro COMEÇA —, então o fluxo marcado "1x a cada 24h" voltava a falar no
+ * mesmo dia, logo depois do encerramento.
+ *
+ * Só as paradas, por `retomarEm`/`aguardandoMensagemContatoId`: a execução que
+ * está rodando neste instante não tem nenhum dos dois gravados, e cancelá-la
+ * sobrescreveria o desfecho dela — inclusive o da execução que acabou de
+ * encerrar a conversa pelo próprio bloco "Encerrar conversa".
+ */
+export async function encerrarRoteirosParadosDaConversa(
+  id: number,
+  escritorioId: number,
+  motivo: string,
+): Promise<number> {
+  const db = await getDb();
+  if (!db) return 0;
+  const [res] = await db.update(smartflowExecucoes)
+    .set({ status: "cancelado", retomarEm: null, aguardandoMensagemContatoId: null, erro: motivo })
+    .where(and(
+      eq(smartflowExecucoes.escritorioId, escritorioId),
+      eq(smartflowExecucoes.conversaId, id),
+      eq(smartflowExecucoes.status, "rodando"),
+      or(
+        isNotNull(smartflowExecucoes.retomarEm),
+        isNotNull(smartflowExecucoes.aguardandoMensagemContatoId),
+      ),
+    ));
+  return Number((res as { affectedRows?: number })?.affectedRows ?? 0);
+}
+
 export async function atualizarConversa(id: number, escritorioId: number, dados: Record<string, any>) {
   const db = await getDb();
   if (!db) throw new Error("Database indisponível");
@@ -1040,6 +1077,11 @@ export async function atualizarConversa(id: number, escritorioId: number, dados:
   if (Object.keys(updateData).length === 0) return;
   await db.update(conversas).set(updateData)
     .where(and(eq(conversas.id, id), eq(conversas.escritorioId, escritorioId)));
+  // Encerrar o atendimento encerra também o roteiro do robô que estava
+  // esperando o cliente — senão a volta dele retomava o fluxo por cima.
+  if (dados.status === "resolvido" || dados.status === "fechado") {
+    await encerrarRoteirosParadosDaConversa(id, escritorioId, "Atendimento encerrado");
+  }
   // Assumir/transferir a conversa também adota o contato quando ele está sem
   // responsável — é o mesmo ato do ponto de vista de quem atende.
   if (dados.atendenteId) {

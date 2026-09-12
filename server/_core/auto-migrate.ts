@@ -1428,6 +1428,28 @@ export async function runMigrations(): Promise<void> {
     // SmartFlow configGatilhoSF — config específica do gatilho (canais, dias, etc.)
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN configGatilhoSF TEXT NULL`); } catch { /* exists */ }
 
+    // Limites de uso por mês (substituem o saldo de créditos nas operações).
+    // NULL e 0 = sem limite: nenhum plano existente passa a barrar nada.
+    for (const col of ["max_consultas_processo_mes", "max_buscas_documento_mes", "max_resumos_ia_mes"]) {
+      try { await connection.query(`ALTER TABLE planos ADD COLUMN ${col} INT DEFAULT NULL`); } catch { /* exists */ }
+    }
+    try {
+      await connection.query(`CREATE TABLE IF NOT EXISTS escritorio_uso_mensal (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        escritorioId INT NOT NULL,
+        competencia VARCHAR(7) NOT NULL,
+        operacao VARCHAR(40) NOT NULL,
+        quantidade INT NOT NULL DEFAULT 0,
+        extraConcedido INT NOT NULL DEFAULT 0,
+        createdAtUso TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAtUso TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unq_uso_escritorio_competencia_operacao (escritorioId, competencia, operacao)
+      )`);
+    } catch { /* exists */ }
+
+    // Assinatura: por que o PDF carimbado não saiu (NULL = nunca falhou).
+    try { await connection.query(`ALTER TABLE assinaturas_digitais ADD COLUMN comprovanteErro TEXT DEFAULT NULL`); } catch { /* exists */ }
+
     // SmartFlow layoutSF — posições x/y dos nós no editor (JSON, só visual).
     try { await connection.query(`ALTER TABLE smartflow_cenarios ADD COLUMN layoutSF TEXT NULL`); } catch { /* exists */ }
 

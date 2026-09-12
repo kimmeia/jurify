@@ -252,7 +252,13 @@ describe("reconhecerCadastroNaEntrada — a conversa segue o cadastro completo",
     expect(reg.values).toEqual(expect.objectContaining({ escritorioId: 1, principalId: 41, duplicadoId: 40, origem: "automatica", executadoPor: null }));
     expect(reg.values.duplicadoSnapshot).toEqual(expect.objectContaining({ id: 40, nome: "Francisco" }));
     expect(reg.values.movidos).toEqual({ conversas: [501, 502] });
-    expect(reg.values.principalAntes).toEqual({ email: null, cpfCnpj: "81012345640", observacoes: "obs", telefonesSecundarios: null });
+    // 10/09: a fotografia passou a cobrir TODO campo que a escolha campo a campo
+    // pode sobrescrever — sem nome, tags e responsável aqui, o Desfazer devolveria
+    // a ficha absorvida e deixaria a sobrevivente com o nome trocado.
+    expect(reg.values.principalAntes).toEqual({
+      nome: "Francisco Nogueira Lima", email: null, cpfCnpj: "81012345640",
+      observacoes: "obs", telefonesSecundarios: null, tags: null, responsavelId: null,
+    });
   });
 
   it("ficha que já é cadastro (CPF) não é mexida — nem procura outras", async () => {

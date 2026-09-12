@@ -29,6 +29,7 @@
 
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import crypto from "crypto";
+import { textoParaPdfWinAnsi } from "../../shared/texto-pdf-winansi";
 
 export type CampoTipo = "ASSINATURA" | "DATA" | "NOME" | "CPF";
 
@@ -66,6 +67,19 @@ const COR_CINZA_LINHA = rgb(0.6, 0.6, 0.6);
 const COR_CINZA_FOOTER = rgb(0.5, 0.5, 0.5);
 const COR_PRETO = rgb(0.1, 0.1, 0.1);
 
+/**
+ * Tudo que vem de fora (nome do assinante, CPF, IP) passa por aqui antes de
+ * virar texto no PDF.
+ *
+ * As fontes padrão do PDF só escrevem WinAnsi. Um nome turco ("Şahin"),
+ * polonês ou tcheco derrubava a geração inteira com "WinAnsi cannot encode",
+ * e o cliente ficava com a assinatura registrada e SEM o comprovante — que é
+ * justamente o documento que ele precisa ter na mão.
+ */
+function escrever(v: string | null | undefined): string {
+  return textoParaPdfWinAnsi(v);
+}
+
 export async function estamparAssinatura(dados: DadosAssinatura): Promise<Buffer> {
   const pdfDoc = await PDFDocument.load(dados.pdfOriginal);
   const pngImage = await pdfDoc.embedPng(dados.assinaturaImagem);
@@ -98,8 +112,8 @@ export async function estamparAssinatura(dados: DadosAssinatura): Promise<Buffer
         const fontSize = Math.min(14, Math.max(8, campo.altura * 0.7));
         let texto = "";
         if (campo.tipo === "DATA") texto = dataFormatada;
-        else if (campo.tipo === "NOME") texto = dados.nomeCompleto;
-        else if (campo.tipo === "CPF") texto = dados.cpf || "";
+        else if (campo.tipo === "NOME") texto = escrever(dados.nomeCompleto);
+        else if (campo.tipo === "CPF") texto = escrever(dados.cpf);
 
         if (texto) {
           // Posiciona o baseline do texto um pouco acima do bottom da
@@ -146,11 +160,11 @@ export async function estamparAssinatura(dados: DadosAssinatura): Promise<Buffer
     font: helv,
   });
   y -= 22;
-  cert.drawText(dados.nomeCompleto, { x: 50, y, size: 13, font: helvBold });
+  cert.drawText(escrever(dados.nomeCompleto), { x: 50, y, size: 13, font: helvBold });
 
   if (dados.cpf) {
     y -= 18;
-    cert.drawText(`CPF: ${dados.cpf}`, { x: 50, y, size: 11, font: helv });
+    cert.drawText(`CPF: ${escrever(dados.cpf)}`, { x: 50, y, size: 11, font: helv });
   }
 
   y -= 18;
@@ -161,7 +175,7 @@ export async function estamparAssinatura(dados: DadosAssinatura): Promise<Buffer
 
   if (dados.ip) {
     y -= 18;
-    cert.drawText(`Endereço IP: ${dados.ip}`, { x: 50, y, size: 11, font: helv });
+    cert.drawText(escrever(`Endereço IP: ${dados.ip}`), { x: 50, y, size: 11, font: helv });
   }
 
   // Hash SHA-256 do PDF ORIGINAL (sem carimbo nem certificação).

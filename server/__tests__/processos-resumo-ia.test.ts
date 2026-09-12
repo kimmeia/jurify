@@ -32,7 +32,13 @@ afterAll(() => {
   globalThis.fetch = originalFetch;
 });
 
-// ─── Mock consumirCreditos ──────────────────────────────────────────────────
+// ─── Mock do limite de uso (substituiu o débito de crédito em 11/09/2026) ────
+const consumirUso = vi.fn();
+vi.mock("../billing/limites-uso", () => ({
+  consumirUso,
+  verificarUso: vi.fn(async () => ({ permitido: true, usado: 0, limite: null, mensagem: null })),
+  registrarUso: vi.fn(),
+}));
 const consumirCreditosEscritorio = vi.fn();
 vi.mock("../billing/escritorio-creditos", () => ({
   consumirCreditosEscritorio,
@@ -166,6 +172,8 @@ beforeEach(() => {
   adminDecrypt.mockReset();
   fetchMock.mockReset();
   consumirCreditosEscritorio.mockReset();
+  consumirUso.mockReset();
+  consumirUso.mockResolvedValue(undefined);
 });
 
 describe("processos.resumoIA — pré-condições", () => {
@@ -226,10 +234,10 @@ describe("processos.resumoIA — fluxo OpenAI", () => {
     // adaptarParaJuditShape retorna `code` ou similar — confirma que veio capa
     expect(result.processo).toMatchObject({ classifications: expect.any(Array) });
 
-    // Cobrou exatamente 1 crédito antes da chamada externa
-    expect(consumirCreditosEscritorio).toHaveBeenCalledWith(
-      1, 100, 1, "resumo_ia", expect.any(String),
-    );
+    // Contou um resumo no limite do mês antes da chamada externa — e NÃO
+    // debitou crédito nenhum (a régua mudou, uma só).
+    expect(consumirUso).toHaveBeenCalledWith(1, "resumo_ia");
+    expect(consumirCreditosEscritorio).not.toHaveBeenCalled();
 
     // Chamou OpenAI com Bearer token
     expect(fetchMock).toHaveBeenCalledWith(

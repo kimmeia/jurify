@@ -37,6 +37,8 @@ import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
+import { capaPorCnjNoDataJud } from "../processos/capa-datajud";
+import { gravarCapaNoCard } from "../processos/gravar-capa-no-card";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
 import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
@@ -69,6 +71,7 @@ const PACOTES_CREDITOS = [
 
 export { CUSTOS } from "../processos/custos-creditos";
 import { CUSTOS } from "../processos/custos-creditos";
+import type { OperacaoLimitada } from "../../shared/limites-uso";
 
 function safeParse(json: string): unknown {
   try {
@@ -150,18 +153,18 @@ function adaptarParaJuditShape(r: any, cnj: string) {
   };
 }
 
-async function consumirCreditos(
-  escritorioId: number,
-  userId: number,
-  custo: number,
-  operacao: string,
-  detalhes?: string,
-): Promise<void> {
-  // Saldo unificado por escritório (migration 0073).
-  // Helper trata: garante registro existe (cria com cota do plano se não),
-  // valida saldo, debita, registra transação. Lança TRPCError se sem saldo.
-  const { consumirCreditosEscritorio } = await import("../billing/escritorio-creditos");
-  await consumirCreditosEscritorio(escritorioId, userId, custo, operacao, detalhes);
+/**
+ * Conta a operação no limite do mês do plano.
+ *
+ * Substituiu o débito de créditos (decisão do dono, 11/09/2026: uma régua só).
+ * O saldo de créditos e o histórico continuam no banco — pararam de decidir,
+ * não foram apagados. Vigiar processo e vigiar CPF saíram daqui: eles já têm
+ * limite de VAGA, conferido antes, e cobrar duas vezes pela mesma coisa era
+ * justamente a confusão.
+ */
+async function contarUso(escritorioId: number, operacao: OperacaoLimitada): Promise<void> {
+  const { consumirUso } = await import("../billing/limites-uso");
+  await consumirUso(escritorioId, operacao);
 }
 
 
@@ -359,13 +362,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, storageState, credId);
       log.info(
@@ -518,13 +515,7 @@ export const processosRouter = router({
       // Cobra antes do gasto externo (mesmo padrão de consultarCNJ).
       // Se IA falhar depois, o crédito já foi debitado — preferimos
       // "cobrança consistente" vs "evitar 1 cred perdido em raros falhas".
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        1,
-        "resumo_ia",
-        `Resumo IA: ${mon.searchKey}`,
-      );
+      await contarUso(esc.escritorio.id, "resumo_ia");
 
       const capaTyped = capa as Record<string, any>;
       const movsTexto = movs
@@ -774,13 +765,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_documento,
-        "consulta_documento",
-        `${input.tipo.toUpperCase()}: ${docLimpo.slice(0, 3)}*** (${codigoTribunal.toUpperCase()})`,
-      );
+      await contarUso(esc.escritorio.id, "busca_documento");
 
       const { requestId, status } = iniciarConsultaDocumentoMotorProprio(
         input.tipo,
@@ -816,6 +801,12 @@ export const processosRouter = router({
     .input(z.object({
       cnj: z.string().min(15).max(30),
       credencialId: z.number().int().positive().optional(),
+      /**
+       * Card de nova ação que pediu a consulta. Com ele, o que vier fica
+       * GRAVADO no card em vez de viver só na tela aberta — sem isso, a
+       * mesma consulta era cobrada de novo no próximo acesso.
+       */
+      acaoId: z.number().int().positive().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -881,13 +872,7 @@ export const processosRouter = router({
         });
       }
 
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `Detalhe CNJ: ${input.cnj} (${tribunal.siglaTribunal})`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const cfgTribunal = getConfigTribunal(tribunal.codigoTribunal);
       if (!cfgTribunal) {
@@ -916,6 +901,18 @@ export const processosRouter = router({
           code: "PRECONDITION_FAILED",
           message: resultado.mensagemErro ?? "Erro desconhecido",
           cause: { categoria: resultado.categoriaErro },
+        });
+      }
+
+      // A consulta já foi cobrada: vindo capa com conteúdo, ela fica GRAVADA
+      // no card em vez de viver só na tela que o usuário tem aberta.
+      if (input.acaoId && resultado.capa) {
+        await gravarCapaNoCard({
+          db,
+          escritorioId: esc.escritorio.id,
+          acaoId: input.acaoId,
+          bruta: resultado.capa,
+          fonte: "processo",
         });
       }
 
@@ -1326,13 +1323,9 @@ export const processosRouter = router({
       }
 
       // Cobra primeira mensalidade
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.monitorar_processo_mes,
-        "monitorar_processo_mes",
-        `Monitor CNJ ${input.numeroCnj} (${tribunal.siglaTribunal})`,
-      );
+      // Vigiar processo não conta no limite mensal: quem manda é a VAGA do
+      // plano (verificarLimiteMonitoramentos, acima). Medir duas vezes a mesma
+      // coisa era a confusão que os créditos criavam.
 
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,
@@ -1827,13 +1820,7 @@ export const processosRouter = router({
       }
 
       // Cobra 1 cred (mesma tarifa de consultarCNJ direta)
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.consulta_cnj,
-        "consulta_cnj",
-        `Histórico monitoramento ${mon.searchKey}`,
-      );
+      await contarUso(esc.escritorio.id, "consulta_processo");
 
       const cfgTribunal = getConfigTribunal(mon.tribunal);
       let resultado;
@@ -2049,13 +2036,8 @@ export const processosRouter = router({
       }
 
       // Cobra primeira mensalidade (15 cred)
-      await consumirCreditos(
-        esc.escritorio.id,
-        ctx.user.id,
-        CUSTOS.monitorar_pessoa_mes,
-        "monitorar_pessoa_mes",
-        `Monitor ${input.tipo.toUpperCase()} ${docLimpo.slice(0, 3)}***`,
-      );
+      // Vigiar CPF/CNPJ também é VAGA do plano, não consumo mensal: o
+      // verificarLimiteMonitoramentos acima já decidiu se cabe mais um.
 
       // "Desde quando alertar": busca um contato no escritório com o
       // mesmo CPF/CNPJ. Se achar, usa `createdAt` dele — só CNJs ajuizados
@@ -2318,6 +2300,66 @@ export const processosRouter = router({
         nextCursor: hasMore ? input.cursor + input.limite : input.cursor + acoesValidas.length,
         contagemPorPolo,
       };
+    }),
+
+  /**
+   * Preenche a natureza do processo pelo banco público do CNJ.
+   *
+   * É a reserva de quando o tribunal não devolveu a capa: não gasta consulta
+   * do plano nem credencial do Cofre, e o que vier fica gravado no card com a
+   * procedência à vista. O DataJud não publica as partes — por isso esta
+   * consulta nunca muda o polo de quem já tem polo, e quem estava sem polo
+   * continua sem, com os botões de marcar à mão no card.
+   */
+  completarCapaPeloDataJud: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const esc = await getEscritorioPorUsuario(ctx.user.id);
+      if (!esc) throw new TRPCError({ code: "NOT_FOUND", message: "Escritório não encontrado" });
+
+      const [evento] = await db
+        .select({ id: eventosProcesso.id, cnj: eventosProcesso.cnjAfetado })
+        .from(eventosProcesso)
+        .where(and(
+          eq(eventosProcesso.id, input.id),
+          eq(eventosProcesso.escritorioId, esc.escritorio.id),
+          eq(eventosProcesso.tipo, "nova_acao"),
+        ))
+        .limit(1);
+      if (!evento?.cnj) throw new TRPCError({ code: "NOT_FOUND", message: "Card não encontrado." });
+
+      const doCnj = await capaPorCnjNoDataJud(evento.cnj);
+      if (!doCnj) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "O DataJud ainda não tem este processo. Ele atualiza em lote e pode levar alguns dias.",
+        });
+      }
+
+      const gravado = await gravarCapaNoCard({
+        db,
+        escritorioId: esc.escritorio.id,
+        acaoId: input.id,
+        bruta: {
+          classe: doCnj.classe,
+          assuntos: doCnj.assuntos,
+          orgaoJulgador: doCnj.orgaoJulgador,
+          valorCausaCentavos: null,
+          dataDistribuicao: doCnj.dataAjuizamento,
+          partes: [],
+        },
+        fonte: "datajud",
+      });
+      if (!gravado.gravou) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "O DataJud respondeu sem a natureza deste processo.",
+        });
+      }
+      return { ok: true, capa: gravado.capa };
     }),
 
   /**
