@@ -222,8 +222,13 @@ export default function Acordos() {
         </FaixaAcoes>
       )}
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* `grid-cols-1` no celular: sem nenhuma coluna declarada abaixo de
+          `lg`, a coluna implícita vale `auto` e cresce até o conteúdo — o
+          bloco ficava com 390px dentro de um grid de 310px e empurrava a
+          página inteira 40px para o lado. O `min-w-0` nos itens é o par
+          disso: item de grid nasce com `min-width:auto`. */}
+      <div className="grid gap-3.5 grid-cols-1 lg:grid-cols-3">
+        <div className="lg:col-span-2 min-w-0">
           <BlocoPrincipal
             rotulo="Em negociação agora"
             valor={brl(valorEmNegociacao)}
@@ -280,7 +285,7 @@ export default function Acordos() {
           </BlocoPrincipal>
         </div>
 
-        <div className="relative min-h-0">
+        <div className="relative min-h-0 min-w-0">
           <div className="lg:absolute lg:inset-0">
             <ListaCard
               titulo="Situação da carteira"

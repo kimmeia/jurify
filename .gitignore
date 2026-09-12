@@ -128,6 +128,13 @@ docs/lp-mockups/out-*.png
 # Mockups de tela — só o HTML entra; o PNG sai do render.mjs quando precisar
 /mockup-*.png
 
+# Mockup NAVEGÁVEL — 4 MB por proposta, e reproduzível pelos scripts de
+# scratchpad/estudo-telas (receita em docs/mockup-navegavel.md). O arquivo vai
+# pro dono pelo chat; versionar um HTML desse tamanho por proposta engorda o
+# repositório sem dar nada em troca.
+scratchpad/mockup-navegavel-*.html
+scratchpad/comparador-antes-depois*.html
+
 # Sondagem de fontes públicas (respostas brutas dos tribunais)
 scripts/.sondagem/
 

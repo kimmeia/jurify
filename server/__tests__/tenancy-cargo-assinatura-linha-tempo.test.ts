@@ -229,7 +229,9 @@ describe("assinaturas.excluir — dono conferido ANTES do cascade dos campos", (
 
     const r = await caller().assinaturas.excluir({ id: 3 });
 
-    expect(r).toEqual({ success: true });
+    // `arquivosApagados` entrou em 12/09 (excluir passou a apagar o PDF e o
+    // desenho do servidor); nesta assinatura de teste não há arquivo nenhum.
+    expect(r).toEqual({ success: true, arquivosApagados: 0 });
 
     const q = whereDoSelect("assinaturas_digitais");
     expect(q.sql).toContain(col(assinaturasDigitais.escritorioId));

@@ -561,7 +561,10 @@ export default function Financeiro() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        {/* `flex-wrap`: em 390px os três controles (Conectar/Sincronizar +
+            Nova cobrança + "⋮") somam mais que a largura da tela, e o último
+            era cortado pela borda em vez de descer para a linha de baixo. */}
+        <div className="flex items-center gap-2 flex-wrap">
           {conectado ? (
             <Button
               variant="outline"
@@ -687,7 +690,7 @@ export default function Financeiro() {
       */}
       <Tabs value={tab} onValueChange={setTab}>
         <div className="sticky top-0 z-20 py-2 -mx-4 px-4 sm:-mx-6 sm:px-6 bg-gradient-to-br from-muted/95 to-white/95 backdrop-blur-md">
-          <TabsList className="!bg-muted !h-auto !p-1.5 inline-flex gap-1 rounded-xl border border-border shadow-sm">
+          <TabsList className="!bg-muted !h-auto !p-1.5 inline-flex max-w-full overflow-x-auto gap-1 rounded-xl border border-border shadow-sm">
             <TabsTrigger
               value="cobrancas"
               className="!text-xs !gap-1.5 !px-3 !py-2 !rounded-lg !text-muted-foreground hover:!text-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm transition-all"
@@ -1047,6 +1050,9 @@ export default function Financeiro() {
           )}
 
           {/* Tabela */}
+          {/* A tabela de cobranças tem 9 colunas — 1.589px. Sem a rolagem
+              própria no card, num celular de 390px ela arrastava a PÁGINA
+              inteira de lado. Virar cartão abaixo de `md` é o passo seguinte. */}
           {loadCob ? (
             <div className="space-y-2">
               <Skeleton className="h-10 w-full" />
@@ -1054,7 +1060,7 @@ export default function Financeiro() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : cobrancasFiltradas.length > 0 ? (
-            <div className="border rounded-lg">
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1663,8 +1669,9 @@ function ClientesContent({
         </ClientesChipBtn>
       </div>
 
+      {/* Mesma rolagem própria da tabela de cobranças. */}
       {ordenados.length > 0 ? (
-        <div className="border rounded-lg">
+        <div className="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -2846,7 +2853,11 @@ function HeroFinanceiro({
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
           {/* 4 KPIs em grid 2x2 (esquerda) */}
-          <div className="lg:col-span-6 grid grid-cols-2 gap-3">
+          {/* 1 coluna no celular: em 390px cada cartão ficava com ~150px e
+              "R$ 10,7 mil" não cabia de jeito nenhum — ou quebrava em duas
+              linhas, ou vazava por cima do cartão vizinho. Empilhado, sobra
+              largura e o valor fica inteiro. */}
+          <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <KPIHero
               label="Entrou no caixa"
               value={formatBRLShort(entrouCaixa)}
@@ -2976,13 +2987,18 @@ function KPIHero({
         <Icon className="w-3 h-3" />
         {label}
       </div>
-      <p className={`text-2xl font-bold tabular-nums leading-none ${numColor}`}>{value}</p>
+      {/* `whitespace-nowrap`: em 390px o card tem ~150px e "R$ 10,7 mil"
+          quebrava entre "R$" e o número, deixando o valor em duas linhas.
+          O tamanho menor no celular é o que faz caber sem quebrar. */}
+      <p className={`text-xl sm:text-2xl font-bold tabular-nums leading-none whitespace-nowrap ${numColor}`}>{value}</p>
       {breakdown && breakdown.length > 0 && (
         <div className="mt-2 space-y-0.5">
           {breakdown.map((b) => (
-            <div key={b.label} className="flex items-center justify-between text-apoio text-white/70 tabular-nums">
+            // `gap-2` + `shrink-0`: sem folga o rótulo encostava no valor e
+            // saía "AsaasR$ 0,00" numa palavra só.
+            <div key={b.label} className="flex items-center justify-between gap-3 text-apoio text-white/70 tabular-nums">
               <span>{b.label}</span>
-              <span>{b.valor}</span>
+              <span className="shrink-0">{b.valor}</span>
             </div>
           ))}
         </div>

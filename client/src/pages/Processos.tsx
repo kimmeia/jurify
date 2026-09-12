@@ -2342,7 +2342,9 @@ function CabecalhoProcessos({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
+      {/* Sem `flex-wrap`, os três controles (créditos, Consultar CNJ,
+          Resumo diário) somavam 425px e vazavam da tela de 390px. */}
+      <div className="flex items-center gap-2 flex-wrap justify-end">
         <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
           <Coins className="h-4 w-4 text-warning" />
           <span className="text-corpo font-bold tabular-nums">{saldo}</span>
