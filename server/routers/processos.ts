@@ -15,6 +15,7 @@
  * operacional externo (só servidor + tribunal de origem).
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { z } from "zod";
 import { eq, desc, and, or, ne, sql, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -605,21 +606,20 @@ export const processosRouter = router({
               "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
             },
-            body: JSON.stringify({
+            body: JSON.stringify(montarBodyAnthropic({
               model: "claude-opus-4-7",
               system: promptSystem,
               messages: [{ role: "user", content: promptUser }],
-              max_tokens: 2200,
-              temperature: 0.4,
-            }),
+              maxTokens: 2200,
+              temperatura: 0.4,
+            })),
             signal: AbortSignal.timeout(30000),
           });
           if (!res.ok) {
             const text = await res.text();
             throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
           }
-          const data = (await res.json()) as { content?: Array<{ text?: string }> };
-          resumo = (data.content?.[0]?.text || "").trim();
+          resumo = textoDaRespostaAnthropic(await res.json());
         } else {
           const res = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",

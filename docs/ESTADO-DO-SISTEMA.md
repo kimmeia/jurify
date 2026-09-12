@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.645 testes verdes** (12/09, depois das entregas do dia; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.701 testes verdes** (12/09, depois das entregas do dia e da correção da IA; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -83,10 +83,13 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 8. **O painel afirma três coisas que podem não ser verdade**, e a pior é o Sentry:
    a tela diz "conectado" e a captura liga só por variável de ambiente. Pode estar
    desligada — o que explicaria por que nada deste documento virou incidente.
-9. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o JurisIA
-   que é vendido: o código manda `temperature` para um modelo Claude que passou a
-   recusar o parâmetro, e usa como padrão um modelo **retirado em 15/06/2026**.
-   Confirmado na documentação oficial da Anthropic.
+9. **Três recursos de IA estavam devolvendo erro — corrigido no código em 12/09**,
+   inclusive o JurisIA que é vendido: o código mandava `temperature` para um modelo
+   Claude que recusa o parâmetro, e usava como padrão um modelo **retirado em
+   15/06/2026**. Hoje toda chamada à Anthropic passa por um helper que tira o
+   parâmetro nos modelos que o recusam e troca modelo retirado pelo substituto
+   oficial (seção 5.2). **Falta a prova em produção**: uma mensagem respondida
+   pelo Atendente IA depois do deploy.
 10. **Três prazos externos com data:** em **01/10/2026** a Meta passa a cobrar por
    mensagem e o sistema não guarda um único dado de custo; em **23/10/2026** a
    OpenAI desliga modelos que o código usa; em **21/01/2027** expira a versão da
@@ -125,7 +128,7 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 1 | **Consertar o backup da plataforma** | ele **nunca termina** em banco de tamanho real, por um impasse de stream, e fica pendurado sem erro. É a última linha de defesa e ela não está lá (item **D-14**) |
 | 2 | **Fechar o cadastro que apaga conta alheia** | qualquer pessoa, **sem login**, apaga a conta de quem ainda não criou escritório e fica com o e-mail. Basta saber o endereço (item **D-13**) |
 | 3 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
-| 4 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
+| 4 | **Testar o Atendente IA e o JurisIA em produção depois do deploy** | o erro 400 da Anthropic foi corrigido no código em 12/09 (seção 5.2); a prova é uma mensagem respondida, não o teste verde |
 | 5 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
 | 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
@@ -154,7 +157,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.645 verdes, 383 arquivos** (12/09, depois de Instagram, tribunais e Sob medida; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.701 verdes, 385 arquivos** (12/09, depois de Instagram, tribunais, Sob medida, cancelamento e helper da Anthropic; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -516,8 +519,8 @@ bloqueia vários sites de documentação), está escrito.
 
 | serviço | usamos | estado oficial | prazo | risco |
 |---|---|---|---|---|
-| Anthropic (Claude) | `claude-sonnet-4-20250514` em 2 lugares | **RETIRADO em 15/06/2026** | já passou | **quebrado hoje** |
-| Anthropic (parâmetro) | `temperature` junto com `claude-opus-4-7` | `temperature` **devolve erro 400** em Opus 4.7 e posteriores | já vale | **quebrado hoje** |
+| Anthropic (Claude) | `claude-sonnet-4-20250514` — era o padrão do JurisIA; segue na lista do painel admin | **RETIRADO em 15/06/2026**; substituto oficial `claude-sonnet-4-6` | já passou | **corrigido 12/09**: padrão virou `claude-sonnet-4-6` e o helper troca o retirado pelo substituto na chamada |
+| Anthropic (parâmetro) | `temperature` junto com `claude-opus-4-7` | **erro 400** em Claude 4.7 e posteriores | já vale | **corrigido 12/09**: `montarBodyAnthropic` tira o parâmetro nesses modelos |
 | Anthropic (Haiku) | `claude-haiku-4-5-20251001` em 17 lugares | Ativo | retirada "não antes de 15/10/2026" | **33 dias** |
 | Meta WhatsApp Cloud | Graph API **v21.0** (19 literais) e v23.0 (1) | v21.0 disponível até **21/01/2027** | 4 meses | alto, e falha calada |
 | OpenAI | `gpt-3.5-turbo`, `gpt-4`, `o3-mini`, `o4-mini`, `o1-preview` | desligamento em **23/10/2026** | 41 dias | médio |
@@ -535,61 +538,81 @@ bloqueia vários sites de documentação), está escrito.
 | S3 (backup) | `Upload` construído antes de esperar o dump fechar | o upload só consome o stream no `done()` | já vale | **backup nunca termina** |
 | Sentry (Express) | sem tratador de erro de rota | a doc do Sentry exige | já vale | webhooks e uploads fora do monitoramento |
 
-### 5.2 Anthropic — dois problemas que estão quebrando AGORA
+### 5.2 Anthropic — dois problemas que quebravam a IA (corrigidos no código em 12/09)
 
-Fonte: página oficial de descontinuação da Anthropic, lida direto
+Fonte: página oficial de descontinuação da Anthropic, lida direto em 12/09
 (`platform.claude.com/docs/en/about-claude/model-deprecations`). Não é fonte
 secundária.
 
-**(a) Um modelo retirado ainda é o padrão de duas operações.**
+**(a) Um modelo retirado era o padrão de duas operações.**
 A tabela oficial diz: `claude-sonnet-4-20250514` → **Retired**, depreciado em
 14/04/2026, retirado em **15/06/2026**, substituto recomendado `claude-sonnet-4-6`.
 E a página avisa: *"Requests to retired models will fail."*
 
-Onde ele está no nosso código:
+Onde ele estava:
 - `server/juridico/router-juridico.ts` — **duas vezes como valor padrão**
-  (`input.modelo || "claude-sonnet-4-20250514"`), uma delas no caminho que lê PDF
-  escaneado (o comentário ao lado diz "Claude lê PDF nativo (escaneado)").
-- `server/routers/admin-agentes-ia.ts` — a lista de modelos aceitos (2 vezes).
+  (`input.modelo || …`), uma delas no caminho que lê PDF escaneado. **Trocado
+  por `claude-sonnet-4-6`.**
+- `server/routers/admin-agentes-ia.ts` — a lista de modelos aceitos. **Ficou**
+  (agente já gravado com ele continua válido) e ganhou `claude-sonnet-4-6`.
 - `client/src/pages/admin/AdminAgentesIA.tsx` — o item do menu, rotulado
-  "Claude Sonnet 4 (Anthropic)". Ou seja: **o painel ainda oferece um modelo morto.**
+  "Claude Sonnet 4 (Anthropic)". **Não mudou** (mudança de tela pede mockup).
+  Escolher esse item hoje funciona, porque o helper abaixo troca o modelo
+  retirado pelo substituto na hora da chamada — o que está gravado no banco
+  não muda.
 
-*O que o advogado vive:* pede a peça ou manda o PDF, e não sai nada.
-
-**(b) `temperature` virou erro 400 nos modelos novos — e nós mandamos.**
+**(b) `temperature` virou erro 400 nos modelos novos — e nós mandávamos.**
 A mesma página, na tabela de parâmetros: `temperature`, `top_p` e `top_k` estão
-**depreciados a partir do Claude Opus 4.7** e *"returns a 400 error when set to a
-non-default value"*.
+**depreciados a partir do Claude 4.7** e *"returns a 400 error when set to a
+non-default value on Claude 4.7 and later models"*.
 
-Onde mandamos:
-- `server/_core/ai-call.ts` — `model: "claude-opus-4-7"` com
-  `temperature: temp` (padrão 0,3). **Este é o helper compartilhado.**
-- `server/routers/processos.ts` — `claude-opus-4-7` com `temperature: 0.4`
-  (resumo de movimentação por IA).
+Onde mandávamos: `server/_core/ai-call.ts` (`claude-opus-4-7` com `temperature`
+0,3 — o helper compartilhado do Atendente IA, da captura de campos e do JurisIA) e
+`server/routers/processos.ts` (`claude-opus-4-7` com 0,4, resumo do processo).
+Também qualquer agente do escritório configurado com "Claude Opus 4.7" na tela
+de Agentes IA — a tela oferece esse modelo e o servidor mandava a temperatura
+do agente junto.
 
-Quem depende do helper `chamarIA`, e portanto cai junto:
-1. **Atendente IA** (`server/escritorio/router-atendimento-ia.ts`) — a IA que
-   responde o cliente no WhatsApp
-2. **Captura de campos** (`server/integracoes/agente-captura-campos.ts`)
-3. **JurisIA** (`server/jurisia/perguntar.ts` e `conversa-una.ts`) — **o módulo
-   que está sendo vendido no plano Escala**
+**Quando disparava:** `resolverChaveIA` tem "preferência: Anthropic" — procura a
+chave da Anthropic primeiro e só cai na OpenAI se não houver. A chave própria do
+escritório tem prioridade sobre a global. Então a falha atingia: escritório sem
+chave própria quando a chave global da plataforma é Anthropic, e escritório cuja
+chave própria é Anthropic. **Não é possível saber daqui quais chaves estão
+cadastradas em produção**, e o JurisIA não tem Sentry — o erro só apareceria
+quando o cliente reclamasse.
 
-**Quando isso dispara:** `resolverChaveIA` tem, escrito no próprio comentário,
-"preferência: **Anthropic**" — procura a chave da Anthropic primeiro e só cai na
-OpenAI se não houver. A chave própria do escritório tem prioridade sobre a global.
-Então a falha atinge: escritório sem chave própria quando a chave global da
-plataforma é Anthropic, e escritório cuja chave própria é Anthropic.
+**O que foi feito (12/09):** `server/_core/anthropic-http.ts`, um helper único
+pelo qual passam **todas** as onze chamadas à Anthropic do servidor:
+- `montarBodyAnthropic` monta o corpo da chamada: tira `temperature`/`top_p`/
+  `top_k` nos modelos que os recusam (Opus 4.7, 4.8 e toda a família Claude 5);
+  mantém nos que aceitam (Sonnet 4.6, Haiku 4.5); troca modelo **retirado** pelo
+  substituto oficial (`modeloAnthropicVigente`, tabela copiada da página); e, na
+  família Claude 5 — que pensa por padrão e gasta o mesmo `max_tokens` da
+  resposta —, soma folga de 2.000 tokens ao teto e pede `effort: "low"`, salvo
+  se o chamador já mandou `thinking`/`output_config`.
+- `textoDaRespostaAnthropic` lê a resposta juntando os blocos de texto — antes
+  todo caller pegava `content[0]`, que na família Claude 5 é o bloco de
+  raciocínio, e a resposta viria vazia.
+- Nenhum modelo foi trocado nas chamadas: quem usava `claude-opus-4-7` segue
+  nele (só sem o parâmetro). A única troca de padrão é a do JurisIA (a).
+- Amarras em `anthropic-http.test.ts` (21 testes): o helper em si; todo arquivo
+  do servidor que chama `api.anthropic.com` e menciona `temperature` tem que
+  montar o corpo com `montarBodyAnthropic`; ninguém lê `content[0]`; nenhum
+  arquivo do servidor usa modelo retirado como padrão. 8 mutações conferidas
+  vermelhas (tirar o `delete`, afrouxar a regex do Opus 4.7, família 5 sem
+  folga, ler `content[0]`, `temperature` por fora do helper, `content[0]` num
+  caller, padrão retirado de volta no JurisIA).
 
-**Não é possível saber daqui quais chaves estão cadastradas em produção.** É uma
-conferência de um minuto para o dono: **Admin → Integrações**. Se houver chave
-Anthropic conectada, esses quatro recursos estão devolvendo erro.
-
-E o agravante que fecha o círculo: **JurisIA não tem Sentry nenhum** — então esse
-erro não aparece em painel algum. Ele só aparece quando o cliente reclama.
+**O que NÃO dá pra provar daqui:** o ambiente não chama a API real. A prova é do
+dono, depois do deploy: uma mensagem ao Atendente IA respondida, e uma pergunta
+ao JurisIA respondida.
 
 *Nota de calibragem:* os 17 usos de `claude-haiku-4-5-20251001` com `temperature`
-**estão corretos.** A depreciação do parâmetro vale de Opus 4.7 pra frente; Haiku
-4.5 é de linha anterior e continua aceitando. Só o prazo de retirada dele é curto.
+sempre estiveram corretos — a depreciação vale de 4.7 pra frente. O prazo de
+retirada do Haiku 4.5 é "não antes de 15/10/2026" e ele é o padrão de 4 caminhos
+(chatbot, extração de campos, resumo de movimentação e o teste de chave do
+painel); quando a Anthropic marcar a data, é o helper (`modeloAnthropicVigente`)
+que recebe o substituto.
 
 ### 5.3 Meta WhatsApp Cloud — prazo de 4 meses, e a falha é muda
 
@@ -849,7 +872,7 @@ Coisas fora do código. Marcadas com o que muda se ficarem como estão.
 
 | item | onde | o que acontece se ficar assim |
 |---|---|---|
-| **Há chave Anthropic conectada?** | Admin → Integrações | se sim, Atendente IA, JurisIA e captura de campos estão devolvendo erro (item 5.2) |
+| **Atendente IA e JurisIA respondem em produção?** | mandar uma mensagem de teste depois do deploy | o erro 400 da Anthropic foi corrigido no código em 12/09 (item 5.2); só a resposta prova |
 | App Secret da Meta cadastrado | Admin → Integrações → WhatsApp Cloud | **feito (dono, 12/09)** — sem ele o webhook aceitaria mensagem forjada de qualquer um |
 | Confirmar a data de sunset da v21.0 | changelog da Graph API | define se o prazo é 21/01/2027 mesmo |
 | `CANAIS_ENCRYPTION_KEY` | Railway | resolvido por código: cai em `ENCRYPTION_KEY`; nada gravado precisa recadastro |

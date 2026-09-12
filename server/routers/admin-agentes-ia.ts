@@ -8,6 +8,7 @@
  * (provedor "openai"), então não precisam armazenar key individual.
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { z } from "zod";
 import { eq, desc, and } from "drizzle-orm";
 import { adminProcedure, router } from "../_core/trpc";
@@ -146,6 +147,7 @@ export const adminAgentesIaRouter = router({
         "gpt-4-turbo",
         "gpt-3.5-turbo",
         "claude-sonnet-4-20250514",
+        "claude-sonnet-4-6",
         "claude-haiku-4-5-20251001",
       ]).default("gpt-4o-mini"),
       prompt: z.string().min(10).max(32000),
@@ -200,6 +202,7 @@ export const adminAgentesIaRouter = router({
         "gpt-4-turbo",
         "gpt-3.5-turbo",
         "claude-sonnet-4-20250514",
+        "claude-sonnet-4-6",
         "claude-haiku-4-5-20251001",
       ]).optional(),
       prompt: z.string().min(10).max(32000).optional(),
@@ -504,13 +507,13 @@ export const adminAgentesIaRouter = router({
               "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
             },
-            body: JSON.stringify({
+            body: JSON.stringify(montarBodyAnthropic({
               model: agente.modelo,
               system: systemPrompt,
               messages: [{ role: "user", content: input.pergunta }],
-              max_tokens: agente.maxTokens,
-              temperature: temperatura,
-            }),
+              maxTokens: agente.maxTokens,
+              temperatura,
+            })),
             signal: AbortSignal.timeout(30000),
           });
 
@@ -525,7 +528,7 @@ export const adminAgentesIaRouter = router({
           };
 
           return {
-            resposta: data.content?.[0]?.text?.trim() || "(sem resposta)",
+            resposta: textoDaRespostaAnthropic(data) || "(sem resposta)",
             tokensUsados: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
           };
         }

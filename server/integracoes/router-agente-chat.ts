@@ -17,6 +17,7 @@
  * Créditos: nesta v1 é GRATUITO. Ver TODO em `enviarMensagem`.
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
@@ -222,18 +223,17 @@ async function gerarTituloThread(
           "x-api-key": resolved.key,
           "anthropic-version": "2023-06-01",
         },
-        body: JSON.stringify({
+        body: JSON.stringify(montarBodyAnthropic({
           model: agente.modelo,
           system: prompt,
           messages: [{ role: "user", content: primeiraPergunta.slice(0, 500) }],
-          max_tokens: 30,
-          temperature: 0.3,
-        }),
+          maxTokens: 30,
+          temperatura: 0.3,
+        })),
         signal: AbortSignal.timeout(10000),
       });
       if (!res.ok) return null;
-      const data = (await res.json()) as { content?: Array<{ text?: string }> };
-      return (data.content?.[0]?.text || "").trim().slice(0, 200) || null;
+      return textoDaRespostaAnthropic(await res.json()).slice(0, 200) || null;
     }
 
     const res = await fetch("https://api.openai.com/v1/chat/completions", {

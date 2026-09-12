@@ -2,6 +2,7 @@
  * Helper compartilhado para chamadas Claude/OpenAI usando credenciais
  * do `admin_integracoes`. Preferência: Anthropic → OpenAI fallback.
  */
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "./anthropic-http";
 import { getDb } from "../db";
 import { adminIntegracoes } from "../../drizzle/schema";
 import { and, eq } from "drizzle-orm";
@@ -104,21 +105,20 @@ export async function chamarIA(opts: ChamadaIAOpts): Promise<string> {
         "x-api-key": keys.apiKey,
         "anthropic-version": "2023-06-01",
       },
-      body: JSON.stringify({
+      body: JSON.stringify(montarBodyAnthropic({
         model: "claude-opus-4-7",
         system,
         messages: [{ role: "user", content: opts.user }],
-        max_tokens: maxTokens,
-        temperature: temp,
-      }),
+        maxTokens,
+        temperatura: temp,
+      })),
       signal: AbortSignal.timeout(timeout),
     });
     if (!res.ok) {
       const t = await res.text();
       throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`);
     }
-    const data = (await res.json()) as { content?: Array<{ text?: string }> };
-    return (data.content?.[0]?.text || "").trim();
+    return textoDaRespostaAnthropic(await res.json());
   }
 
   const body: any = {

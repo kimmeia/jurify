@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.645 verdes em 12/09/2026 (383 arquivos)
+pnpm test               # vitest (server/**/*.test.ts) — 5.701 verdes em 12/09/2026 (385 arquivos, ~1min35)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -325,6 +325,20 @@ Range/ETag (visualizador do iOS pede faixas de bytes antes de renderizar),
 biblioteca e worker TÊM que ser da mesma variante, misturar dá
 "sendWithPromise null"), e o canvas da assinatura preserva os traços em
 resize (teclado do Android apagava a assinatura desenhada).
+
+### Chamadas à Anthropic passam pelo helper (12/09/2026)
+
+Toda chamada a `api.anthropic.com` monta o corpo com `montarBodyAnthropic` e lê a
+resposta com `textoDaRespostaAnthropic` (`server/_core/anthropic-http.ts`).
+Motivo medido: Opus 4.7+ e toda a família Claude 5 devolvem **400** se recebem
+`temperature`/`top_p`/`top_k`, e `ai-call.ts` mandava `temperature` pro
+`claude-opus-4-7` — Atendente IA, captura de campos e JurisIA quebrados em
+silêncio. O helper também troca modelo **retirado** pelo substituto oficial
+(`claude-sonnet-4-20250514` era o padrão do JurisIA e está retirado desde
+15/06/2026) e, na família 5, protege o `max_tokens` do raciocínio. Amarra:
+`anthropic-http.test.ts` — quebra se um arquivo do servidor mandar
+`temperature` por fora, ler `content[0]` ou usar modelo retirado como padrão.
+Mesma ideia do `montarBodyOpenAIChat` que já existia pro lado OpenAI.
 
 ### Migration safety
 
@@ -1773,6 +1787,9 @@ no dia 1 — é o número que diz se o anúncio vai pagar.
 - ❌ Frontend lendo `c.customerKey` ou `c.username` da view do cofre (não existem)
 - ❌ Procedure mostrar erro só no response sem persistir
 - ❌ Hardcode `cargo === "dono"` (use checkPermission)
+- ❌ `fetch` à `api.anthropic.com` montando o body à mão — `temperature` dá 400
+  em Opus 4.7+/Claude 5 e `content[0]` pode ser raciocínio; use
+  `montarBodyAnthropic` + `textoDaRespostaAnthropic`
 - ❌ confirm() nativo do browser pra ações destrutivas (use AlertDialog) —
   catraca em `robo-acao-cercas.test.ts` com a dívida por arquivo: a lista só
   encolhe. Além do padrão, o robô de ação NÃO consegue responder confirm(),
