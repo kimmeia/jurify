@@ -3,7 +3,7 @@
 **Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
-terminar.** Se você tem trinta segundos, leia "O retrato em doze linhas". Se tem
+terminar.** Se você tem trinta segundos, leia "O retrato em treze linhas". Se tem
 dez minutos, leia até o fim da seção 4.
 
 ---
@@ -54,55 +54,64 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1. O retrato em doze linhas
+## 1. O retrato em treze linhas
 
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
-   comentários que explicam o *porquê*, e listas de exclusão explícitas.
+   comentários que explicam o *porquê*, e listas de exclusão explícitas. A varredura
+   completa das 779 operações achou **um** caso de vazamento entre escritórios — as
+   correções de setembro seguraram.
 3. O problema principal **não é o código: é a memória do projeto.** 55% do
    CLAUDE.md é histórico de entrega, que só envelhece.
-4. Há **237 achados catalogados** com identificador estável desde 03/09 e
-   **nenhum registro de quais foram corrigidos**.
-5. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
-   redondo (**D-1**); e no lado do Asaas, chargeback e estorno **não têm
-   tratamento nenhum** — o dinheiro sai da conta e o painel não muda (seção 5.4).
-6. Uma lacuna de backup provada: 20 tabelas do escritório ficam fora do backup, e
-   a trava que deveria impedir isso tem um ponto cego (item **D-2**).
-7. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o
-   JurisIA que é vendido: o código manda `temperature` para um modelo Claude que
-   passou a recusar esse parâmetro, e usa como padrão um modelo **retirado em
-   15/06/2026**. Confirmado na documentação oficial da Anthropic (seção 5.2).
-8. **Três prazos externos com data:** em **01/10/2026** (19 dias) a Meta passa a
-   cobrar por mensagem e o sistema não guarda um único dado de custo; em
-   **23/10/2026** a OpenAI desliga modelos antigos que o código usa; em
-   **21/01/2027** expira a versão da API da Meta, e essa falha é silenciosa.
-9. **O opt-out que o cliente faz dentro do WhatsApp não é honrado** — a Meta avisa
-   pelo webhook `user_preferences` e o código não o trata. Isso pesa, porque o
-   projeto já levou dois avisos de spam da Meta.
-10. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
-    assinatura eletrônica (sem controle de permissão), e Instagram/Messenger
-    conectáveis na tela sem ingerir uma única mensagem.
-11. Pouco código morto de verdade: 4 tabelas sem uso em 126, e um módulo inteiro
-    (Diário da Justiça) que existe só como desenho de banco.
-12. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+4. Há **237 achados catalogados** com identificador estável desde 03/09 e, até
+   agora, **nenhum registro de quais foram corrigidos**. Dos 112 já reconferidos,
+   34 estão corrigidos e 75 seguem abertos — mas **nenhum bloqueador** ficou de pé.
+5. **Segurança:** qualquer pessoa, **sem login**, apaga a conta de quem ainda não
+   criou escritório e fica com o e-mail — basta saber o endereço (**D-13**).
+6. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
+   redondo (**D-1**); a faxina diária apaga parcelas de parcelamento longo; e
+   chargeback e estorno do Asaas **não têm tratamento nenhum** — o dinheiro sai da
+   conta e o painel não muda.
+7. **O painel afirma três coisas que podem não ser verdade**, e a pior é o Sentry:
+   a tela diz "conectado" e a captura liga só por variável de ambiente. Pode estar
+   desligada — o que explicaria por que nada deste documento virou incidente.
+8. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o JurisIA
+   que é vendido: o código manda `temperature` para um modelo Claude que passou a
+   recusar o parâmetro, e usa como padrão um modelo **retirado em 15/06/2026**.
+   Confirmado na documentação oficial da Anthropic.
+9. **Três prazos externos com data:** em **01/10/2026** a Meta passa a cobrar por
+   mensagem e o sistema não guarda um único dado de custo; em **23/10/2026** a
+   OpenAI desliga modelos que o código usa; em **21/01/2027** expira a versão da
+   API da Meta — e essa falha é silenciosa.
+10. **O opt-out que o cliente faz dentro do WhatsApp não é honrado**, e a origem do
+    consentimento que gravamos ninguém consegue ler. Pesa, porque o projeto já
+    levou dois avisos de spam da Meta.
+11. Uma lacuna de backup provada: **20 tabelas do escritório** ficam fora do
+    backup, e a trava que deveria impedir isso tem um ponto cego (**D-2**).
+12. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
+    assinatura eletrônica (sem controle de permissão), Instagram e Messenger
+    conectáveis sem ingerir uma única mensagem, e telas que prometem "+90
+    tribunais" onde o servidor procura em um.
+13. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
 
-## 1.1 Se for fazer só sete coisas, faça estas
+## 1.1 Se for fazer só oito coisas, faça estas
 
 Ordenado por dano × prazo × esforço, não por dificuldade.
 
 | # | o que | por quê agora |
 |---|---|---|
-| 1 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
-| 2 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
-| 3 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
-| 4 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
-| 5 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
-| 6 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 7 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 1 | **Fechar o cadastro que apaga conta alheia** | qualquer pessoa, **sem login**, apaga a conta de quem ainda não criou escritório e fica com o e-mail. Basta saber o endereço (item **D-13**) |
+| 2 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
+| 3 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
+| 4 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
+| 5 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
+| 6 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
+| 7 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
+| 8 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
 
