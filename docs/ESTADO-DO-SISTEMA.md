@@ -59,16 +59,17 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
-   comentários que explicam o *porquê*, e listas de exclusão explícitas. A varredura
-   completa das 779 operações achou **um** caso de vazamento entre escritórios — as
-   correções de setembro seguraram.
+   comentários que explicam o *porquê*, e listas de exclusão explícitas. O
+   vazamento entre escritórios, que era o medo de setembro, está **substancialmente
+   fechado** — sobraram três pontas, e a pior é um cargo de outro escritório poder
+   ser atribuído a um colaborador do seu (seção 12).
 3. O problema principal **não é o código: é a memória do projeto.** 55% do
    CLAUDE.md é histórico de entrega, que só envelhece.
-4. Há **237 achados catalogados** com identificador estável desde 03/09 e, até
-   agora, **nenhum registro de quais foram corrigidos**. Dos 172 já reconferidos,
-   40 estão corrigidos e 127 seguem abertos — **três de cada quatro**. Mas
-   **nenhum bloqueador de lançamento** ficou de pé: o que sobrou é a cauda que
-   ninguém fechou porque ninguém tinha a lista.
+4. Havia **237 achados catalogados** desde 03/09 e **nenhum registro de quais
+   foram corrigidos**. Agora há: os 237 foram reconferidos. **57 corrigidos, 172
+   abertos, 8 parciais** — três de cada quatro seguem abertos. Mas **os 15
+   bloqueadores de lançamento seguraram** (14 fechados, 1 parcial): o que sobrou é
+   a cauda que ninguém fechou porque ninguém tinha a lista.
 5. **Segurança:** qualquer pessoa, **sem login**, apaga a conta de quem ainda não
    criou escritório e fica com o e-mail — basta saber o endereço (**D-13**).
 6. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
@@ -105,7 +106,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1.1 Se for fazer só nove coisas, faça estas
+## 1.1 Se for fazer só dez coisas, faça estas
 
 Ordenado por dano × prazo × esforço, não por dificuldade.
 
@@ -119,7 +120,8 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 9 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 9 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
+| 10 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
 
@@ -360,6 +362,24 @@ Isso vale para os dois caminhos que geram o backup completo da plataforma. É a
 última linha de defesa do produto, e ela não está lá.
 *Confirmei lendo o arquivo:* o `done()` está depois da espera, e é a única chamada
 dele. O `abort()` do caminho de erro também nunca é alcançado num dump grande.
+
+**D-15 · Um cargo de outro escritório pode ser atribuído a um colaborador do seu —
+e a matriz obedece.** São dois descuidos que sozinhos não fazem nada e juntos viram
+elevação de acesso.
+
+`atribuirCargo` protege o **alvo**: o colaborador precisa ser do escritório de quem
+chama. Mas **não valida o cargo**: grava o número que veio do navegador direto na
+ficha. E `checkPermission`, ao resolver as permissões daquele cargo, consulta a
+tabela de permissões **só pelo id do cargo, sem escritório**.
+
+Somando: quem tem "editar equipe" atribui a alguém do próprio time um cargo que
+pertence a outro escritório — basta acertar o número, que é sequencial — e esse
+alguém passa a ter exatamente as permissões que o cargo alheio tiver.
+
+Não é elevação de estagiário para dono (exige "editar equipe", que já é cargo de
+confiança), e não muda o `dono` canônico, que é outra coluna. É elevação de
+"gestor" para "qualquer conjunto de permissões que exista na plataforma", usando
+configuração de um cliente que não é o seu.
 
 ### Gravidade média
 
@@ -980,25 +1000,20 @@ segurança.
    dependia disso, está escrito "o dono confere".
 3. **Os testes foram rodados, não escritos.** 5.570 verdes é o estado atual, não
    prova de cobertura. A seção de pendências aponta onde falta trava.
-4. **Três passadas ainda estavam rodando quando este documento foi escrito**, e
-   por isso ele é incompleto **por construção**, não por descuido:
-   - a conferência dos 237 achados fechou **10 de 16 domínios** (faltam smartflow,
-     configurações, admin, assinaturas, casca do app e infra);
-   - a auditoria por subsistema do servidor cobriu os maiores (Asaas, WhatsApp,
-     Meta, SmartFlow, painel admin) e **ainda não passou** por cálculos, JurisIA,
-     peças jurídicas, RH/ponto, assinatura de documento, cofre, agenda, comissões,
-     relatórios e o schema;
-   - a leitura integral dos 12 maiores arquivos está em curso.
-
-   Em outras palavras: **a lista de achados deste documento vai crescer**, e o que
-   está aqui é o que passou por duas leituras. Nenhum número dele deve ser tratado
-   como total final — o que vale é que cada linha presente foi conferida.
-5. **Não houve teste de mutação.** O padrão da casa é quebrar o código de
+4. **A cobertura não é uniforme, e isso está detalhado na seção 14.** A
+   conferência dos 237 fechou por inteiro; a auditoria por subsistema cobriu os
+   maiores (Asaas, WhatsApp, Meta, SmartFlow, painel admin) e **não passou** por
+   cálculos, JurisIA, peças jurídicas, RH e ponto; a leitura linha a linha cobriu
+   15 blocos dos arquivos gigantes. **A lista de achados vai crescer.**
+5. **Parte dos revisores céticos não chegou a rodar** (a sessão bateu no limite de
+   uso). Onde o segundo leitor passou, está marcado; onde não passou, o achado vem
+   da primeira leitura com evidência de arquivo. Ver seção 14.
+6. **Não houve teste de mutação.** O padrão da casa é quebrar o código de
    propósito e ver o teste ficar vermelho. Não fiz isso aqui: esta passada foi de
    leitura, e o dono pediu que nada fosse alterado.
-6. **A leitura integral cobriu os 12 maiores arquivos**, em blocos. Arquivos médios
+7. **A leitura integral cobriu os 12 maiores arquivos**, em blocos. Arquivos médios
    e pequenos foram lidos por subsistema, o que é mais raso.
-7. **Nenhuma tela foi aberta.** Toda afirmação sobre o que o usuário vê vem de ler
+8. **Nenhuma tela foi aberta.** Toda afirmação sobre o que o usuário vê vem de ler
    o componente, não de rodar o app.
 
 ---
@@ -1514,76 +1529,187 @@ correto — o problema de permissão que sobrou não é "vejo o escritório do o
 Este é o registro que faltava. O documento `auditoria-lancamento-2026-09-03-achados.md`
 tem 237 achados com identificador estável (`[kanban-1]`, `[auth-x1]`, `[infra-2]`…)
 em três níveis — **BLOQUEIA 15, IMPORTANTE 117, MENOR 105** — e nunca teve coluna de
-status. Cada um foi reaberto e conferido no código de hoje, com uma segunda leitura
-cética em cima de todo veredito "corrigido" (é o erro caro: declarar resolvido o que
-não está).
-
-**Parcial — 10 dos 16 domínios fechados, 172 dos 237 achados conferidos:**
-
-| domínio | situação |
-|---|---|
-| kanban, atendimento, financeiro, agenda, processos, auth, clientes, relatorios, ia, publico | **conferidos (172 achados)** |
-| smartflow, configuracoes, admin, assinaturas, shell, infra | em andamento |
+status. **Todos os 237 foram reabertos e conferidos no código de hoje**, com uma
+segunda leitura cética sobre cada veredito "corrigido" (é o erro caro: declarar
+resolvido o que não está).
 
 | estado | quantos | o que significa |
 |---|---|---|
-| **CORRIGIDO** | 40 | o defeito não existe mais, com prova positiva no código |
-| **ABERTO** | 127 | o defeito está lá |
-| **PARCIAL** | 5 | parte foi corrigida |
+| **CORRIGIDO** | **57** | o defeito não existe mais, com prova positiva no código |
+| **ABERTO** | **172** | o defeito está lá |
+| **PARCIAL** | **8** | parte foi corrigida |
 
-A proporção é a notícia desconfortável: **três de cada quatro achados seguem
-abertos.** Não por descuido — por não existir lista. Ninguém fecha o que não
-consegue ver.
+**Três de cada quatro seguem abertos.** Isso não é descuido: é consequência de não
+existir lista. Ninguém fecha o que não consegue ver — e é exatamente o buraco que o
+documento de estado passa a tapar.
 
-### A notícia boa, e ela é grande
+Nota de método: nenhum dos 57 "corrigido" passou sem teste que o trave
+(`corrigidosSemTeste: 0`), e o cético derrubou 3 vereditos do primeiro leitor.
 
-**Nenhum dos 15 "BLOQUEIA" destes domínios está aberto.** Os bloqueadores de
-lançamento foram, de fato, resolvidos — e isso confirma o que o CLAUDE.md narra
-sobre as entregas de 03/09. O que sobrou é a cauda: 75 achados de nível IMPORTANTE e
-MENOR que ninguém fechou porque ninguém tinha a lista.
+### A notícia boa: os bloqueadores de lançamento seguraram
 
-### Os 15 que seguem abertos com gravidade alta hoje
+Dos **15 "BLOQUEIA"**, **14 estão corrigidos** e **1 está PARCIAL**. Nenhum ficou
+aberto. As amarrações de 03/09 e 10/09 funcionaram.
 
-Reavaliados com o código de hoje, não com a gravidade de 03/09:
+O parcial é o `kanban-2`, e vale entender porque é um padrão que se repete:
+
+> **A porta foi fechada, a vidraça continua sem grade.** O achado pedia duas coisas.
+> A **gravação** foi corrigida e testada: nenhuma tela, cron, automação, importação
+> ou restauração consegue mais colar num card o cliente ou o responsável de outro
+> escritório — id alheio devolve "não encontrado". Mas a **leitura** não mudou: o
+> quadro, a gaveta do card e o PDF ainda buscam nome, CPF e e-mail só pelo id, sem
+> conferir o escritório, em três lugares. Não é mais explorável por quem tenta hoje
+> (precisaria de um card gravado ANTES da correção), nenhuma limpeza de dados foi
+> feita, e nenhum teste protege esse lado.
+
+### Os 29 que seguem abertos com gravidade alta hoje
+
+Reavaliados com o código de hoje, não com a gravidade de 03/09. Agrupei pelo que
+têm em comum, porque a lista solta esconde o padrão.
+
+**Permissão: "ver os próprios" respeitado em umas telas e ignorado em outras**
 
 | id | o que acontece |
 |---|---|
-| `auth-8` | **cadastro apaga conta existente de quem não tem escritório, sem login** (é o item **D-13**) |
+| `relatorios-x1` | o Painel Geral mostra **o caixa do escritório inteiro** para atendente, estagiário e SDR |
+| `financeiro-6` | "ver próprios" do Financeiro **libera o escritório inteiro** em quase todas as procedures |
+| `publico-1` | no Ponto, cargo com só "ver próprios" recebe **o espelho da equipe inteira** |
+| `processos-3` | atendente vê "0 monitorados" enquanto a central mostra os processos |
+
+**Permissão: portas sem gate nenhum**
+
+| id | o que acontece |
+|---|---|
+| `kanban-17` | funil e colunas: **qualquer colaborador cria, renomeia e exclui** |
+| `financeiro-7` | sincronizações que reescrevem contatos e apagam vínculos, sem gate |
+| `infra-6` | vincular e sincronizar contato no Asaas, sem gate de Financeiro |
+| `configuracoes-1` | a tela de Configurações decide "pode editar" por cargo escrito na mão, **ignorando a matriz** |
+
+**Escalada de privilégio (confirmei eu mesmo, é o mais sério do grupo)**
+
+`configuracoes-6` — `atribuirCargo` protege o **alvo** (o colaborador só pode ser do
+seu escritório) e **não valida o `cargoId`**. E a matriz de permissão resolve o cargo
+lendo `permissoes_cargo` **só pelo id, sem escritório**. Somando os dois: quem tem
+"editar equipe" atribui a um colaborador do próprio escritório um **cargo de outro
+escritório** — basta acertar o número — e esse colaborador passa a ter as permissões
+que o cargo alheio tiver. É vazamento de configuração entre escritórios usado como
+elevação de acesso.
+
+**Automação (SmartFlow)**
+
+| id | o que acontece |
+|---|---|
+| `smartflow-1` | salvar apaga e regrava passos de cenário **de outro escritório** quando o cargo tem "editar" sem "ver" |
+| `smartflow-4` | retomada depois de "Esperar" continua **por posição, não pelo desenho** das setas |
+| `smartflow-2` | ligar/desligar "Ativo" no editor **descarta alterações não salvas** |
+| `smartflow-6` | cenário **desligado ou na lixeira** continua respondendo conversas que já estavam pausadas |
+
+**Dinheiro e relatório**
+
+| id | o que acontece |
+|---|---|
+| `financeiro-1` | o PDF e o CSV do DRE saem por "pagamento" e a tela mostra "vencimento" |
+| `relatorios-1` | a aba Comercial do Dashboard **quebra com erro de código** quando nenhum colaborador está num setor |
+| `relatorios-2` | "enviar por e-mail" e "programar envio" **descartam o filtro** da tela |
+| `kanban-10` | a escolha "Avulsa / Parcelamento / Manual" é ignorada e abre sempre em Avulsa — confirmar cria cobrança real no Asaas |
+
+**Assinatura, conta e cadastro**
+
+| id | o que acontece |
+|---|---|
+| `assinaturas-2` | **o IP de quem assina nunca é registrado** — vem do navegador e o navegador não manda. A tela promete que registra |
+| `auth-8` | cadastro apaga conta de quem não tem escritório, sem login (é o **D-13**) |
 | `auth-5` | os Termos prometem acesso até o fim do período pago; cancelar **corta na hora** |
-| `auth-6` | a cota mensal de créditos lê **uma assinatura qualquer** do dono, sem filtrar status |
-| `auth-4` | no trial de plano com preço, o botão do próprio plano fica desabilitado — **não dá pra assinar** |
-| `financeiro-1` | o PDF e o CSV do DRE saem com critério "pagamento" e a tela mostra "vencimento" |
-| `financeiro-6` | a permissão "ver próprios" do Financeiro **libera o escritório inteiro** em quase todas as procedures |
-| `financeiro-7` | as sincronizações que reescrevem contatos e apagam vínculos não têm gate de permissão |
-| `kanban-17` | funil e colunas **sem gate nenhum**: qualquer colaborador cria, renomeia e exclui |
-| `kanban-13` | excluir tag: um clique, sem confirmação e sem tratamento de erro, remove a tag de **todos** os clientes |
-| `kanban-10` | a escolha "Avulsa / Parcelamento / Manual" do modal pós-Ganho é ignorada |
-| `agenda-2` | o processo vinculado no diálogo da Agenda usa o id de monitoramento numa chave que espera outro |
-| `agenda-7` | a tela Prazos lista só de −7 a +30 dias **sem dizer**; prazo distante "desaparece" depois de criado |
-| `processos-3` | atendente vê a aba Monitoramento vazia ("0 monitorados") enquanto a central mostra os processos |
-| `processos-7` | importação Advbox: a credencial nacional não liga monitoramento de nenhum processo |
-| `processos-11` | "Marcar como resolvidas" age no período inteiro, ignorando a busca que está na tela |
-
-### Mais seis que apareceram nos domínios seguintes
-
-| id | o que acontece |
-|---|---|
-| `relatorios-1` | **a aba Comercial do Dashboard quebra com erro de código** para dono e admin quando nenhum colaborador está num setor |
-| `relatorios-x1` | o Painel Geral **mostra o caixa do escritório inteiro** para atendente, estagiário e SDR, sem permissão nenhuma |
-| `publico-1` | no Ponto, cargo com só "ver os próprios" **recebe o espelho da equipe inteira** |
+| `auth-6` | a cota mensal lê **uma assinatura qualquer** do dono, sem filtrar status |
+| `auth-4` | no trial de plano com preço, o botão do próprio plano fica desabilitado: **não dá pra assinar** |
 | `clientes-x3` | a ficha abre pelo lead, mas Salvar e "Fechar contrato" recusam |
-| `relatorios-2` | "Enviar por e-mail" e "Programar envio" do relatório de Atendimento **descartam o filtro** que estava na tela |
-| `ia-9` | o caso em análise "gruda" na conversa seguinte, que não tem caso, e é gravado nela |
 
-Os três primeiros são de permissão, e os três juntos contam a mesma história: o
-recorte "ver os próprios" é respeitado em algumas telas e ignorado em outras. É o
-mesmo padrão da seção 10.2 — o problema de hoje não é "vejo o escritório do outro",
-é **"vejo o que não deveria dentro do meu"**.
+**Os demais**
+
+`kanban-13` (excluir tag: um clique sem confirmação remove de todos os clientes e
+cards) · `agenda-2` (processo vinculado usa o id errado numa chave) · `agenda-7` (a
+tela Prazos lista só de −7 a +30 dias sem dizer, e prazo distante "desaparece") ·
+`processos-7` (importação Advbox não liga monitoramento com a credencial nacional) ·
+`processos-11` ("marcar como resolvidas" age no período inteiro, ignorando a busca) ·
+`ia-9` (o caso em análise "gruda" na conversa seguinte e é gravado nela).
+
+**`assinaturas-2` merece um parágrafo à parte.** Assinatura eletrônica vale pelo que
+consegue provar. A tela diz ao cliente que registra o IP; o servidor espera o IP vir
+do navegador, e o navegador não manda. Então a trilha de prova sai sem ele. Junto com
+o `D-5` (a assinatura não tem controle de permissão nenhum) e com a tabela de aceite
+dos Termos que ninguém lê (seção 11.4), é a terceira vez que este documento encontra
+o mesmo tipo de lacuna: **o sistema produz a prova e não guarda, ou guarda e não
+consegue apresentar.**
 
 ### Como manter isto vivo
 
-Quando a conferência dos 10 domínios restantes fechar, a tabela completa
-`id → estado` entra aqui. A partir daí a regra do topo deste documento vale para
-ela: **entrega que fecha um achado muda o estado dele no mesmo commit.** É a única
-forma de a lista não virar, de novo, 237 linhas que ninguém sabe se valem.
+A tabela completa `id → estado` está no resultado da conferência. A partir daqui vale
+a regra do topo deste documento: **entrega que fecha um achado muda o estado dele no
+mesmo commit.** É a única forma de a lista não virar, de novo, 237 linhas que ninguém
+sabe se valem.
 
+---
+
+## 13. Números finais da auditoria
+
+O que as oito passadas examinaram, com o que cada uma mediu de verdade.
+
+| passada | escopo medido | resultado |
+|---|---|---|
+| Documentação | **1.016 afirmações** do CLAUDE.md conferidas uma a uma | 892 conferem · **76 desatualizadas ou erradas** · 48 inconferíveis |
+| Os 237 achados | **237 de 237** reabertos | 57 corrigidos · 172 abertos · 8 parciais |
+| Subsistemas do servidor | 10 subsistemas, os maiores do repo | **104 achados** · **368 regras de negócio** mapeadas |
+| Telas | 8 áreas, **264 fluxos de usuário** percorridos | **186 achados** · **98 fluxos incompletos** |
+| Arquivos gigantes | 15 blocos lidos linha a linha | **168 achados** · 213 regras |
+| Varreduras transversais | 8 ângulos sobre o repo inteiro | **95 achados** |
+| Varreduras complementares | 8 ângulos (comentários, spike, e2e, ambiente) | **153 achados** |
+| APIs externas | 7 integrações × documentação oficial | **92 divergências**, 63 confirmadas na doc |
+
+### Código morto, com o método
+
+A varredura de exports foi a mais cuidadosa, e vale registrar como ela evitou o falso
+positivo fácil. Ela não pergunta "o nome aparece em outro lugar?" — isso confunde
+homônimo com uso. Pergunta três coisas separadas e cruza: **quem importa o nome**,
+**quem usa o símbolo dentro do arquivo**, e **o arquivo é alcançável a partir do
+boot**. Duas implementações independentes chegaram ao mesmo número, e os 15 casos
+ambíguos foram resolvidos à mão.
+
+| medida | valor |
+|---|---|
+| exports examinados | **2.803**, em 670 arquivos |
+| vivos | 1.789 |
+| `export` sem consumidor, mas o símbolo é usado dentro do próprio arquivo | 554 |
+| **completamente morto** (nem no próprio arquivo é referenciado) | **94** |
+| exportado só para o teste alcançar | 359 |
+| **arquivos não alcançáveis** do boot do servidor nem do cliente | **36** (4.647 linhas) |
+
+Os 554 são ruído de `export` largado, não código morto — arrumar é higiene barata. Os
+**94** e os **36 arquivos** são o alvo de verdade.
+
+---
+
+## 14. Honestidade sobre a própria auditoria
+
+Três coisas que o leitor precisa saber para calibrar o que está escrito aqui.
+
+**1. A camada cética não cobriu tudo.** O desenho era: todo achado grave passa por um
+segundo leitor que tenta derrubá-lo. Isso funcionou nos primeiros — e foi assim que o
+meu erro do Twilio (item **D-4**) e três vereditos da conferência dos 237 foram
+pegos. Mas a sessão bateu no limite de uso e **uma parte dos revisores não chegou a
+rodar**. Os achados que passaram pelos dois leitores estão marcados como confirmados;
+os que não passaram vêm da primeira leitura, com evidência de arquivo, e merecem uma
+conferência antes de virar trabalho.
+
+**2. A cobertura não é uniforme.** Foi mais funda onde o risco é maior —
+dinheiro, WhatsApp, automação, painel admin, e os arquivos maiores do repositório. Ficou
+mais rasa em cálculos, peças jurídicas, RH e ponto. Onde não se olhou, o documento diz.
+
+**3. Nada foi executado.** Nenhuma tela foi aberta, nenhum banco de produção
+consultado, nenhuma chamada real feita a tribunal, Meta, Asaas ou DataJud — o proxy
+deste ambiente bloqueia todos. Os testes foram rodados (5.570 verdes) e o build foi
+rodado uma vez, para conferir o achado do spike. O resto é leitura de código com
+arquivo e linha.
+
+A regra do topo deste documento resolve isso ao longo do tempo: cada entrega que
+tocar num item conferido aqui corrige o registro. O que está errado neste documento
+vai aparecer — e aí ele se conserta, em vez de envelhecer.
