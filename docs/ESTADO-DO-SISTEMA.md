@@ -1893,10 +1893,10 @@ aprovado."** Lido item a item:
 
 | decisão | resultado |
 |---|---|
-| 1 · Instagram | aprovado como proposto: selo nos 8 lugares, card travado |
-| 1b · Messenger | aprovado: mesmo selo |
-| 1c · "e-mail" | aprovado como proposto: "Instagram e e-mail em breve" (a palavra fica) |
-| 2 · Tribunais, texto | aprovado: todos os lugares, incluindo as 4 trocas de texto marcadas como remoção |
+| 1 · Instagram | aprovado como proposto: selo nos 8 lugares, card travado — **ENTREGUE** (fonte única `canalEmBreve` em `shared/smartflow-types.ts`; o `onClick` do Card em Configurações → Canais não abre o diálogo quando em breve; migration 0222 troca só o 1º bullet do Atende, idempotente; amarra `instagram-em-breve.test.ts`, 19 testes, 10 mutações vermelhas) |
+| 1b · Messenger | aprovado: mesmo selo — **ENTREGUE** junto com o 1 |
+| 1c · "e-mail" | aprovado como proposto: "Instagram e e-mail em breve" (a palavra fica) — **ENTREGUE** junto com o 1 |
+| 2 · Tribunais, texto | aprovado: todos os lugares, incluindo as 4 trocas de texto marcadas como remoção — **ENTREGUE** (fonte única em `shared/tribunais-pje.ts`: `coberturaTribunais`, `textoCoberturaCurto`, `listaSiglasCobertas`, `mensagemTribunalSemMotor`, `chipPjeIntegracoes`…; o servidor DERIVA `TRIBUNAIS_CONSULTA_PUBLICA` do shared e as 5 recusas de tribunal sem motor passam pelo mesmo helper; migration 0223 troca o bullet "Vigia…" dos 3 planos pelo índice certo; diálogo Monitorar avisa antes do clique e abre o pedido preenchido via `?tab=cofre&interesse=<SIGLA>`; **fila que avisa**: migration 0224 `interesse_tribunais.avisadoEm`, procedures `admin.interessesTribunais`/`admin.avisarInteressadosTribunal`, card "Fila de tribunais pedidos" em /admin/saude → Visão rápida, e-mail `tribunal_disponivel` ao dono do escritório, um por escritório, auditado; amarra `tribunais-texto-honesto.test.ts`, 42 testes, 12 mutações vermelhas). Ressalva: o bullet gravado em `planos.features` é retrato de hoje — tribunal novo no registro atualiza site/app/erros sozinho, mas o bullet do plano precisa de migration nova (o teste acusa) |
 | 3 · Tribunais, cobertura | **motor próprio para TJSP e TRTs (caminhos B, C e D); DataJud (A) recusado** — "processos lá têm atrasos de meses" |
 | 4 · Cancelar | aprovado: honrar a cláusula 5 |
 | 4b · Reativar | aprovado: sim (cria a assinatura de novo no Asaas, cobrança no fim do período) |
