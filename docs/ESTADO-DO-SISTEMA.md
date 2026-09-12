@@ -704,34 +704,117 @@ barata de checar e tão caro de ignorar.
 
 ## 6. Regras de negócio, por domínio
 
-> Em preenchimento pela auditoria por subsistema que está rodando. A intenção
-> desta seção é que qualquer pessoa leia, em português, **o que o sistema decide**
-> sem precisar abrir código: como o dinheiro é contado, quando um prazo está
-> atrasado, quem pode ver o quê, quando o robô fala e quando cala.
->
-> Regra ao preencher: cada regra cita o **símbolo** que decide (nome de função),
-> nunca a linha.
+O que o sistema **decide sozinho**, em português, sem abrir código. Foram mapeadas
+**337 regras** nesta passada; **133 delas têm um ponto frágil declarado** — um
+lugar onde a regra depende de sorte, de silêncio ou de um caminho que ninguém
+confere. Abaixo estão as que mudam dinheiro, acesso ou o que o cliente recebe.
 
-O que já está registrado em outros pontos deste documento e vale como regra:
+Quando aparecer **⚠**, é um ponto frágil que vale conhecer antes de mexer.
 
-- **Quem pode ver o quê** sai de `checkPermission(usuário, módulo, ação)`. Dono e
-  gestor têm `verTodos`. Gate por cargo escrito na mão é anti-pattern — e está
-  praticamente limpo hoje (ver seção 4).
-- **Quais módulos o escritório enxerga** sai do plano contratado, num porteiro
-  global que é **fail-open de propósito**: só bloqueia quando conseguiu resolver o
-  plano E o módulo não está na lista. Na dúvida, libera.
-- **Quanto o escritório pode usar por mês** sai de `escritorio_uso_mensal` contra
-  os tetos escritos no plano (migration 0221). Erro de leitura **libera** — perder
-  a contagem é considerado melhor que derrubar o pedido do advogado.
-- **Quando um prazo está atrasado** é o fim do dia civil no fuso do escritório, não
-  UTC. Prazo só-data é gravado como meio-dia UTC pra sobreviver a conversão.
-- **Quando o robô cala:** conversa `em_atendimento` cancela a retomada do roteiro;
-  encerrar a conversa cancela roteiro parado; e o limite por contato é janela
-  deslizante de 24h/7d/30d, com recado interno na conversa (um por atendimento).
-- **Dinheiro do cliente final** é `varchar` na tabela de cobranças — texto, não
-  número. Isso é a raiz do item **D-1**.
+### 6.1 Dinheiro do cliente do escritório
 
----
+- **Cada escritório usa a própria conta Asaas.** A chave fica guardada cifrada.
+  ⚠ Se a descriptografia falhar, o erro é engolido sem log: a integração
+  simplesmente para, e ninguém sabe por quê.
+- **Sandbox ou produção é deduzido do texto da chave**, não escolhido. ⚠ Chave de
+  teste em formato novo vira "produção", e o escritório acha que está só testando.
+- **Cobrança parcelada não usa o parcelamento do Asaas:** o sistema cria N cobranças
+  independentes, uma por mês. ⚠ Se a 5ª falhar, **as 4 primeiras não são desfeitas**;
+  o operador recebe "criei 4, falhou na 5ª".
+- **Criar a mesma cobrança duas vezes por engano não cobra o cliente em dobro** — a
+  tela gera uma senha de operação. ⚠ **Assinatura e cobrança manual não têm esse
+  mecanismo.**
+- **Existe cobrança "manual"**, que não passa pelo Asaas, para quem pagou em
+  dinheiro ou transferência.
+- **"Pagamento de terceiro":** quando a esposa paga a conta do Carlos com o CPF
+  dela, a cobrança continua sendo do Carlos. ⚠ Duas procedures gravam esse vínculo
+  com regras diferentes.
+- **Quem recebe a comissão é decidido quando a cobrança NASCE** e nada depois muda
+  isso. ⚠ Se a leitura da configuração falhar, segue o caminho padrão em silêncio.
+- **Elegibilidade de comissão:** decisão manual vence; sem ela, vale a categoria.
+  ⚠ A categoria não é conferida contra o escritório ao ser gravada.
+- **Os três números do topo do Financeiro:** RECEBIDO conta pela data do pagamento;
+  A RECEBER e VENCIDO contam pela data de vencimento. ⚠ Se a consulta falhar, a
+  resposta é **zero em tudo**, sem aviso e sem log.
+- **Para os painéis,** pago = recebido + confirmado + pago em dinheiro + pago após
+  negativação. ⚠ **Cobrança estornada desaparece dos números sem nenhuma linha
+  explicando.**
+- **Na régua de cobrança, "estornada" é tratada junto com "paga"** — some da régua,
+  embora o dinheiro tenha voltado para o cliente.
+- **Na importação do extrato, só o que SAIU da conta vira despesa.** ⚠ Inclusive a
+  transferência do próprio dinheiro para o banco do escritório, que derruba o lucro.
+- **Uma vez por dia roda uma faxina de "fantasmas"**, comparando 5 anos atrás até 1
+  ano à frente. ⚠ **A janela de 1 ano é curta demais para parcelamento longo:
+  parcela que vence depois é apagada como se não existisse.**
+
+### 6.2 Limites do Asaas e o que acontece quando estouram
+
+- **Toda chamada espera no máximo 15 segundos e não é repetida.** Falha de rede é
+  erro final. ⚠ Uma oscilação de 1 segundo perde a operação; quem repete é o cron,
+  no dia seguinte.
+- **Quatro travas locais decidem se a requisição pode sair.** ⚠ Abaixo de 18.000
+  chamadas no mês, **duas instâncias do sistema contam separado** e juntas podem
+  passar do teto.
+- ⚠ **Até 49 chamadas podem não ter sido gravadas** no contador quando o sistema cai.
+- **Quando o Asaas responde 429, o endereço é bloqueado pelo tempo que ele pedir.**
+  ⚠ Reação exagerada: um limite de minuto vira bloqueio de meio dia em tudo.
+- **Quem conecta durante um bloqueio fica "aguardando validação" e é promovido
+  depois.** ⚠ **Essa promoção não registra o webhook** — o escritório fica sem tempo
+  real para sempre.
+- ⚠ **O endereço do webhook registrado no Asaas vem do navegador de quem conectou.**
+  Conectar a partir de um endereço de teste registra o webhook para lá.
+
+### 6.3 O WhatsApp e o robô
+
+- **Mensagem de grupo é descartada** — o sistema atende uma pessoa por vez.
+- **A mesma mensagem nunca entra duas vezes**, pelo identificador da Meta. ⚠ A busca
+  é global, sem escritório, **e não há índice único**: duas entregas no mesmo
+  instante podem passar as duas.
+- **Quando o cliente escreve, o sistema tenta juntar a ficha magra do WhatsApp com o
+  cadastro completo.** ⚠ Falha em silêncio: duplicata não unificada não aparece como
+  pendência em lugar nenhum.
+- **Nota de voz é transcrita e a transcrição vira o texto.** ⚠ Sem a transcrição
+  configurada, **o cliente fala e o robô fica mudo**, sem nenhum aviso na tela.
+- **Foto, vídeo, PDF e figurinha são baixados e guardados no servidor**, em
+  `./uploads/whatsapp-cloud/...`. **Isso está seguro** — e o comentário do arquivo
+  diz o contrário, ver a nota na seção 9.2.1.
+- **O robô cala quando o atendente assume** (conversa em atendimento), e **encerrar a
+  conversa cancela o roteiro parado**.
+- **O limite por contato é janela deslizante** de 24h, 7 dias ou 30 dias, e quando
+  ele cala o robô, fica um recado interno na conversa — um por atendimento.
+- **Roteiro que espera resposta fica aguardando por um prazo configurável de 1
+  minuto a 7 dias** (o padrão é 24h). O teto de 24h é do Atendente IA, não do roteiro.
+
+### 6.4 Quem vê o quê
+
+- **A régua é `checkPermission(usuário, módulo, ação)`.** Dono e gestor têm
+  "ver tudo" — **exceto no Ponto**, fechado por padrão para gestor.
+- **Quem tem "ver tudo" no financeiro vê o escritório inteiro; quem tem "ver os
+  próprios" vê só o que é seu.** ⚠ **O crachá financeiro da ficha e a tela de
+  duplicatas não aplicam esse recorte** (seção 10.2).
+- **Quem ATENDE uma conversa pode ver, editar e transformar em cliente o contato que
+  atende** — mesmo sem ser o responsável pelo cadastro. Trocar o responsável
+  continua sendo só de quem vê tudo, porque isso redistribuiria comissão.
+- **O que o escritório enxerga depende do plano**, num porteiro que é **fail-open de
+  propósito**: só bloqueia quando resolveu o plano e o módulo não está na lista.
+
+### 6.5 Tempo, prazo e fuso
+
+- **"Atrasado" é o fim do dia civil no fuso do escritório**, não UTC.
+- **Prazo só-data é gravado como meio-dia UTC** para sobreviver a conversão.
+- **O período do Inbox conta pelo início do ATENDIMENTO** — a primeira mensagem da
+  conversa; atendimento encerrado e cliente que volta = novo início.
+- **O resumo diário sai no fuso de cada escritório**, não num horário fixo em UTC.
+
+### 6.6 Cota e limite do plano
+
+- **Cada operação avulsa tem teto mensal escrito no plano** (consulta de processo,
+  busca de documento, resumo de IA, cálculo), contado em competência `AAAA-MM`.
+- ⚠ **Erro ao ler o limite LIBERA a operação** — e perder a contagem é considerado
+  melhor que derrubar o pedido do advogado. É decisão consciente, documentada no
+  código.
+- **Vaga de processo vigiado e de CPF vigiado é limite separado**, conferido antes.
+- ⚠ **O saldo de créditos antigo ainda destranca item de menu** (seção **D-6**).
 
 ## 7. Dívida consciente (não reabrir sem o gatilho)
 
@@ -917,6 +1000,19 @@ repositório** — só um deles foi versionado. A conferência por mutação pod
 acontecido de verdade; o que não dá é para alguém repetir.
 → *Conserto:* ou versiona o script, ou escreve "conferido por mutação, script não
 versionado". As duas são honestas; citar caminho que não abre, não.
+
+**Um caso em que o comentário assusta sem motivo — a podridão corta nos dois
+lados.** O arquivo que baixa mídia do WhatsApp avisa, no cabeçalho: "Storage local é
+efêmero em ambientes como Railway (container recicla, mídia some)". Isso era verdade
+quando foi escrito e **não é mais**: a mídia vai para `./uploads/...`, o Dockerfile
+define `WORKDIR /app` e cria `/app/uploads` como ponto de montagem, e o volume
+`juridflow-volume` do Railway está montado exatamente ali — conferido no painel e
+**validado fim a fim em produção**, com o log de boot mostrando
+`uploadsDir: '/app/uploads'`. A mídia sobrevive a redeploy, e o comentário faz o
+próximo leitor caçar uma perda de dados que não existe.
+Anotei porque quase virou um achado grave meu: a regra extraída do código dizia
+"mídia some", e só conferindo o Dockerfile contra o documento do volume ficou claro
+que o texto é que envelheceu.
 
 **4. O mockup aprovado e o código entregue divergem, e ninguém volta no mockup.**
 O documento registra que o mockup da conferência de cadastros dizia "17 colunas" e
