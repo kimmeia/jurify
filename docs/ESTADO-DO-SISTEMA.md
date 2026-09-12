@@ -3,7 +3,7 @@
 **Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
-terminar.** Se você tem trinta segundos, leia "O retrato em quatorze linhas". Se tem
+terminar.** Se você tem trinta segundos, leia "O retrato em quinze linhas". Se tem
 dez minutos, leia até o fim da seção 4.
 
 ---
@@ -54,7 +54,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1. O retrato em quatorze linhas
+## 1. O retrato em quinze linhas
 
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
@@ -103,12 +103,16 @@ Não é burocracia. É o custo medido de não ter tido a regra:
     vendido em três lugares sem receber uma mensagem, armazenamento e número de
     WhatsApp vendidos sem trava, e o plano "Sob medida" entregando menos que o
     Escala. Seção 15.
-14. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+14. **O que o sistema promete apagar, ele não apaga.** "Excluir cliente" deixa cinco
+    tabelas intactas e os arquivos no disco — e diz que apagou. E a impersonação, que
+    troca poder total por rastro total, tem o rastro quase vazio: **49 registros de
+    auditoria para 779 procedures**, e só 2 deles dentro do app. Seção 16.
+15. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
 
-## 1.1 Se for fazer só onze coisas, faça estas
+## 1.1 Se for fazer só doze coisas, faça estas
 
 Ordenado por dano × prazo × esforço, não por dificuldade.
 
@@ -123,8 +127,9 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
 | 9 | **Decidir o que fazer com a cobertura de tribunais** | a venda diz "monitora processos" sem ressalva e o motor não conhece TJSP nem nenhum TRT. Ou muda o texto, ou muda a cobertura — mas não dá pra vender assim (seção 15.1) |
-| 10 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
-| 11 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 10 | **Completar o "excluir cliente"** | ele deixa 5 tabelas intactas — telefone, CNJ, acordo, pergunta à IA — e os arquivos no disco, dizendo que apagou. É a ferramenta com que o escritório cumpre pedido de exclusão do cliente dele (seções 16.1 e 16.2) |
+| 11 | **Validar o cargo em `atribuirCargo`** | uma linha. Hoje dá pra atribuir cargo de outro escritório e a matriz de permissão obedece (item **D-15**) |
+| 12 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
 E três que são quase de graça, porque são só texto:
 
@@ -1829,3 +1834,127 @@ texto — e **os dois são baratos**. O que custa caro é descobrir pela reclama
 um cliente que assinou esperando o TJSP, ou por um pedido de reembolso amparado na
 cláusula 5. Nenhum deles precisa de decisão técnica: precisam de uma decisão do dono
 sobre o que prometer.
+
+---
+
+## 16. Apagar, impersonar e avisar — três varreduras finais
+
+Estas três não estavam no pedido original com esse nome, mas saem dele: "regras de
+negócio" inclui o que o sistema promete fazer com o dado de uma pessoa, e "código
+morto" tem um primo pior, que é o **código que existe mas não é chamado**. Os três
+casos abaixo são desse tipo.
+
+### 16.1 Excluir cliente não apaga o cliente inteiro
+
+O comentário no topo de `excluir-cliente.ts` diz, com essas palavras:
+
+> "Quando um cliente é removido do sistema, **todos os dados relacionados também
+> devem ser removidos**."
+
+Contei as tabelas do schema que guardam o `contatoId` de um cliente: são **16**. A
+exclusão em cascata trata **11**. Ficam de fora, intactas, cinco:
+
+| tabela | o que continua guardado sobre a pessoa excluída |
+|---|---|
+| `agendamentos` | **o telefone dela** (`contatoTelefone`), o título, a descrição e a observação do atendimento |
+| `acordos` | **nome e telefone da parte contrária**, e todos os valores negociados |
+| `cliente_processos` | o **número CNJ** dos processos dela, o tribunal, a classe e o valor da causa |
+| `jurisia_conversas` | o **título da conversa** com a IA — que costuma ser a pergunta jurídica do caso |
+| `atendimentos` | o registro de cada atendimento: quando abriu, quem atendeu, quando fechou |
+
+Não há bloqueio nem aviso: a exclusão termina com `success: true` e a tela diz que
+o cliente foi excluído.
+
+**Por que isso importa mais aqui do que em outro sistema.** Os Termos de Uso do
+JuridFlow colocam o **escritório como controlador** dos dados (é a palavra da LGPD
+para "quem responde pelo dado"). Quando o cliente de um advogado pede exclusão, é o
+escritório que tem a obrigação legal de apagar — e a ferramenta que ele usa para
+cumprir isso é esse botão. Ele clica, o sistema confirma, e o número CNJ, o telefone
+e a pergunta jurídica continuam na base.
+
+### 16.2 Os arquivos continuam no disco
+
+A exclusão apaga sim os blobs, mas por um caminho com uma trava de segurança que,
+sem querer, vira um filtro:
+
+```
+const expected = `/uploads/escritorio_${escritorioId}/`;
+if (!url || !url.startsWith(expected) || url.includes("..")) {
+  return; // URL externa (S3 legacy, etc) ou maliciosa — ignorar silenciosamente
+}
+```
+
+A trava existe por um bom motivo (impedir que uma URL manipulada apague arquivo de
+outro escritório). Só que **dois tipos de arquivo do produto não moram nessa pasta**:
+
+- a mídia recebida no WhatsApp, que vai para `/uploads/whatsapp-cloud/<escritório>/…`
+  — foto, áudio, documento que o cliente mandou na conversa;
+- o documento de assinatura eletrônica, em `/uploads/assinaturas/escritorio_<id>/…`.
+
+Os dois caem no `return` silencioso. As linhas do banco somem, os arquivos ficam no
+volume para sempre — e sem a linha do banco, **ninguém mais sabe que eles existem**,
+nem para apagar depois.
+
+### 16.3 Nada nunca é apagado por idade
+
+Procurei rotina de expurgo, retenção, faxina por data: **não existe nenhuma**. Mensagem
+de 2024, conversa encerrada, lead perdido, log de e-mail, execução de fluxo — tudo
+fica indefinidamente. Isso tem dois custos: o banco só cresce (e o backup da
+plataforma já não termina por causa disso — item **D-14**), e a LGPD trabalha com a
+ideia de que dado pessoal se guarda pelo tempo necessário, não para sempre.
+
+Não estou dizendo para sair apagando. Estou dizendo que **hoje não existe a decisão**
+— e "para sempre" é uma decisão, tomada por omissão.
+
+### 16.4 Impersonação: o desenho é bom, a premissa que o sustenta é falsa
+
+Quando você entra na conta de um cliente pelo painel, o sistema faz um monte de coisa
+certa: a sessão dura 1 hora e não a duração normal, não deixa impersonar outro admin,
+o cache de permissão é separado para não vazar entre as duas sessões, e a saída
+confere o seu cargo **naquele momento** (se você tivesse sido rebaixado no meio,
+sair derruba tudo, não devolve poderes).
+
+E dentro da impersonação você vira superusuário do escritório. O código diz por quê:
+
+> "Admin impersonando: acesso total de superuser, independe do cargo do alvo.
+> (decisão de produto — **ações ficam auditadas em nome do admin original**.)"
+
+A troca é explícita e defensável: poder total em troca de rastro total. **O problema
+é que o rastro quase não existe.** Medi:
+
+| | |
+|---|---|
+| procedures no servidor | **779** |
+| chamadas de `registrarAuditoria` | **49** |
+| onde elas estão | 36 no painel admin, 8 nos agentes de IA, 2 no financeiro do admin, **2 no app inteiro** |
+
+As duas do app são "cancelar contrato" e "reativar contrato". Tudo o mais que se faz
+dentro do escritório durante uma impersonação — editar cliente, apagar cliente, mexer
+em cobrança, mudar fluxo, subir ou excluir documento — **não gera uma linha de log**.
+
+A parte de auditoria que funciona é boa: a entrada é registrada com hora, IP e alvo, e
+quando há registro o ator gravado é o **admin de verdade**, não o usuário-alvo. O que
+falta é o registro existir nas ações.
+
+E há um segundo buraco, independente da impersonação: a tabela `audit_log` **não tem
+coluna de escritório**. Ela é uma trilha da plataforma, para você. O escritório — que
+é o controlador dos dados perante a lei — não tem como ver o que foi feito dentro da
+conta dele, nem por você, nem por um colaborador dele.
+
+**O que eu faria** (não fiz, é mudança de código): auditar as ações destrutivas do app
+— excluir cliente, excluir arquivo, excluir card/coluna, mexer em cobrança, trocar
+responsável — e dar à `audit_log` a coluna de escritório, para que essa trilha possa
+um dia virar uma tela do escritório. São poucas linhas em cada procedure e nenhuma
+mudança visível para o advogado, o que dispensa mockup.
+
+### 16.5 Notificações: aqui está certo
+
+Registro o que está bem-feito, porque documento que só lista defeito ensina errado.
+
+As notificações do sino são amarradas pelo `userId` em **todas** as operações — ler,
+marcar como lida, marcar todas, apagar uma, limpar as lidas. Cada uma tem a cláusula
+do dono na mesma consulta que faz a mudança, que é exatamente o padrão que falta em
+outros lugares deste documento. Não achei um caminho de vazamento.
+
+A única ponta solta é a mesma da 16.1: notificação **não é apagada** quando o cliente
+é excluído, e o texto dela costuma trazer o nome da pessoa.
