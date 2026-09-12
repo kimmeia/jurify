@@ -858,7 +858,12 @@ function LinhaRelevante({
         className={`h-1.5 w-1.5 rounded-full shrink-0 ${item.lido ? "bg-transparent" : "bg-primary"}`}
         title={item.lido ? undefined : "Não lida"}
       />
-      <span className="w-[220px] shrink-0 min-w-0">
+      {/* A coluna do nome era 220px fixos em qualquer tela. Num monitor de
+          1600px isso truncava "Maria Aparecida Nogueira de Sousa" (252px)
+          com mais de mil pixels vazios à direita. Cresce por faixa em vez de
+          virar flexível: numa lista, o alinhamento entre as linhas é o que
+          deixa a coluna legível. */}
+      <span className="w-[220px] lg:w-[300px] xl:w-[380px] shrink-0 min-w-0">
         <span className="block text-[12.5px] font-bold truncate" title={nomeDoCaso(item)}>
           {nomeDoCaso(item)}
         </span>

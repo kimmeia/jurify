@@ -43,6 +43,58 @@ código depois do "aprovado" dele. **A entrega é o ARQUIVO HTML auto-contido
 (fontes embutidas em base64), não PNG** — o dono abre no navegador dele.
 Ele já corrigiu isso uma vez ("pedi mockup EM HTML bem claro"); não repetir.
 
+#### O mockup é NAVEGÁVEL e sai do sistema RODANDO (regra do dono, 12/09/2026)
+
+Palavras dele: *"gere o mockup em html navegável para eu visualizar como
+ficará no mundo real e aprovar ou não. adote como regra."*
+
+Antes disso, em 11/09, ele reprovou um mockup desenhado à mão: *"para poder
+sugerir melhoria você precisa saber como é o sistema hoje, seus mockups não
+retratam o de uso real hoje, fez uma cópia barata e muito mal feita"*. Estava
+certo — a proposta havia nascido de `grep` no código, e o desenho inventava
+telas que não existem (afirmava que Clientes e Financeiro não tinham
+cabeçalho; os dois têm *hero* com nome, subtítulo e KPI, melhores do que o
+que eu propunha).
+
+**As três regras que ficam:**
+
+1. **Nada de desenhar tela de memória.** Suba o app
+   (`docs/rodar-o-app-localmente.md`, ~5 min neste ambiente), povoe com dados
+   (`scratchpad/estudo-telas/povoar.sql`) e trabalhe sobre o que aparece.
+   **Tela vazia esconde defeito**: sem dados o estudo dizia "nenhuma tela rola
+   de lado no celular"; com dados, quatro rolavam.
+2. **O "antes" é captura, nunca desenho.** E o "depois" também: mude o código
+   numa branch descartável e capture o resultado. Um typecheck verde não
+   prova aparência — no conserto do KPI do Financeiro, `whitespace-nowrap`
+   trocou a quebra de linha por um vazamento por cima do cartão vizinho, e
+   **só a foto mostrou**.
+3. **O navegável é montado com a MARCAÇÃO REAL do app**, serializada do
+   navegador — não reescrita à mão. Receita completa em
+   `docs/mockup-navegavel.md`; scripts em `scratchpad/estudo-telas/`
+   (`povoar.sql` · `serializa.mjs` · `fontes.mjs` · `gera-navegavel.mjs` ·
+   `confere-navegavel.mjs`). Ele precisa ter: troca de tela pelo menu, chave
+   **Antes ⟷ Depois** e chave **Computador ⟷ Celular**, tudo num HTML
+   auto-contido. E tem que ser **dirigido por Playwright** antes de entregar
+   — combinação que sai em branco não aparece sozinha.
+
+4. **Navegar não é comparar (12/09, resposta dele ao 1º navegável):**
+   *"o antes e depois tá a mesma coisa, não consegui entender as
+   diferenças."* Estava certo. O arquivo abria no COMPUTADOR e cinco dos seis
+   consertos só aparecem no CELULAR; a chave Antes/Depois exige memória; e o
+   quadro de 390px CORTA o vazamento, que é justamente o defeito. Toda
+   comparação agora sai do `gera-comparador.mjs`: **uma comparação por
+   achado**, já aberta na tela e no tamanho onde ele acontece, os dois lados
+   ao mesmo tempo com o MESMO recorte e a MESMA rolagem, **anel** no elemento
+   que mudou, **linha tracejada da borda da tela** (o anel cruza no antes e
+   não cruza no depois — é esse par que torna o vazamento visível), régua
+   medida, uma frase "Onde olhar" e o botão **Piscar** (sobrepõe os dois
+   alternando). `mede-alvos.mjs` confere se o alvo do anel realmente MUDA
+   entre os estados — três dos dez estavam no elemento errado e o anel saía
+   igual nos dois lados.
+
+O "sem JavaScript" da skill `mockup-juridflow` vale para o mockup-retrato;
+**o navegável é a exceção pedida por ele**, e o JS nele só troca classe.
+
 ### Nunca remover sem autorização expressa (regra do dono, 27/08/2026)
 
 Nenhuma remoção — campo de tela, bloco, procedure, coluna, funcionalidade,
@@ -1236,6 +1288,102 @@ vermelhas (`scratchpad/mutar-plano-whatsapp.py`).
     quem se cadastrou** — assunto encerrado. Conclusão de produto, não de
     bug: o cadastro self-service está aberto pra quem é CLIENTE de
     escritório, não advogado.
+
+## Frente de frontend (10–12/09/2026) — "o sistema mais lindo e intuitivo"
+
+Pedido do dono em 10/09, com duas regras explícitas: **não mexer em
+backend, só telas**, e **documentar tudo** (feito, stand-by, corrigido) para
+outro agente conseguir continuar. Decisão de ritmo dele: *"mockup hoje,
+código depois do lançamento"* — ou seja, proposta visual nasce mockup e só
+vira código quando ele aprovar.
+
+### Fatia 1 — escala tipográfica: ENTREGUE e MERGEADA (10/09, "pode mergear")
+
+Eram **2.856 `text-[Npx]`** escritos à mão no client, em 33 valores
+distintos, e o que caía no menor deles era o que mais importa (o selo
+"2º grau?" e o PRAZO saíam em 9px na lista de Processos). Agora há 7 tokens
+em `client/src/index.css` (`--text-micro` 11px · `--text-apoio` 11.5px ·
+`--text-corpo` 13px · `--text-secao` 15px · `--text-titulo` 20px ·
+`--text-numero` 22px · `--text-pagina` 26px), aplicados em **673 lugares**
+nas 6 telas do dia a dia. **Piso de 11px**: abaixo disso não entra nada —
+quem lê é advogado, lê o dia inteiro, boa parte usa óculos. Onde faltar
+contraste, a saída é PESO e COR, não um tamanho novo.
+Os tokens são declarados **sem `line-height` de propósito**: `text-[10px]`
+também só mexia no font-size, então trocar por token não pode arrastar o
+espaçamento vertical e mudar layout que ninguém pediu.
+Amarra: `server/__tests__/escala-tipografica.test.ts` (9 testes, 5 mutações
+vermelhas) — a lista `TELAS_MIGRADAS` cresce a cada fatia, de propósito.
+Correção de fato que ficou registrada: **título de tela é Inter 700, não
+Poppins**. Poppins (`--font-display`) é só a marca "J" e as telas de login.
+
+### Fatia 2 — REPROVADA (11/09), e por quê
+
+Mockup desenhado à mão foi reprovado: *"para poder sugerir melhoria você
+precisa saber como é o sistema hoje, seus mockups não retratam o de uso real
+hoje, fez uma cópia barata e muito mal feita"*. Ele estava certo. A proposta
+havia nascido de `grep`, e **`grep '<h1'` mede a TAG, não o título**:
+Clientes e Financeiro "não tinham cabeçalho" no diagnóstico e na verdade têm
+*hero* com selo, subtítulo e KPI, melhores do que o `PageHeader` proposto; a
+saudação do Dashboard/Atendimento é decisão de produto (trocar por
+"Dashboard" seco seria remoção); e `/movimentacoes` é a MESMA tela de
+Processos, contada como duas.
+
+### Estudo refeito das telas REAIS (11/09) + ambiente local
+
+`docs/estudo-frontend-telas-reais-2026-09-11.md` — app subido de verdade,
+povoado e fotografado em 1600px e 390px. Receita do ambiente em
+`docs/rodar-o-app-localmente.md` (MariaDB por apt — Docker Hub é bloqueado
+pelo proxy; `pnpm dev` roda as 225 migrations sozinho).
+**Tela vazia esconde defeito**: sem dados o estudo dizia "nenhuma tela rola
+de lado no celular"; com dados, quatro rolavam — e com tarefas/conversas
+povoadas (12/09) apareceu uma quinta e uma sexta.
+
+### Entregue 12/09 — 7 consertos de tela, APROVADA ("pode fazer") e MERGEADA
+
+Mergeada em `develop` e em `main` no mesmo dia, com os pré-requisitos da casa
+conferidos na ponta final DEPOIS de trazer `develop` para dentro da branch:
+`pnpm check` limpo, **5.602 testes verdes (383 arquivos)** e `vite build`
+passando. O único conflito do merge foi em `CLAUDE.md` (as duas pontas
+escreveram no mesmo lugar) — resolvido mantendo os DOIS lados, o bloco do
+`develop` antes da seção nova.
+
+O que foi aprovado saiu do comparador `comparador-antes-depois.html` (ver
+regra 4 acima). Mockup navegável
+`mockup-navegavel-telas-reais.html` (antes ⟷ depois, computador ⟷ celular,
+telas serializadas do app rodando). Medido no navegador, largura do conteúdo
+num celular de 390px: Dashboard 461→390 · Processos 449→390 ·
+Movimentações 449→390 · Tarefas 437→390 · Financeiro 443→390 ·
+Acordos 430→390. **11 de 11 telas cabem; eram 5 de 11** — e as três causas
+eram diferentes (tira de abas em linha reta; fileira de botões sem
+`flex-wrap`; grid sem coluna declarada abaixo de `lg`, onde a coluna
+implícita vale `auto` e cresce até o conteúdo). Mais quatro:
+pílula "AGORA" da Agenda (103px num vão de 48px, invadia a coluna das horas
+e cobria o nome do compromisso) virou duas linhas; na linha da tarefa o
+aviso de atraso era desenhado em cima da data (`10/09/2026⚠`); coluna do cliente em Movimentações (220px fixos, cortava
+"Maria Aparecida Nogueir…" com 1.065px vazios) cresce até 380px em monitor;
+e `R$ 10.7k` — ponto decimal inglês — virou `R$ 10,7 mil` por
+`shared/formato-numero.ts` (`moedaBR`/`moedaCurtaBR`/`numeroBR` em cima do
+`Intl`), única fonte: os dois arquivos que tinham a função duplicada,
+idêntica e com o mesmo defeito (`financeiro/helpers.tsx` e
+`dashboards/common.tsx`) passaram a reexportar dali. Amarra:
+`server/__tests__/formato-numero.test.ts` e
+`server/__tests__/telas-cabem-no-celular.test.ts` (8 testes, **14 mutações
+vermelhas** em `scratchpad/mutar-telas-celular.py` — as duas primeiras
+versões da amarra passavam com a classe apagada porque o trecho vizinho
+tinha a palavra; foi preciso ancorar no `className` do elemento certo).
+O navegável foi dirigido por Playwright (46 combinações, nenhuma vazia) e
+`confere-fidelidade.mjs` confere DENTRO do iframe os números medidos no app
+(coluna 220→380px, pílula 103px/1 linha→48px/2 linhas, `R$ 10.7k`→
+`R$ 10,7 mil`, valor no celular 48px→20px): 7/7.
+**Regressão que só a FOTO pegou** (typecheck e 4.696 testes passaram nas
+duas versões): `whitespace-nowrap` no KPI do Financeiro trocou a quebra de
+linha por vazamento por cima do cartão vizinho, truncando "Asaas" em "As…".
+Conserto certo foi `grid-cols-1 sm:grid-cols-2`.
+**Fora do pedido, anotado e NÃO mexido**: avisos empilhados do Financeiro
+(esconder é remoção); os 5 tamanhos de título de tela (mexe em hero e
+saudação, precisa de mockup próprio); tabela do Financeiro virar cartão no
+celular (hoje rola dentro da moldura — virar cartão é redesenho); contraste
+do valor verde-escuro no hero verde (decisão de cor).
 
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
