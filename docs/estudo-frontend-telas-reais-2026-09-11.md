@@ -185,3 +185,106 @@ node scratchpad/estudo-telas/medir.mjs <sessao.json>
 **Use `--default-character-set=utf8mb4` no mariadb.** Sem isso o seed entra
 com acentuação quebrada ("petiÃ§Ã£o") e a foto vira um falso achado — foi o
 que aconteceu na primeira rodada.
+
+---
+
+## 6. O que foi corrigido — proposta de 12/09/2026 (aguardando aprovação)
+
+Branch `claude/proposta-visual-11-09`. **Nada foi mergeado**: o dono aprova
+vendo o mockup navegável `mockup-navegavel-telas-reais.html`, que mostra as
+telas do app rodando com chave Antes ⟷ Depois e Computador ⟷ Celular
+(receita em `docs/mockup-navegavel.md`).
+
+### Os 6 achados, medidos no navegador antes e depois
+
+Largura do conteúdo num celular de **390px** — acima de 390 a página anda de
+lado com o dedo:
+
+| Tela | Antes | Depois | O que era |
+|---|---|---|---|
+| Dashboard | **461px** | 390px | régua de abas "Hoje · Semana · Mês · Trimestre" em linha reta |
+| Processos | **449px** | 390px | fileira de botões do topo sem quebra |
+| Movimentações | **449px** | 390px | a mesma fileira (é a mesma tela) |
+| Tarefas | **437px** | 390px | filtros "Todas · Pendente · Em andamento · Concluída" na linha da busca |
+| Financeiro | **443px** | 390px | régua de abas + duas tabelas empurrando a página |
+| Acordos | **430px** | 390px | 3 cartões de resumo lado a lado até no celular |
+| Clientes · Agenda · Kanban · Relatórios · Atendimento | cabem | cabem | — |
+
+**11 de 11 telas cabem no celular; eram 5 de 11.** A medição sai do próprio
+log do serializador (`ROLA DE LADO`), não de opinião — e as três causas eram
+diferentes: tira de abas em linha reta (Dashboard, Financeiro), fileira de
+botões sem quebra (Processos, Movimentações, Tarefas) e grid sem coluna
+declarada no celular (Acordos — sem nenhuma coluna abaixo de `lg`, a coluna
+implícita vale `auto` e cresce até o conteúdo).
+
+Mais três consertos que não são de largura:
+
+- **Agenda** — a pílula "AGORA" media **103px** num vão de 48px e entrava por
+  cima da coluna das horas, cobrindo o nome do compromisso. Virou duas linhas
+  (AGORA / 14:35) e termina exatamente onde a grade começa. (Medido dentro do
+  navegável: antes 103px em 1 linha, depois 48px em 2 linhas.)
+- **Movimentações** — a coluna do cliente tinha 220px fixos e escrevia
+  "Maria Aparecida Nogueir…" com 1.065px vazios à direita. Cresce até 380px
+  em monitor; no celular continua enxuta.
+- **Dinheiro** — `R$ 10.7k` (ponto decimal inglês) virou `R$ 10,7 mil`.
+  `shared/formato-numero.ts` é agora a única fonte: `moedaBR`,
+  `moedaCurtaBR`, `numeroBR`, em cima de `Intl`. Os dois arquivos que tinham
+  a função duplicada, idêntica e com o mesmo defeito
+  (`financeiro/helpers.tsx` e `dashboards/common.tsx`) passaram a reexportar
+  daí. Amarra: `server/__tests__/formato-numero.test.ts` trava a vírgula e
+  proíbe `/1000 … toFixed` voltar nesses arquivos.
+
+- **Tarefas** — na linha de apoio de cada tarefa lia-se `10/09/2026⚠`, com o
+  triângulo de atraso desenhado **em cima** da data: os itens encolhiam abaixo
+  do próprio texto porque a linha não quebrava. Agora quebram.
+
+### Achados novos, que o estudo de 11/09 não tinha
+
+**Tarefas rola de lado no celular** (437px) **e o aviso de atraso cai em cima
+da data**. Não estavam na lista porque a tela estava **vazia** na primeira
+rodada — não havia tarefa nenhuma no banco. Com 7 tarefas povoadas, os dois
+defeitos apareceram. É a mesma lição de novo: tela vazia esconde defeito. O
+`povoar.sql` ganhou tarefas, conversas, mensagens e um canal de WhatsApp por
+isso — o Atendimento também estava vazio, e é a tela mais usada do sistema.
+
+### O que NÃO foi mexido, e por quê
+
+- **Item F (avisos empilhados no Financeiro)** — esconder ou juntar aviso é
+  decisão de produto, e tirar um deles é remoção. Aguarda o dono.
+- **Item G (cinco tamanhos de título)** — mexe em cabeçalho de tela, inclui a
+  saudação do Dashboard/Atendimento e os heroes de Clientes/Financeiro, que
+  são deliberados e bons. Precisa de mockup próprio e autorização.
+- **Tabela do Financeiro virar cartão no celular** (1.589px de largura) — hoje
+  ela rola dentro da própria moldura, que resolve o estouro da página. Virar
+  cartão é redesenho, não recorte.
+- **Contraste do valor no hero verde do Financeiro** — verde-escuro sobre
+  verde. É decisão de cor; o dono decide.
+- **Na linha da tarefa, o título é cortado no celular** ("Cobrar entrada d…")
+  porque os botões de ação da linha só aparecem no `hover` — que no celular
+  nunca acontece — e mesmo invisíveis ocupam a largura que falta ao título.
+  Consertar é decidir o que a linha mostra num celular: mockup próprio.
+- **47 telas formatam data na mão.** O formatador de dinheiro ficou pronto; o
+  de data é o mesmo tipo de conserto, maior.
+
+### Amarras e conferência
+
+- `server/__tests__/formato-numero.test.ts` (7 testes) trava a vírgula e
+  proíbe `/1000 … toFixed` voltar nos dois arquivos.
+- `server/__tests__/telas-cabem-no-celular.test.ts` (8 testes) guarda as três
+  causas de estouro encontradas no navegador (tira de abas sem rolagem,
+  fileira sem `flex-wrap`, grid sem coluna declarada) mais a pílula da Agenda
+  e a coluna de Movimentações. **14 mutações conferidas, todas vermelhas**
+  (`scratchpad/mutar-telas-celular.py`) — as duas primeiras versões da amarra
+  passavam com a classe apagada, porque o trecho vizinho tinha a palavra.
+- O navegável foi **dirigido por Playwright** (`confere-navegavel.mjs`): 46
+  combinações, nenhuma vazia, nenhum erro de página. E `confere-fidelidade.mjs`
+  confere dentro do iframe os números que foram medidos no app: coluna do nome
+  220 → 380px, pílula 103px/1 linha → 48px/2 linhas, `R$ 10.7k` → `R$ 10,7 mil`,
+  altura do valor no celular 48px → 20px. **7/7 conferem.**
+
+### Onde está o arquivo
+
+`mockup-navegavel-telas-reais.html` (4,4 MB, auto-contido). **Não é
+versionado**: é reproduzível pelos scripts, e um HTML de 4 MB por proposta
+engorda o repositório rápido. Receita em `docs/mockup-navegavel.md`; o
+arquivo vai para o dono pelo chat.

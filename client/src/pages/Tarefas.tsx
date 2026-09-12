@@ -42,12 +42,12 @@ export default function Tarefas() {
       </div>
 
       {/* Busca + filtros */}
-      <div className="flex gap-2 items-center">
-        <div className="flex-1 relative">
+      <div className="flex gap-2 items-center flex-wrap">
+        <div className="flex-1 min-w-[180px] relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar tarefas..." value={busca} onChange={e => setBusca(e.target.value)} className="h-9 pl-9" />
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1 max-w-full">
           {(["todas", "pendente", "em_andamento", "concluida"] as const).map(s => (
             <Button key={s} variant={filtroStatus === s ? "default" : "outline"} size="sm" className="h-8 text-xs" onClick={() => setFiltroStatus(s)}>
               {s === "todas" ? "Todas" : STATUS_LABELS[s]}
@@ -81,9 +81,12 @@ export default function Tarefas() {
               {/* Conteúdo */}
               <div className="flex-1 min-w-0">
                 <p className={`text-sm font-medium truncate ${t.status === "concluida" ? "line-through text-muted-foreground" : ""}`}>{t.titulo}</p>
-                <div className="flex items-center gap-3 text-[10px] text-muted-foreground mt-0.5">
-                  {t.responsavelNome && <span className="flex items-center gap-0.5"><User className="h-2.5 w-2.5" /> {t.responsavelNome}</span>}
-                  {t.dataVencimento && <span className={`flex items-center gap-0.5 ${t.vencida ? "text-danger font-medium" : ""}`}><Calendar className="h-2.5 w-2.5" /> {new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</span>}
+                {/* `flex-wrap` + `shrink-0`: sem isso, no celular os itens da
+                    linha de apoio encolhiam abaixo do próprio texto e o aviso
+                    de atraso era desenhado em cima da data ("10/09/2026⚠"). */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground mt-0.5">
+                  {t.responsavelNome && <span className="flex items-center gap-0.5 shrink-0"><User className="h-2.5 w-2.5" /> {t.responsavelNome}</span>}
+                  {t.dataVencimento && <span className={`flex items-center gap-0.5 shrink-0 ${t.vencida ? "text-danger font-medium" : ""}`}><Calendar className="h-2.5 w-2.5" /> {new Date(t.dataVencimento).toLocaleDateString("pt-BR")}</span>}
                   {t.vencida && <AlertTriangle className="h-3 w-3 text-danger" />}
                 </div>
               </div>
