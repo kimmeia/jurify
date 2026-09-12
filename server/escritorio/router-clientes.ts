@@ -138,7 +138,7 @@ function contatosMeusPorLead(
  * arquivos, pastas, conversas, leads. Sem isso, atendente com verProprios
  * conseguia operar em qualquer cliente do escritório só conhecendo o ID.
  */
-async function podeVerCliente(
+export async function podeVerCliente(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   contatoId: number,
   escritorioId: number,
