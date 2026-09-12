@@ -855,9 +855,19 @@ segurança.
    dependia disso, está escrito "o dono confere".
 3. **Os testes foram rodados, não escritos.** 5.570 verdes é o estado atual, não
    prova de cobertura. A seção de pendências aponta onde falta trava.
-4. **A conferência dos 237 achados de 03/09 está em andamento** e vai virar uma
-   tabela id → estado. Sem ela, o número de pendências reais deste documento é
-   incompleto por construção.
+4. **Três passadas ainda estavam rodando quando este documento foi escrito**, e
+   por isso ele é incompleto **por construção**, não por descuido:
+   - a conferência dos 237 achados fechou **10 de 16 domínios** (faltam smartflow,
+     configurações, admin, assinaturas, casca do app e infra);
+   - a auditoria por subsistema do servidor cobriu os maiores (Asaas, WhatsApp,
+     Meta, SmartFlow, painel admin) e **ainda não passou** por cálculos, JurisIA,
+     peças jurídicas, RH/ponto, assinatura de documento, cofre, agenda, comissões,
+     relatórios e o schema;
+   - a leitura integral dos 12 maiores arquivos está em curso.
+
+   Em outras palavras: **a lista de achados deste documento vai crescer**, e o que
+   está aqui é o que passou por duas leituras. Nenhum número dele deve ser tratado
+   como total final — o que vale é que cada linha presente foi conferida.
 5. **Não houve teste de mutação.** O padrão da casa é quebrar o código de
    propósito e ver o teste ficar vermelho. Não fiz isso aqui: esta passada foi de
    leitura, e o dono pediu que nada fosse alterado.
