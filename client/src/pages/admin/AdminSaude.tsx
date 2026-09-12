@@ -1,6 +1,8 @@
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
@@ -53,6 +55,80 @@ function SeloStatus({ tom, children }: { tom: "ok" | "atencao" | "erro"; childre
  * Visão rápida: um resumo do que as outras abas detalham. Cada card responde
  * "isso precisa de mim agora?" sem obrigar a abrir aba por aba.
  */
+/**
+ * Fila do "Avisar quando chegar": cada tribunal pedido pelos escritórios,
+ * quantos pediram e o botão que manda o e-mail pra quem ainda espera.
+ */
+function FilaTribunais() {
+  const utils = trpc.useUtils();
+  const fila = trpc.admin.interessesTribunais.useQuery(undefined, {
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const avisar = trpc.admin.avisarInteressadosTribunal.useMutation({
+    onSuccess: (r) => {
+      const partes = [`${r.enviados} e-mail(s) enviado(s)`];
+      if (r.jaAvisados > 0) partes.push(`${r.jaAvisados} já tinha(m) sido avisado(s)`);
+      if (r.semEmail > 0) partes.push(`${r.semEmail} sem e-mail do dono`);
+      if (r.falhas.length > 0) partes.push(`${r.falhas.length} falha(s) no envio`);
+      toast.success(`Interessados no ${r.tribunal} avisados`, { description: partes.join(" · ") });
+      utils.admin.interessesTribunais.invalidate();
+    },
+    onError: (e) => toast.error("Não deu pra avisar", { description: e.message }),
+  });
+  const grupos = fila.data?.grupos ?? [];
+
+  return (
+    <Card className="lg:col-span-5">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Fila de tribunais pedidos</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Quem clicou em "Avisar quando chegar". Entrou um tribunal na cobertura? Avise a fila dele por e-mail.
+        </p>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {fila.isLoading ? (
+          <Skeleton className="h-16 w-full" />
+        ) : grupos.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4">Nenhum pedido registrado ainda.</p>
+        ) : (
+          <div className="divide-y">
+            {grupos.map((g) => (
+              <div key={g.tribunal} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                <span className="font-semibold">{g.tribunal}</span>
+                <span className="text-muted-foreground">
+                  · {g.pedidos} pedido{g.pedidos === 1 ? "" : "s"} · {g.escritorios} escritório{g.escritorios === 1 ? "" : "s"}
+                  {g.avisados > 0 ? ` · ${g.avisados} avisado${g.avisados === 1 ? "" : "s"}` : ""}
+                </span>
+                {g.grafias.length > 1 && (
+                  <span className="text-xs text-muted-foreground" title={g.grafias.join(", ")}>
+                    ({g.grafias.slice(0, 3).join(", ")})
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-2">
+                  {g.pendentes === 0 ? (
+                    <SeloStatus tom="ok">TODOS AVISADOS</SeloStatus>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={avisar.isPending}
+                      onClick={() => avisar.mutate({ tribunal: g.tribunal })}
+                    >
+                      Avisar interessados ({g.pendentes})
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
   const erros = trpc.adminErros.listar.useQuery(
     { status: "unresolved", limite: 25, pagina: 1 },
@@ -291,6 +367,8 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
             )}
           </CardContent>
         </Card>
+
+        <FilaTribunais />
       </div>
     </div>
   );

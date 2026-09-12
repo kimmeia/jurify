@@ -11,6 +11,7 @@
  * ao ser ligado — a URL é derivada do padrão e confirmada no uso. Ver #529.
  */
 import type { TribunalPdpjConfig } from "./adapters/pje-tjce";
+import { TRIBUNAIS_CONSULTA_PUBLICA_PJE } from "../../shared/tribunais-pje";
 
 /**
  * Gera a config PDPJ de um TJ a partir da UF, no padrão do TJCE. Se algum
@@ -192,9 +193,9 @@ export function getConfigTribunal(
  *
  * Cron decide o caminho via `tribunalRequerCredencial` abaixo.
  */
-export const TRIBUNAIS_CONSULTA_PUBLICA = new Set<string>([
-  "trf5",
-]);
+export const TRIBUNAIS_CONSULTA_PUBLICA = new Set<string>(
+  TRIBUNAIS_CONSULTA_PUBLICA_PJE.map((t) => t.codigo),
+);
 
 /** Usado pelo cnj-parser pra marcar `temMotorProprio` no parse do CNJ.
  *  União dos dois registros (PDPJ-cloud com credencial + consulta pública). */

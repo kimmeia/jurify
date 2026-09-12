@@ -575,6 +575,45 @@ export async function enviarEmailTrialExpirou(params: {
 }
 
 /**
+ * "Avisar quando chegar" cumprido: o tribunal que o escritório pediu entrou
+ * na cobertura. Texto simples de propósito — é um aviso, não uma campanha.
+ */
+export const TIPO_EMAIL_TRIBUNAL_DISPONIVEL = "tribunal_disponivel";
+
+export function textoEmailTribunalDisponivel(sigla: string): string {
+  return `O ${sigla} entrou na cobertura do JuridFlow. Cadastre sua credencial no Cofre e vigie seus processos.`;
+}
+
+export async function enviarEmailTribunalDisponivel(params: {
+  email: string;
+  nome?: string | null;
+  sigla: string;
+  escritorioId?: number;
+  userId?: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/processos?tab=cofre&novo=1`;
+  const corpo = textoEmailTribunalDisponivel(params.sigla);
+  const html = templateTrialBase({
+    titulo: `${params.sigla} disponível no JuridFlow`,
+    saudacao: `Olá ${params.nome || "Usuário"},`,
+    corpo,
+    ctaLabel: "Abrir o Cofre",
+    ctaUrl: link,
+    rodape: "Você recebeu este aviso porque pediu pra ser avisado quando esse tribunal chegasse.",
+  });
+  const text = `Olá ${params.nome || "Usuário"},\n\n${corpo}\n\nAbrir o Cofre: ${link}`;
+  return enviarEmail({
+    to: params.email,
+    subject: `${params.sigla} entrou na cobertura do JuridFlow`,
+    html,
+    text,
+    tipo: TIPO_EMAIL_TRIBUNAL_DISPONIVEL,
+    escritorioId: params.escritorioId,
+    userId: params.userId,
+  });
+}
+
+/**
  * Email de boas-vindas pós-signup com CTA pra dashboard.
  */
 export async function enviarEmailBoasVindas(params: {

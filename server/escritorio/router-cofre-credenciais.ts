@@ -47,6 +47,7 @@ import {
   type SistemaCofre,
   type StatusCredencial,
 } from "@shared/cofre-credenciais-types";
+import { rotuloPjeNacional } from "@shared/tribunais-pje";
 
 /**
  * Cofre é restrito a admin do módulo processos: cargo com `verTodos=true`
@@ -461,7 +462,7 @@ export const cofreCredenciaisRouter = router({
     return [
       {
         id: SISTEMA_PJE_NACIONAL,
-        label: `PJe — todos os estados (${estados.length})`,
+        label: rotuloPjeNacional(),
         disponivel: true,
         nacional: true,
       },

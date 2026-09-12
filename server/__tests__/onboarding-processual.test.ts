@@ -34,8 +34,9 @@ describe("guia de 3 passos no dashboard processual", () => {
     expect(guia).toContain("Entendi, pode esconder");
   });
 
-  it("cobertura transparente: número de estados sai da lista compartilhada", () => {
-    expect(guia).toContain("TRIBUNAIS_PJE.length");
+  it("cobertura transparente: o rodapé sai do helper derivado da lista compartilhada", () => {
+    expect(guia).toContain("textoCoberturaGuia()");
+    expect(guia).toContain("/processos?tab=cofre&interesse=1");
   });
 
   it("dashboard monta o guia (substituiu o aviso amber de credencial)", () => {
