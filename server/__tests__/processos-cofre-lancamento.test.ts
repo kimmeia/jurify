@@ -271,11 +271,11 @@ describe("processos-6 — credencial PJe TRF validada e usada no TRF", () => {
     }
   });
 
-  it("pros TJs a lista é a MESMA de antes ([sistemaCofre, nacional]); só o TRF ganhou o específico", () => {
+  it("pros TJs a lista é a MESMA de antes ([sistemaCofre, nacional]); TRF e TRT ganharam o específico", () => {
     for (const t of tribunaisPjeDisponiveis()) {
       const cofre = sistemaCofrePorTribunal(t);
-      if (t.startsWith("trf")) {
-        // O cnj-parser continua nomeando a nacional pros TRFs (o import depende disso).
+      if (t.startsWith("trf") || t.startsWith("trt")) {
+        // O cnj-parser continua nomeando a nacional pros TRFs e TRTs (o import depende disso).
         expect(cofre, t).toBe(SISTEMA_PJE_NACIONAL);
         expect(sistemasQueAtendem(t)[0]).toBe(`pje_${t}`);
       } else {

@@ -84,15 +84,24 @@ describe("parseCnjTribunal — Justiça Estadual (TJ)", () => {
 });
 
 describe("parseCnjTribunal — Justiça do Trabalho (TRT)", () => {
-  it("TRT-7 (CE)", () => {
+  it("TRT-7 (CE) — candidato no motor próprio (PJe-JT via PDPJ, não testado)", () => {
     const r = parseCnjTribunal("0001234-12.2024.5.07.0001");
     expect(r).toMatchObject({
       codigoTribunal: "trt7",
       siglaTribunal: "TRT-7",
       segmento: "trabalhista",
       uf: null, // TRT não mapeia UF (cobre múltiplos estados)
-      temMotorProprio: false,
+      temMotorProprio: true,
     });
+  });
+
+  it("todos os 24 TRTs contam como motor próprio", () => {
+    for (let n = 1; n <= 24; n++) {
+      const tr = String(n).padStart(2, "0");
+      const r = parseCnjTribunal(`0001234-12.2024.5.${tr}.0001`);
+      expect(r?.codigoTribunal, tr).toBe(`trt${n}`);
+      expect(r?.temMotorProprio, tr).toBe(true);
+    }
   });
 
   it("TRT-2 (SP capital)", () => {
@@ -223,8 +232,18 @@ describe("sistemaCofrePorTribunal", () => {
     expect(sistemaCofrePorTribunal("tjdf")).toBe("pje_tjdft");
   });
 
+  it("TRT-N → pje_* (nacional, como os TRFs) — o import de planilha depende disso", () => {
+    // null aqui faria o import tratar processo trabalhista como consulta
+    // pública e criar monitoramento sem credencial.
+    for (let n = 1; n <= 24; n++) {
+      expect(sistemaCofrePorTribunal(`trt${n}`), `trt${n}`).toBe("pje_*");
+    }
+    expect(sistemaCofrePorTribunal("trt7")).not.toMatch(/^pje_restrito_/);
+    expect(sistemaCofrePorTribunal("trt25")).toBeNull();
+  });
+
   it("Tribunal sem mapping retorna null", () => {
-    expect(sistemaCofrePorTribunal("trt7")).toBeNull();
+    expect(sistemaCofrePorTribunal("trf5")).toBeNull();
     expect(sistemaCofrePorTribunal("desconhecido")).toBeNull();
   });
 });
@@ -238,7 +257,7 @@ describe("conveniences", () => {
   it("temAdapterMotorProprio é true só pra tribunais implementados", () => {
     expect(temAdapterMotorProprio("3024938-55.2026.8.06.0001")).toBe(true); // TJCE
     expect(temAdapterMotorProprio("1000123-45.2024.8.26.0100")).toBe(false); // TJSP
-    expect(temAdapterMotorProprio("0001234-12.2024.5.07.0001")).toBe(false); // TRT-7
+    expect(temAdapterMotorProprio("0001234-12.2024.5.07.0001")).toBe(true); // TRT-7 (candidato)
     expect(temAdapterMotorProprio("invalido")).toBe(false);
   });
 });
