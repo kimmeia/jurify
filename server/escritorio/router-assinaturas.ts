@@ -20,6 +20,9 @@ import { estamparAssinatura } from "./pdf-stamp-assinatura";
 import { converterDocxParaPdf } from "./docx-to-pdf";
 import { TRPCError } from "@trpc/server";
 import { createLogger } from "../_core/logger";
+import { checkPermission } from "./check-permission";
+import { podeVerCliente } from "./router-clientes";
+import { registrarAuditoria } from "../_core/audit";
 
 const log = createLogger("router-assinaturas");
 
@@ -384,6 +387,62 @@ export const assinaturasRouter = router({
         .limit(1);
       if (!assinatura) throw new Error("Assinatura não encontrada.");
 
+      // Apagar documento assinado apaga PROVA. Decisão do dono (12/09): só o
+      // atendente daquele cliente e quem manda no escritório. A régua é a
+      // mesma que decide quem enxerga a ficha (responsável do cadastro, de
+      // lead, ou `verTodos`) — documento NÃO assinado segue como sempre foi,
+      // qualquer colaborador do escritório exclui.
+      if (assinatura.status === "assinado") {
+        const perm = await checkPermission(ctx.user.id, "clientes", "ver");
+        const autorizado =
+          perm.allowed &&
+          perm.escritorioId === esc.escritorio.id &&
+          (await podeVerCliente(
+            db,
+            assinatura.contatoId,
+            esc.escritorio.id,
+            perm.colaboradorId,
+            perm.verTodos,
+          ));
+        if (!autorizado) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Documento assinado só pode ser excluído pelo atendente deste cliente ou por quem coordena o escritório.",
+          });
+        }
+      }
+
+      // Os arquivos vão junto: "excluir" que deixa o PDF e o desenho da
+      // assinatura no servidor não é exclusão, é sumiço da tela — e o dado do
+      // cliente continua lá. Só caminho nosso (`/uploads/...`) é apagado;
+      // link externo (Google Docs e afins) não é nosso para apagar.
+      const arquivos = [
+        assinatura.documentoUrl,
+        assinatura.documentoAssinadoUrl,
+        assinatura.assinaturaImagemUrl,
+      ];
+      let apagados = 0;
+      for (const url of arquivos) {
+        const interno = url ? caminhoInterno(url) : null;
+        if (!interno) continue;
+        try {
+          const alvo = path.resolve("." + interno);
+          if (fs.existsSync(alvo)) {
+            fs.unlinkSync(alvo);
+            apagados++;
+          }
+        } catch (err) {
+          // Arquivo preso não pode impedir a exclusão do registro: o usuário
+          // pediu para apagar, e deixar a linha de pé traria o documento de
+          // volta para a lista.
+          log.warn(
+            { assinaturaId: assinatura.id, err: err instanceof Error ? err.message : String(err) },
+            "Não deu para apagar arquivo da assinatura",
+          );
+        }
+      }
+
       // Cascade: campos posicionais são órfãos sem a assinatura mãe.
       try {
         await db.delete(assinaturaCampos).where(eq(assinaturaCampos.assinaturaId, input.id));
@@ -393,7 +452,24 @@ export const assinaturasRouter = router({
       await db.delete(assinaturasDigitais)
         .where(and(eq(assinaturasDigitais.id, input.id), eq(assinaturasDigitais.escritorioId, esc.escritorio.id)));
 
-      return { success: true };
+      // Depois de excluído não existe mais o que consultar: quem apagou, o
+      // que era e quando só vão existir aqui.
+      await registrarAuditoria({
+        ctx,
+        acao: "assinatura.excluir",
+        alvoTipo: "assinatura_digital",
+        alvoId: assinatura.id,
+        alvoNome: assinatura.titulo || "Documento sem título",
+        detalhes: {
+          status: assinatura.status,
+          contatoId: assinatura.contatoId,
+          assinanteNome: assinatura.assinantNome ?? null,
+          assinadoAt: toIsoString(assinatura.assinadoAt),
+          arquivosApagados: apagados,
+        },
+      });
+
+      return { success: true, arquivosApagados: apagados };
     }),
 
   /**
