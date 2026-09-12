@@ -2601,9 +2601,12 @@ export const adminRouter = router({
         }
       }
 
+      // O diálogo promete "perde o acesso ao fim do período": a carência da
+      // cláusula 5 vale também quando quem cancela é o painel.
+      const { camposDeCancelamento } = await import("../billing/periodo-pago");
       await db
         .update(subscriptionsTable)
-        .set({ status: "canceled" })
+        .set(camposDeCancelamento(sub))
         .where(eq(subscriptionsTable.id, input.subscriptionId));
 
       await registrarAuditoria({
@@ -2745,6 +2748,7 @@ export const adminRouter = router({
             trialExpiraEm: trialAte,
             currentPeriodEnd: trialAte,
             trialConvertido: true,
+            ciclo: input.interval,
           })
           .where(eq(subscriptionsTable.id, currentSub.id));
         subLocalId = currentSub.id;
@@ -2761,6 +2765,7 @@ export const adminRouter = router({
             asaasCustomerId: customerId,
             planId: input.newPlanId,
             status: "incomplete",
+            ciclo: input.interval,
           });
         }
       }
@@ -2899,6 +2904,7 @@ export const adminRouter = router({
           asaasCustomerId: customerId,
           status: "incomplete",
           valorNegociadoCentavos: valorMensalCentavos,
+          ciclo: input.interval,
         });
         subLocalId = Number((ins as any)?.insertId ?? 0);
       } else {
@@ -2914,6 +2920,7 @@ export const adminRouter = router({
             trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
             trialConvertido: true,
             valorNegociadoCentavos: valorMensalCentavos,
+            ciclo: input.interval,
           })
           .where(eq(subscriptionsTable.id, ultima.id));
         subLocalId = ultima.id;

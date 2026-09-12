@@ -36,6 +36,12 @@ import {
 } from "./asaas-billing-mappers";
 import { createLogger } from "../_core/logger";
 import { encerrarOutrasAssinaturas } from "./assinatura-substituicao";
+import {
+  camposDeCancelamento,
+  cicloDoAsaas,
+  fimDoPeriodoPago,
+  fusoDoDonoDaAssinatura,
+} from "./periodo-pago";
 
 const log = createLogger("billing-asaas-webhook");
 
@@ -46,6 +52,7 @@ interface AsaasBillingWebhookPayload {
     customer: string;
     status: "ACTIVE" | "INACTIVE" | "EXPIRED";
     nextDueDate?: string;
+    cycle?: string;
     externalReference?: string;
     deleted?: boolean;
   };
@@ -115,9 +122,11 @@ export function registerAsaasBillingWebhook(app: Express) {
 
         if (body.event === "SUBSCRIPTION_DELETED" || sub.deleted) {
           if (existing) {
+            // Apagada no Asaas = cancelada, mas o que já foi pago continua
+            // valendo até o fim do período (cláusula 5 dos Termos).
             await db
               .update(subscriptions)
-              .set({ status: "canceled" })
+              .set(camposDeCancelamento(existing))
               .where(eq(subscriptions.id, existing.id));
             log.info({ subId: sub.id }, "Subscription canceled");
           }
@@ -127,6 +136,7 @@ export function registerAsaasBillingWebhook(app: Express) {
         const periodEnd = sub.nextDueDate
           ? new Date(sub.nextDueDate).getTime()
           : null;
+        const ciclo = cicloDoAsaas(sub.cycle);
 
         if (existing) {
           const novoStatus = statusAposEventoDeAssinatura(existing.status, sub.status);
@@ -137,6 +147,7 @@ export function registerAsaasBillingWebhook(app: Express) {
               status: novoStatus,
               currentPeriodEnd: periodEnd ?? existing.currentPeriodEnd,
               planId: planId || existing.planId,
+              ciclo: ciclo ?? existing.ciclo,
             })
             .where(eq(subscriptions.id, existing.id));
           log.info(
@@ -151,6 +162,7 @@ export function registerAsaasBillingWebhook(app: Express) {
             planId,
             status: statusAposEventoDeAssinatura(null, sub.status),
             currentPeriodEnd: periodEnd,
+            ciclo,
           });
           log.info({ subId: sub.id, userId }, "Subscription criada via webhook");
         }
@@ -236,9 +248,23 @@ export function registerAsaasBillingWebhook(app: Express) {
               ? dueDate + 30 * 24 * 60 * 60 * 1000
               : existing.currentPeriodEnd;
 
+            // O período PAGO segue o ciclo real (1 mês ou 1 ano a partir do
+            // vencimento, até o fim do dia civil do escritório) — é o que
+            // sustenta o acesso se o cliente cancelar depois. Sem ciclo
+            // conhecido cai nos mesmos 30 dias do `currentPeriodEnd`.
+            const fuso = await fusoDoDonoDaAssinatura(db, existing.userId);
+            const fimPeriodoPagoEm = payment.dueDate
+              ? fimDoPeriodoPago(payment.dueDate, existing.ciclo, fuso)
+              : null;
+
             await db
               .update(subscriptions)
-              .set({ status: "active", currentPeriodEnd: nextPeriod })
+              .set({
+                status: "active",
+                currentPeriodEnd: nextPeriod,
+                ultimoPagamentoEm: Date.now(),
+                ...(fimPeriodoPagoEm != null ? { fimPeriodoPagoEm } : {}),
+              })
               .where(eq(subscriptions.id, existing.id));
             log.info(
               { subId: existing.id, event: body.event, status: payment.status },

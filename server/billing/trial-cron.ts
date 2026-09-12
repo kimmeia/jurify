@@ -16,7 +16,7 @@
  * não recebeu o aviso vai ser avisado no próximo email/login).
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, lte, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import { subscriptions, users, configSistema } from "../../drizzle/schema";
 import { getPlanoBySlug } from "./planos-repo";
@@ -25,6 +25,7 @@ import {
   enviarEmailTrialFaltam3Dias,
   enviarEmailTrialFaltam1Dia,
   enviarEmailTrialExpirou,
+  enviarEmailAcessoTermina3Dias,
 } from "../_core/email";
 import { createLogger } from "../_core/logger";
 
@@ -159,4 +160,71 @@ export async function processarTrials(): Promise<ResultadoCronTrial> {
   }
 
   return { avisos3d, avisos1d, expirados };
+}
+
+/**
+ * Aviso de fim de acesso (cláusula 5 dos Termos): assinatura cancelada em
+ * carência cujo período pago termina entre 2 e 4 dias à frente recebe UM
+ * e-mail. A janela é larga de propósito — o cron é diário e não pode
+ * perder o dia exato; a trava `avisoFimAcessoEnviadoEm` garante um só.
+ */
+export async function processarAvisosFimDeAcesso(agora: number = Date.now()): Promise<{ avisos: number }> {
+  const db = await getDb();
+  if (!db) return { avisos: 0 };
+
+  const inicioJanela = agora + 2 * DIA_MS;
+  const fimJanela = agora + 4 * DIA_MS;
+
+  const candidatas = await db
+    .select({
+      subId: subscriptions.id,
+      userId: subscriptions.userId,
+      planId: subscriptions.planId,
+      status: subscriptions.status,
+      cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      fimPeriodoPagoEm: subscriptions.fimPeriodoPagoEm,
+      avisoFimAcessoEnviadoEm: subscriptions.avisoFimAcessoEnviadoEm,
+      userEmail: users.email,
+      userNome: users.name,
+    })
+    .from(subscriptions)
+    .leftJoin(users, eq(users.id, subscriptions.userId))
+    .where(
+      and(
+        eq(subscriptions.status, "canceled"),
+        eq(subscriptions.cancelAtPeriodEnd, true),
+        isNull(subscriptions.avisoFimAcessoEnviadoEm),
+        gte(subscriptions.fimPeriodoPagoEm, inicioJanela),
+        lte(subscriptions.fimPeriodoPagoEm, fimJanela),
+      ),
+    );
+
+  let avisos = 0;
+  for (const c of candidatas) {
+    // Mesma régua do WHERE, reconferida aqui: a trava do "uma vez" não pode
+    // depender só do banco.
+    if (c.avisoFimAcessoEnviadoEm != null) continue;
+    if (c.status !== "canceled" || !c.cancelAtPeriodEnd) continue;
+    if (c.fimPeriodoPagoEm == null || c.fimPeriodoPagoEm < inicioJanela || c.fimPeriodoPagoEm > fimJanela) continue;
+    if (!c.userEmail) continue;
+
+    const plano = c.planId ? await getPlanoBySlug(c.planId) : undefined;
+    const r = await enviarEmailAcessoTermina3Dias({
+      email: c.userEmail,
+      nome: c.userNome ?? "",
+      planoNome: plano?.nome ?? c.planId ?? "JuridFlow",
+      acessoAte: c.fimPeriodoPagoEm,
+    });
+    if (!r.success) {
+      log.warn({ userId: c.userId, error: r.error }, "Email 'acesso termina em 3 dias' falhou");
+    }
+    // Marca mesmo se o envio falhou — evita loop de reenvio (mesmo padrão
+    // dos avisos de trial).
+    await db.update(subscriptions)
+      .set({ avisoFimAcessoEnviadoEm: agora })
+      .where(eq(subscriptions.id, c.subId));
+    avisos++;
+  }
+
+  return { avisos };
 }
