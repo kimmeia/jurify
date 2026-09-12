@@ -1958,3 +1958,189 @@ outros lugares deste documento. Não achei um caminho de vazamento.
 
 A única ponta solta é a mesma da 16.1: notificação **não é apagada** quando o cliente
 é excluído, e o texto dela costuma trazer o nome da pessoa.
+
+---
+
+## 17. Otimização — o que está lento, medido
+
+Esta seção fecha a última parte do pedido que gerou este documento ("otimização de
+código"). Tudo aqui foi **medido**, não estimado, e o comando que produziu cada
+número está junto.
+
+Antes de começar, uma ressalva honesta: **não medi o sistema rodando com dados
+reais**. Não tenho acesso ao banco de produção. O que está abaixo são custos que se
+enxergam no código e no build — os que aparecem sem precisar de um cronômetro.
+
+### 17.1 O que o navegador baixa antes de mostrar qualquer coisa
+
+Rodei o build do client (`npx vite build`, 50 segundos). O resultado:
+
+| | |
+|---|---|
+| arquivo principal | **7.311 kB** (1.772 kB compactado) |
+| arquivos gerados ao todo | 332 |
+| total publicado | 22 MB |
+
+O arquivo principal é o que **todo usuário baixa na primeira visita**, antes de a
+primeira tela aparecer. 1,77 MB compactado é muito: num celular em 4G de corredor de
+fórum, são vários segundos de tela branca.
+
+A causa é simples e está numa linha só de configuração: o `App.tsx` importa as **54
+páginas de uma vez**, de forma estática. Não existe `React.lazy` em lugar nenhum do
+client (`grep -c "React.lazy" = 0`). Então o código da Agenda, do SmartFlow, dos
+Relatórios e do painel admin entra no mesmo pacote da tela de login.
+
+O próprio Vite avisa isso no fim do build, com o nome do remédio:
+
+> "(!) Some chunks are larger than 500 kB. Consider: using dynamic import() to
+> code-split the application."
+
+**O conserto é pequeno e não muda nada do que o advogado vê**: trocar os `import` das
+páginas por `lazy(() => import(...))` e envolver as rotas num `<Suspense>`. Cada tela
+passa a baixar quando é aberta. Não é mockup — é a mesma tela, chegando mais rápido.
+
+### 17.2 Uma biblioteca de markdown que trouxe um compilador junto
+
+Entre os 332 arquivos do build há coisas assim:
+
+```
+emacs-lisp-…js      779 kB
+cpp-…js             626 kB
+wasm-…js            622 kB
+cytoscape.esm-…js   442 kB
+mermaid.core-…js    403 kB
+wolfram-…js         262 kB
+```
+
+Um sistema jurídico não tem por que carregar realce de sintaxe de **Emacs Lisp,
+C++, Wolfram e Objective-C**, nem um desenhador de diagramas. Rastreei: vêm todos de
+uma dependência só, `streamdown`, usada em quatro telas para transformar a resposta
+da IA (texto com markdown) em texto formatado. Ela puxa `shiki` (realce de código,
+com dezenas de gramáticas) e `mermaid` + `cytoscape` (diagramas) junto.
+
+Esses pedaços **não estão no arquivo principal** — são carregados só se a página
+precisar. Então o custo hoje não é de download, é de peso do build e de superfície:
+22 MB de arquivos publicados para renderizar um parecer em negrito e itálico.
+
+Não estou propondo arrancar a `streamdown` (seria remoção, e ela funciona). Estou
+registrando que, se um dia o tamanho incomodar, **é aqui que está a gordura**, e a
+troca por uma biblioteca de markdown simples resolve sem mudar uma vírgula do que
+aparece na tela.
+
+### 17.3 Consultas em laço — o caso que dá para ver
+
+Varri o servidor procurando laço com consulta ao banco dentro: **104 ocorrências**.
+A maioria é legítima (importação, robô, cron — coisas que precisam ir uma a uma).
+O que interessa é o que está no caminho de uma tela. O mais claro:
+
+**Abrir o painel de um card do Kanban** (`detalheCard`, em `router-kanban.ts`) busca
+até 50 movimentações do card e, **para cada uma**, faz três consultas: o nome da
+coluna de origem, o da coluna de destino, e o nome de quem moveu. São até **150
+consultas ao banco para abrir uma gaveta**.
+
+O conserto é a mesma ideia em três linhas: um funil tem meia dúzia de colunas e o
+escritório tem poucos colaboradores — carrega-se a lista inteira **uma vez** e
+resolve-se o nome na memória. Zero mudança visível.
+
+**Renomear ou apagar uma etiqueta** (`editarTag` / `deletarTag`) tem a mesma forma:
+busca todos os contatos e todos os cards que citam a etiqueta e atualiza **um por
+um**, em laço. Num escritório grande com uma etiqueta popular, é uma operação que
+pode demorar visivelmente — e o botão não avisa que está trabalhando.
+
+### 17.4 Índice de banco: 24 colunas muito usadas sem nenhum
+
+Esta é a mais importante da seção, e a que quase me fez errar.
+
+Índice é o que permite ao banco achar uma linha sem ler a tabela inteira. Cruzei
+**todas** as fontes de índice do projeto — os declarados no `schema.ts`, os criados
+nas migrations, as chaves estrangeiras e os três criados no boot pelo
+`auto-migrate.ts` — contra as colunas que o código realmente filtra.
+
+> **Errei antes de acertar, e vale registrar:** minha primeira contagem deu 39
+> colunas sem índice. Estava errada — meu filtro não reconhecia a escrita
+> `CREATE INDEX IF NOT EXISTS`, que é justamente a que a migration 0017 usa. Refeito
+> com a sintaxe certa, o número real é 24. É o mesmo tipo de erro que este documento
+> cobra dos outros: contar sem conferir a fonte.
+
+As 24, filtradas 10 vezes ou mais no código e **sem índice em lugar nenhum**:
+
+| coluna | filtros no código |
+|---|---|
+| `tarefas.statusTarefa` | 39 |
+| `agendamentos.statusAgendamento` | 34 |
+| `canais_integrados.escritorioId` | 30 |
+| `cliente_processos.escritorioIdCliProc` | 24 |
+| `kanban_colunas.funilIdKC` | 23 |
+| `agentes_ia.escritorioId` | 21 |
+| `asaas_clientes.contatoIdAsaas` | 20 |
+| `kanban_funis.escritorioIdKF` | 18 |
+| `cliente_arquivos.escritorioId` | 17 |
+| `canais_integrados.tipoCanal` | 16 |
+| `cofre_credenciais.escritorioId` · `cliente_processos.contatoIdCliProc` · `cliente_pastas.escritorioIdPasta` | 14 cada |
+| `smartflow_cenarios.escritorioIdSF` · `assinaturas_digitais.escritorioId` · `asaas_cobrancas.contatoIdAsaasCob` | 13 cada |
+| e mais 9 entre 10 e 11 filtros | |
+
+**Por que isso é pior num sistema multi-escritório do que num sistema comum.** Repare
+quantas das colunas acima são `escritorioId` — a coluna que separa um escritório do
+outro. Sem índice nela, toda vez que um escritório abre a tela de canais, de agentes
+de IA, de documentos ou do cofre, o banco **lê as linhas de todos os escritórios**
+para achar as dele. O efeito é que o sistema fica mais lento para cada cliente à
+medida que **outros** clientes crescem. Hoje, com pouca gente, não aparece. É
+exatamente o tipo de problema que só se manifesta depois de vender.
+
+**De onde vem a lacuna.** Existe uma migration que faz esse trabalho — a **0017**,
+chamada "Add missing indexes and foreign key constraints". Ela é boa e cobre o
+essencial de `conversas`, `leads`, `contatos`, `tarefas`, `agendamentos`. O problema
+é que foi uma **lista escrita à mão, uma vez**. Tabelas anteriores a ela ficaram de
+fora (`agentes_ia` é da 0003, `canais_integrados` da 0011) e as posteriores só
+ganharam índice quando quem escreveu a migration lembrou.
+
+**A recomendação concreta**, e é barata: já existe no repo o teste
+`migrations-colunas-de-indice.test.ts`, que confere se o nome da coluna de cada
+índice bate com o schema — foi ele que pegou um erro de anos. Dá para estender o
+mesmo teste com uma segunda regra: **toda tabela que tem `escritorioId` precisa ter
+índice nele**. Aí a lacuna deixa de depender de memória. Criar os índices que faltam
+é uma migration só, aditiva, sem mudança de comportamento — mas em tabela grande um
+`CREATE INDEX` trava a tabela por um tempo, então isso se faz em janela combinada.
+
+### 17.5 Arquivos que ficaram grandes demais
+
+Não é lentidão de máquina, é lentidão de gente — e afeta a qualidade de tudo que vier
+depois. Os maiores arquivos do projeto:
+
+| arquivo | linhas |
+|---|---|
+| `client/src/pages/SmartFlowEditor.tsx` | 6.527 |
+| `server/integracoes/router-asaas.ts` | 6.029 |
+| `client/src/pages/Processos.tsx` | 5.202 |
+| `client/src/pages/Atendimento.tsx` | 4.742 |
+| `client/src/pages/Clientes.tsx` | 4.468 |
+| `client/src/pages/Agenda.tsx` | 3.891 |
+| `server/escritorio/router-relatorios.ts` | 3.701 |
+| `server/smartflow/engine.ts` | 3.619 |
+
+Seis arquivos passam de 3.500 linhas. Isso tem custo real e medível em três frentes:
+é onde mais aparecem regras duplicadas (as três cópias do portão
+`contatoEhDoEscritorio` estão em arquivos assim), é onde uma correção tem mais chance
+de quebrar outra coisa, e é o que torna uma revisão completa inviável.
+
+**Não estou propondo quebrar esses arquivos agora** — refatoração desse tamanho sem
+motivo é risco puro, e a regra da casa é não mexer no que não foi pedido. Registro
+como o lugar a preferir quando houver escolha: quando uma entrega encostar em um
+deles, vale extrair a parte tocada em vez de engordar mais.
+
+### 17.6 O que NÃO está lento, e é importante dizer
+
+Documento que só aponta defeito ensina a temer o sistema inteiro. Conferi e está
+certo:
+
+- **As listas grandes paginam.** `clientes.listar` recebe `limite` (máximo 100) e
+  `pagina`, e a consulta termina em `.limit(limite).offset(offset)`. A tela mais
+  pesada do produto não carrega a base inteira.
+- **As mensagens têm índice composto** (`conversaIdMsg, createdAtMsg`), que é
+  exatamente o par pelo qual o inbox busca. Foi criado no boot, no `auto-migrate.ts`.
+- **A matriz de permissão tem cache** com tempo de vida, e o cache é
+  deliberadamente pulado durante impersonação para não vazar entre as duas sessões
+  — detalhe fino, e está certo.
+- **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
+  laço, não a consulta.
