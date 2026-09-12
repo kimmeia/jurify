@@ -3,7 +3,7 @@
 **Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
-terminar.** Se você tem trinta segundos, leia "O retrato em treze linhas". Se tem
+terminar.** Se você tem trinta segundos, leia "O retrato em quatorze linhas". Se tem
 dez minutos, leia até o fim da seção 4.
 
 ---
@@ -54,7 +54,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1. O retrato em treze linhas
+## 1. O retrato em quatorze linhas
 
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
@@ -65,35 +65,41 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 3. O problema principal **não é o código: é a memória do projeto.** 55% do
    CLAUDE.md é histórico de entrega, que só envelhece.
 4. Há **237 achados catalogados** com identificador estável desde 03/09 e, até
-   agora, **nenhum registro de quais foram corrigidos**. Dos 112 já reconferidos,
-   34 estão corrigidos e 75 seguem abertos — mas **nenhum bloqueador** ficou de pé.
+   agora, **nenhum registro de quais foram corrigidos**. Dos 172 já reconferidos,
+   40 estão corrigidos e 127 seguem abertos — **três de cada quatro**. Mas
+   **nenhum bloqueador de lançamento** ficou de pé: o que sobrou é a cauda que
+   ninguém fechou porque ninguém tinha a lista.
 5. **Segurança:** qualquer pessoa, **sem login**, apaga a conta de quem ainda não
    criou escritório e fica com o e-mail — basta saber o endereço (**D-13**).
 6. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
    redondo (**D-1**); a faxina diária apaga parcelas de parcelamento longo; e
    chargeback e estorno do Asaas **não têm tratamento nenhum** — o dinheiro sai da
    conta e o painel não muda.
-7. **O painel afirma três coisas que podem não ser verdade**, e a pior é o Sentry:
+7. **O recorte "ver os próprios" é respeitado em algumas telas e ignorado em
+   outras.** Atendente e estagiário chegam a ver o caixa do escritório, o dinheiro de
+   qualquer cliente e o espelho de ponto da equipe. O risco de hoje não é "vejo o
+   escritório do outro" — é **"vejo o que não deveria dentro do meu"**.
+8. **O painel afirma três coisas que podem não ser verdade**, e a pior é o Sentry:
    a tela diz "conectado" e a captura liga só por variável de ambiente. Pode estar
    desligada — o que explicaria por que nada deste documento virou incidente.
-8. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o JurisIA
+9. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o JurisIA
    que é vendido: o código manda `temperature` para um modelo Claude que passou a
    recusar o parâmetro, e usa como padrão um modelo **retirado em 15/06/2026**.
    Confirmado na documentação oficial da Anthropic.
-9. **Três prazos externos com data:** em **01/10/2026** a Meta passa a cobrar por
+10. **Três prazos externos com data:** em **01/10/2026** a Meta passa a cobrar por
    mensagem e o sistema não guarda um único dado de custo; em **23/10/2026** a
    OpenAI desliga modelos que o código usa; em **21/01/2027** expira a versão da
    API da Meta — e essa falha é silenciosa.
-10. **O opt-out que o cliente faz dentro do WhatsApp não é honrado**, e a origem do
+11. **O opt-out que o cliente faz dentro do WhatsApp não é honrado**, e a origem do
     consentimento que gravamos ninguém consegue ler. Pesa, porque o projeto já
     levou dois avisos de spam da Meta.
-11. Uma lacuna de backup provada: **20 tabelas do escritório** ficam fora do
+12. Uma lacuna de backup provada: **20 tabelas do escritório** ficam fora do
     backup, e a trava que deveria impedir isso tem um ponto cego (**D-2**).
-12. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
+13. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
     assinatura eletrônica (sem controle de permissão), Instagram e Messenger
     conectáveis sem ingerir uma única mensagem, e telas que prometem "+90
     tribunais" onde o servidor procura em um.
-13. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+14. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
@@ -1377,18 +1383,22 @@ status. Cada um foi reaberto e conferido no código de hoje, com uma segunda lei
 cética em cima de todo veredito "corrigido" (é o erro caro: declarar resolvido o que
 não está).
 
-**Parcial — 6 dos 16 domínios fechados, 112 dos 237 achados conferidos:**
+**Parcial — 10 dos 16 domínios fechados, 172 dos 237 achados conferidos:**
 
-| domínio | conferidos |
+| domínio | situação |
 |---|---|
-| kanban, atendimento, financeiro, agenda, processos, auth | 112 |
-| clientes, relatorios, ia, publico, smartflow, configuracoes, admin, assinaturas, shell, infra | em andamento |
+| kanban, atendimento, financeiro, agenda, processos, auth, clientes, relatorios, ia, publico | **conferidos (172 achados)** |
+| smartflow, configuracoes, admin, assinaturas, shell, infra | em andamento |
 
 | estado | quantos | o que significa |
 |---|---|---|
-| **CORRIGIDO** | 34 | o defeito não existe mais, com prova positiva no código |
-| **ABERTO** | 75 | o defeito está lá |
-| **PARCIAL** | 3 | parte foi corrigida |
+| **CORRIGIDO** | 40 | o defeito não existe mais, com prova positiva no código |
+| **ABERTO** | 127 | o defeito está lá |
+| **PARCIAL** | 5 | parte foi corrigida |
+
+A proporção é a notícia desconfortável: **três de cada quatro achados seguem
+abertos.** Não por descuido — por não existir lista. Ninguém fecha o que não
+consegue ver.
 
 ### A notícia boa, e ela é grande
 
@@ -1418,6 +1428,22 @@ Reavaliados com o código de hoje, não com a gravidade de 03/09:
 | `processos-3` | atendente vê a aba Monitoramento vazia ("0 monitorados") enquanto a central mostra os processos |
 | `processos-7` | importação Advbox: a credencial nacional não liga monitoramento de nenhum processo |
 | `processos-11` | "Marcar como resolvidas" age no período inteiro, ignorando a busca que está na tela |
+
+### Mais seis que apareceram nos domínios seguintes
+
+| id | o que acontece |
+|---|---|
+| `relatorios-1` | **a aba Comercial do Dashboard quebra com erro de código** para dono e admin quando nenhum colaborador está num setor |
+| `relatorios-x1` | o Painel Geral **mostra o caixa do escritório inteiro** para atendente, estagiário e SDR, sem permissão nenhuma |
+| `publico-1` | no Ponto, cargo com só "ver os próprios" **recebe o espelho da equipe inteira** |
+| `clientes-x3` | a ficha abre pelo lead, mas Salvar e "Fechar contrato" recusam |
+| `relatorios-2` | "Enviar por e-mail" e "Programar envio" do relatório de Atendimento **descartam o filtro** que estava na tela |
+| `ia-9` | o caso em análise "gruda" na conversa seguinte, que não tem caso, e é gravado nela |
+
+Os três primeiros são de permissão, e os três juntos contam a mesma história: o
+recorte "ver os próprios" é respeitado em algumas telas e ignorado em outras. É o
+mesmo padrão da seção 10.2 — o problema de hoje não é "vejo o escritório do outro",
+é **"vejo o que não deveria dentro do meu"**.
 
 ### Como manter isto vivo
 
