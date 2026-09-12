@@ -2248,3 +2248,44 @@ certo:
   — detalhe fino, e está certo.
 - **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
   laço, não a consulta.
+
+## 18. Manual de uso e painel dos robôs — proposta entregue (12/09), aguardando decisão
+
+Origem: o dono, olhando `/admin/saude`: *"esse robô funciona? está muito
+complexo. O princípio é ser fácil de usar. Precisamos criar um manual para
+ensinar a usar"* — e depois *"vamos fazer"*. Pela regra dele, nasceu como mockup
+navegável: **`mockup-central-de-ajuda.html`** (raiz do repo, 6 abas, fontes
+embutidas, sem referência externa; conferido em 1280px e 400px).
+
+Fatos conferidos no código que sustentam a proposta:
+- **Não existe botão de ajuda em lugar nenhum do app** — nem no `AppLayout`
+  (barra lateral tem Buscar ⌘K, avatar, Configurações, Sair), nem rota `/ajuda`.
+  A única orientação é o `GuiaProcessual` (só pra quem tem o pacote processual)
+  e dicas soltas em 6 telas, sem sistema.
+- **O robô de jornada não tira print de tela** (nenhum `screenshot(` em
+  `tests/e2e`). Prints do manual saem feitos à mão; ensinar o robô é trabalho a
+  mais (decisão 2).
+- `/admin/saude` tem **6 abas** (Visão rápida, Erros, Robô auditor, Robô de
+  jornada, E-mails, Auditoria), ~20 números e vocabulário de programador
+  (`runId`, latência em ms, "invariantes", "shadow mode"). Não responde
+  "funciona?" em lugar nenhum. O "0 erros abertos" não prova nada enquanto o
+  `SENTRY_DSN_BACKEND` não estiver confirmado (seção 11.1).
+
+A proposta, em três camadas: (1) **Central de ajuda por tarefa** em `/ajuda`
+(botão "Ajuda" na barra lateral + "?" no topo de cada tela; 20 tarefas escritas
+do jeito que o advogado pensa, com print da tela real, passo a passo, "se não deu
+certo" e botão "Abrir a tela"; fora do porteiro de módulos); (2) **Primeiros
+passos** no Dashboard do dono (5 passos com marcação automática, some ao
+completar — o `GuiaProcessual` esticado pra todos os planos); (3) vídeos curtos
+depois. E o painel dos robôs com a **Visão rápida em 3 linhas** (semáforo +
+frase + "o que fazer"), abas técnicas dobradas em "detalhes técnicos" — **nada
+removido**.
+
+Decisões pendentes do dono (recomendação entre parênteses): 1 · Central em
+página própria ou painel deslizante (página); 2 · prints à mão agora ou robô
+tirando (à mão pra lançar, robô na fatia 4); 3 · Primeiros passos só pro dono
+(sim); 4 · quais 5 passos e a ordem (WhatsApp → 1º cliente → Cofre → vigiar
+processo → convidar equipe); 5 · simplificar a Visão rápida (sim). Fatias:
+1 Central + botão + 5 tarefas · 2 Primeiros passos · 3 robôs em 3 linhas ·
+4 mais 15 tarefas + prints pelo robô + vídeos. **Nada implementado até o
+"pode fazer".**
