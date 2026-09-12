@@ -1694,10 +1694,11 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    mudança relevante no texto = bump em TERMOS_VERSAO (dispara re-aceite).
 3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
    ACEITA a requisição e só loga aviso (`verif.mode === "no-secret"` em
-   whatsapp-cloud-webhook.ts): qualquer um na internet forja mensagem
-   recebida, cria conversa falsa e dispara SmartFlow. Conferido ainda aberto
-   em 10/09, no dia do lançamento — o dono foi avisado pra checar
-   /admin → Integrações → WhatsApp Cloud. Endurecer em produção.
+   whatsapp-cloud-webhook.ts). **12/09: o dono confirmou que o App Secret
+   está cadastrado no painel** (Integrações → WhatsApp Cloud) — em produção
+   o webhook está no modo estrito. O código continua fail-open sem secret
+   (decisão de desenho registrada no documento de estado); não cobrar de
+   novo.
 4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no
    executor do painel. Depois: cron de staging de hora em hora.
 5. **CSP desligado** no Helmet; **body-parser 3GB em memória** (OOM) — sai

@@ -473,7 +473,7 @@ consciente, não como esquecimento.
 
 | item | onde | estado |
 |---|---|---|
-| HMAC da Meta em modo brando | `whatsapp-cloud-webhook.ts` | **aberto.** Sem App Secret cadastrado, o código só emite aviso no log e **aceita** o webhook. Qualquer um forja mensagem recebida. |
+| HMAC da Meta em modo brando | `whatsapp-cloud-webhook.ts` | **mitigado em produção (dono confirmou em 12/09 que o App Secret está cadastrado no painel).** O código continua fail-open sem secret: sem App Secret, só emite aviso no log e **aceita** o webhook. Endurecer o código (recusar sem secret) segue como melhoria opcional. |
 | CSP desligado | `_core/index.ts` | **aberto.** `contentSecurityPolicy: false` |
 | body-parser aceita 3 GB em memória | `_core/index.ts` | **aberto.** `limit: "3gb"` em json e urlencoded |
 | histórico de buscas vaza entre escritórios | `processos/search-history.tsx` | **aberto.** A chave é `jurify:processos:history`, sem escritório. Trava numa decisão do dono: sessão de impersonação deve gravar histórico? |
@@ -850,7 +850,7 @@ Coisas fora do código. Marcadas com o que muda se ficarem como estão.
 | item | onde | o que acontece se ficar assim |
 |---|---|---|
 | **Há chave Anthropic conectada?** | Admin → Integrações | se sim, Atendente IA, JurisIA e captura de campos estão devolvendo erro (item 5.2) |
-| App Secret da Meta cadastrado | Admin → Integrações → WhatsApp Cloud | sem ele o webhook **aceita** mensagem forjada de qualquer um |
+| App Secret da Meta cadastrado | Admin → Integrações → WhatsApp Cloud | **feito (dono, 12/09)** — sem ele o webhook aceitaria mensagem forjada de qualquer um |
 | Confirmar a data de sunset da v21.0 | changelog da Graph API | define se o prazo é 21/01/2027 mesmo |
 | `CANAIS_ENCRYPTION_KEY` | Railway | resolvido por código: cai em `ENCRYPTION_KEY`; nada gravado precisa recadastro |
 | Turnstile (captcha) | Railway | **decisão tomada: não quer por ora.** Não cobrar de novo, salvo cadastro em massa de robô |
