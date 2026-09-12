@@ -1832,6 +1832,20 @@ dizendo uma coisa e o sistema fazendo outra, contra o cliente que já pagou o m�
 `currentPeriodEnd` estiver no futuro. É mudança de regra de negócio (mexe em dinheiro
 e acesso), então precisa da sua decisão antes — não de análise técnica.
 
+### 15.4.1 Decisões do dono (12/09/2026)
+
+Lidas as seções 15.1–15.4, o dono decidiu, nas palavras dele: **"Deixar o
+Instagram como 'em breve', cobertura do tribunal corrigir, e o 3 não entendi."**
+E fixou uma regra de trabalho: **toda sugestão nasce como mockup HTML navegável**,
+para ele entender e aprovar — ou não — antes de qualquer código.
+
+| item | decisão | estado |
+|---|---|---|
+| Instagram (15.3) | fica na venda, marcado **"em breve"** — não some | aguardando mockup |
+| Cobertura de tribunais (15.1) | **corrigir** | aguardando mockup (o mockup mostra os dois caminhos: corrigir o texto e ampliar a cobertura, com o custo de cada um) |
+| Acesso após cancelar (15.4) | não entendido | o mockup explica com datas, antes de pedir decisão |
+| "Sob medida" entrega menos (15.3) | sem decisão ainda | entra no mesmo mockup como aviso |
+
 ### 15.5 Por que isto está num documento de engenharia
 
 Porque todos os itens acima se consertam de dois jeitos — mudar o código ou mudar o
