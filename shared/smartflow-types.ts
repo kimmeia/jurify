@@ -1016,7 +1016,7 @@ export const TIPO_PASSO_META: ReadonlyArray<TipoPassoMeta> = [
 ];
 
 export const GATILHO_META: ReadonlyArray<GatilhoMeta> = [
-  { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem em qualquer canal (WhatsApp, Instagram, Facebook).", grupo: "mensagem" },
+  { id: "mensagem_canal", label: "Mensagem recebida", descricao: "Dispara quando chega mensagem no WhatsApp (Instagram e Facebook em breve).", grupo: "mensagem" },
   { id: "whatsapp_mensagem", label: "Mensagem WhatsApp (legado)", descricao: "Gatilho antigo de WhatsApp. Descontinuado — use 'Mensagem recebida'.", grupo: "mensagem", oculto: true },
   { id: "pagamento_recebido", label: "Pagamento recebido (Asaas)", descricao: "Dispara no webhook do Asaas.", grupo: "asaas" },
   { id: "pagamento_vencido", label: "Pagamento vencido (Asaas)", descricao: "Dispara quando a cobrança está atrasada há N dias.", grupo: "asaas" },
@@ -1030,6 +1030,15 @@ export const TIPO_CANAL_META: ReadonlyArray<TipoCanalMeta> = [
   { id: "instagram", label: "Instagram", emBreve: true },
   { id: "facebook", label: "Facebook", emBreve: true },
 ];
+
+/**
+ * Fonte única do "em breve" de canal: toda tela que precisa saber se um canal
+ * ainda não recebe/envia mensagem pergunta aqui, nunca numa lista própria.
+ * Tipo desconhecido não é "em breve" (fail-open: não some botão de canal real).
+ */
+export function canalEmBreve(tipo: string | null | undefined): boolean {
+  return !!TIPO_CANAL_META.find((m) => m.id === tipo)?.emBreve;
+}
 
 /**
  * Config com que um passo NASCE no editor.

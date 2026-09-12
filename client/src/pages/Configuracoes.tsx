@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
+import { canalEmBreve } from "@shared/smartflow-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
 import {
   AsaasDialog,
@@ -1764,6 +1765,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     comErro: boolean;
     /** Card de "+ Adicionar outro" — renderiza estilo tracejado. */
     isAdicionar?: boolean;
+    /** Canal que ainda não recebe nem envia mensagem — o card não abre o diálogo. */
+    emBreve?: boolean;
   };
 
   const cardsWhatsApp: CardCanal[] = whatsappCanais.map((c: any) => ({
@@ -1817,23 +1820,29 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       key: "instagram",
       dialog: { type: "instagram" },
       nome: "Instagram Business",
-      descricao: "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
+      descricao: canalEmBreve("instagram")
+        ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
+        : "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
       logo: "📸",
       cor: "from-danger to-danger",
       canal: instagramCanal,
       conectado: instagramCanal?.status === "conectado",
       comErro: instagramCanal?.status === "erro",
+      emBreve: canalEmBreve("instagram"),
     },
     {
       key: "messenger",
       dialog: { type: "messenger" },
       nome: "Facebook Messenger",
-      descricao: "Mensagens da sua página do Facebook direto no Inbox.",
+      descricao: canalEmBreve("facebook")
+        ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
+        : "Mensagens da sua página do Facebook direto no Inbox.",
       logo: "💙",
       cor: "from-info to-info",
       canal: facebookCanal,
       conectado: facebookCanal?.status === "conectado",
       comErro: facebookCanal?.status === "erro",
+      emBreve: canalEmBreve("facebook"),
     },
   ];
 
@@ -1867,8 +1876,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
               Conexão simplificada via Facebook
             </p>
             <p className="text-xs text-info-fg mt-1">
-              WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
-              tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
+              O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar
+              pelo Facebook Login. Instagram e Messenger: em breve.
             </p>
             {/* Fallback pra quando OAuth não roda (App Review pendente,
                 Tech Provider não aprovado, BM dona do app = dos números).
@@ -1888,7 +1897,9 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         {canaisPrincipais.map((canal) => (
           <Card
             key={canal.key}
-            className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${
+            className={`overflow-hidden hover:shadow-lg transition-all border-2 ${
+              canal.emBreve ? "cursor-default" : "cursor-pointer"
+            } ${
               canal.isAdicionar
                 ? "border-dashed border-success/30 bg-success-bg/30 hover:bg-success-bg/50"
                 : canal.conectado
@@ -1897,7 +1908,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                     ? "border-danger/30"
                     : "border-transparent hover:border-primary/20"
             }`}
-            onClick={() => setMetaDialog(canal.dialog)}
+            onClick={() => {
+              if (canal.emBreve) return;
+              setMetaDialog(canal.dialog);
+            }}
           >
             <CardContent className="p-5">
               <div className="flex items-start gap-4">
@@ -1911,6 +1925,11 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-semibold text-sm">{canal.nome}</h3>
+                    {canal.emBreve && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg text-[9px] font-bold">
+                        <span className="w-1 h-1 rounded-full bg-warning" /> Em breve
+                      </span>
+                    )}
                     {!canal.isAdicionar && canal.conectado && (
                       <Badge
                         variant="outline"
@@ -2004,14 +2023,17 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                   variant={canal.conectado || canal.isAdicionar ? "outline" : "default"}
                   size="sm"
                   className="text-xs"
+                  disabled={canal.emBreve}
                 >
-                  {canal.isAdicionar
-                    ? "Conectar novo"
-                    : canal.conectado
-                      ? "Gerenciar"
-                      : canal.comErro
-                        ? "Reconectar"
-                        : "Conectar"}
+                  {canal.emBreve
+                    ? "Em breve"
+                    : canal.isAdicionar
+                      ? "Conectar novo"
+                      : canal.conectado
+                        ? "Gerenciar"
+                        : canal.comErro
+                          ? "Reconectar"
+                          : "Conectar"}
                 </Button>
               </div>
             </CardContent>
