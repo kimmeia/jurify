@@ -575,6 +575,73 @@ export async function enviarEmailTrialExpirou(params: {
 }
 
 /**
+ * E-mails do cancelamento com carência (cláusula 5 dos Termos): o cliente
+ * cancelou e continua com acesso até o fim do período pago; e o aviso de
+ * 3 dias antes do fim, disparado pelo cron diário (uma vez por assinatura).
+ */
+function dataCurtaBR(ms: number): string {
+  return new Date(ms).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+}
+
+export async function enviarEmailAssinaturaCancelada(params: {
+  email: string;
+  nome: string;
+  planoNome: string;
+  /** Fim do período pago (epoch ms). `null` = o acesso encerrou na hora. */
+  acessoAte: number | null;
+}): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/configuracoes?tab=meu-plano`;
+  const corpo =
+    params.acessoAte != null
+      ? `Sua assinatura do plano <strong>${params.planoNome}</strong> foi cancelada. Nenhuma cobrança nova será feita. Você continua com acesso a tudo até <strong>${dataCurtaBR(params.acessoAte)}</strong>, o fim do período que já pagou. Depois disso a conta fica sem plano — os dados continuam guardados, e você pode reativar até lá sem pagar nada agora.`
+      : `Sua assinatura do plano <strong>${params.planoNome}</strong> foi cancelada. Nenhuma cobrança nova será feita e a conta ficou sem plano — os dados continuam guardados, e você pode assinar de novo quando quiser.`;
+  const html = templateTrialBase({
+    titulo: "Assinatura cancelada",
+    saudacao: `Olá ${params.nome || "Usuário"},`,
+    corpo,
+    ctaLabel: params.acessoAte != null ? "Reativar assinatura" : "Ver planos",
+    ctaUrl: link,
+    rodape: "Se você não pediu este cancelamento, fale com a gente respondendo este e-mail.",
+  });
+  const text =
+    params.acessoAte != null
+      ? `Olá ${params.nome || "Usuário"},\n\nSua assinatura do plano ${params.planoNome} foi cancelada. Nenhuma cobrança nova será feita. Você continua com acesso até ${dataCurtaBR(params.acessoAte)}, o fim do período que já pagou. Pode reativar até lá sem pagar nada agora: ${link}`
+      : `Olá ${params.nome || "Usuário"},\n\nSua assinatura do plano ${params.planoNome} foi cancelada. A conta ficou sem plano; os dados continuam guardados. Ver planos: ${link}`;
+  return enviarEmail({
+    to: params.email,
+    subject: "Sua assinatura JuridFlow foi cancelada",
+    html,
+    text,
+    tipo: "assinatura_cancelada",
+  });
+}
+
+export async function enviarEmailAcessoTermina3Dias(params: {
+  email: string;
+  nome: string;
+  planoNome: string;
+  acessoAte: number;
+}): Promise<{ success: boolean; error?: string }> {
+  const link = `${APP_URL}/configuracoes?tab=meu-plano`;
+  const html = templateTrialBase({
+    titulo: "Seu acesso termina em 3 dias",
+    saudacao: `Olá ${params.nome || "Usuário"},`,
+    corpo: `Sua assinatura do plano <strong>${params.planoNome}</strong> está cancelada e o período que você pagou termina em <strong>${dataCurtaBR(params.acessoAte)}</strong>. Depois disso a conta fica sem plano. Se quiser continuar, é só reativar — a primeira cobrança nova cai depois dessa data, nada é cobrado agora.`,
+    ctaLabel: "Reativar assinatura",
+    ctaUrl: link,
+    rodape: "Se preferir não continuar, não precisa fazer nada — seus dados continuam guardados.",
+  });
+  const text = `Olá ${params.nome || "Usuário"},\n\nSua assinatura do plano ${params.planoNome} está cancelada e o acesso termina em ${dataCurtaBR(params.acessoAte)}. Reativar: ${link}`;
+  return enviarEmail({
+    to: params.email,
+    subject: "Seu acesso ao JuridFlow termina em 3 dias",
+    html,
+    text,
+    tipo: "acesso_termina_3dias",
+  });
+}
+
+/**
  * Email de boas-vindas pós-signup com CTA pra dashboard.
  */
 export async function enviarEmailBoasVindas(params: {

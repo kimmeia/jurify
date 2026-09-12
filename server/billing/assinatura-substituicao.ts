@@ -6,8 +6,9 @@
  * em "Continuar para pagamento", mesmo sem nunca pagar a nova.
  */
 
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import { subscriptions } from "../../drizzle/schema";
+import { emCarenciaDeCancelamento } from "../../shared/assinatura-carencia";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("assinatura-substituicao");
@@ -25,18 +26,33 @@ export async function encerrarOutrasAssinaturas(
   manterId: number,
   cancelarNoAsaas?: (asaasSubscriptionId: string) => Promise<void>,
 ): Promise<{ encerradas: number[] }> {
-  const outras: Array<{ id: number; asaasSubscriptionId: string | null; cortesia: boolean | null }> = await db
+  const outras: Array<{
+    id: number;
+    asaasSubscriptionId: string | null;
+    cortesia: boolean | null;
+    status?: string | null;
+    cancelAtPeriodEnd?: boolean | null;
+    fimPeriodoPagoEm?: number | null;
+  }> = await db
     .select({
       id: subscriptions.id,
       asaasSubscriptionId: subscriptions.asaasSubscriptionId,
       cortesia: subscriptions.cortesia,
+      status: subscriptions.status,
+      cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      fimPeriodoPagoEm: subscriptions.fimPeriodoPagoEm,
     })
     .from(subscriptions)
     .where(
       and(
         eq(subscriptions.userId, userId),
         ne(subscriptions.id, manterId),
-        inArray(subscriptions.status, [...STATUS_SUBSTITUIVEIS]),
+        or(
+          inArray(subscriptions.status, [...STATUS_SUBSTITUIVEIS]),
+          // Cancelada ainda dentro do período pago: a nova assinatura paga
+          // toma o lugar dela, e a carência deixa de ter o que sustentar.
+          and(eq(subscriptions.status, "canceled"), eq(subscriptions.cancelAtPeriodEnd, true)),
+        ),
       ),
     );
 
@@ -44,6 +60,16 @@ export async function encerrarOutrasAssinaturas(
   for (const s of outras) {
     // Cortesia é concessão do admin, não assinatura do cliente — fica.
     if (s.cortesia) continue;
+    if (s.status === "canceled") {
+      // Já foi apagada no Asaas quando cancelou; só a carência é retirada.
+      if (!emCarenciaDeCancelamento(s)) continue;
+      await db
+        .update(subscriptions)
+        .set({ status: "canceled", cancelAtPeriodEnd: false })
+        .where(eq(subscriptions.id, s.id));
+      encerradas.push(s.id);
+      continue;
+    }
     if (s.asaasSubscriptionId) {
       try {
         const cancelar = cancelarNoAsaas ?? (await cancelarPadrao());
