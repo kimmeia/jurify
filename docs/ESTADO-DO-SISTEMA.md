@@ -293,6 +293,32 @@ documento com valor jurídico, é a lacuna mais desconfortável desta auditoria.
 *Histórico:* já constava como P2-11 no documento de 18/08. A parte de vazamento
 entre escritórios foi corrigida em 03/09; a de permissão, não.
 
+**D-13 · Qualquer pessoa, sem login, apaga a conta de quem ainda não criou
+escritório — e fica com o e-mail.** `auth.signup` é pública, como tem de ser. Só que
+quando o e-mail já existe, em vez de recusar, ela faz isto: procura um vínculo
+**ativo** de colaborador; se não achar, marca a conta como "órfã", **apaga as linhas
+de colaborador e apaga a linha do usuário**, e segue criando a conta nova com a
+senha que o visitante digitou.
+
+O comentário explica a origem: era um remendo para contas que ficaram órfãs num
+hard-delete antigo. O remendo virou porta.
+
+Quem está nessa situação hoje:
+- **todo cadastro self-service que ainda não terminou o onboarding** — a conta nasce
+  antes de o escritório existir;
+- qualquer colaborador **removido** de um escritório (a remoção é soft-delete, então
+  `ativo = false`).
+
+Basta saber o e-mail. Não há confirmação, não há limite de tentativas, não há aviso
+para o dono do e-mail.
+*Atenuante real, que confirmei:* se a conta tiver dado dependente, a exclusão bate
+numa restrição de chave estrangeira e o código lança "não foi possível recriar a
+conta". Então contas com histórico estão protegidas **por acidente do banco**, não
+por regra. As vazias, não.
+*Contexto do próprio projeto:* o caso "Pedro Yuri" registrado no CLAUDE.md é
+exatamente um cadastro self-service de quem não é advogado — ou seja, a população
+nessa situação não é hipotética.
+
 ### Gravidade média
 
 **D-6 · Resíduo da migração "crédito → teto mensal" (migration 0221).** O gate
@@ -1185,4 +1211,64 @@ Isso é uma notícia boa e vale dizer com clareza: as 8 amarrações de 03/09 e 
 10/09 seguraram. O padrão multi-tenant do sistema está, hoje, substancialmente
 correto — o problema de permissão que sobrou não é "vejo o escritório do outro", é
 "vejo o que não deveria dentro do meu" (seção 10.2).
+
+---
+
+## 12. Os 237 achados de 03/09: estado hoje
+
+Este é o registro que faltava. O documento `auditoria-lancamento-2026-09-03-achados.md`
+tem 237 achados com identificador estável (`[kanban-1]`, `[auth-x1]`, `[infra-2]`…)
+em três níveis — **BLOQUEIA 15, IMPORTANTE 117, MENOR 105** — e nunca teve coluna de
+status. Cada um foi reaberto e conferido no código de hoje, com uma segunda leitura
+cética em cima de todo veredito "corrigido" (é o erro caro: declarar resolvido o que
+não está).
+
+**Parcial — 6 dos 16 domínios fechados, 112 dos 237 achados conferidos:**
+
+| domínio | conferidos |
+|---|---|
+| kanban, atendimento, financeiro, agenda, processos, auth | 112 |
+| clientes, relatorios, ia, publico, smartflow, configuracoes, admin, assinaturas, shell, infra | em andamento |
+
+| estado | quantos | o que significa |
+|---|---|---|
+| **CORRIGIDO** | 34 | o defeito não existe mais, com prova positiva no código |
+| **ABERTO** | 75 | o defeito está lá |
+| **PARCIAL** | 3 | parte foi corrigida |
+
+### A notícia boa, e ela é grande
+
+**Nenhum dos 15 "BLOQUEIA" destes domínios está aberto.** Os bloqueadores de
+lançamento foram, de fato, resolvidos — e isso confirma o que o CLAUDE.md narra
+sobre as entregas de 03/09. O que sobrou é a cauda: 75 achados de nível IMPORTANTE e
+MENOR que ninguém fechou porque ninguém tinha a lista.
+
+### Os 15 que seguem abertos com gravidade alta hoje
+
+Reavaliados com o código de hoje, não com a gravidade de 03/09:
+
+| id | o que acontece |
+|---|---|
+| `auth-8` | **cadastro apaga conta existente de quem não tem escritório, sem login** (é o item **D-13**) |
+| `auth-5` | os Termos prometem acesso até o fim do período pago; cancelar **corta na hora** |
+| `auth-6` | a cota mensal de créditos lê **uma assinatura qualquer** do dono, sem filtrar status |
+| `auth-4` | no trial de plano com preço, o botão do próprio plano fica desabilitado — **não dá pra assinar** |
+| `financeiro-1` | o PDF e o CSV do DRE saem com critério "pagamento" e a tela mostra "vencimento" |
+| `financeiro-6` | a permissão "ver próprios" do Financeiro **libera o escritório inteiro** em quase todas as procedures |
+| `financeiro-7` | as sincronizações que reescrevem contatos e apagam vínculos não têm gate de permissão |
+| `kanban-17` | funil e colunas **sem gate nenhum**: qualquer colaborador cria, renomeia e exclui |
+| `kanban-13` | excluir tag: um clique, sem confirmação e sem tratamento de erro, remove a tag de **todos** os clientes |
+| `kanban-10` | a escolha "Avulsa / Parcelamento / Manual" do modal pós-Ganho é ignorada |
+| `agenda-2` | o processo vinculado no diálogo da Agenda usa o id de monitoramento numa chave que espera outro |
+| `agenda-7` | a tela Prazos lista só de −7 a +30 dias **sem dizer**; prazo distante "desaparece" depois de criado |
+| `processos-3` | atendente vê a aba Monitoramento vazia ("0 monitorados") enquanto a central mostra os processos |
+| `processos-7` | importação Advbox: a credencial nacional não liga monitoramento de nenhum processo |
+| `processos-11` | "Marcar como resolvidas" age no período inteiro, ignorando a busca que está na tela |
+
+### Como manter isto vivo
+
+Quando a conferência dos 10 domínios restantes fechar, a tabela completa
+`id → estado` entra aqui. A partir daí a regra do topo deste documento vale para
+ela: **entrega que fecha um achado muda o estado dele no mesmo commit.** É a única
+forma de a lista não virar, de novo, 237 linhas que ninguém sabe se valem.
 
