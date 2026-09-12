@@ -3,6 +3,7 @@
  * com a chave dele (fallback plataforma). Usada pela avaliação, pela redação e
  * pela conversa do Agente Jurídico.
  */
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { resolverAPIKey, providerDoModelo } from "../integracoes/router-agentes-ia";
 import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 import { createLogger } from "../_core/logger";
@@ -39,21 +40,20 @@ async function chamarChat(
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
+        body: JSON.stringify(montarBodyAnthropic({
           model: opts.modelo,
           system: opts.system,
           messages: opts.mensagens,
-          max_tokens: opts.maxTokens,
-          temperature: opts.temperatura,
-        }),
+          maxTokens: opts.maxTokens,
+          temperatura: opts.temperatura,
+        })),
         signal: AbortSignal.timeout(opts.timeoutMs),
       });
       if (!res.ok) {
         const d = await res.text().catch(() => "");
         return { texto: null, erro: `Anthropic ${res.status}: ${d.slice(0, 200)}` };
       }
-      const data = (await res.json()) as { content?: Array<{ text?: string }> };
-      return { texto: (data.content?.[0]?.text || "").trim() || null };
+      return { texto: textoDaRespostaAnthropic(await res.json()) || null };
     }
 
     // OpenAI
@@ -144,19 +144,18 @@ export async function transcreverDocumentoVision(
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": rk.key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({
+        body: JSON.stringify(montarBodyAnthropic({
           model: opts.modelo,
-          max_tokens: maxTokens,
+          maxTokens,
           messages: [{ role: "user", content: [bloco, { type: "text", text: instrucao }] }],
-        }),
+        })),
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) {
         const d = await res.text().catch(() => "");
         return { texto: null, erro: `Anthropic ${res.status}: ${d.slice(0, 200)}` };
       }
-      const data = (await res.json()) as { content?: Array<{ text?: string }> };
-      return { texto: (data.content?.[0]?.text || "").trim() || null };
+      return { texto: textoDaRespostaAnthropic(await res.json()) || null };
     }
 
     // OpenAI — só imagem

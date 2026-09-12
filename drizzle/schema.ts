@@ -191,6 +191,16 @@ export const subscriptions = mysqlTable("subscriptions", {
    * no lugar do preço de tabela.
    */
   valorNegociadoCentavos: int("valor_negociado_centavos"),
+  /**
+   * Período pago (cláusula 5 dos Termos). `fimPeriodoPagoEm` é o instante em
+   * que termina o que o cliente já pagou — é o que mantém o acesso de uma
+   * assinatura cancelada (`canceled` + `cancelAtPeriodEnd`) até lá.
+   * `currentPeriodEnd` continua sendo o próximo vencimento previsto.
+   */
+  ultimoPagamentoEm: bigint("ultimo_pagamento_em", { mode: "number" }),
+  ciclo: mysqlEnum("ciclo", ["monthly", "yearly"]),
+  fimPeriodoPagoEm: bigint("fim_periodo_pago_em", { mode: "number" }),
+  avisoFimAcessoEnviadoEm: bigint("aviso_fim_acesso_enviado_em", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -3715,6 +3725,8 @@ export const interesseTribunais = mysqlTable(
     userId: int("userIdIntTrib").notNull(),
     tribunal: varchar("tribunalIntTrib", { length: 120 }).notNull(),
     criadoEm: timestamp("criadoEmIntTrib").defaultNow().notNull(),
+    // Quando o interessado recebeu o e-mail "entrou na cobertura". NULL = ainda na fila.
+    avisadoEm: timestamp("avisadoEmIntTrib"),
   },
   (t) => ({
     porTribunal: index("idx_interesse_tribunais_trib").on(t.tribunal),

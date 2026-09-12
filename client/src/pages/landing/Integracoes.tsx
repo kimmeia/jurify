@@ -3,11 +3,13 @@
  * Reforça credibilidade logo após o hero.
  */
 
-const integracoes = [
+import { chipPjeIntegracoes } from "@shared/tribunais-pje";
+
+const integracoes: Array<{ nome: string; cor: string; emBreve?: boolean }> = [
   { nome: "Asaas", cor: "bg-success" },
   { nome: "WhatsApp", cor: "bg-[#25d366]" },
-  { nome: "Instagram", cor: "bg-[#e1306c]" },
-  { nome: "PJe · TJCE", cor: "bg-info" },
+  { nome: "Instagram", cor: "bg-[#e1306c]", emBreve: true },
+  { nome: chipPjeIntegracoes(), cor: "bg-info" },
   { nome: "BACEN", cor: "bg-warning" },
 ];
 
@@ -26,6 +28,11 @@ export function Integracoes() {
             >
               <span className={`h-2.5 w-2.5 rounded-full ${i.cor}`} />
               {i.nome}
+              {i.emBreve && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-warning-bg px-1.5 py-0.5 text-[9px] font-bold text-warning-fg">
+                  <span className="h-1 w-1 rounded-full bg-warning" /> em breve
+                </span>
+              )}
             </span>
           ))}
         </div>

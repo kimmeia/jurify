@@ -10,6 +10,7 @@
  * Usado pelo passo `ia_extrair_campos` do SmartFlow.
  */
 
+import { montarBodyAnthropic } from "../_core/anthropic-http";
 import { createLogger } from "../_core/logger";
 import { montarBodyOpenAIChat } from "../_core/openai-model-params";
 
@@ -193,25 +194,27 @@ async function invocarAnthropicComTool(
   const msgsHist = historico
     .slice(-20)
     .map((m) => ({ role: m.role === "system" ? ("user" as const) : m.role, content: m.content }));
-  const body = {
+  const body = montarBodyAnthropic({
     model: modelo || "claude-haiku-4-5-20251001",
-    max_tokens: maxTokens,
-    temperature: temperatura,
+    maxTokens,
+    temperatura,
     system: systemPrompt,
-    tools: [
-      {
-        name: "salvar_campos_extraidos",
-        description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
-        input_schema: {
-          type: "object",
-          properties: schema.properties,
-          required: schema.required,
-        },
-      },
-    ],
-    tool_choice: { type: "tool", name: "salvar_campos_extraidos" },
     messages: [...msgsHist, { role: "user" as const, content: mensagem }],
-  };
+    extra: {
+      tools: [
+        {
+          name: "salvar_campos_extraidos",
+          description: "Salva os campos que o usuário informou em qualquer momento da conversa. Omita campos que não foram informados.",
+          input_schema: {
+            type: "object",
+            properties: schema.properties,
+            required: schema.required,
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "salvar_campos_extraidos" },
+    },
+  });
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

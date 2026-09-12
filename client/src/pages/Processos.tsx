@@ -24,7 +24,16 @@ import {
 import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
 import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
 import { EstadosPicker } from "@/components/EstadosPicker";
-import { TRIBUNAL_SEDE, siglaDoTribunal, tribunalDoCnj } from "@shared/tribunais-pje";
+import {
+  TRIBUNAL_SEDE,
+  avisoProcessoForaDaCobertura,
+  parseCnjTribunalPuro,
+  resumoPjeNacional,
+  siglaConsultaNaHora,
+  siglaDoTribunal,
+  totalTribunaisVigiaveis,
+  tribunalDoCnj,
+} from "@shared/tribunais-pje";
 import { formatarDataCalendario } from "@shared/data-calendario";
 import { GAVETAS, type GavetaPolo } from "@shared/nova-acao-polo";
 import { ROTULO_FONTE_CAPA, type FonteCapa } from "@shared/nova-acao-capa";
@@ -637,7 +646,7 @@ function ConsultarTab() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-tight">Consultar processo</p>
-            <p className="text-apoio text-muted-foreground">CNJ direto, ou busca por CPF/CNPJ em +90 tribunais.</p>
+            <p className="text-apoio text-muted-foreground">Número do processo direto, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.</p>
           </div>
         </div>
 
@@ -740,7 +749,7 @@ function ConsultarTab() {
             <p className="text-sm font-semibold text-info-fg">Consultando tribunais…</p>
             <p className="text-xs text-info-fg/80">
               {tipo !== "lawsuit_cnj"
-                ? `Buscando em todos os tribunais por ${TIPO_LABELS[tipo]}. Pode levar até 2 minutos.`
+                ? `Buscando no ${siglaConsultaNaHora()} por ${TIPO_LABELS[tipo]}. Pode levar até 2 minutos.`
                 : "Resultado em até 9 segundos."}
               {tentativas > 5 && ` (${tentativas * 3}s)`}
             </p>
@@ -826,7 +835,7 @@ function ConsultarTab() {
             <Scale className="h-7 w-7 text-info/70" />
           </div>
           <p className="font-semibold text-foreground">Consulte processos judiciais</p>
-          <p className="text-sm text-muted-foreground">Busque por CNJ, CPF ou CNPJ em +90 tribunais do Brasil.</p>
+          <p className="text-sm text-muted-foreground">Consulta na hora: {siglaConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.</p>
         </div>
       ) : null}
       </div>
@@ -1608,6 +1617,25 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
   const [novoOpen, setNovoOpen] = useState(false);
   const [novoValor, setNovoValor] = useState("");
   const [novoCredencialId, setNovoCredencialId] = useState<string>("");
+  // Tribunal do número digitado, resolvido no client: avisa ANTES do clique
+  // que o robô não entra lá, em vez de deixar o servidor recusar depois.
+  const tribunalForaDaCobertura = useMemo(() => {
+    const t = parseCnjTribunalPuro(novoValor);
+    return t && !t.coberto ? t : null;
+  }, [novoValor]);
+  const irAvisarQuandoChegar = (sigla: string) => {
+    const sp = new URLSearchParams(window.location.search);
+    sp.set("tab", "cofre");
+    sp.set("interesse", sigla);
+    const url = `${window.location.pathname}?${sp.toString()}`;
+    if (onIrAoCofre) {
+      window.history.replaceState({}, "", url);
+      setNovoOpen(false);
+      onIrAoCofre();
+    } else {
+      window.location.href = url;
+    }
+  };
   const [deletarTarget, setDeletarTarget] = useState<{ id: number; nome: string } | null>(null);
   const [filtroStatus, setFiltroStatus] = useState<"todos" | "ativo" | "pausado" | "erro">("todos");
   const [buscaTexto, setBuscaTexto] = useState("");
@@ -2168,6 +2196,20 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 placeholder="0000000-00.0000.0.00.0000"
               />
             </div>
+            {tribunalForaDaCobertura && (
+              <div className="rounded-lg bg-warning-bg border border-warning/30 p-3 text-xs space-y-2">
+                <p className="text-warning-fg">{avisoProcessoForaDaCobertura(tribunalForaDaCobertura.sigla)}</p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-warning/40"
+                  onClick={() => irAvisarQuandoChegar(tribunalForaDaCobertura.sigla)}
+                >
+                  <Bell className="h-3.5 w-3.5 mr-1.5" />
+                  Avisar quando o {tribunalForaDaCobertura.sigla} chegar
+                </Button>
+              </div>
+            )}
             <div>
               <Label className="text-xs">Credencial OAB *</Label>
               <Select value={novoCredencialId} onValueChange={setNovoCredencialId}>
@@ -2208,7 +2250,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                   credencialId: Number(novoCredencialId),
                 });
               }}
-              disabled={!novoValor.trim() || !novoCredencialId || criarMut.isPending}
+              disabled={!novoValor.trim() || !novoCredencialId || criarMut.isPending || !!tribunalForaDaCobertura}
             >
               {criarMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Radar className="h-4 w-4 mr-2" />}
               Monitorar
@@ -4344,10 +4386,18 @@ function CofreTab() {
   // interesse (fila de prioridade de adapters) em vez de cadastro perdido.
   const [interesseOpen, setInteresseOpen] = useState(false);
   const [interesseTribunal, setInteresseTribunal] = useState("");
+  // Deep-link do guia (?interesse=1) e do "Monitorar movimentações"
+  // (?interesse=<SIGLA>, já com o tribunal preenchido).
+  useEffect(() => {
+    const interesse = new URLSearchParams(window.location.search).get("interesse");
+    if (!interesse) return;
+    if (interesse !== "1") setInteresseTribunal(interesse);
+    setInteresseOpen(true);
+  }, []);
   const interesseMut = (trpc.cofreCredenciais as any).registrarInteresseTribunal?.useMutation({
     onSuccess: () => {
-      toast.success("Anotado!", {
-        description: "Quando esse tribunal entrar na cobertura, a gente te avisa.",
+      toast.success("Pedido registrado", {
+        description: "Quando esse tribunal entrar, a gente te avisa por e-mail.",
       });
       setInteresseOpen(false);
       setInteresseTribunal("");
@@ -4798,7 +4848,7 @@ function CofreTab() {
                 },
                 {
                   id: "todos",
-                  titulo: `Todos os PJe${nacionalDisponivel ? ` — ${estadosPje.length} estados` : ""}`,
+                  titulo: `Todos os PJe${nacionalDisponivel ? ` — ${resumoPjeNacional()}` : ""}`,
                   desc: "Mesmo login do PDPJ em qualquer tribunal com PJe. Um cadastro só.",
                 },
               ].map((o) => {
@@ -4972,8 +5022,8 @@ function CofreTab() {
           <DialogHeader>
             <DialogTitle>Avisar quando chegar</DialogTitle>
             <DialogDescription>
-              Diga qual tribunal você precisa. O interesse entra na nossa fila de prioridade,
-              e te avisamos assim que a cobertura chegar.
+              Diga qual tribunal você precisa. Seu pedido entra na fila de prioridade, e te avisamos
+              por e-mail assim que a cobertura chegar.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
@@ -5085,7 +5135,7 @@ function CofreTab() {
 
           <div className="space-y-1.5">
             {[
-              { id: SISTEMA_NACIONAL, titulo: `Todos os PJe (${estadosPje.length} estados)`, desc: "Processo de qualquer estado usa essa credencial." },
+              { id: SISTEMA_NACIONAL, titulo: `Todos os PJe (${resumoPjeNacional()})`, desc: "Processo de qualquer estado usa essa credencial." },
               { id: estadosPje[0]?.id ?? "pje_tjce", titulo: "Só um tribunal", desc: "Volta a valer num estado só — processos dos outros são pausados." },
             ].map((o) => {
               const atual = (o.id === SISTEMA_NACIONAL) === (alcanceAlvo?.sistema === SISTEMA_NACIONAL);

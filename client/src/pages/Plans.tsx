@@ -19,11 +19,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock } from "lucide-react";
+import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock, RotateCcw } from "lucide-react";
 import { StatusPlanoBadge } from "@/components/StatusPlanoBadge";
 import { resolverStatusVisual } from "@/lib/subscription-status";
+import { emCarenciaDeCancelamento } from "@shared/assinatura-carencia";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -52,6 +57,7 @@ export default function Plans() {
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   // Modal CPF/CNPJ — exibido na primeira assinatura (quando ainda não tem customer Asaas)
   const [cpfModalOpen, setCpfModalOpen] = useState(false);
@@ -120,6 +126,11 @@ export default function Plans() {
     enabled: !!user && !!currentSub,
     retry: false,
     refetchInterval: awaitingPayment ? 3000 : false,
+  });
+  // Até quando o acesso fica se cancelar agora — é a data do diálogo.
+  const { data: previaCancelamento } = trpc.subscription.previaCancelamento.useQuery(undefined, {
+    enabled: !!user && !!currentSub && currentSub.status !== "canceled",
+    retry: false,
   });
   // Assinatura cujo pagamento estamos esperando. Sem isso, na troca de plano
   // a atual (que continua ativa) faria o polling "confirmar" na hora.
@@ -210,14 +221,31 @@ export default function Plans() {
   });
 
   const cancelSub = trpc.subscription.cancel.useMutation({
-    onSuccess: () => {
-      toast.success("Assinatura cancelada.");
+    onSuccess: (r) => {
+      toast.success(
+        r.acessoAte != null
+          ? `Assinatura cancelada. Você continua com acesso até ${formatDate(r.acessoAte)}.`
+          : "Assinatura cancelada.",
+      );
       setCancelLoading(false);
+      setCancelDialogOpen(false);
       utils.subscription.current.invalidate();
+      utils.subscription.previaCancelamento.invalidate();
     },
     onError: (error) => {
       toast.error("Erro ao cancelar: " + error.message);
       setCancelLoading(false);
+    },
+  });
+
+  const reativarSub = trpc.subscription.reativar.useMutation({
+    onSuccess: (r) => {
+      toast.success(`Assinatura reativada. Primeira cobrança nova em ${formatDate(r.proximaCobranca)} — nada foi cobrado agora.`);
+      utils.subscription.current.invalidate();
+      utils.subscription.previaCancelamento.invalidate();
+    },
+    onError: (error) => {
+      toast.error("Erro ao reativar: " + error.message);
     },
   });
 
@@ -258,15 +286,18 @@ export default function Plans() {
   };
 
   const handleCancel = () => {
-    if (
-      !confirm(
-        "Tem certeza que deseja cancelar sua assinatura? O cancelamento é definitivo — para voltar você precisará criar uma nova assinatura.",
-      )
-    )
-      return;
+    setCancelDialogOpen(true);
+  };
+
+  const confirmarCancelamento = () => {
     setCancelLoading(true);
     cancelSub.mutate();
   };
+
+  // Data civil pra pessoa: epoch ms ou "YYYY-MM-DD" (o vencimento que o
+  // servidor devolve) — a string entra como meio-dia pra não virar a véspera.
+  const formatDate = (v: number | string) =>
+    (typeof v === "string" ? new Date(`${v}T12:00:00`) : new Date(v)).toLocaleDateString("pt-BR");
 
   const formatPrice = (cents: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -300,6 +331,10 @@ export default function Plans() {
     ? (cicloDoPlano(currentPlanId) === "monthly" ? currentPlanData.priceMonthly : currentPlanData.priceYearly)
     : 0;
   const emTeste = currentSub?.status === "trialing";
+  // Cancelada, mas ainda dentro do período pago (cláusula 5 dos Termos).
+  const emCarencia = emCarenciaDeCancelamento(currentSub);
+  const acessoAte = emCarencia ? (currentSub as any).fimPeriodoPagoEm as number : null;
+  const dataPreviaCancelamento = previaCancelamento?.acessoAte ?? null;
   // Quem já fechou o valor na conversa (assinatura negociada pelo painel) vê o
   // número combinado — não "Sob consulta" com botão de fechar de novo.
   const valorNegociado = (currentSub as any)?.valorNegociadoCentavos ?? null;
@@ -345,11 +380,16 @@ export default function Plans() {
               ) : currentPrice > 0 && (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-lg font-bold tabular-nums">{formatPrice(currentPrice)}</span>
-                  <span className="text-[10px] text-white/70">/{cicloDoPlano(currentPlanId) === "monthly" ? "mês" : "ano"}</span>
+                  <span className="text-[10px] text-white/70">
+                    /{cicloDoPlano(currentPlanId) === "monthly" ? "mês" : "ano"}
+                    {emCarencia ? " · nenhuma cobrança nova" : ""}
+                  </span>
                 </div>
               )}
               <p className="text-[11px] text-white/80 mt-2">
-                {currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
+                {emCarencia && acessoAte != null
+                  ? `Acesso até ${formatDate(acessoAte)} — o fim do período que você já pagou. Depois disso a conta fica sem plano.`
+                  : currentSub.status === "trialing" && (currentSub as any).diasRestantesTrial != null
                   ? sobConsultaAtual && !(currentSub as any).pagamentoEmAndamento
                     ? `Teste termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}. Nada é cobrado sem você fechar o valor.`
                     : `Trial termina em ${(currentSub as any).diasRestantesTrial} dia${(currentSub as any).diasRestantesTrial === 1 ? "" : "s"}${
@@ -387,7 +427,36 @@ export default function Plans() {
                   💬 Fechar valor com a gente
                 </Button>
               )}
-              {currentSub.status !== "trialing" && (
+              {emCarencia && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => reativarSub.mutate()}
+                    disabled={reativarSub.isPending}
+                    className="bg-white text-primary hover:bg-white/90 font-bold shadow-sm"
+                  >
+                    {reativarSub.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    ) : (
+                      <RotateCcw className="h-4 w-4 mr-1.5" />
+                    )}
+                    Reativar assinatura
+                  </Button>
+                  <p className="text-[10px] text-white/70 text-center">
+                    Reativar cria a assinatura de novo no Asaas, com a primeira cobrança em{" "}
+                    {acessoAte != null ? formatDate(acessoAte + 24 * 60 * 60 * 1000) : "—"} — nada é cobrado agora
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => document.getElementById("lista-planos")?.scrollIntoView({ behavior: "smooth" })}
+                    className="bg-white/12 border border-white/25 text-white hover:bg-white/20 backdrop-blur-sm"
+                  >
+                    Ver planos
+                  </Button>
+                </>
+              )}
+              {currentSub.status !== "trialing" && currentSub.status !== "canceled" && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -541,7 +610,7 @@ export default function Plans() {
       </div>
 
       {/* Plans Grid */}
-      <div className="grid gap-6 md:grid-cols-3">
+      <div id="lista-planos" className="grid gap-6 md:grid-cols-3">
         {subscriptionPlans.map((plan) => {
           const ciclo = cicloDoPlano(plan.id);
           const price = ciclo === "monthly" ? plan.priceMonthly : plan.priceYearly;
@@ -705,6 +774,31 @@ export default function Plans() {
           <p>O acesso é liberado automaticamente após confirmação do pagamento.</p>
         </div>
       )}
+
+      {/* Cancelar assinatura — cláusula 5 dos Termos: acesso até o fim do período pago */}
+      <AlertDialog open={cancelDialogOpen} onOpenChange={(o) => { if (!cancelLoading) setCancelDialogOpen(o); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar a assinatura {previaCancelamento?.planName ?? currentPlanName ?? ""}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {dataPreviaCancelamento != null
+                ? `Nenhuma cobrança nova será feita. Você continua com acesso a tudo até ${formatDate(dataPreviaCancelamento)}, o fim do período que já pagou. Depois disso a conta fica sem plano — os dados continuam guardados, e você pode reativar até lá sem pagar nada agora.`
+                : "Nenhuma cobrança nova será feita. Não há período pago registrado, então o acesso encerra agora — os dados continuam guardados, e você pode assinar de novo quando quiser."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelLoading}>Manter assinatura</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmarCancelamento(); }}
+              disabled={cancelLoading}
+              className="bg-danger text-white hover:bg-danger/90"
+            >
+              {cancelLoading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <XCircle className="h-4 w-4 mr-1.5" />}
+              Cancelar assinatura
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Modal CPF/CNPJ */}
       <Dialog open={cpfModalOpen} onOpenChange={setCpfModalOpen}>

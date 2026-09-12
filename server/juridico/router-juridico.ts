@@ -166,7 +166,7 @@ export const juridicoRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
-      const modelo = input.modelo || "claude-sonnet-4-20250514";
+      const modelo = input.modelo || "claude-sonnet-4-6";
       const leitura = await resolverConteudoFonte(perm.escritorioId, {
         texto: input.texto, link: input.link, arquivoBase64: input.arquivoBase64, nomeArquivo: input.nomeArquivo, modelo,
       });
@@ -602,7 +602,7 @@ export const juridicoRouter = router({
       const key = await resolverChaveOpenAI(esc?.escritorio.id ?? 0);
       if (!key) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Sem chave OpenAI pra indexar (configure a chave da plataforma ou do escritório)." });
 
-      const modelo = input.modelo || "claude-sonnet-4-20250514"; // Claude lê PDF nativo (escaneado)
+      const modelo = input.modelo || "claude-sonnet-4-6"; // Claude lê PDF nativo (escaneado)
       const leitura = await resolverConteudoFonte(esc?.escritorio.id ?? 0, {
         texto: input.texto, link: input.link, arquivoBase64: input.base64, nomeArquivo: input.nomeArquivo, modelo,
       });

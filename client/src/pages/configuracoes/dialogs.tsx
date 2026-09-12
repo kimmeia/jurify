@@ -1157,8 +1157,8 @@ export function ChatGPTDialog({ open, onClose, canEdit }: { open: boolean; onClo
             <p className="text-xs font-semibold text-info-fg">📌 Próximo passo</p>
             <p className="text-[11px] text-info-fg">
               Após salvar a chave, vá em <strong>Configurações → Agentes de IA</strong> para criar
-              chatbots com prompts personalizados, vincular a canais (WhatsApp, Instagram) e ativar
-              respostas automáticas.
+              chatbots com prompts personalizados, vincular a canais (WhatsApp; Instagram em breve) e
+              ativar respostas automáticas.
             </p>
           </div>
         </div>

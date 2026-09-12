@@ -57,8 +57,26 @@ describe("temAcessoAtivo — cortesia OFF (comportamento legacy)", () => {
     expect(temAcessoAtivo({ status: "trialing", cortesia: false, cortesiaExpiraEm: null })).toBe(true);
   });
 
-  it("status='canceled' bloqueia", () => {
+  it("status='canceled' sem flag de carência e sem data bloqueia", () => {
     expect(temAcessoAtivo({ status: "canceled", cortesia: false, cortesiaExpiraEm: null })).toBe(false);
+    expect(
+      temAcessoAtivo({ status: "canceled", cortesia: false, cortesiaExpiraEm: null, cancelAtPeriodEnd: false, fimPeriodoPagoEm: Date.now() + 60_000 }),
+    ).toBe(false);
+    expect(
+      temAcessoAtivo({ status: "canceled", cortesia: false, cortesiaExpiraEm: null, cancelAtPeriodEnd: true, fimPeriodoPagoEm: null }),
+    ).toBe(false);
+  });
+
+  it("status='canceled' com carência (flag + período pago no futuro) LIBERA — cláusula 5 dos Termos", () => {
+    expect(
+      temAcessoAtivo({ status: "canceled", cortesia: false, cortesiaExpiraEm: null, cancelAtPeriodEnd: true, fimPeriodoPagoEm: Date.now() + 60_000 }),
+    ).toBe(true);
+  });
+
+  it("status='canceled' com flag mas período pago já vencido bloqueia", () => {
+    expect(
+      temAcessoAtivo({ status: "canceled", cortesia: false, cortesiaExpiraEm: null, cancelAtPeriodEnd: true, fimPeriodoPagoEm: Date.now() - 1 }),
+    ).toBe(false);
   });
 
   it("status='past_due' bloqueia", () => {
