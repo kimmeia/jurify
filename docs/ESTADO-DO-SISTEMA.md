@@ -1887,8 +1887,26 @@ e que vale como fato para quem for implementar:
   `STATUS_SUBSTITUIVEIS`); ordem em `getActiveSubscription`; o teste
   `cortesia-acesso.test.ts` ("status='canceled' bloqueia") terá de mudar.
 
-Decisões abertas no mockup (aba 4): 1, 1b, 1c, 2, 3 (A/B/C/D), 4, 4b, 4c, 5.
-**Nada foi implementado.**
+**Decisões do dono (12/09, depois do mockup): "em relação aos tribunais, quero que
+crie logo o motor, nada de datajud, processos lá tem atrasos de meses. o resto tá
+aprovado."** Lido item a item:
+
+| decisão | resultado |
+|---|---|
+| 1 · Instagram | aprovado como proposto: selo nos 8 lugares, card travado |
+| 1b · Messenger | aprovado: mesmo selo |
+| 1c · "e-mail" | aprovado como proposto: "Instagram e e-mail em breve" (a palavra fica) |
+| 2 · Tribunais, texto | aprovado: todos os lugares, incluindo as 4 trocas de texto marcadas como remoção |
+| 3 · Tribunais, cobertura | **motor próprio para TJSP e TRTs (caminhos B, C e D); DataJud (A) recusado** — "processos lá têm atrasos de meses" |
+| 4 · Cancelar | aprovado: honrar a cláusula 5 |
+| 4b · Reativar | aprovado: sim (cria a assinatura de novo no Asaas, cobrança no fim do período) |
+| 4c · Cancelamento direto no Asaas | aprovado: honra o período também |
+| 5 · Sob medida | aprovado: igualar ao Escala |
+
+Ressalva registrada na resposta ao dono: **este ambiente não alcança nenhum portal de
+tribunal**; o motor para TJSP/TRTs é construído e testado com páginas gravadas, e nasce
+marcado "não testado" até o dono validar pelo "Testar tudo" do Cofre. Implementação em
+andamento — o estado de cada item entra aqui no commit da entrega.
 
 ### 15.5 Por que isto está num documento de engenharia
 
