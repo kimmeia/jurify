@@ -31,6 +31,7 @@ import {
   resumoPjeNacional,
   siglaConsultaNaHora,
   siglaDoTribunal,
+  textoConsultaNaHora,
   totalTribunaisVigiaveis,
   tribunalDoCnj,
 } from "@shared/tribunais-pje";
@@ -646,7 +647,7 @@ function ConsultarTab() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-tight">Consultar processo</p>
-            <p className="text-apoio text-muted-foreground">Número do processo direto, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.</p>
+            <p className="text-apoio text-muted-foreground">Número do processo direto {textoConsultaNaHora()}, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.</p>
           </div>
         </div>
 
@@ -835,7 +836,7 @@ function ConsultarTab() {
             <Scale className="h-7 w-7 text-info/70" />
           </div>
           <p className="font-semibold text-foreground">Consulte processos judiciais</p>
-          <p className="text-sm text-muted-foreground">Consulta na hora: {siglaConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.</p>
+          <p className="text-sm text-muted-foreground">Consulta na hora {textoConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.</p>
         </div>
       ) : null}
       </div>

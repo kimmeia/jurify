@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>PJe — Detalhe do processo (fixture sintética, layout mudado)</title></head>
+<body>
+<nav id="menuTopo"><span>Sessão iniciada em 01/01/2026 08:00</span></nav>
+<!-- O tribunal trocou a timeline por uma estrutura que o parser não conhece:
+     sem #divTimeLine e sem tabela de movimentações. Os itens estão soltos
+     direto no body, no MESMO desenho de um item da timeline — quem cair no
+     body inteiro (o que o adapter fazia antes) lê tudo isso como
+     movimentação. O parser tem que devolver VAZIO. -->
+<div class="media data"><span class="data-interna">07 mai 2026</span></div>
+<div class="media"><div class="media-body"><span>Juntada de Petição</span><span class="text-muted">14:23</span></div></div>
+<div class="media"><div class="media-body"><span>Distribuído por sorteio</span><span class="text-muted">11:00</span></div></div>
+<div>02/05/2026 09:00 - Aviso do sistema que parece movimentação</div>
+<footer>Atualizado em 12/09/2026 15:30</footer>
+</body>
+</html>

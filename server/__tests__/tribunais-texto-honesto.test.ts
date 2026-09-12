@@ -19,6 +19,7 @@ import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import {
+  TRIBUNAIS_CONSULTA_PUBLICA_PJE,
   TRIBUNAIS_PJE,
   avisoProcessoForaDaCobertura,
   bulletVigiaPlano,
@@ -31,6 +32,7 @@ import {
   resumoPjeNacional,
   rotuloPjeNacional,
   siglaConsultaNaHora,
+  textoConsultaNaHora,
   textoCoberturaComparativo,
   textoCoberturaCurto,
   textoCoberturaGuia,
@@ -69,6 +71,10 @@ function arquivosDoClient(dir = join(raiz, "client", "src")): string[] {
 
 const nTjs = TRIBUNAIS_PJE.filter((t) => t.codigo.startsWith("tj")).length;
 const nTrfs = TRIBUNAIS_PJE.filter((t) => t.codigo.startsWith("trf")).length;
+// "TRF5, TRT2 e TRT15" — derivado da lista de consulta pública, como os helpers.
+const siglasPublicas = TRIBUNAIS_CONSULTA_PUBLICA_PJE.map((t) => t.sigla);
+const publicas = `${siglasPublicas.slice(0, -1).join(", ")} e ${siglasPublicas[siglasPublicas.length - 1]}`;
+const trtsPublicos = siglasPublicas.filter((s) => s.startsWith("TRT"));
 
 describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
   it("contagens saem da lista compartilhada", () => {
@@ -76,11 +82,11 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
     expect(trfsCobertos().length).toBe(nTrfs);
     expect(coberturaTribunais().comCredencial.length).toBe(TRIBUNAIS_PJE.length);
     expect(totalTribunaisVigiaveis()).toBe(TRIBUNAIS_PJE.length + coberturaTribunais().consultaPublica.length);
-    expect(textoCoberturaCurto()).toBe(`${nTjs} TJs + ${nTrfs} TRFs (TRF5 por consulta pública)`);
+    expect(textoCoberturaCurto()).toBe(`${nTjs} TJs + ${nTrfs} TRFs (${publicas} por consulta pública)`);
     expect(resumoPjeNacional()).toBe(`${nTjs} estados + ${nTrfs} TRFs`);
     expect(rotuloPjeNacional()).toBe(`PJe — ${nTjs} estados + ${nTrfs} TRFs`);
     expect(chipPjeIntegracoes()).toBe(`PJe · ${nTjs} TJs + ${nTrfs} TRFs`);
-    expect(textoCoberturaComparativo()).toBe(`hoje ${nTjs} TJs e ${nTrfs} TRFs, mais o TRF5 por consulta pública`);
+    expect(textoCoberturaComparativo()).toBe(`hoje ${nTjs} TJs e ${nTrfs} TRFs, mais ${publicas} por consulta pública`);
   });
 
   it("os helpers de texto não carregam número fixo no código-fonte", () => {
@@ -96,17 +102,18 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
     expect(secao).not.toMatch(/\b(1[0-9]|[2-9][0-9]*)\b/);
   });
 
-  it("TJDFT é a sigla de exibição; TRF5 fica separado, por consulta pública", () => {
+  it("TJDFT é a sigla de exibição; TRF5, TRT2 e TRT15 ficam separados, por consulta pública", () => {
     const c = coberturaTribunais();
     const siglas = c.comCredencial.map((t) => t.sigla);
     expect(siglas).toContain("TJDFT");
     expect(siglas).not.toContain("TJDF");
     expect(siglas).not.toContain("Federal 1ª");
     expect(siglas).toContain("TRF1");
-    expect(c.consultaPublica.map((t) => t.codigo)).toEqual(["trf5"]);
+    expect(c.consultaPublica.map((t) => t.codigo)).toEqual(TRIBUNAIS_CONSULTA_PUBLICA_PJE.map((t) => t.codigo));
+    expect(c.consultaPublica.map((t) => t.codigo)).toEqual(expect.arrayContaining(["trf5", "trt2", "trt15"]));
     expect(c.consultaPublica[0].sigla).toBe("TRF5");
-    expect(c.comCredencial.map((t) => t.codigo)).not.toContain("trf5");
-    expect(listaSiglasCobertas()).toMatch(/^TJCE, TJDFT, .*, TRF6 e, por consulta pública, TRF5$/);
+    for (const codigo of ["trf5", "trt2", "trt15"]) expect(c.comCredencial.map((t) => t.codigo)).not.toContain(codigo);
+    expect(listaSiglasCobertas()).toBe(`TJCE, TJDFT, TJMA, TJMG, TJMT, TJPA, TJPB, TJPE, TJRJ, TJRN, TJRO, TJRR, TRF1, TRF2, TRF3, TRF6 e, por consulta pública, ${publicas}`);
   });
 
   it("a lista compartilhada bate com o registro do motor no servidor", () => {
@@ -116,8 +123,9 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
     expect(TRIBUNAIS_MOTOR_PROPRIO).toContain("trf5");
   });
 
-  it("consulta na hora é só a sede", () => {
+  it("a sede é a única comprovada em campo; a consulta na hora vale nos cobertos, com ou sem credencial", () => {
     expect(siglaConsultaNaHora()).toBe("TJCE");
+    expect(textoConsultaNaHora()).toBe(`nos tribunais cobertos com a sua credencial (${publicas} sem credencial)`);
   });
 
   it("mensagem de tribunal sem motor nomeia a cobertura inteira", () => {
@@ -127,12 +135,13 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
 
   it("textos do site e do guia levam os números derivados", () => {
     expect(textoCoberturaPricing()).toBe(
-      "Cobertura hoje: PJe do TJCE, TJDFT, TJMA, TJMG, TJMT, TJPA, TJPB, TJPE, TJRJ, TJRN, TJRO, TJRR, mais TRF1, TRF2, TRF3 e TRF6 (TRF5 por consulta pública). " +
-        "TJSP, Justiça do Trabalho e os demais ainda não — conte pra gente e entra na fila.",
+      `Cobertura hoje: PJe do TJCE, TJDFT, TJMA, TJMG, TJMT, TJPA, TJPB, TJPE, TJRJ, TJRN, TJRO, TJRR, mais TRF1, TRF2, TRF3 e TRF6 (${publicas} por consulta pública). ` +
+        `TJSP e os demais ainda não; Justiça do Trabalho: ${trtsPublicos.join(" e ")} por consulta pública — conte pra gente e entra na fila.`,
     );
     expect(textoCoberturaGuia()).toBe(
       `Cobertura hoje: PJe em ${nTjs} estados (CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR) e TRF1/2/3/6, ` +
-        "mais TRF5 por consulta pública · novas ações por CPF/CNPJ: comprovado no TJCE.",
+        `mais ${publicas} por consulta pública · consulta na hora ${textoConsultaNaHora()} · ` +
+        "novas ações por CPF/CNPJ: comprovado no TJCE.",
     );
   });
 });
@@ -169,7 +178,7 @@ describe("servidor: as quatro recusas usam o mesmo helper", () => {
 
   it("consultarCNJ, consultarCNJSincrono, criarMonitoramento e o 'sistema cofre' passam pelo helper", () => {
     expect(router.split("mensagemTribunalSemMotor(tribunal.siglaTribunal)").length - 1).toBeGreaterThanOrEqual(5);
-    expect(router).toContain('mensagemTribunalSemMotor, normalizarTribunais } from "../../shared/tribunais-pje"');
+    expect(router).toMatch(/import \{[^}]*mensagemTribunalSemMotor,[^}]*normalizarTribunais,[^}]*\} from "\.\.\/\.\.\/shared\/tribunais-pje"/);
   });
 
   it("os textos antigos e divergentes sumiram", () => {
@@ -219,8 +228,9 @@ describe("client: nenhum número inventado sobrou", () => {
 
   it("Processos: consulta na hora, vigiar e a busca por CPF dizem a verdade derivada", () => {
     const proc = conteudo.get("client/src/pages/Processos.tsx")!;
-    expect(proc).toContain("Número do processo direto, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.");
-    expect(proc).toContain("Consulta na hora: {siglaConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.");
+    // Consulta por número na hora vale nos cobertos; a busca por CPF segue na sede.
+    expect(proc).toContain("Número do processo direto {textoConsultaNaHora()}, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.");
+    expect(proc).toContain("Consulta na hora {textoConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.");
     expect(proc).toContain("`Buscando no ${siglaConsultaNaHora()} por ${TIPO_LABELS[tipo]}. Pode levar até 2 minutos.`");
   });
 
@@ -299,12 +309,20 @@ describe("migration 0223: bullet certo de cada plano, idempotente", () => {
     ["escala", "2.500", "150"],
   ];
 
+  /** O texto que a 0223 gravou é história: fica congelado aqui. O helper
+   *  `bulletVigiaPlano` já diz a cobertura de hoje e alimenta a 0227. */
+  const bullet0223 = (processos: string, cpfs: string) =>
+    `Vigia ${processos} processos nos tribunais cobertos (${nTjs} TJs e ${nTrfs} TRFs, mais o TRF5 por consulta pública — TJSP e TRTs ainda não) · ` +
+    `${cpfs} CPFs/CNPJs (novas ações: comprovado no TJCE)`;
+
   for (const [slug, processos, cpfs] of planos) {
-    it(`${slug}: JSON_REPLACE no índice do bullet da seed, WHERE com o texto antigo, texto novo = helper`, () => {
+    it(`${slug}: JSON_REPLACE no índice do bullet da seed, WHERE com o texto antigo, texto = o que a 0223 gravou`, () => {
       const i = indiceDoBulletVigia(slug);
       expect(i).toBeGreaterThan(-1);
       const antigo = `Vigia ${processos} processos e ${cpfs} CPFs/CNPJs (novas ações: TJCE por enquanto)`;
-      const novo = bulletVigiaPlano(processos, cpfs);
+      const novo = bullet0223(processos, cpfs);
+      // A 0227 parte exatamente deste texto (WHERE) e grava o do helper de hoje.
+      expect(bulletVigiaPlano(processos, cpfs)).not.toBe(novo);
       const trecho = mig.slice(mig.indexOf(`WHERE slug = '${slug}'`) - 400, mig.indexOf(`WHERE slug = '${slug}'`) + 300);
       expect(trecho).toContain(`JSON_REPLACE(features, '$[${i}]',`);
       expect(trecho).toContain(`'${novo}'`);

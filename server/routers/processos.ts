@@ -46,7 +46,12 @@ import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resu
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
-import { mensagemTribunalSemMotor, normalizarTribunais } from "../../shared/tribunais-pje";
+import {
+  TRIBUNAL_SEDE,
+  mensagemTribunalSemMotor,
+  normalizarTribunais,
+  siglaDoTribunal,
+} from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -234,6 +239,16 @@ async function escolherCredencial(
   };
 }
 
+/**
+ * Sistemas do cofre que servem pra busca por CPF/CNPJ (e pra vigiar novas
+ * ações) num tribunal, do específico pro nacional. Na sede o `esaj_tjce`
+ * histórico continua valendo — era a lista cravada que existia aqui.
+ */
+function sistemasParaDocumento(codigoTribunal: string): string[] {
+  if (codigoTribunal === TRIBUNAL_SEDE) return ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL];
+  return sistemasQueAtendem(codigoTribunal);
+}
+
 export const processosRouter = router({
   saldo: protectedProcedure.query(async ({ ctx }) => {
     const esc = await getEscritorioPorUsuario(ctx.user.id);
@@ -298,6 +313,20 @@ export const processosRouter = router({
           message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
           cause: { motivo: "tribunal_sem_motor", tribunal: tribunal.codigoTribunal },
         });
+      }
+
+      // Tribunal de consulta pública (TRF5, TRT2, TRT15): sem credencial,
+      // sem sessão — o runner recebe `null` e o despachante chama o adapter
+      // aberto. A consulta é COBRADA igual (`contarUso`): o que o tribunal
+      // dispensa é o login, não o custo de rodar o robô.
+      if (!tribunalRequerCredencial(tribunal.codigoTribunal)) {
+        await contarUso(esc.escritorio.id, "consulta_processo");
+        const { requestId, status } = iniciarConsultaMotorProprio(input.cnj, null);
+        log.info(
+          { cnj: input.cnj, requestId, tribunal: tribunal.codigoTribunal, consultaPublica: true },
+          "[motor-proprio] consulta pública iniciada",
+        );
+        return { requestId, status };
       }
 
       const sistemaCofre = sistemaCofrePorTribunal(tribunal.codigoTribunal);
@@ -692,8 +721,9 @@ export const processosRouter = router({
    *
    * Cobra 3 créditos flat (não varia com número de resultados).
    *
-   * Hoje só funciona pra TJCE (único tribunal com adapter de CPF).
-   * Outros tribunais retornam NOT_IMPLEMENTED.
+   * Roda em qualquer tribunal do registro do PJe (o tribunal vem do pedido;
+   * sem ele, a sede — é o que a tela manda hoje). Comprovado em campo só no
+   * TJCE. Tribunal fora do registro retorna NOT_IMPLEMENTED.
    */
   consultarDocumento: protectedProcedure
     .input(
@@ -701,6 +731,8 @@ export const processosRouter = router({
         tipo: z.enum(["cpf", "cnpj"]),
         valor: z.string().min(11).max(20),
         credencialId: z.number().int().positive().optional(),
+        /** Tribunal da busca; omitido = sede (TJCE), como a tela sempre fez. */
+        codigoTribunal: z.string().max(16).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -715,6 +747,17 @@ export const processosRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "CNPJ deve ter 14 dígitos" });
       }
 
+      // O tribunal deixa de ser cravado: vem do pedido, e a credencial é
+      // escolhida pra ELE. Sem config no registro não há busca por parte
+      // (é tela autenticada do PJe) — consulta pública não serve aqui.
+      const codigoTribunal = input.codigoTribunal ?? TRIBUNAL_SEDE;
+      if (!getConfigTribunal(codigoTribunal)) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Busca por CPF/CNPJ ainda não funciona no ${siglaDoTribunal(codigoTribunal)}.`,
+        });
+      }
+
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
@@ -724,7 +767,7 @@ export const processosRouter = router({
       // recusado com "nenhuma de TJCE" nos fluxos por CPF, enquanto os
       // fluxos por CNJ aceitavam a mesma credencial numa boa.
       const { cred } = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
+        sistemas: sistemasParaDocumento(codigoTribunal),
         credencialId: input.credencialId,
       });
 
@@ -735,19 +778,6 @@ export const processosRouter = router({
             "Pra buscar processos por CPF/CNPJ, cadastre sua credencial OAB no Cofre. " +
             "→ /processos?tab=cofre",
           cause: { motivo: "credencial_ausente" },
-        });
-      }
-
-      // Mapeia sistema → tribunal (a varredura por CPF hoje é só TJCE; a
-      // credencial nacional atende, porque TJCE roda PJe)
-      const codigoTribunal =
-        cred.sistema === "pje_tjce" || cred.sistema === "esaj_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
-          ? "tjce"
-          : null;
-      if (!codigoTribunal) {
-        throw new TRPCError({
-          code: "NOT_IMPLEMENTED",
-          message: `Busca por CPF/CNPJ ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
         });
       }
 
@@ -1965,11 +1995,13 @@ export const processosRouter = router({
         valor: z.string().min(11).max(20),
         apelido: z.string().max(255).optional(),
         // Opcional: se omitido, backend auto-seleciona a primeira credencial
-        // ativa do usuário (TJCE). Frontend pode chamar sem credencial.
+        // ativa do usuário (do tribunal escolhido). Frontend pode chamar sem credencial.
         credencialId: z.number().int().positive().optional(),
         recurrenceHoras: z.number().int().min(1).max(168).default(6),
         /** Tribunais PJe a vigiar; sede (TJCE) entra sempre. Omitido = só sede. */
         tribunais: z.array(z.string().max(16)).max(24).optional(),
+        /** Tribunal-base do monitor (credencial e sessão); omitido = sede (TJCE). */
+        codigoTribunal: z.string().max(16).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1993,8 +2025,20 @@ export const processosRouter = router({
       // Mesma regra do consultarDocumento: a credencial nacional ("pje_*")
       // atende TJCE — recusá-la aqui barrava o "Monitorar" do cliente pra
       // quem seguiu o caminho recomendado do Cofre.
+      // O tribunal-base deixa de ser cravado: vem do pedido (sede por
+      // padrão) e a credencial é escolhida pra ele, pelo despachante de
+      // sistemas. Fora do registro não há busca por parte.
+      const tribunalDaCred = input.codigoTribunal ?? TRIBUNAL_SEDE;
+      const siglaBase = siglaDoTribunal(tribunalDaCred);
+      if (!getConfigTribunal(tribunalDaCred)) {
+        throw new TRPCError({
+          code: "NOT_IMPLEMENTED",
+          message: `Monitoramento de novas ações ainda não funciona no ${siglaBase}.`,
+        });
+      }
+
       const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL],
+        sistemas: sistemasParaDocumento(tribunalDaCred),
         credencialId: input.credencialId,
       });
 
@@ -2005,21 +2049,8 @@ export const processosRouter = router({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: sistemasNoCofre.length
-            ? `O cofre tem credencial cadastrada, mas nenhuma de TJCE (encontrei: ${sistemasNoCofre.join(", ")}). Cadastre uma do TJCE em Processos → Cofre.`
-            : "Nenhuma credencial no cofre. Cadastre uma do TJCE em Processos → Cofre antes de criar monitoramento.",
-        });
-      }
-
-      // Mapeia sistema cofre → tribunal. Hoje só TJCE 1º grau; a credencial
-      // nacional atende (TJCE roda PJe).
-      const tribunalDaCred =
-        cred.sistema === "esaj_tjce" || cred.sistema === "pje_tjce" || cred.sistema === SISTEMA_PJE_NACIONAL
-          ? "tjce"
-          : null;
-      if (!tribunalDaCred) {
-        throw new TRPCError({
-          code: "NOT_IMPLEMENTED",
-          message: `Monitoramento de novas ações ainda só funciona pra TJCE. Sistema ${cred.sistema} entra em sprint futura.`,
+            ? `O cofre tem credencial cadastrada, mas nenhuma de ${siglaBase} (encontrei: ${sistemasNoCofre.join(", ")}). Cadastre uma do ${siglaBase} em Processos → Cofre.`
+            : `Nenhuma credencial no cofre. Cadastre uma do ${siglaBase} em Processos → Cofre antes de criar monitoramento.`,
         });
       }
 
@@ -2052,7 +2083,9 @@ export const processosRouter = router({
         .limit(1);
       const dataReferenciaCadastro = cnjQuery[0]?.createdAt ?? null;
 
-      const tribunaisVigiados = normalizarTribunais(input.tribunais);
+      // O tribunal-base entra sempre na lista vigiada: é dele a sessão que o
+      // cron usa primeiro (a sede continua entrando pelo normalizador).
+      const tribunaisVigiados = normalizarTribunais([tribunalDaCred, ...(input.tribunais ?? [])]);
 
       const result = await db.insert(motorMonitoramentos).values({
         escritorioId: esc.escritorio.id,

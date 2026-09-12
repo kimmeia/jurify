@@ -86,6 +86,11 @@ export function tribunalDoCnj(cnj: string | null | undefined): string | null {
  */
 export const TRIBUNAIS_CONSULTA_PUBLICA_PJE = [
   { codigo: "trf5", sigla: "TRF5" },
+  // Justiça do Trabalho: o PJe dos TRTs tem consulta pública aberta, mesmo
+  // molde JSF do TRF5. Entram os dois que têm adapter no servidor
+  // (`ADAPTERS_PUBLICOS`) — o teste trava as duas listas iguais.
+  { codigo: "trt2", sigla: "TRT2" },
+  { codigo: "trt15", sigla: "TRT15" },
 ] as const;
 
 export type TribunalCoberto = { codigo: string; sigla: string; uf?: string };
@@ -136,13 +141,13 @@ export function totalTribunaisVigiaveis(): number {
   return codigosTribunaisCobertos().length;
 }
 
-/** Só a sede tem consulta na hora (o adapter síncrono é o dela). */
+/**
+ * Sede — o único tribunal onde a busca por CPF/CNPJ e as novas ações foram
+ * COMPROVADAS em campo. A consulta por número na hora não é só dela: vale em
+ * todos os cobertos (`textoConsultaNaHora`).
+ */
 export function siglaConsultaNaHora(): string {
   return siglaDoTribunal(TRIBUNAL_SEDE);
-}
-
-function siglasConsultaPublica(): string {
-  return coberturaTribunais().consultaPublica.map((t) => t.sigla).join(", ");
 }
 
 function listaComE(itens: string[]): string {
@@ -150,12 +155,40 @@ function listaComE(itens: string[]): string {
   return `${itens.slice(0, -1).join(", ")} e ${itens[itens.length - 1]}`;
 }
 
-/** "12 TJs + 4 TRFs (TRF5 por consulta pública)" */
+/** "TRF5, TRT2 e TRT15" */
+function siglasConsultaPublica(): string {
+  return listaComE(coberturaTribunais().consultaPublica.map((t) => t.sigla));
+}
+
+/**
+ * Onde a aba Consultar responde na hora: qualquer tribunal do registro com a
+ * credencial do Cofre, e os de consulta pública sem credencial nenhuma.
+ * "nos tribunais cobertos com a sua credencial (TRF5, TRT2 e TRT15 sem credencial)"
+ */
+export function textoConsultaNaHora(): string {
+  return `nos tribunais cobertos com a sua credencial (${siglasConsultaPublica()} sem credencial)`;
+}
+
+function ehTrt(t: { codigo: string }): boolean {
+  return t.codigo.startsWith("trt");
+}
+
+/**
+ * O que dizer da Justiça do Trabalho, a partir da lista: os TRTs que estão
+ * na consulta pública são nomeados; sem nenhum, "ainda não".
+ */
+export function textoJusticaDoTrabalho(): string {
+  const trts = coberturaTribunais().consultaPublica.filter(ehTrt).map((t) => t.sigla);
+  if (trts.length === 0) return "Justiça do Trabalho ainda não";
+  return `Justiça do Trabalho: ${listaComE(trts)} por consulta pública`;
+}
+
+/** "12 TJs + 4 TRFs (TRF5, TRT2 e TRT15 por consulta pública)" */
 export function textoCoberturaCurto(): string {
   return `${tjsCobertos().length} TJs + ${trfsCobertos().length} TRFs (${siglasConsultaPublica()} por consulta pública)`;
 }
 
-/** "TJCE, TJDFT, …, TRF6 e, por consulta pública, TRF5" */
+/** "TJCE, TJDFT, …, TRF6 e, por consulta pública, TRF5, TRT2 e TRT15" */
 export function listaSiglasCobertas(): string {
   const siglas = coberturaTribunais().comCredencial.map((t) => t.sigla).join(", ");
   return `${siglas} e, por consulta pública, ${siglasConsultaPublica()}`;
@@ -181,9 +214,9 @@ export function chipPjeIntegracoes(): string {
   return `PJe · ${tjsCobertos().length} TJs + ${trfsCobertos().length} TRFs`;
 }
 
-/** Trecho do card do site: "hoje 12 TJs e 4 TRFs, mais o TRF5 por consulta pública". */
+/** Trecho do card do site: "hoje 12 TJs e 4 TRFs, mais TRF5, TRT2 e TRT15 por consulta pública". */
 export function textoCoberturaComparativo(): string {
-  return `hoje ${tjsCobertos().length} TJs e ${trfsCobertos().length} TRFs, mais o ${siglasConsultaPublica()} por consulta pública`;
+  return `hoje ${tjsCobertos().length} TJs e ${trfsCobertos().length} TRFs, mais ${siglasConsultaPublica()} por consulta pública`;
 }
 
 /** Linha de cobertura embaixo do subtítulo dos planos no site. */
@@ -192,7 +225,7 @@ export function textoCoberturaPricing(): string {
   const trfs = listaComE(trfsCobertos().map((t) => t.sigla));
   return (
     `Cobertura hoje: PJe do ${tjs}, mais ${trfs} (${siglasConsultaPublica()} por consulta pública). ` +
-    `TJSP, Justiça do Trabalho e os demais ainda não — conte pra gente e entra na fila.`
+    `TJSP e os demais ainda não; ${textoJusticaDoTrabalho()} — conte pra gente e entra na fila.`
   );
 }
 
@@ -202,7 +235,8 @@ export function textoCoberturaGuia(): string {
   const trfs = trfsCobertos().map((t) => t.sigla.replace(/^TRF/, "")).join("/");
   return (
     `Cobertura hoje: PJe em ${tjsCobertos().length} estados (${ufs}) e TRF${trfs}, ` +
-    `mais ${siglasConsultaPublica()} por consulta pública · novas ações por CPF/CNPJ: comprovado no ${siglaConsultaNaHora()}.`
+    `mais ${siglasConsultaPublica()} por consulta pública · consulta na hora ${textoConsultaNaHora()} · ` +
+    `novas ações por CPF/CNPJ: comprovado no ${siglaConsultaNaHora()}.`
   );
 }
 
@@ -210,7 +244,7 @@ export function textoCoberturaGuia(): string {
 export function bulletVigiaPlano(processos: string, cpfs: string): string {
   return (
     `Vigia ${processos} processos nos tribunais cobertos (${tjsCobertos().length} TJs e ${trfsCobertos().length} TRFs, ` +
-    `mais o ${siglasConsultaPublica()} por consulta pública — TJSP e TRTs ainda não) · ` +
+    `mais ${siglasConsultaPublica()} por consulta pública — TJSP ainda não; ${textoJusticaDoTrabalho()}) · ` +
     `${cpfs} CPFs/CNPJs (novas ações: comprovado no ${siglaConsultaNaHora()})`
   );
 }

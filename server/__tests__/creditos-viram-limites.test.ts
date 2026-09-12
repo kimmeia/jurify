@@ -153,11 +153,12 @@ describe("o motor no servidor", () => {
 describe("as operações passaram a contar no limite", () => {
   const processos = ler("server/routers/processos.ts");
 
-  it("consultar processo conta nos TRÊS caminhos que consultam", () => {
-    // consultarCNJ, detalhe do CNJ e histórico do monitoramento. Contar em um
-    // e esquecer os outros é como o limite vazaria sem ninguém ver.
+  it("consultar processo conta nos QUATRO caminhos que consultam", () => {
+    // consultarCNJ (dois ramos: consulta pública sem credencial e o caminho
+    // com credencial), detalhe do CNJ e histórico do monitoramento. Contar em
+    // um e esquecer os outros é como o limite vazaria sem ninguém ver.
     const chamadas = processos.match(/await contarUso\(esc\.escritorio\.id, "consulta_processo"\);/g) ?? [];
-    expect(chamadas).toHaveLength(3);
+    expect(chamadas).toHaveLength(4);
   });
 
   it("buscar por CPF/CNPJ conta na régua própria (decisão do dono: dois limites)", () => {
