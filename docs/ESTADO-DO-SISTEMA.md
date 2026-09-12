@@ -3,7 +3,7 @@
 **Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
-terminar.** Se você tem trinta segundos, leia "O retrato em quinze linhas". Se tem
+terminar.** Se você tem trinta segundos, leia "O retrato em dezesseis linhas". Se tem
 dez minutos, leia até o fim da seção 4.
 
 ---
@@ -54,7 +54,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1. O retrato em quinze linhas
+## 1. O retrato em dezesseis linhas
 
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
@@ -107,7 +107,11 @@ Não é burocracia. É o custo medido de não ter tido a regra:
     tabelas intactas e os arquivos no disco — e diz que apagou. E a impersonação, que
     troca poder total por rastro total, tem o rastro quase vazio: **49 registros de
     auditoria para 779 procedures**, e só 2 deles dentro do app. Seção 16.
-15. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+15. **Desempenho: o que dói depois de vender.** Todo usuário baixa **1,77 MB
+    compactado** antes da primeira tela, porque as 54 páginas entram num pacote só; e
+    **24 colunas muito consultadas não têm índice**, várias delas o `escritorioId` —
+    ou seja, cada escritório fica mais lento conforme os **outros** crescem. Seção 17.
+16. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
@@ -1672,6 +1676,7 @@ O que as oito passadas examinaram, com o que cada uma mediu de verdade.
 | Varreduras transversais | 8 ângulos sobre o repo inteiro | **95 achados** |
 | Varreduras complementares | 8 ângulos (comentários, spike, e2e, ambiente) | **153 achados** |
 | APIs externas | 7 integrações × documentação oficial | **92 divergências**, 63 confirmadas na doc |
+| Desempenho | build do client medido + índices cruzados com 4 fontes | pacote de **1,77 MB** compactado · **24 colunas sem índice** · 104 laços com consulta |
 
 ### Código morto, com o método
 
