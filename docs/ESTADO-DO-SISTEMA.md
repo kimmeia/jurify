@@ -887,6 +887,55 @@ marcado no aviso no topo do CLAUDE.md.
   `scratchpad/mutar-relatorio-comercial.py` foi versionado. As mutações podem ter
   sido conferidas de verdade, mas o caminho citado não abre.
 
+### 9.2.1 O padrão por trás da defasagem (e é o mais útil de entender)
+
+Olhando as divergências juntas, elas não são aleatórias. São **quatro padrões**, e
+cada um tem um conserto de escrita, não de código.
+
+**1. O arquivo é escrito em camadas, e a camada nova não apaga a velha.**
+O caso mais claro: um parágrafo de 09/09 diz que `crm.unificarContatos` **não** ganhou
+a trava de CPFs diferentes; a entrega de 10/09, algumas dezenas de linhas abaixo,
+diz que **ganhou**. As duas frases convivem no mesmo arquivo. O mesmo acontece com
+`admin.criarCliente` (duas vezes "não pede WhatsApp", e ele pede) e com
+`trocarPlanoAdmin` (duas vezes "só cancela depois", e ele não cancela).
+Quem lê de cima para baixo acredita na primeira; quem lê por busca acha qualquer uma
+das duas.
+→ *Conserto:* quando uma entrega supera um texto anterior, **corrigir o texto
+anterior** faz parte da entrega. É o que a regra do topo deste documento pede.
+
+**2. Número contado uma vez, e nunca mais.**
+As contagens de teste das amarras envelheceram sozinhas: `mesclar-cpf-diferente`
+está escrito como 25 testes e tem **24**; `conferencia-cadastros` está como 37 e tem
+**39**. A contagem geral estava 44 testes atrás. Nenhum desses números estava errado
+quando foi escrito.
+→ *Conserto:* a regra 2 do topo — número medido ou número nenhum.
+
+**3. Caminho citado que não existe.**
+Os scripts de mutação referenciados em várias entregas
+(`scratchpad/mutar-trocar-plano.py`, `mutar-um-numero.py` e outros) **não estão no
+repositório** — só um deles foi versionado. A conferência por mutação pode ter
+acontecido de verdade; o que não dá é para alguém repetir.
+→ *Conserto:* ou versiona o script, ou escreve "conferido por mutação, script não
+versionado". As duas são honestas; citar caminho que não abre, não.
+
+**4. O mockup aprovado e o código entregue divergem, e ninguém volta no mockup.**
+O documento registra que o mockup da conferência de cadastros dizia "17 colunas" e
+"ponto-e-vírgula", e que o código saiu com 16 colunas e vírgula. O código está certo;
+**o arquivo do mockup segue divergente até hoje**. Como o mockup é a peça que o dono
+aprova, ele vira uma segunda fonte de verdade que ninguém mantém.
+
+Duas correções pontuais que saíram da mesma conferência e valem registrar:
+
+- O achado **(b)** do robô que falava por cima do atendente — "as bolhas da mesma
+  resposta não se reconferem entre si" — está listado como **não corrigido** e **já
+  foi corrigido**: a função reconfere o status entre bolhas e interrompe as
+  restantes.
+- "Roteiro que espera resposta fica rodando por até 24h" — o prazo é **configurável
+  de 1 minuto a 7 dias** (24h é só o padrão). O teto de 24h é do Atendente IA, não do
+  roteiro.
+- "Execução com `conversaId` só nasce em `dispararMensagemCanal`" — nasce também em
+  `dispararNovoLead`. A conclusão que o texto tira a partir disso muda de alcance.
+
 ### 9.3 Um conflito entre a regra do dono e a skill que a implementa
 
 A regra de 19/08 no CLAUDE.md é explícita:
