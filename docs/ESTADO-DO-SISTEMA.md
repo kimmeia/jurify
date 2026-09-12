@@ -1,0 +1,708 @@
+# Estado do sistema — JuridFlow
+
+**Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
+
+Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
+terminar.** Se você tem trinta segundos, leia "O retrato em onze linhas". Se tem
+dez minutos, leia até o fim da seção 4.
+
+---
+
+## Regra de manutenção (vale pra qualquer pessoa ou assistente que mexer no repo)
+
+**Toda entrega atualiza este arquivo no MESMO commit da entrega.** Não depois, não
+num commit separado de "docs". Se a mudança não cabe aqui, ela não está pronta.
+
+O que cada entrega precisa revisitar:
+
+| seção | pergunta a responder |
+|---|---|
+| 2. Baseline | rodei `pnpm test`? então o número aqui é o que o terminal mostrou |
+| 3. Módulos | algum módulo mudou de estado (casca → parcial → completo)? |
+| 4. Pendências | fechei item? abri item? mudou o prazo de algum? |
+| 5. Dependências externas | mexi em Meta, Asaas, OpenAI, DataJud, Resend, Twilio ou BACEN? |
+| 6. Regras de negócio | mudei alguma regra que decide dinheiro, permissão ou prazo? |
+
+E três regras de escrita, cada uma nascida de um erro real deste repositório:
+
+1. **Cite símbolo, nunca linha.** Escreva `exigirPlanoContratavel` em
+   `server/billing/planos-repo.ts`, não `planos-repo.ts:147`. Motivo: em
+   12/09/2026 as **cinco** citações `arquivo:linha` que existiam no CLAUDE.md
+   apontavam todas para o lugar errado. Linha apodrece em dias; nome de função não.
+2. **Número medido, ou número nenhum.** Contagem de teste, de achado, de tabela
+   só entra junto com o comando que a produziu. Motivo: o CLAUDE.md dizia "5.526
+   testes em 378 arquivos"; o real era 5.570 em 380.
+3. **Estado, não diário.** Este arquivo responde "onde estamos". O histórico de
+   como chegamos aqui fica no CLAUDE.md e no git.
+
+**Regra de leitura, a mais importante:** quando a documentação e o código
+discordam, **o código ganha** — e corrigir a documentação faz parte da tarefa que
+descobriu a diferença.
+
+### Por que esta regra existe
+
+Não é burocracia. É o custo medido de não ter tido a regra:
+
+- O commit `e2e3c0b` (11/09) trocou uma regra de negócio central — crédito parou
+  de decidir operação, entrou teto mensal por plano (migration 0221). O CLAUDE.md
+  não tem **uma linha** sobre isso. O código andou, a memória não.
+- Por causa da defasagem, o CLAUDE.md afirma que o JurisIA "não tem como ser
+  vendido". **Ele já está sendo vendido** no plano Escala desde 09/09, com os
+  riscos jurídicos e a falta de monitoramento que o próprio documento havia
+  classificado como "pode esperar, ninguém compra ainda".
+- Documentação velha não é inútil. Ela faz tomar decisão errada.
+
+---
+
+## 1. O retrato em onze linhas
+
+1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
+   limpos, 126 tabelas, 70 áreas de API, 72 telas.
+2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
+   comentários que explicam o *porquê*, e listas de exclusão explícitas.
+3. O problema principal **não é o código: é a memória do projeto.** 55% do
+   CLAUDE.md é histórico de entrega, que só envelhece.
+4. Há **237 achados catalogados** com identificador estável desde 03/09 e
+   **nenhum registro de quais foram corrigidos**.
+5. Um bug de dinheiro provado: o detector de cobrança duplicada não acha
+   duplicata de valor redondo (item **D-1** abaixo).
+6. Uma lacuna de backup provada: 20 tabelas do escritório ficam fora do backup, e
+   a trava que deveria impedir isso tem um ponto cego (item **D-2**).
+7. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o
+   JurisIA que é vendido: o código manda `temperature` para um modelo Claude que
+   passou a recusar esse parâmetro, e usa como padrão um modelo **retirado em
+   15/06/2026**. Confirmado na documentação oficial da Anthropic (seção 5.2).
+8. Outros dois prazos externos com data: o desligamento de modelos antigos da
+   OpenAI em **23/10/2026**, e a versão **v21.0** da API da Meta, que expira em
+   **21/01/2027** — e cuja falha é silenciosa (seções 5.2 e 5.3).
+9. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade) e
+   assinatura eletrônica (sem controle de permissão).
+10. Pouco código morto de verdade: 4 tabelas sem uso em 126, e um módulo inteiro
+   (Diário da Justiça) que existe só como desenho de banco.
+11. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+    mapa, não a obra.
+
+---
+
+## 2. Baseline medido
+
+Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
+
+| medida | resultado | comando |
+|---|---|---|
+| testes | **5.570 verdes, 380 arquivos, 103,8 s** | `pnpm test` |
+| tipos | **limpo, saída 0** | `pnpm check` |
+| lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
+
+Tamanho do código:
+
+| área | linhas |
+|---|---|
+| servidor, sem teste | 123.064 |
+| servidor, teste | 70.541 |
+| cliente | 123.247 |
+| compartilhado (`shared/`) | 12.263 |
+| schema do banco | 4.715 (126 tabelas) |
+| migrations | 227 arquivos, 6.819 linhas |
+| testes de navegador (`tests/`) | 4.005 |
+| `scripts/` | 7.061 |
+
+Contagens: **70** áreas de API (namespaces tRPC), **779** operações
+(procedures), **72** rotas de tela, **401** arquivos de teste no repo (380 rodam
+no vitest).
+
+---
+
+## 3. Mapa dos módulos
+
+São 17 módulos contratáveis (`shared/modulos-app.ts`), dois deles obrigatórios.
+A coluna **estado** significa:
+
+- **completo** — o fluxo principal fecha de ponta a ponta
+- **parcial** — fecha o principal, falta um pedaço que o usuário percebe
+- **casca** — a tela existe e o servidor não entrega o essencial
+
+> Esta tabela é preenchida módulo a módulo pela auditoria em andamento. O que já
+> está conferido está marcado; o resto é honestamente "não auditado nesta passada"
+> em vez de palpite.
+
+| módulo | estado | o que falta | é vendido? |
+|---|---|---|---|
+| Dashboard (obrigatório) | completo | resíduo morto do medidor antigo de créditos (**D-6**) | incluso |
+| Configurações (obrigatório) | não auditado | — | incluso |
+| Clientes (CRM) | não auditado | — | sim |
+| Atendimento (WhatsApp + IG) | completo na tela | ligar por telefone está desligado com trava de teste; a operação segue aberta na API (**D-4**) | sim |
+| Funil Kanban | não auditado | — | sim |
+| Agenda e Tarefas | parcial | lembrete por e-mail e WhatsApp desabilitado com "em breve" (decisão consciente) | sim |
+| Monitoramento de Processos | ligado para 16 tribunais no código, **comprovado em campo só no TJCE** (seção 9.2) | validação real nos outros 15 | sim |
+| SmartFlow (automação) | **completo** — os 32 tipos de bloco têm executor de verdade (conferido) | — | sim |
+| Agentes IA | não auditado | cobrança por uso não implementada (`router-agente-chat.ts`, único TODO do repo) | sim |
+| Cálculos Jurídicos | parcial | Tributário é rota viva que abre um cartão vazio, mas **nenhum caminho de tela leva até ela** (**D-7**) | sim |
+| JurisIA | **parcial e VENDIDO** | cobrança avulsa nunca entra na fatura; zero monitoramento de erro; nenhuma tela mostra consumo (**D-3**) | **sim, no plano Escala** |
+| Financeiro (Asaas) | parcial | detector de cobrança duplicada falha em valor redondo (**D-1**) | sim |
+| Comissões automáticas | não auditado | — | sim |
+| Modelos de Contrato / assinatura | parcial | assinatura eletrônica **sem nenhum controle de permissão** (**D-5**) | sim |
+| Relatórios | não auditado | card "Recebido" tem regra que não soma quinzenas (decisão do dono pendente) | sim |
+| Backup do escritório | parcial | 20 tabelas do escritório ficam fora do backup (**D-2**) | sim |
+| Ponto | não auditado | dados de ponto e RH estão entre as tabelas fora do backup (**D-2**) | sim |
+
+**Módulo que existe só como desenho de banco:** Diário da Justiça Eletrônico.
+As tabelas `dje_documentos` e `dje_publicacoes` estão no schema, completas e bem
+pensadas (download por tribunal/caderno/dia, deduplicação por hash do PDF, busca
+FULLTEXT, CPF guardado só como hash por LGPD) — e **nenhuma linha de código lê ou
+escreve nelas**. Precisa de decisão: construir ou remover.
+
+---
+
+## 4. Pendências abertas
+
+Cada item foi conferido no código em 12/09/2026. Os que têm **prazo** têm data de
+verdade, não estimativa.
+
+### Gravidade alta
+
+**D-1 · O detector de cobrança duplicada não acha duplicata de valor redondo.**
+`asaas_cobrancas.valor` é `varchar(20)` — dinheiro guardado como texto. Três
+caminhos gravam com formato diferente: cobrança manual grava `"100.00"`
+(`input.valor.toFixed(2)`), e tanto a sincronização quanto o webhook do Asaas
+gravam `"100"` (`value.toString()`). As duas procedures que procuram par suspeito
+(`listarParesSuspeitos` e a irmã dela em `router-asaas.ts`) casam o par com
+igualdade de texto, e `'100.00' = '100'` é falso.
+O agravante: o filtro dessas buscas **exige que um lado seja manual** — ou seja,
+elas existem justo pro par manual × automático, que é exatamente onde o formato
+difere. Funciona só quando o valor tem duas casas decimais não-nulas
+(R$ 100,45); falha em valor redondo (R$ 100,00) e em uma casa (R$ 100,50).
+*Efeito para o cliente do escritório:* é cobrado duas vezes e a tela que existe
+pra apontar isso mostra lista vazia.
+*Por que os testes não pegam:* um teste que grava as duas cobranças pelo mesmo
+caminho passa.
+
+**D-2 · Vinte tabelas do escritório ficam fora do backup, e a trava que deveria
+impedir isso tem um ponto cego.** `server/backup/escritorio-tabelas.ts` promete,
+no próprio comentário, que o teste `backup-allowlist.test.ts` "falha se aparecer
+qualquer tabela nova com `escritorioId` que não esteja classificada". A promessa
+não se cumpre: o detector do teste varre o schema **linha por linha** e exige o
+nome da tabela na mesma linha do `mysqlTable(`. Metade das tabelas é declarada com
+o nome na linha seguinte — 48 de 126 — e essas são invisíveis ao teste.
+Resultado medido: **74** tabelas têm coluna de escritório; **20** não estão em
+nenhuma das quatro listas do backup; e **todas as 20 são declarações multi-linha**
+(correlação de 100%, o que prova o mecanismo).
+O que o escritório perde num restore: ponto eletrônico e RH inteiros
+(`ponto_dias`, `rh_ocorrencias`, `rh_avaliacoes`, `rh_avaliacao_acoes`), histórico
+do JurisIA (`jurisia_conversas`, `jurisia_mensagens`, `jurisia_uso`),
+`atendimentos`, a regra de comissão de gestão (`comissao_gestao`), a configuração
+de setores e origens de lead (`setores`, `origens_lead`), `prazos_sugeridos`,
+`financeiro_anexos` e os relatórios programados.
+Nem todas precisam entrar — `email_log`, `escritorio_addons`,
+`interesse_tribunais`, `resumo_diario_envios` e `ofx_importacoes_fitid` parecem
+medição interna e caberiam na lista de exclusão. **O problema não é a lista estar
+curta: é ninguém ter decidido, porque o teste nunca perguntou.**
+
+**D-3 · JurisIA está sendo vendido com três pontas soltas.** O CLAUDE.md diz que
+nenhum plano libera o módulo. Está desatualizado: a migration `0217` criou o plano
+`escala` (R$ 597) com `jurisia_mensagens_mes = 200` e `'jurisia'` na cesta de
+módulos, e a lista de vantagens do plano diz textualmente "JurisIA: pesquisa
+jurisprudencial (200 consultas por mês)" — texto que a tela de planos renderiza a
+partir do banco. Então está vendido. E seguem abertos:
+- **cobrança cruzada**: a constante do módulo é `"jurisia"` sem prefixo, mas a
+  fatura composta só soma add-on cujo produto começa com `modulo:`. Conceder pelo
+  cartão do JurisIA **libera e não cobra**; conceder pelo diálogo de módulos
+  avulsos grava `modulo:jurisia`, que **cobra e não libera**.
+- **zero monitoramento**: `grep -rn "Sentry\|captureException" server/jurisia/`
+  volta vazio. Erro da OpenAI vai cru pro advogado e fica gravado no histórico dele.
+- **nenhuma visão de consumo**: `jurisia_uso` só é lida dentro do próprio router,
+  pra impor a cota. Nenhuma tela, nem do admin, mostra consumo ou custo.
+
+**D-4 · A operação de ligar por telefone segue aberta na API, embora o botão esteja
+desligado.** *(Este item nasceu errado na primeira versão deste documento; a
+correção está no fim.)*
+
+O botão "Ligar" do Atendimento está **desabilitado** desde 09/09: sem `onClick`,
+com `title="Ligação por telefone (Twilio) — em breve"`, e com um comentário ao lado
+explicando que o servidor só recebe o número do cliente e por isso cairia no ramo
+que toca "chamada de teste do sistema". A trava é real e testada:
+`server/__tests__/twilio-ligacao-em-breve.test.ts` prende o desenho em oito
+afirmações, entre elas "está desabilitado e não disca".
+Rastreei o caminho inteiro: `onTel` só é chamado por aquele botão, `setTelPopup` só
+por `onTel`, e o popup que dispara a chamada (`TwilioCallPopup`) executa a mutation
+no `useEffect` de montagem. Com o botão desabilitado, nada disso monta. **Pela tela,
+é inalcançável.**
+
+O que **continua aberto** é o lado servidor: `twilio.iniciarChamada` é
+`protectedProcedure`, portanto:
+- **sem nenhum controle de permissão** — qualquer sessão logada chama;
+- aceita `destino` como texto livre de 8+ caracteres, **sem conferir se o número
+  pertence a um contato do escritório**;
+- e **não deixa registro** de quem ligou pra quem.
+Uma chamada direta à API (fora da tela) dispara uma ligação real tocando "esta é uma
+chamada de teste do sistema", na conta Twilio do escritório.
+*Atenuante conferido:* a credencial usada é sempre a do escritório da sessão
+(`getTwilioConfig(ctx.user.id)`), nunca a de outro — não há vazamento entre
+escritórios. O risco é interno e financeiro.
+
+> **Onde eu errei, e por quê.** Na primeira passada vi a mutation ligada em
+> `Atendimento.tsx` e o TwiML de teste no cliente Twilio, e concluí que o botão
+> chamava clientes. Não conferi se o botão que dispara a mutation estava habilitado
+> — e ele não está, desde 09/09. Quem apontou o erro foi a camada de revisão
+> adversarial desta auditoria, lendo o mesmo arquivo. Fica registrado porque é a
+> lição mais útil da auditoria inteira: **existir a chamada não significa existir o
+> caminho.** E também porque o CLAUDE.md ainda diz "E (Twilio) em stand-by por
+> decisão do dono", o que reforçou minha conclusão errada — é o texto velho que está
+> desatualizado, não o código.
+
+**D-5 · Assinatura eletrônica não tem nenhum controle de permissão.**
+`server/escritorio/router-assinaturas.ts`: `grep -c checkPermission` = **0**, e não
+há `adminProcedure` nem gate próprio. São 14 operações — 11 exigem apenas login
+(entre elas `criar`, `criarDeUpload`, `cancelar`, `excluir`, `salvarCampos`) e 3
+são públicas por token.
+O escopo por escritório existe (21 menções a `escritorioId`), então não há
+vazamento entre escritórios. Mas **qualquer colaborador, no cargo mais restrito
+que exista, cancela ou exclui a assinatura de um contrato do escritório.** Para um
+documento com valor jurídico, é a lacuna mais desconfortável desta auditoria.
+*Histórico:* já constava como P2-11 no documento de 18/08. A parte de vazamento
+entre escritórios foi corrigida em 03/09; a de permissão, não.
+
+### Gravidade média
+
+**D-6 · Resíduo da migração "crédito → teto mensal" (migration 0221).** O gate
+novo funciona (`server/billing/limites-uso.ts`, chamado por `routers/processos.ts`
+e `db.ts`). Mas o medidor antigo não parou: `dashboard.credits` tem 4 consumidores.
+- `components/AppLayout.tsx`: o **saldo de créditos ainda destranca item de menu**
+  (`itemsLocked = ... && !hasSubscription && !hasCredits`). Quem tem assinatura não
+  sente; conta sem assinatura, sim.
+- `components/SubscriptionGuard.tsx`: mesma família de decisão.
+- `pages/calculos/Calculos.tsx`: usa o medidor **novo** pro limite e pra barra, mas
+  tira a **data de virada** do medidor **antigo** (`credits.resetAt`). Duas fontes
+  pro mesmo conceito: se não virarem no mesmo dia, a tela mostra uma barra com data
+  de reset que não é a dela.
+- `pages/dashboards/DashboardGeral.tsx`: **código morto.** Cinco variáveis
+  derivadas (`creditsUsed`, `creditsTotal`, `creditsRemaining`, `isUnlimited`,
+  `percentCreditos`) e nenhuma é renderizada; o cartão hoje mostra `<UsoDoMes />`,
+  corretamente titulado "Uso do plano neste mês". Sobrou o comentário
+  `{/* Créditos */}` e a consulta disparando a cada abertura sem consumidor.
+
+**D-7 · Uma rota de cálculo abre um cartão vazio.** `/calculos/tributario` renderiza
+`Tributario.tsx` (11 linhas) → `CalculoPlaceholder`, que desenha um título e um
+cartão tracejado **com só um ícone dentro** — nem texto de "em breve".
+*Atenuante importante, conferido:* o hub de Cálculos trata `emBreve` e renderiza o
+cartão do Tributário como um `<div>` não clicável e esmaecido, e o menu lateral só
+aponta para `/calculos`. **Nenhum caminho de tela leva à página vazia** — ela só
+abre digitando a URL. É rota pendurada, não promessa quebrada.
+Junto: `client/src/pages/calculos/AtualizacaoMonetaria.tsx` é **código morto** —
+nenhum arquivo importa esse componente, e a rota
+`/calculos/atualizacao-monetaria` renderiza a tela real `CalculosDiversos`.
+
+**D-8 · O roadmap mostra o nome de clientes de outros escritórios.**
+`server/router-roadmap.ts` não tem **nenhuma** menção a `escritorioId` — o quadro é
+da plataforma inteira, de propósito. A operação `obter` devolve, com JOIN em
+`users`, o nome do autor do item e o nome dos **últimos 10 votantes**.
+Como os clientes do JuridFlow são bancas de advocacia, várias concorrentes na mesma
+cidade, o quadro entrega (a) quem são os clientes da plataforma, pelo nome, e (b) o
+que cada um está pedindo. É uma lista de clientes navegável, e nenhum deles
+concordou com isso.
+
+**D-9 · As conferências do robô de jornada nunca rodam pelo painel — e o histórico
+dá a entender que rodaram.** A operação `catalogo` expõe a lista de conferências só
+pra o painel **mostrar**; `jornada/historico.ts` grava `conferenciasTotal`, isto é
+**quantas** existem; e `jornada/executor.ts` **não importa nem executa** nenhuma.
+Quem de fato roda é `tests/e2e/jornada-conferencias.spec.ts`, pelo Playwright.
+Ou seja: o painel guarda um total que sugere verificação, e zero conferência rodou.
+
+**D-10 · `push.desinscrever` remove a inscrição de qualquer um.** Em
+`server/routers/push.ts` a operação desestrutura só `{ input }`, **sem `ctx`**, e
+chama `removerInscricao(input.endpoint)` — a identidade de quem chamou nunca é
+usada. O vizinho `inscrever` usa `ctx.user.id`; a assimetria é o sinal. Risco
+prático baixo (o endpoint é uma URL longa e aleatória), mas é exclusão não
+escopada a quem pediu.
+
+### Riscos estruturais (latentes, não bugs de hoje)
+
+**D-11 · Nenhuma trava contra cron rodando em duas instâncias.**
+`server/_core/cron-jobs.ts` registra cerca de 20 trabalhos com `setInterval` dentro
+do processo, sem lock distribuído, eleição de líder ou claim em banco. Se o Railway
+subir duas instâncias, **cada cron roda nas duas**. O que segura hoje é a
+idempotência de cada trabalho, uma a uma, e ela varia: a cobrança mensal se protege
+com `ultimaCobrancaEm`, o SmartFlow tem claim atômico, o alerta de limite de e-mail
+tem dedup por dia — outros não têm nada óbvio. A proteção existe por acidente de
+implementação, não por desenho. E a tabela que registraria execução de job
+(`worker_jobs_log`) está morta desde a migration 0050.
+Não é possível saber daqui quantas instâncias rodam em produção. Se for uma só,
+isso é risco latente — do tipo que aparece no dia em que alguém escala pra aguentar
+carga.
+
+**D-12 · Sem ESLint, nada enxerga ordem de hooks do React.** Confirmado: nenhum
+config de eslint/biome/oxlint no repo, e `pnpm check` é só `tsc --noEmit`. O
+remendo é uma varredura de texto (`react-hooks-apos-return.test.ts`) que cobre um
+padrão só. Foi assim que um `useEffect` depois de um `return` antecipado subiu pra
+produção e derrubou o editor do SmartFlow. O motivo de adiar é legítimo (plugar
+ESLint agora acusa uma montanha de uma vez) — fica registrado como dívida
+consciente, não como esquecimento.
+
+### Pendências antigas confirmadas AINDA ABERTAS
+
+| item | onde | estado |
+|---|---|---|
+| HMAC da Meta em modo brando | `whatsapp-cloud-webhook.ts` | **aberto.** Sem App Secret cadastrado, o código só emite aviso no log e **aceita** o webhook. Qualquer um forja mensagem recebida. |
+| CSP desligado | `_core/index.ts` | **aberto.** `contentSecurityPolicy: false` |
+| body-parser aceita 3 GB em memória | `_core/index.ts` | **aberto.** `limit: "3gb"` em json e urlencoded |
+| histórico de buscas vaza entre escritórios | `processos/search-history.tsx` | **aberto.** A chave é `jurify:processos:history`, sem escritório. Trava numa decisão do dono: sessão de impersonação deve gravar histórico? |
+| portão de escritório duplicado | `router-crm.ts` e `router-kanban.ts` | **aberto e subestimado.** A fonte única existe; as cópias privadas seguem, com outro nome (`contatoDoEscritorio`), e há uma segunda duplicata que o registro não citava: `colaboradorDoEscritorio`, copiada nos dois routers |
+| `confirm()` nativo em ação destrutiva | 12 arquivos, 18 ocorrências | **estável.** A catraca em `robo-acao-cercas.test.ts` lista exatamente os mesmos 12 arquivos e 18 totais: não cresceu nem diminuiu desde 08/09 |
+
+### Pendência que pode ser REESCRITA como resolvida
+
+**"Hardcode `cargo === 'dono'`" — na prática limpo. Não gastar tempo aqui.**
+Contei 13 ocorrências em 6 arquivos do servidor e li todas. Nenhuma é o defeito que
+o anti-pattern descreve: duas são o próprio resolvedor da matriz de permissão
+("dono tem tudo", que é a definição), três são governança deliberada (só o dono
+cria/edita/exclui cargo), três protegem o registro do dono de ser rebaixado ou
+removido, uma é o dono aceitando os termos (ele é a parte contratante), uma está
+dentro de `exigirDonoOuAdmin` — que é **bem feito**, porque o teste canônico é
+`escritorios.ownerId === user.id` e o cargo é só fallback pra linha antiga — e uma
+é um comentário dizendo que o gate nunca compara cargo.
+Único ponto de atenção honesto: cargo personalizado nunca consegue administrar
+cargos. Isso é decisão de produto, não bug.
+
+**"DNS rebinding no webhook do SmartFlow" — limitação assumida, não bug aberto.**
+O comentário de `validarUrlDeWebhook` diz a verdade sobre o próprio limite:
+"não protege contra DNS que resolve pra IP privado depois do check — proteção
+completa exigiria resolver e conectar no IP validado. Cobre o caso prático: URL
+interna digitada direto." Isso é documentação honesta. Tratar como bug aberto na
+mesma lista dos outros faz a lista parecer pior do que é, e aí ninguém confia nela.
+
+---
+
+## 5. Dependências externas
+
+Esta seção existe porque serviço de terceiro muda sem avisar o nosso código, e
+quando muda **a falha costuma ser silenciosa**. Cada linha diz a versão que usamos,
+o que a documentação oficial diz hoje, e a data de conferência.
+
+**Conferido em 12/09/2026.** Onde a fonte oficial não abriu (o proxy deste ambiente
+bloqueia vários sites de documentação), está escrito.
+
+### 5.1 Quadro-resumo
+
+| serviço | usamos | estado oficial | prazo | risco |
+|---|---|---|---|---|
+| Anthropic (Claude) | `claude-sonnet-4-20250514` em 2 lugares | **RETIRADO em 15/06/2026** | já passou | **quebrado hoje** |
+| Anthropic (parâmetro) | `temperature` junto com `claude-opus-4-7` | `temperature` **devolve erro 400** em Opus 4.7 e posteriores | já vale | **quebrado hoje** |
+| Anthropic (Haiku) | `claude-haiku-4-5-20251001` em 17 lugares | Ativo | retirada "não antes de 15/10/2026" | **33 dias** |
+| Meta WhatsApp Cloud | Graph API **v21.0** (19 literais) e v23.0 (1) | v21.0 disponível até **21/01/2027** | 4 meses | alto, e falha calada |
+| OpenAI | `gpt-3.5-turbo`, `gpt-4`, `o3-mini`, `o4-mini`, `o1-preview` | desligamento em **23/10/2026** | 41 dias | médio |
+| OpenAI | `gpt-4o`, `gpt-4o-mini` | o **apelido** segue disponível na API | sem prazo | ok |
+| Asaas | `https://api.asaas.com/v3`, header `access_token` | confere com a documentação atual | sem prazo | ok |
+| OpenAI (endpoints) | `chat/completions`, `embeddings`, `audio/transcriptions`, `models` | todos vigentes; **não usamos a Assistants API**, que foi desligada em 26/08/2026 | — | ok |
+
+### 5.2 Anthropic — dois problemas que estão quebrando AGORA
+
+Fonte: página oficial de descontinuação da Anthropic, lida direto
+(`platform.claude.com/docs/en/about-claude/model-deprecations`). Não é fonte
+secundária.
+
+**(a) Um modelo retirado ainda é o padrão de duas operações.**
+A tabela oficial diz: `claude-sonnet-4-20250514` → **Retired**, depreciado em
+14/04/2026, retirado em **15/06/2026**, substituto recomendado `claude-sonnet-4-6`.
+E a página avisa: *"Requests to retired models will fail."*
+
+Onde ele está no nosso código:
+- `server/juridico/router-juridico.ts` — **duas vezes como valor padrão**
+  (`input.modelo || "claude-sonnet-4-20250514"`), uma delas no caminho que lê PDF
+  escaneado (o comentário ao lado diz "Claude lê PDF nativo (escaneado)").
+- `server/routers/admin-agentes-ia.ts` — a lista de modelos aceitos (2 vezes).
+- `client/src/pages/admin/AdminAgentesIA.tsx` — o item do menu, rotulado
+  "Claude Sonnet 4 (Anthropic)". Ou seja: **o painel ainda oferece um modelo morto.**
+
+*O que o advogado vive:* pede a peça ou manda o PDF, e não sai nada.
+
+**(b) `temperature` virou erro 400 nos modelos novos — e nós mandamos.**
+A mesma página, na tabela de parâmetros: `temperature`, `top_p` e `top_k` estão
+**depreciados a partir do Claude Opus 4.7** e *"returns a 400 error when set to a
+non-default value"*.
+
+Onde mandamos:
+- `server/_core/ai-call.ts` — `model: "claude-opus-4-7"` com
+  `temperature: temp` (padrão 0,3). **Este é o helper compartilhado.**
+- `server/routers/processos.ts` — `claude-opus-4-7` com `temperature: 0.4`
+  (resumo de movimentação por IA).
+
+Quem depende do helper `chamarIA`, e portanto cai junto:
+1. **Atendente IA** (`server/escritorio/router-atendimento-ia.ts`) — a IA que
+   responde o cliente no WhatsApp
+2. **Captura de campos** (`server/integracoes/agente-captura-campos.ts`)
+3. **JurisIA** (`server/jurisia/perguntar.ts` e `conversa-una.ts`) — **o módulo
+   que está sendo vendido no plano Escala**
+
+**Quando isso dispara:** `resolverChaveIA` tem, escrito no próprio comentário,
+"preferência: **Anthropic**" — procura a chave da Anthropic primeiro e só cai na
+OpenAI se não houver. A chave própria do escritório tem prioridade sobre a global.
+Então a falha atinge: escritório sem chave própria quando a chave global da
+plataforma é Anthropic, e escritório cuja chave própria é Anthropic.
+
+**Não é possível saber daqui quais chaves estão cadastradas em produção.** É uma
+conferência de um minuto para o dono: **Admin → Integrações**. Se houver chave
+Anthropic conectada, esses quatro recursos estão devolvendo erro.
+
+E o agravante que fecha o círculo: **JurisIA não tem Sentry nenhum** — então esse
+erro não aparece em painel algum. Ele só aparece quando o cliente reclama.
+
+*Nota de calibragem:* os 17 usos de `claude-haiku-4-5-20251001` com `temperature`
+**estão corretos.** A depreciação do parâmetro vale de Opus 4.7 pra frente; Haiku
+4.5 é de linha anterior e continua aceitando. Só o prazo de retirada dele é curto.
+
+### 5.3 Meta WhatsApp Cloud — prazo de 4 meses, e a falha é muda
+
+O código fixa a versão da Graph API em **20 literais**: 19 em `v21.0` e 1 em
+`v23.0`. Distribuição por arquivo: `server/routers/meta-channels.ts` **14**,
+`whatsapp-coex.ts` 2, `whatsapp-cloud.ts` 2, `whatsapp-cloud-media.ts` 1, e 1 em
+teste.
+
+`whatsapp-cloud.ts` até define duas constantes (`GRAPH_API` e `GRAPH_API_CALLS`),
+mas **não as exporta**, e `meta-channels.ts` as ignora e escreve a URL à mão 14
+vezes. Não existe versão centralizada: trocar a versão hoje é editar 4 arquivos de
+produção e 1 de teste.
+
+Pesquisa (o site oficial da Meta é bloqueado pelo proxy daqui, então isto vem de
+fontes secundárias e **precisa de confirmação do dono no changelog oficial**):
+v21.0 foi lançada em 02/10/2024 e fica disponível **até 21/01/2027**; a política da
+Meta é cada versão viver pelo menos dois anos.
+
+**O modo de falha é o pior possível:** chamada a versão expirada **não dá erro** —
+a Meta roteia em silêncio para a versão mais antiga ainda válida. O comportamento
+muda sem ninguém receber um 400. É exatamente a categoria de falha que este
+projeto já combate por princípio ("falhas que somem").
+
+### 5.4 Asaas — conforme
+
+Base `https://api.asaas.com/v3` e sandbox `https://sandbox.asaas.com/api/v3`
+(`server/integracoes/asaas-client.ts`), autenticação pelo header `access_token`.
+Confere com a documentação vigente. Endpoints usados: `/customers`, `/payments`,
+`/subscriptions`, `/installments`, `/finance/balance`, `/webhook`.
+
+Pendente de conferência mais funda (a auditoria dos eventos de webhook está em
+andamento): a lista oficial de eventos que o Asaas envia, cruzada com os que o
+código trata — evento oficial não tratado é falha silenciosa. O site
+`docs.asaas.com` é bloqueado pelo proxy; a busca traz trechos, não a lista completa.
+
+### 5.5 O que só o dono pode conferir ou resolver
+
+Coisas fora do código. Marcadas com o que muda se ficarem como estão.
+
+| item | onde | o que acontece se ficar assim |
+|---|---|---|
+| **Há chave Anthropic conectada?** | Admin → Integrações | se sim, Atendente IA, JurisIA e captura de campos estão devolvendo erro (item 5.2) |
+| App Secret da Meta cadastrado | Admin → Integrações → WhatsApp Cloud | sem ele o webhook **aceita** mensagem forjada de qualquer um |
+| Confirmar a data de sunset da v21.0 | changelog da Graph API | define se o prazo é 21/01/2027 mesmo |
+| `CANAIS_ENCRYPTION_KEY` | Railway | resolvido por código: cai em `ENCRYPTION_KEY`; nada gravado precisa recadastro |
+| Turnstile (captcha) | Railway | **decisão tomada: não quer por ora.** Não cobrar de novo, salvo cadastro em massa de robô |
+| Quais eventos de webhook estão ligados no Asaas | painel Asaas | decide quais transições o sistema nunca vê |
+| Cadastros nos tribunais + "Testar tudo" | portais | **o dono está fazendo e está funcionando.** Não cobrar |
+| Revisão jurídica dos Termos v2 | — | **o dono deu por resolvida.** Não cobrar |
+| Avisos de spam da Meta | WhatsApp Manager | **o dono deu por resolvido.** Só reabrir se chegar aviso novo |
+
+Do ambiente: só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se faltarem. Todo o
+resto falha em silêncio — é o que torna a linha "Há chave Anthropic conectada?" tão
+barata de checar e tão caro de ignorar.
+
+---
+
+## 6. Regras de negócio, por domínio
+
+> Em preenchimento pela auditoria por subsistema que está rodando. A intenção
+> desta seção é que qualquer pessoa leia, em português, **o que o sistema decide**
+> sem precisar abrir código: como o dinheiro é contado, quando um prazo está
+> atrasado, quem pode ver o quê, quando o robô fala e quando cala.
+>
+> Regra ao preencher: cada regra cita o **símbolo** que decide (nome de função),
+> nunca a linha.
+
+O que já está registrado em outros pontos deste documento e vale como regra:
+
+- **Quem pode ver o quê** sai de `checkPermission(usuário, módulo, ação)`. Dono e
+  gestor têm `verTodos`. Gate por cargo escrito na mão é anti-pattern — e está
+  praticamente limpo hoje (ver seção 4).
+- **Quais módulos o escritório enxerga** sai do plano contratado, num porteiro
+  global que é **fail-open de propósito**: só bloqueia quando conseguiu resolver o
+  plano E o módulo não está na lista. Na dúvida, libera.
+- **Quanto o escritório pode usar por mês** sai de `escritorio_uso_mensal` contra
+  os tetos escritos no plano (migration 0221). Erro de leitura **libera** — perder
+  a contagem é considerado melhor que derrubar o pedido do advogado.
+- **Quando um prazo está atrasado** é o fim do dia civil no fuso do escritório, não
+  UTC. Prazo só-data é gravado como meio-dia UTC pra sobreviver a conversão.
+- **Quando o robô cala:** conversa `em_atendimento` cancela a retomada do roteiro;
+  encerrar a conversa cancela roteiro parado; e o limite por contato é janela
+  deslizante de 24h/7d/30d, com recado interno na conversa (um por atendimento).
+- **Dinheiro do cliente final** é `varchar` na tabela de cobranças — texto, não
+  número. Isso é a raiz do item **D-1**.
+
+---
+
+## 7. Dívida consciente (não reabrir sem o gatilho)
+
+Coisas adiadas de propósito. Cada uma tem o gatilho que justifica trazer de volta.
+Reabrir antes do gatilho é desperdício; ignorar depois dele é o erro.
+
+| dívida | por que foi adiada | gatilho pra reabrir |
+|---|---|---|
+| ESLint + regras de hooks do React | plugar agora acusa uma montanha acumulada de uma vez | outro erro de React em produção que o remendo de texto não pegou; ou mais gente mexendo no cliente |
+| Nome próprio por bloco no SmartFlow | o save não grava `data.label`; o rótulo apareceria e sumiria no reload | o dono reclamar de três blocos "ENVIAR MENSAGEM" iguais no canvas |
+| Migração de uploads para S3 | volume do Railway está validado fim a fim em produção | quando CSP e body-parser saírem juntos, ou quando o volume apertar |
+| Extras avulsos dos planos novos (usuário, +processos, número extra) | não existe mecanismo de limite por escritório pra processos e números | quando alguém quiser comprar o extra |
+| Card "Recebido" que não soma as quinzenas | é escolha de âncora (pagamento × safra), e as duas não podem valer juntas | o dono escolher a âncora. **Não implementar antes disso** |
+| Histórico de buscas por escritório | trava numa decisão: sessão de impersonação deve gravar histórico? | o dono responder (a recomendação é: não) |
+| Desduplicar o portão de escritório | as três cópias funcionam; mexer é remoção de código | quando alguém precisar mudar a regra em si |
+| DNS rebinding no webhook do SmartFlow | limitação assumida e escrita no código; cobre o caso prático | se aparecer uso de webhook pra destino interno |
+| Twilio "Ligar" (tela) | **resolvido em 09/09**: botão desligado com "em breve" e amarra de teste. Fica aqui só porque o CLAUDE.md ainda diz "stand-by" | religar quando a ligação conectar as duas pontas (atendente + cliente) |
+
+---
+
+## 8. O que esta auditoria NÃO alcançou
+
+Dito na frente, porque auditoria que não declara o próprio limite vira falsa
+segurança.
+
+1. **Nada foi executado contra serviço real.** O proxy deste ambiente bloqueia os
+   portais dos tribunais, o DataJud, a Meta e a documentação do Asaas. Tudo sobre
+   tribunal e sobre a Meta saiu de leitura de código e de fonte secundária.
+2. **Nenhum banco de produção foi consultado.** Quantas instâncias o Railway roda,
+   quais chaves de IA estão conectadas, quais eventos de webhook estão ligados no
+   Asaas, quantas linhas cada tabela tem — nada disso é visível daqui. Onde
+   dependia disso, está escrito "o dono confere".
+3. **Os testes foram rodados, não escritos.** 5.570 verdes é o estado atual, não
+   prova de cobertura. A seção de pendências aponta onde falta trava.
+4. **A conferência dos 237 achados de 03/09 está em andamento** e vai virar uma
+   tabela id → estado. Sem ela, o número de pendências reais deste documento é
+   incompleto por construção.
+5. **Não houve teste de mutação.** O padrão da casa é quebrar o código de
+   propósito e ver o teste ficar vermelho. Não fiz isso aqui: esta passada foi de
+   leitura, e o dono pediu que nada fosse alterado.
+6. **A leitura integral cobriu os 12 maiores arquivos**, em blocos. Arquivos médios
+   e pequenos foram lidos por subsistema, o que é mais raso.
+7. **Nenhuma tela foi aberta.** Toda afirmação sobre o que o usuário vê vem de ler
+   o componente, não de rodar o app.
+
+---
+
+## 9. Documentação que discorda do código
+
+Esta é a seção que o dono pediu: **o que está escrito e não é mais verdade.**
+
+Método: cada afirmação factual do CLAUDE.md foi extraída e conferida no código,
+uma por uma, com uma segunda leitura cética em cima de cada divergência. Até o
+fechamento desta versão: **490 afirmações conferidas, 432 confirmadas**, e as
+divergências abaixo.
+
+### 9.1 Já corrigido no CLAUDE.md nesta passada
+
+| o que dizia | o que é |
+|---|---|
+| "5.526 verdes (378 arquivos)" | 5.570 verdes, 380 arquivos (medido) |
+| `AdminClients.tsx:1693` | a linha virou outro botão; a exclusão está noutro lugar e **já usa `current`** |
+| `Atendimento.tsx:471` | `maskPhoneBR` está em outra linha e **já delega** pro shared |
+| `Clientes.tsx:2919` | a separação carregando × vazio está em outra linha, e funciona |
+| `router-crm.ts:70` / `router-kanban.ts:60` | as cópias existem com **outro nome**, e há uma **segunda** duplicata não citada |
+
+As cinco citações `arquivo:linha` do arquivo estavam **todas** erradas. Daí a regra
+"cite símbolo, nunca linha".
+
+### 9.2 Conferido, e o texto segue precisando de correção
+
+Não reescrevi a narrativa do dono (isso seria remoção sem autorização). Está tudo
+marcado no aviso no topo do CLAUDE.md.
+
+**Coisas que o texto diz que faltam, e já foram feitas:**
+
+- **"E (Twilio) em stand-by"** — foi entregue em 09/09: botão desligado com "em
+  breve", ícone do Twilio, e `twilio-ligacao-em-breve.test.ts` travando o desenho.
+  *Este texto velho me levou a um erro de diagnóstico; ver a nota no item D-4.*
+- **"`admin.criarCliente` não pede WhatsApp"** — pede. A procedure exige e recusa
+  número inválido com a mesma mensagem do cadastro público. A anotação aparece
+  **duas vezes** no arquivo e as duas estão vencidas (o próprio texto se corrige
+  algumas linhas adiante, o que mostra o problema de escrever em camadas).
+- **"`trocarPlanoAdmin` só cancela a assinatura atual DEPOIS de a nova existir"** —
+  hoje não cancela em momento nenhum; quem encerra a anterior é o webhook de
+  pagamento. Também aparece duas vezes.
+- **"planos de Monitoramento são os do lançamento na vitrine"** — a migration 0217
+  tirou os dois da vitrine (`oculto = TRUE`; quem assina continua).
+- **"o plano `completo` virou 'JuridFlow Completo'"** — a 0217 renomeou para
+  **"Sob medida"**.
+
+**Uma coisa em que o texto é pessimista e o código é mais capaz:**
+
+- **"novas ações (CPF/CNPJ) hoje é SÓ TJCE"** — desatualizado, e no sentido bom.
+  O adapter é genérico apesar do nome: `cnj-parser.ts` diz, no comentário,
+  "adapter genérico em pje-tjce.ts cobre todos"; `consultarTjcePorCpf` recebe a
+  configuração do tribunal como parâmetro; e o cron de novas ações percorre
+  `lerTribunaisDoMonitor(mon)`, resolvendo a config de cada um e tratando falha de
+  um estado como linha no relatório de cobertura, sem derrubar os outros.
+  `shared/tribunais-pje.ts` oferece **16 tribunais** (12 estaduais + TRF1/2/3/6;
+  TRF5 fica fora porque é consulta pública, TRF4 usa eproc sem adapter).
+  O que segue verdade: **só o TJCE foi validado em campo**, e os endereços dos TRFs
+  foram deduzidos do padrão. A frase correta é "ligado para 16, comprovado em 1".
+  Isso importa comercialmente: a comparação da landing promete "novas ações por
+  CPF/CNPJ" **sem ressalva**, enquanto as vantagens dos planos novos dizem "novas
+  ações: TJCE por enquanto". Uma peça promete demais, a outra promete de menos.
+
+**Coisas que o texto afirma e o código nunca fez, ou faz diferente:**
+
+- **`pnpm check` = "typecheck + lint"** — não há lint. É só `tsc --noEmit`, e não
+  existe ESLint no repositório.
+- **`requireFinanceiroVer`** — esse símbolo **não existe**. O real é
+  `exigirFinanceiroVer`, em `router-relatorios.ts`. Quem grepar o nome do doc não
+  acha nada e pode concluir que não há gate.
+- **"`protectedProcedure` só checa login"** — checa login **e** passa pelo porteiro
+  de módulos contratados (dois middlewares). O certo é dizer que ele **não checa
+  escritório nem permissão** — que é o ponto que importa pro anti-pattern.
+- **"numeração sequencial das migrations"** — há **26 prefixos repetidos**
+  (`0003`, `0004`, `0005`, `0011`–`0016`, `0101`–`0107`, `0117`, `0118`,
+  `0121`–`0124`, `0137`, `0138`, `0163`, `0198`, `0220`). O número é convenção; o
+  executor se orienta pelo nome do arquivo.
+- **"menu do admin agrupado em Principal/Produto/Sistema"** — o primeiro grupo não
+  tem rótulo; só existem "Produto" e "Sistema".
+- **"`verTodos: true` = dono e gestor"** — gestor tem `verTodos` em todos os
+  módulos **menos `ponto`**, fechado por padrão nos dois conjuntos de permissão.
+- **"janela de 30 dias no funil de remarketing"** — a janela é por cartão: nunca
+  ativou 90d, teste vencido 30d, teste vencendo 7d.
+- **`server/_core/` "tem totp guards"** — lá só existe o **teste** de regressão; o
+  guard em si não mora ali.
+- **`server/admin/` "é onde moram as integrações do painel"** — o router de
+  integrações está em `server/integracoes/`.
+- **`AdminErros` listado como página top-level** — está em `client/src/pages/admin/`.
+- **A explicação do bug de TOTP está tecnicamente errada** no mecanismo (o getter
+  não expõe `epoch`), embora a **conclusão** — nunca mexer no singleton — esteja
+  certa e siga valendo.
+- **"persist em cada chamada" (observabilidade do Sentry)** — só a leitura de
+  issues persiste, e nem em todos os desfechos; o catch de rede não persiste.
+- **Scripts de mutação citados (`scratchpad/mutar-trocar-plano.py`,
+  `mutar-um-numero.py` e outros)** não estão no repositório. Só
+  `scratchpad/mutar-relatorio-comercial.py` foi versionado. As mutações podem ter
+  sido conferidas de verdade, mas o caminho citado não abre.
+
+### 9.3 Um conflito entre a regra do dono e a skill que a implementa
+
+A regra de 19/08 no CLAUDE.md é explícita:
+
+> A entrega é o ARQUIVO HTML auto-contido (fontes embutidas em base64), **não PNG**
+> — o dono abre no navegador dele. Ele já corrigiu isso uma vez ("pedi mockup EM
+> HTML bem claro"); **não repetir.**
+
+Mas `.claude/skills/mockup-juridflow/SKILL.md` diz o contrário, duas vezes: a
+descrição é "mockups de tela em **HTML renderizado para PNG**", e o passo 4 é
+"**Entregue.** `SendUserFile` com o **PNG**".
+
+Ou seja: a skill que existe para produzir mockups vai fazer o próximo assistente
+repetir exatamente o erro que o dono já corrigiu. **Isto é o conserto mais barato
+de toda a auditoria** — alinhar a skill com a regra — e depende de autorização
+porque mexe em instrução do dono.
+
+### 9.4 O que ainda falta conferir nesta frente
+
+A conferência dos **237 achados** catalogados em 03/09 (15 "BLOQUEIA", 117
+"IMPORTANTE", 105 "MENOR", com id estável como `[kanban-1]`, `[auth-x1]`) está
+rodando. Esse documento nunca teve coluna de status, então **hoje ninguém sabe
+quais foram corrigidos** — o único registro é a narrativa do CLAUDE.md, que é
+justamente o que esta seção mostra estar defasada.
+
+Quando a conferência fechar, o resultado entra aqui como tabela `id → estado`, e
+passa a ser mantida pela regra do topo deste documento.
+

@@ -1,10 +1,47 @@
 # JuridFlow — guia rápido para sessões Claude Code
 
+> ## ⚠ Leia primeiro: correções de 12/09/2026
+>
+> Uma auditoria de leitura conferiu este arquivo contra o código. **Onde este
+> texto e o código discordam, o código ganha.** O estado atual do produto está
+> em **`docs/ESTADO-DO-SISTEMA.md`** — comece por lá.
+>
+> Correções já aplicadas aqui: a contagem de testes, e as cinco citações
+> `arquivo:linha` (as cinco apontavam pro lugar errado; agora citam o símbolo).
+>
+> **Trechos abaixo que estão DESATUALIZADOS e não foram reescritos** (reescrever
+> narrativa do dono sem autorização seria remoção; a correção está no documento
+> de estado):
+>
+> - **Fila item A (JurisIA)** diz "Nenhum plano libera hoje" e "não existe como
+>   comprar". **Falso desde 09/09:** a migration 0217 criou o plano `escala` com
+>   `jurisia_mensagens_mes = 200` e `'jurisia'` na cesta, e a lista de vantagens
+>   do plano vende "JurisIA: pesquisa jurisprudencial (200 consultas por mês)".
+>   Está vendido. Os itens A.1 (cobrança cruzada), A.6 (zero Sentry, nenhuma tela
+>   de consumo) seguem abertos — e agora valem em produção.
+> - **"novas ações (CPF/CNPJ) hoje é SÓ TJCE"** — desatualizado. O adapter é
+>   genérico (o próprio `cnj-parser.ts` diz "adapter genérico em pje-tjce.ts
+>   cobre todos"), `consultarTjcePorCpf` recebe a config do tribunal, e o cron
+>   percorre os tribunais do monitoramento. `shared/tribunais-pje.ts` oferece 16.
+>   O que segue verdade: só o TJCE foi validado em campo. Escreva "ligado para
+>   16, comprovado em 1".
+> - **Pendência 4 (conferências do robô de jornada)** está certa, e é pior: o
+>   painel grava `conferenciasTotal` — quantas existem — sem rodar nenhuma.
+> - **Entregas de 11/09 sem registro:** botões do fluxo na conversa, assinado sem
+>   comprovante (migration 0220) e **crédito virou teto mensal por plano**
+>   (migration 0221, `escritorio_uso_mensal`). A última troca uma regra de
+>   negócio central e não tem uma linha aqui.
+> - **Duas migrations numeradas 0220** coexistem (`0220_assinatura_comprovante_erro`
+>   e `0220_lead_cancelamento`).
+> - **Anti-pattern "hardcode `cargo === 'dono'`"** está na prática limpo: as 13
+>   ocorrências são o resolvedor da matriz, proteção do registro do dono,
+>   governança deliberada e um fallback documentado. Não gastar tempo aqui.
+
 ## Comandos essenciais
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.526 verdes em 11/09/2026 (378 arquivos, ~2 min)
+pnpm test               # vitest (server/**/*.test.ts) — 5.570 verdes em 12/09/2026 (380 arquivos, ~1min45)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -52,6 +89,46 @@ no caminho; refatorar não é licença pra apagar; código "aparentemente
 morto" também não sai sem perguntar. Na dúvida, pergunta antes. (Origem:
 ele estranhou um suposto sumiço do timeout do Atendente IA — era alarme
 falso, mas a regra fica.)
+
+### Documento vivo do estado do sistema (regra do dono, 12/09/2026)
+
+`docs/ESTADO-DO-SISTEMA.md` é o retrato de onde o produto está. **Toda
+entrega atualiza esse arquivo no MESMO commit da entrega** — não depois,
+não num commit separado de "docs". Se a mudança não cabe no documento,
+ela não está pronta.
+
+O que cada entrega revisita lá:
+- **Baseline** — rodou `pnpm test`? o número é o que o terminal mostrou
+- **Módulos** — algum módulo mudou de estado (casca → parcial → completo)?
+- **Pendências** — fechou item? abriu item? mudou o prazo de algum?
+- **Dependências externas** — mexeu em Meta, Asaas, OpenAI/Anthropic,
+  DataJud, Resend, Twilio ou BACEN? então versão, endpoint e data de
+  conferência mudam
+- **Regras de negócio** — mudou regra que decide dinheiro, permissão ou prazo?
+
+Três regras de escrita, cada uma nascida de um erro medido neste repo:
+1. **Cite símbolo, nunca linha.** `exigirPlanoContratavel` em
+   `planos-repo.ts`, não `planos-repo.ts:147`. Em 12/09/2026 as CINCO
+   citações `arquivo:linha` deste CLAUDE.md apontavam todas pro lugar
+   errado. Linha apodrece em dias; nome de função não.
+2. **Número medido, ou número nenhum.** Contagem de teste, de achado, de
+   tabela só entra junto com o comando que a produziu. Este arquivo dizia
+   "5.526 testes em 378 arquivos"; o real era 5.570 em 380.
+3. **Estado, não diário.** O documento responde "onde estamos hoje". O
+   histórico de como chegamos aqui fica aqui no CLAUDE.md e no git.
+
+**Regra de leitura, a que mais importa:** quando este CLAUDE.md e o código
+discordam, **o código ganha** — e corrigir o CLAUDE.md faz parte da tarefa
+que descobriu a diferença.
+
+Por que a regra existe, em um exemplo: o commit `e2e3c0b` (11/09) trocou
+uma regra de negócio central — crédito parou de decidir operação, entrou
+teto mensal por plano (migration 0221) — e este arquivo não tem uma linha
+sobre isso. Pior: por causa da defasagem, a seção da fila abaixo afirma
+que o JurisIA "não tem como ser vendido", quando ele **já está sendo
+vendido** no plano Escala desde 09/09, com os riscos jurídicos que o
+próprio texto classificou como "pode esperar, ninguém compra ainda".
+Documentação velha não é inútil: ela faz tomar decisão errada.
 
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
@@ -299,12 +376,12 @@ P0 em uma linha cada (detalhe e linhas no relatório):
   padrão × botão "Testar grátis").
 - **C · dinheiro** — taxa do Asaas vira despesa 2× (webhook + cron do extrato).
 - **D · admin** — "Excluir conta permanentemente" na Equipe exclui o DONO
-  (`AdminClients.tsx:1693` usa `userId` do prop, não `current`).
+  (em `AdminClients.tsx`, o botão usava `userId` do prop, não `current`).
 - **E · Twilio** — "Ligar" liga pro CLIENTE com mensagem de teste
   (**decisão do dono**: esconder o botão é remoção).
 
 Regressão da entrega de 02/09 que entra no P1: o `maskPhoneBR` local do
-Atendimento (`Atendimento.tsx:471`) não corta o DDI — deep-link
+Atendimento (`Atendimento.tsx`) não cortava o DDI — deep-link
 `?telefone=` com número do cadastro `5585…` preenche `(55) 85997-9657` e o
 envio vai pra número inválido. Fix: delegar pra `mascararTelefoneBR` do
 shared (atendimento-x1).
@@ -1267,7 +1344,7 @@ deixa de ser "sem dado", então gira eternamente. Só a Milena vê porque o
 cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
 vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
 deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
-**Estado 03/09**: (2) resolvido — `Clientes.tsx:2919` separa carregando de
+**Estado 03/09**: (2) resolvido — em `Clientes.tsx`, `ClienteDetalhe` separa carregando de
 vazio ("Não foi possível abrir este cadastro", com cadeado) e a decisão de
 acesso virou a entrega H; (1) editar o nome inline NÃO foi feito, aguarda o
 "pode fazer" dele.
@@ -1638,7 +1715,9 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    mockup; sem ela, esvazia o histórico de todo mundo e vira remoção.
 7. **Portão `contatoEhDoEscritorio` duplicado** (10/09) — a fonte única está
    em `server/escritorio/contato-do-escritorio.ts` e só a agenda usa; as
-   cópias privadas em `router-crm.ts:70` e `router-kanban.ts:60` continuam.
+   cópias privadas continuam em `router-crm.ts` e `router-kanban.ts`, com
+   OUTRO nome (`contatoDoEscritorio`); e há uma segunda duplicata que este
+   registro não citava: `colaboradorDoEscritorio`, copiada nos dois routers.
    Apontar as duas pra ela é higiene, não segurança (as três funcionam) — e
    é remoção de código, então precisa de autorização.
 
