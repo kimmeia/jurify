@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { Check, Clock, AlertTriangle, RotateCcw, XCircle, Zap, CreditCard, Receipt, HelpCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { moedaBR, moedaCurtaBR } from "@shared/formato-numero";
 
 /**
  * Hook que retorna as permissões do usuário atual no módulo Financeiro.
@@ -45,15 +46,8 @@ export function useFinanceiroPerms(): {
   };
 }
 
-export function formatBRL(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
-}
-
-export function formatBRLShort(v: number) {
-  if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-  if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(1)}k`;
-  return formatBRL(v);
-}
+export const formatBRL = moedaBR;
+export const formatBRLShort = moedaCurtaBR;
 
 export function formatMes(mes: string): string {
   const [y, m] = mes.split("-").map(Number);

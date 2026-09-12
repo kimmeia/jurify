@@ -166,7 +166,10 @@ function DashboardComTabs({
         {/* Cores por token, não por `slate-*`/`bg-card` fixos: no tema escuro
             a aba ativa ficava branca com texto branco por cima — sumia — e as
             inativas viravam cinza sobre cinza. */}
-        <div className="inline-flex rounded-md border bg-muted p-1.5">
+        {/* `max-w-full` + rolagem própria: as 4 abas somam 430px e numa tela
+            de 390px empurravam a PÁGINA inteira de lado. Agora quem rola é a
+            tira, e o resto da tela fica parado. */}
+        <div className="inline-flex max-w-full overflow-x-auto rounded-md border bg-muted p-1.5">
           <TabsList className="h-auto gap-1 bg-transparent p-0">
             {ABAS.map(({ valor, rotulo, icone: Icone }) => (
               <TabsTrigger

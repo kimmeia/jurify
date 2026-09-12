@@ -1,9 +1,41 @@
 ---
 name: mockup-juridflow
-description: Gera mockups de tela do JuridFlow em HTML renderizado para PNG, no tom visual clean aprovado pelo dono (slate + violeta, cards brancos, tipografia Inter/Poppins). Use sempre que o pedido envolver mockup, protótipo, "gere uma tela", "como podemos melhorar esse módulo", proposta de redesign, nova visão/aba de um módulo, ou qualquer coisa que o dono precise **ver** antes de aprovar implementação — inclusive quando ele não usar a palavra "mockup" e só perguntar como melhorar uma funcionalidade.
+description: Gera mockups de tela do JuridFlow. Para tela que JÁ EXISTE, o mockup é NAVEGÁVEL e sai do app rodando (DOM serializado, antes ⟷ depois, computador ⟷ celular) — desenhar de memória foi reprovado pelo dono. Para tela que ainda não existe, desenha em HTML no tom visual aprovado (marinho #194b86, cards brancos, Inter). Use sempre que o pedido envolver mockup, protótipo, "gere uma tela", "como podemos melhorar esse módulo", proposta de redesign, nova visão/aba de um módulo, ou qualquer coisa que o dono precise **ver** antes de aprovar implementação — inclusive quando ele não usar a palavra "mockup" e só perguntar como melhorar uma funcionalidade.
 ---
 
 # Mockups do JuridFlow
+
+## ANTES DE TUDO: a tela já existe?
+
+**Se existe, o mockup NÃO é desenhado — é capturado do app rodando.** Regra
+do dono, 12/09/2026, nas palavras dele: *"gere o mockup em html navegável
+para eu visualizar como ficará no mundo real e aprovar ou não. adote como
+regra."* Antes disso ele havia reprovado uma rodada de mockups desenhados à
+mão: *"seus mockups não retratam o de uso real hoje, fez uma cópia barata e
+muito mal feita"*. Estava certo — aquelas telas foram desenhadas a partir de
+`grep`, sem ninguém nunca ter subido o app.
+
+O caminho, em `docs/mockup-navegavel.md` (receita completa, com os scripts):
+
+1. **Suba o app** (`docs/rodar-o-app-localmente.md`, ~5 min) e **povoe com
+   dados** (`scratchpad/estudo-telas/povoar.sql`). Tela vazia esconde
+   defeito: sem dados, quatro telas "não rolavam de lado" no celular — com
+   dados, seis rolavam.
+2. **Serialize o DOM** das telas (`serializa.mjs`): HTML real + CSS
+   compilado do app, imagens e canvas embutidos, nos dois tamanhos
+   (1440×900 e 390×844).
+3. **Capture os dois lados.** "Antes" é o código sem a mudança, "depois" é
+   com — os dois serializados do app, nenhum desenhado.
+4. **Monte o navegável** (`gera-navegavel.mjs`): um HTML auto-contido com
+   menu de telas, chave **Antes ⟷ Depois**, chave **Computador ⟷ Celular**
+   e, em cada tela, o que muda escrito em português de gente. O menu do
+   próprio app navega dentro do mockup.
+5. **Dirija o mockup** com Playwright (`confere-navegavel.mjs`) e **olhe as
+   fotos** com o Read. Sem isso você não sabe se alguma combinação saiu em
+   branco.
+
+O resto desta skill vale para **tela que ainda não existe** — e para ela o
+desenho à mão continua sendo o caminho.
 
 O dono aprova mudança de produto olhando, não lendo. Um mockup bom encurta
 a conversa de três idas e voltas para uma: ele bate o olho, diz "ficou
@@ -24,16 +56,26 @@ sombras para separar blocos — a borda de 1px já separa, e sombra empilhada
 suja a tela. Sombra fica reservada para o que flutua de verdade
 (popover, bloco de agenda) e para o botão primário.
 
-**Uma cor de ação.** Violeta `#7c3aed`, e só. Botão primário, controle
+**Uma cor de ação.** Marinho `#194b86`, e só. Botão primário, controle
 selecionado, dia de hoje, o que é novo. Se dois elementos disputam o
-violeta na mesma tela, um dos dois não é ação primária — deixe neutro.
-Estado ativo de chip/filtro usa tinta sólida `#0f172a`, não violeta.
+marinho na mesma tela, um dos dois não é ação primária — deixe neutro.
+Estado ativo de chip/filtro usa tinta sólida `#0f172a`, não marinho.
+⚠ O violeta `#7c3aed` que aparece em mockups antigos e no `assets/base.html`
+**não é o app**: o violeta foi rejeitado pelo dono ("doía na vista") e
+trocado por marinho. Mockup em violeta não retrata o produto.
 
-**Hierarquia por peso e cor, não por tamanho.** O corpo inteiro vive entre
-10px e 13.5px. O que mudam são o peso (500 → 600 → 700) e o tom do cinza
-(`#0f172a` → `#334155` → `#64748b` → `#94a3b8`). Título de página é
-Poppins 700/27px, título de seção Poppins 700/16px — só isso é Poppins, o
-resto é Inter.
+**Hierarquia por peso e cor, não por tamanho.** Os tamanhos saem da escala
+de `client/src/index.css` (`--text-micro` 11px · `--text-apoio` 11.5px ·
+`--text-corpo` 13px · `--text-secao` 15px · `--text-titulo` 20px ·
+`--text-numero` 22px · `--text-pagina` 26px). Piso de 11px: abaixo disso não
+entra nada. Onde faltar contraste entre dois elementos, a saída é peso
+(500 → 600 → 700) e cor (`#0f172a` → `#334155` → `#64748b` → `#94a3b8`) —
+não inventar mais um tamanho.
+
+**Poppins é só a marca.** A fonte de texto é Inter, inclusive nos títulos de
+tela (`font-bold`). Poppins (`--font-display`) serve ao "J" do logotipo e
+aos títulos das telas de login. Mockup antigo que escreve título em Poppins
+está descrevendo algo que o app não faz.
 
 **Micro-labels em maiúscula.** `10–11px`, `font-weight:700`,
 `letter-spacing:.06em`, cor `#94a3b8`. É o que rotula legenda, seção de

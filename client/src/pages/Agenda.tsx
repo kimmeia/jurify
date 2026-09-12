@@ -1493,8 +1493,13 @@ function TimelineHorariaHoje({ eventos, onCardClick }: { eventos: any[]; onCardC
               style={{ top: nowOffset, height: 2 }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-warning via-warning to-transparent" />
-              <span className="absolute -left-12 top-0 -translate-y-1/2 bg-warning text-warning-on text-micro font-bold px-1.5 py-0.5 rounded-full tabular-nums">
-                AGORA · {String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}
+              {/* A calha das horas tem 48px (`left-12`) e o selo em UMA linha
+                  media ~85px: o excedente caía em cima do bloco do evento e
+                  escondia o título. Empilhado em duas linhas ele cabe na
+                  calha — mesmo texto, sem invadir a grade. */}
+              <span className="absolute -left-12 top-0 -translate-y-1/2 w-12 flex flex-col items-center leading-tight bg-warning text-warning-on text-micro font-bold px-1 py-0.5 rounded-md tabular-nums">
+                <span>AGORA</span>
+                <span>{String(agora.getHours()).padStart(2, "0")}:{String(agora.getMinutes()).padStart(2, "0")}</span>
               </span>
             </div>
           )}

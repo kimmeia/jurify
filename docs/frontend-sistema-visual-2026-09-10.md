@@ -121,12 +121,17 @@ Substitui os 33 valores. Nomes em português, no padrão do repo.
 | `micro` | **11** | 700, caps, `.06em` | rótulo de seção, cabeçalho de coluna, selo | 7 · 7,5 · 8 · 8,5 · 9 · 9,5 · 10 · 10,5 |
 | `apoio` | **11,5** | 500 | meta, carimbo de tempo, ajuda | 10 · 10,5 · 11 · 11,5 |
 | `corpo` | **13** | 500/600 | texto de lista, controle, valor | 12 · 12,5 · 12,8 · 13 · 13,5 · `text-xs` · `text-sm` |
-| `secao` | **15** | 700 Poppins | título de card | 14 · 14,5 · 15 · `text-base` · `text-lg` |
-| `titulo` | **20** | 700 Poppins | título de aba / subpágina | 17 · 18 · 19 · 20 · `text-xl` |
-| `pagina` | **26** | 700 Poppins | título da tela | 22 · 24 · 26 · 27 · 28 · `text-2xl` · `text-3xl` |
+| `secao` | **15** | 700 | título de card | 14 · 14,5 · 15 · `text-base` · `text-lg` |
+| `titulo` | **20** | 700 | título de aba / subpágina | 17 · 18 · 19 · 20 · `text-xl` |
+| `pagina` | **26** | 700 | título da tela | 22 · 24 · 26 · 27 · 28 · `text-2xl` · `text-3xl` |
 | `numero` | **22** | 700 tabular | KPI de cartão | 19 · 22 · 26 · 30 · 34 · 38 · 42 |
 
 **A regra que resolve o problema de verdade: nada abaixo de 11px.**
+
+> **Correção (11/09):** a coluna "Peso" dizia "700 Poppins" em três
+> degraus. Medido no app rodando, os `<h1>` saem em **Inter 700** — o token
+> só define tamanho, a família vem do `body`. Poppins (`--font-display`)
+> quase não é usada nos títulos. Ver `docs/estudo-frontend-telas-reais-2026-09-11.md`.
 
 ### A descoberta que faz o piso sair quase de graça
 
@@ -265,8 +270,9 @@ Convertidos de OKLCH com `scratchpad/ok2hex.mjs`. Tema claro:
   produção** — foi mergeada com essa ressalva dita na mensagem. Olhar
   primeiro: lista de Processos, cartões do Kanban, painel do cliente no
   Atendimento.
-- **Escolher a próxima fatia** (2 · cara de produto único, 3 · celular,
-  4 · resto do sistema).
+- **Aprovar a Fatia 2.** Mockup `mockup-cara-unica.html` entregue em 11/09
+  (seção 10). Nada foi codado.
+- **Escolher o que vem depois** (3 · celular, 4 · resto do sistema).
 - **O selo "CPF diferente"** (Clientes, "Vincular a cliente") continua em
   caixa alta. Veio de `develop` durante o merge da Fatia 1 e tem o MESMO
   papel dos dois selos da lista de Processos que viraram caixa normal.
@@ -462,3 +468,140 @@ torna a comparação honesta, e é como deve ser refeito se mudarem.
      isso, estouro vira erro visível em vez de corte mudo.
 - O olho pegou o que o script não pegou nas duas vezes. Não pular o passo 3
   da skill (ler o PNG com o Read).
+
+---
+
+## 10. Fatia 2 — REPROVADA em 11/09. Diagnóstico refeito.
+
+> **Estado: a proposta da Fatia 2 está SUSPENSA.** O dono reprovou os
+> mockups: *"para poder sugerir melhoria você precisa saber como é o sistema
+> hoje, seus mockups não retratam o de uso real hoje, fez uma cópia barata e
+> muito mal feita"*. Ele está certo. Leia
+> `docs/rodar-o-app-localmente.md` **antes** de retomar este assunto.
+
+### O que deu errado
+
+Desenhei as telas a partir de `grep` no código, sem nunca ter visto o sistema
+rodando. O `grep '<h1'` mede a TAG, não o título — e foi sobre essa medição
+que a Fatia 2 inteira foi construída. Subindo o app (dá para fazer neste
+ambiente em ~5 min, receita no arquivo acima) as fotos mostraram que:
+
+- **Clientes e Financeiro têm cabeçalho, e bom.** Não têm `<h1>`, mas têm
+  *hero* com nome da tela, subtítulo, KPI grande e bloco de atenção. O
+  `PageHeader` que propus seria um **downgrade** nas duas.
+- **Dashboard e Atendimento abrem com saudação** ("Bom dia, Dono"). Trocar
+  isso pelo nome da tela é remoção — precisa de autorização expressa.
+- **`/movimentacoes` é a mesma tela de Processos.** Qualquer contagem de
+  "N telas" que some as duas está inflada.
+- Acordos **tem** título (`text-[22px]`); o navegável afirmava que não.
+
+Detalhe do que cada tela realmente tem: tabela no fim de
+`docs/rodar-o-app-localmente.md`.
+
+### Os artefatos reprovados (ficam para histórico, não são referência)
+
+`mockup-cara-unica.html` e `mockup-cara-unica-navegavel.html`. **Não usar
+como base.** Os números que eles exibem (18 variantes de `<h1>`, 9 ritmos)
+medem a tag, não o que o usuário vê.
+
+### Como retomar
+
+1. Subir o app e fotografar o "antes" **real** de cada tela em questão.
+2. Para o "depois", mudar o código de verdade numa branch descartável e
+   fotografar o resultado — nada de desenhar a mão.
+3. Só então levar ao dono.
+
+O que sobra de pé do diagnóstico original, porque foi medido no código e não
+na aparência: as duas linguagens de "carregando" (99 `Loader2` × 47
+`Skeleton`, 30 arquivos com os dois) e o `ui/empty.tsx` com zero usos. Isso
+continua verdade — mas precisa ser visto em tela antes de virar proposta.
+
+---
+
+## 10-bis. Registro do mockup reprovado (11/09)
+
+`mockup-cara-unica.html` (gerador: `scratchpad/mockup-tipografia/gera-cara-unica.mjs`).
+**Nada foi codado** — a regra do mockup vale.
+
+### O que o estudo mediu (números do mockup, todos reproduzíveis)
+
+| O que | Medida |
+|---|---|
+| Variantes distintas de `className` em `<h1>` | **18** |
+| Tamanhos de título em uso | `text-2xl` (16×), `text-pagina`, `text-xl`, `text-lg`, `text-3xl`, `text-4xl`, `text-[22px]`, `text-[42px]`, `text-base` — e um `text-sm` |
+| Ritmos de container distintos | **9** (`space-y-` 1 · 1.5 · 2 · 2.5 · 3 · 3.5 · 4 · 5 · 6), alguns com padding, outros sem |
+| Telas com `Loader2` × com `Skeleton` | 99 × 47 |
+| Telas que usam **os dois ao mesmo tempo** | **30** |
+| Usos do primitivo `ui/empty.tsx` que já existe | **0** (em 81 telas com estado vazio) |
+| Grafias de "carregando" no código | 2 — `Carregando...` e `Carregando…` |
+
+Os três cabeçalhos do "antes" no mockup são fiéis ao código: Processos
+(`text-pagina font-bold tracking-tight leading-none`, `space-y-4 min-w-0`),
+Relatórios (`text-2xl font-bold tracking-tight`, `space-y-4`) e Acordos
+(**sem `<h1>`** — a tela começa no conteúdo, `space-y-3.5 p-4 md:p-6`).
+
+### O que a Fatia 2 propõe
+
+1. **`<PageHeader />`** com quatro fatias, sempre nesta ordem: título
+   (`pagina`) · uma linha dizendo o que a tela resolve (`corpo`) · pastilhas
+   com o número que importa (opcional) · ações à direita, uma azul só. O que
+   a tela não tiver, some — **nunca vira outra estrutura**.
+2. **Um respiro só** no lugar dos nove.
+3. **Uma lista vazia**: adotar o `ui/empty.tsx` (ícone + o que está vazio +
+   por que importa + o botão que sai dali).
+4. **Um "carregando"**: esqueleto com a forma da lista que vem (nada pula
+   quando os dados entram); girinho só dentro do botão clicado.
+
+### Decisões que o dono precisa tomar
+
+- **Subtítulo em toda tela.** O `PageHeader` pede uma linha explicando a
+  tela. Hoje a maioria não tem. Escrever ~40 subtítulos é trabalho de texto,
+  não de código — ele aprova os textos ou prefere subtítulo opcional?
+- **Telas sem `<h1>` hoje** (Acordos, Movimentações e outras) **ganham
+  título.** Isso é adicionar, não remover, mas muda o que ele vê.
+- **Ordem de aplicação.** As 47 telas de uma vez, ou as 6 do dia a dia
+  primeiro (mesmo recorte da Fatia 1) e o resto depois?
+
+### O navegável (11/09, a pedido do dono)
+
+`mockup-cara-unica-navegavel.html` — o app inteiro, clicável, para ver a
+proposta "no mundo real". Gerador:
+`scratchpad/mockup-tipografia/gera-navegavel.mjs`.
+
+- Menu lateral real (4 grupos) que **troca de tela**: Processos, Clientes,
+  Agenda, Acordos, Financeiro, Relatórios. Os itens sem tela viram inertes.
+- Chave **Como está hoje ⟷ Proposto** — o modo "hoje" é fiel ao código:
+  Clientes, Acordos e Financeiro abrem **sem título nenhum**, Relatórios em
+  `text-2xl`, e cada tela com o seu `space-y-*` real (o respiro muda ao
+  trocar de tela, que é exatamente o defeito).
+- Chave **Com dados · Lista vazia · Carregando** — mostra as outras duas
+  peças da Fatia 2 dentro da tela, não num quadrinho à parte.
+
+**A skill de mockup pede "sem JavaScript".** Aqui o dono pediu navegável em
+palavras ("gere um navegável para eu visualizar como ficará no mundo real") e
+o projeto já tem precedente (`mockup-correcoes-p1.html`). O JS é só troca de
+classe no `<body>` — nenhum dado, nenhuma lógica de produto.
+
+**Conferido por script, não a olho** (`scratchpad/testa-navegavel.mjs` e
+`checa-coerencia.mjs`, no scratchpad da sessão): navegação, as duas chaves e
+zero erro de console; e as **36 combinações** (6 telas × 2 modos × 3 estados)
+conferidas uma a uma — em todas há exatamente um corpo visível, um conjunto
+de pastilhas, e nenhum número que contradiga o estado.
+
+Duas incoerências que essa checagem pegou e foram corrigidas:
+1. Na lista vazia o cabeçalho continuava dizendo "6 monitorados" e o card
+   "6 REGISTROS". Agora pastilha, contagem e rodapé acompanham o estado.
+2. O rodapé seguia visível sem dados: `.rodape{display:none}` tinha a mesma
+   especificidade (0,1,0) da definição de `.rodape`, que vem **depois** na
+   folha e ganhava. Resolvido com `body[data-estado] .rodape`.
+
+### Risco e verificação
+
+Menor que o da Fatia 1: é extração de padrão, não redesenho, e o
+`PageHeader` é aditivo — cada tela troca o próprio cabeçalho pelo
+componente, uma por vez. Continua valendo a ressalva da seção 9: **daqui não
+dá para ver o app rodando**, então a conferência visual final é do dono.
+
+Amarra prevista: um teste que exige `<PageHeader` nas telas migradas e
+proíbe `<h1` solto nelas — mesma mecânica de `TELAS_MIGRADAS` da
+`escala-tipografica.test.ts`, que já provou pegar regressão vinda por merge.
