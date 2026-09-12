@@ -90,24 +90,28 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1.1 Se for fazer só cinco coisas, faça estas
+## 1.1 Se for fazer só sete coisas, faça estas
 
-Ordenado por dano × prazo, não por dificuldade.
+Ordenado por dano × prazo × esforço, não por dificuldade.
 
 | # | o que | por quê agora |
 |---|---|---|
-| 1 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
-| 2 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (item 1 da seção 10.1) |
-| 3 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
-| 4 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam (seção 5.3.1) |
-| 5 | **Corrigir o detector de cobrança duplicada** | ele não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+| 1 | **Conferir se o Sentry está realmente capturando** | o painel diz "conectado" mas a captura liga **só** por variável de ambiente. Pode estar desligado há meses — e é por isso que nada do que está neste documento apareceu como incidente (seção 11.1) |
+| 2 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
+| 3 | **Declarar os `ARG` de `VITE_*` no Dockerfile** | nenhuma variável do cliente chega ao build. Hoje isso mantém o captcha impossível de aparecer, e vai morder qualquer coisa nova que dependa disso (seção 11.1) |
+| 4 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
+| 5 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
+| 6 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
+| 7 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
 
-E duas que são de graça, porque são só texto:
+E três que são quase de graça, porque são só texto:
 
 - **Alinhar a skill de mockup com a regra do dono** — ela manda entregar PNG, a
   regra manda entregar HTML (seção 9.3).
 - **Tirar o "+90 tribunais" da tela de Processos** — o servidor procura em um
   (seção 9.2).
+- **Corrigir a nota de metodologia do PDF do DRE** — ela lista 3 status e o cálculo
+  usa 4, e é um PDF que o escritório entrega e arquiva (seção 11.5).
 
 ---
 
@@ -1037,4 +1041,148 @@ Todo item acima passou por duas leituras: a que encontrou e uma cética que tent
 derrubar, indo ao código conferir se havia guard, gate, default ou caminho
 alternativo que o primeiro não viu. O que não sobreviveu à segunda leitura ficou
 fora — incluindo, como registrado no item **D-4**, um achado meu.
+
+---
+
+## 11. Varreduras que atravessam o repositório
+
+Aqui estão os achados que só aparecem olhando o repositório inteiro num ângulo só
+— e são, em média, os mais graves da auditoria. Os números dizem o tamanho da
+varredura, não são adjetivos.
+
+### 11.1 Implantação e observabilidade: três coisas que o painel afirma e não são
+
+Este trio é o mais importante do documento depois do dinheiro, porque **o dono está
+olhando um painel que mente para ele.**
+
+1. **Nenhuma variável `VITE_*` chega ao build do cliente.** O build roda dentro da
+   imagem (`RUN pnpm build` no `Dockerfile`), e o Dockerfile **não declara um único
+   `ARG`**. Como o Vite só embute variáveis presentes no momento do build, tudo que
+   o cliente esperava do ambiente chega vazio. É o que explica, por exemplo, o
+   widget de captcha **nunca poder aparecer**, independente de a chave existir no
+   Railway. *(crítico)*
+2. **O campo de DSN do Sentry no painel não vai a lugar nenhum.** A captura de erros
+   do servidor liga **exclusivamente** por variável de ambiente
+   (`SENTRY_DSN_BACKEND`), e o painel exibe "Sentry conectado" com base em outra
+   coisa. Ou seja: é possível — e provável — que o monitoramento de erro esteja
+   **desligado** enquanto a tela garante que está ligado. Isso fecha o círculo com
+   o JurisIA, que não tem Sentry nenhum: o erro não aparece em lugar algum.
+   *(crítico)*
+3. **`ENCRYPTION_KEY` faltando ou trocada joga no lixo, em silêncio, a mensagem de
+   WhatsApp que chega** — e o log culpa o cliente. *(crítico)*
+
+Escala da varredura: **63 variáveis de ambiente distintas**, 36 delas lidas por
+código de produção do servidor. A afirmação do CLAUDE.md de que só `JWT_SECRET` e
+`DATABASE_URL` derrubam o boot **está correta** e foi conferida linha a linha. O que
+a frase esconde é o tamanho do "resto": ao menos **seis** casos em que a falta da
+variável apaga funcionalidade paga sem aviso, e em **três** deles o painel afirma
+ativamente o contrário.
+
+E um de autenticação, que merece linha própria:
+
+4. **`GOOGLE_CLIENT_ID` ausente desliga a checagem de para-quem-o-token-foi-emitido
+   no login Google.** O código valida o token no Google e depois confere se ele foi
+   emitido **para o JuridFlow** — mas só se a variável existir. Sem ela, um token
+   legítimo emitido para **outro aplicativo** passa. *(alto)*
+
+### 11.2 Os testes: onde o verde não significa nada
+
+O repositório tem 5.570 testes verdes. Três descobertas sobre o que esse verde cobre:
+
+5. **O job de CI chamado "Smoke tRPC (todas as procedures)" não reprova por nada.**
+   Ele chama todas as procedures procurando erro 500, **encontra, imprime no log e
+   passa verde** — a asserção que reprovaria não existe. *(crítico)*
+6. **Os 23 testes de smoke ficam verdes sem banco, sem verificar nada.** Todos
+   começam com um retorno antecipado se não há `DATABASE_URL`, e o relatório diz
+   "23 passed" em vez de "23 pulados".
+7. **`pnpm check` não typecheca uma única linha de teste** — são **74.439 linhas**
+   fora do radar, e isso já produziu um bug silencioso que está documentado no
+   próprio código.
+
+E sobre os dois robôs:
+
+8. **O robô de ação clica em "Excluir", "Apagar", "Monitorar" e "Carregar
+   detalhes".** Existem duas travas no repositório: a ampla, com 26 padrões de ação
+   proibida, e a estreita — e o robô usa a estreita. Ele exercita ação destrutiva e
+   ação **paga**.
+9. **O Dockerfile afirma uma trava de produção que não existe.** Ele instala o
+   Chromium sempre, justificando que "em produção o `exigirAmbienteTeste()` no
+   router bloqueia a execução" — e **essa função não existe no repositório**. O robô
+   de jornada do painel pode rodar em produção e **escrever um escritório de teste
+   no banco de produção**. *(alto)*
+10. **Confirmado o que eu já havia achado: existem DOIS seletores de "está
+    carregando"**, e o do Playwright é cego para os **161 esqueletos** do app.
+
+### 11.3 O spike que virou produção
+
+**A pasta que o próprio README chama de "descartável" e que diz "TUDO RODA EM
+STAGING" é hoje o motor de produção de consulta processual do TJCE.** São 3.996
+linhas de código de spike no bundle que roda em produção, e **2.755 delas — o
+scraper — não têm um único teste que as execute** (os testes que existem leem o
+arquivo como texto).
+
+Dois pontos de honestidade da varredura, que valem registrar:
+
+- **O risco de deploy NÃO se confirmou.** O `esbuild` embute import relativo no
+  arquivo final; o build foi rodado de verdade e o `dist/index.js` contém as fontes
+  do spike inlinadas. O servidor em produção não precisa da pasta existir.
+- Os riscos reais são de manutenção: **`pnpm format` reescreve 802 linhas do
+  scraper de produção e quebra um teste**, porque o `.prettierignore` não cobre
+  `scripts/`; e os scripts da raiz dessa pasta ficam fora do `pnpm check` — um deles
+  já apodreceu de verdade.
+
+### 11.4 Dado que se grava e ninguém lê
+
+Varredura de **2.803 exports** em 670 arquivos, **126 tabelas** e **1.538 colunas**.
+Os quatro casos que importam:
+
+11. **A trilha jurídica de aceite dos Termos é gravada e nunca lida.** A tabela
+    `aceites_termos` (quem aceitou, quando, de qual IP, qual versão) tem **três
+    pontos de gravação e zero leitura** em todo o código. É exatamente a prova que
+    se produz para ser apresentada depois — e não há como apresentá-la. *(alto)*
+12. **A origem do opt-in e do opt-out de WhatsApp é gravada e nenhuma tela lê** —
+    justo o dado que a Meta pediria numa contestação de spam. *(alto)*
+13. **"Avise quando meu tribunal chegar" grava o pedido e ninguém nunca lê.** Um
+    insert, zero leituras, nenhuma tela de admin. O escritório pede e o pedido morre
+    no banco.
+14. **Quatro tabelas sem nenhum consumidor** (já detalhado na seção 4), incluindo o
+    módulo do Diário da Justiça inteiro.
+
+E duas funcionalidades prontas que ninguém alcança:
+
+15. **O atendimento que "vence por silêncio" nunca vence.** A função que fecha
+    atendimento parado existe, **é testada**, e **ninguém a chama**. *(alto)*
+16. **O motor de cálculo de FGTS está completo e testado, e nenhum usuário consegue
+    alcançá-lo** — 246 linhas de cálculo e redação de parecer sem porta de entrada.
+
+### 11.5 Comentários que mentem — e um deles é sobre segurança
+
+Varredura de **696 arquivos** não-teste. Os piores:
+
+17. **O cabeçalho do Cofre garante que "o backend NUNCA retorna senha/TOTP em
+    claro" — e 1.069 linhas abaixo ele retorna o segredo TOTP.** *(alto)*
+18. **O comentário da tabela `planos` — a fonte de verdade do faturamento —
+    descreve OUTRA tabela, já apagada, e manda deletar esta.** *(alto)*
+19. **O robô auditor jura usar a mesma lista de status do financeiro e usa uma
+    lista curta**, reproduzindo o exato bug que já custou comissão. *(alto)*
+20. **A nota de metodologia impressa no PDF do DRE lista 3 status; o cálculo usa
+    4.** O escritório arquiva e entrega esse PDF. *(alto)*
+21. E o que eu já havia achado: o cabeçalho do cron de monitoramento chama de
+    "placeholder" uma função implementada 830 linhas abaixo, no mesmo arquivo.
+
+### 11.6 Tenancy: a varredura completa
+
+**779 procedures** examinadas (614 exigem login, 142 exigem admin, 23 são
+públicas), em 54 arquivos de router, mais os helpers de banco, as rotas HTTP de
+upload e assinatura por token, o SSE e os webhooks.
+
+Resultado: **um caso** sobrou, e é de gravidade alta, não crítica:
+
+22. **`tarefas.criar` aceita cliente de outro escritório** (grava `contatoId` sem
+    conferir o dono) **e a Agenda depois mostra o nome dele.**
+
+Isso é uma notícia boa e vale dizer com clareza: as 8 amarrações de 03/09 e as 3 de
+10/09 seguraram. O padrão multi-tenant do sistema está, hoje, substancialmente
+correto — o problema de permissão que sobrou não é "vejo o escritório do outro", é
+"vejo o que não deveria dentro do meu" (seção 10.2).
 
