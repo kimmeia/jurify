@@ -133,6 +133,7 @@ docs/lp-mockups/out-*.png
 # pro dono pelo chat; versionar um HTML desse tamanho por proposta engorda o
 # repositório sem dar nada em troca.
 scratchpad/mockup-navegavel-*.html
+scratchpad/comparador-antes-depois*.html
 
 # Sondagem de fontes públicas (respostas brutas dos tribunais)
 scripts/.sondagem/

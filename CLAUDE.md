@@ -76,6 +76,21 @@ que eu propunha).
    auto-contido. E tem que ser **dirigido por Playwright** antes de entregar
    — combinação que sai em branco não aparece sozinha.
 
+4. **Navegar não é comparar (12/09, resposta dele ao 1º navegável):**
+   *"o antes e depois tá a mesma coisa, não consegui entender as
+   diferenças."* Estava certo. O arquivo abria no COMPUTADOR e cinco dos seis
+   consertos só aparecem no CELULAR; a chave Antes/Depois exige memória; e o
+   quadro de 390px CORTA o vazamento, que é justamente o defeito. Toda
+   comparação agora sai do `gera-comparador.mjs`: **uma comparação por
+   achado**, já aberta na tela e no tamanho onde ele acontece, os dois lados
+   ao mesmo tempo com o MESMO recorte e a MESMA rolagem, **anel** no elemento
+   que mudou, **linha tracejada da borda da tela** (o anel cruza no antes e
+   não cruza no depois — é esse par que torna o vazamento visível), régua
+   medida, uma frase "Onde olhar" e o botão **Piscar** (sobrepõe os dois
+   alternando). `mede-alvos.mjs` confere se o alvo do anel realmente MUDA
+   entre os estados — três dos dez estavam no elemento errado e o anel saía
+   igual nos dois lados.
+
 O "sem JavaScript" da skill `mockup-juridflow` vale para o mockup-retrato;
 **o navegável é a exceção pedida por ele**, e o JS nele só troca classe.
 
