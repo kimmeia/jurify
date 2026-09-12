@@ -3,7 +3,7 @@
 **Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
-terminar.** Se você tem trinta segundos, leia "O retrato em onze linhas". Se tem
+terminar.** Se você tem trinta segundos, leia "O retrato em doze linhas". Se tem
 dez minutos, leia até o fim da seção 4.
 
 ---
@@ -54,7 +54,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
-## 1. O retrato em onze linhas
+## 1. O retrato em doze linhas
 
 1. O sistema é grande e está saudável na base: **5.570 testes verdes**, tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
@@ -64,22 +64,28 @@ Não é burocracia. É o custo medido de não ter tido a regra:
    CLAUDE.md é histórico de entrega, que só envelhece.
 4. Há **237 achados catalogados** com identificador estável desde 03/09 e
    **nenhum registro de quais foram corrigidos**.
-5. Um bug de dinheiro provado: o detector de cobrança duplicada não acha
-   duplicata de valor redondo (item **D-1** abaixo).
+5. **Dinheiro:** o detector de cobrança duplicada não acha duplicata de valor
+   redondo (**D-1**); e no lado do Asaas, chargeback e estorno **não têm
+   tratamento nenhum** — o dinheiro sai da conta e o painel não muda (seção 5.4).
 6. Uma lacuna de backup provada: 20 tabelas do escritório ficam fora do backup, e
    a trava que deveria impedir isso tem um ponto cego (item **D-2**).
 7. **Três recursos de IA podem estar devolvendo erro agora**, inclusive o
    JurisIA que é vendido: o código manda `temperature` para um modelo Claude que
    passou a recusar esse parâmetro, e usa como padrão um modelo **retirado em
    15/06/2026**. Confirmado na documentação oficial da Anthropic (seção 5.2).
-8. Outros dois prazos externos com data: o desligamento de modelos antigos da
-   OpenAI em **23/10/2026**, e a versão **v21.0** da API da Meta, que expira em
-   **21/01/2027** — e cuja falha é silenciosa (seções 5.2 e 5.3).
-9. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade) e
-   assinatura eletrônica (sem controle de permissão).
-10. Pouco código morto de verdade: 4 tabelas sem uso em 126, e um módulo inteiro
-   (Diário da Justiça) que existe só como desenho de banco.
-11. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
+8. **Três prazos externos com data:** em **01/10/2026** (19 dias) a Meta passa a
+   cobrar por mensagem e o sistema não guarda um único dado de custo; em
+   **23/10/2026** a OpenAI desliga modelos antigos que o código usa; em
+   **21/01/2027** expira a versão da API da Meta, e essa falha é silenciosa.
+9. **O opt-out que o cliente faz dentro do WhatsApp não é honrado** — a Meta avisa
+   pelo webhook `user_preferences` e o código não o trata. Isso pesa, porque o
+   projeto já levou dois avisos de spam da Meta.
+10. Módulos vendidos com pontas soltas: JurisIA (cobrança e observabilidade),
+    assinatura eletrônica (sem controle de permissão), e Instagram/Messenger
+    conectáveis na tela sem ingerir uma única mensagem.
+11. Pouco código morto de verdade: 4 tabelas sem uso em 126, e um módulo inteiro
+    (Diário da Justiça) que existe só como desenho de banco.
+12. **Nenhum arquivo de código foi alterado.** Só documentação. Este documento é o
     mapa, não a obra.
 
 ---
@@ -391,7 +397,11 @@ bloqueia vários sites de documentação), está escrito.
 | Meta WhatsApp Cloud | Graph API **v21.0** (19 literais) e v23.0 (1) | v21.0 disponível até **21/01/2027** | 4 meses | alto, e falha calada |
 | OpenAI | `gpt-3.5-turbo`, `gpt-4`, `o3-mini`, `o4-mini`, `o1-preview` | desligamento em **23/10/2026** | 41 dias | médio |
 | OpenAI | `gpt-4o`, `gpt-4o-mini` | o **apelido** segue disponível na API | sem prazo | ok |
-| Asaas | `https://api.asaas.com/v3`, header `access_token` | confere com a documentação atual | sem prazo | ok |
+| Asaas (versão/auth) | `https://api.asaas.com/v3`, header `access_token` | v3 é a única vigente; não há sunset | sem prazo | ok |
+| Asaas (eventos) | dedup por status, não pelo `id` do evento | `CONFIRMED` e `RECEIVED` chegam para a MESMA cobrança | já vale | **alto — dinheiro** |
+| Asaas (chargeback/estorno) | sem tratamento | eventos próprios, documentados | disputa até 150 dias | **alto — dinheiro** |
+| Meta (cobrança) | não lê o objeto `pricing` do webhook | cobrança por mensagem passa a valer | **01/10/2026** | alto |
+| Meta (`user_preferences`) | evento ignorado | é como a Meta entrega o opt-out de marketing | já vale | **alto — histórico de spam** |
 | OpenAI (endpoints) | `chat/completions`, `embeddings`, `audio/transcriptions`, `models` | todos vigentes; **não usamos a Assistants API**, que foi desligada em 26/08/2026 | — | ok |
 
 ### 5.2 Anthropic — dois problemas que estão quebrando AGORA
@@ -472,17 +482,143 @@ a Meta roteia em silêncio para a versão mais antiga ainda válida. O comportam
 muda sem ninguém receber um 400. É exatamente a categoria de falha que este
 projeto já combate por princípio ("falhas que somem").
 
-### 5.4 Asaas — conforme
+### 5.3.1 Meta — o resto do que a conferência achou
 
-Base `https://api.asaas.com/v3` e sandbox `https://sandbox.asaas.com/api/v3`
-(`server/integracoes/asaas-client.ts`), autenticação pelo header `access_token`.
-Confere com a documentação vigente. Endpoints usados: `/customers`, `/payments`,
-`/subscriptions`, `/installments`, `/finance/balance`, `/webhook`.
+Tudo abaixo foi cruzado com a documentação oficial da Meta. A coluna **fonte** diz
+se a documentação confirmou (`doc`) ou se é leitura forte mas não fechada (`provável`).
 
-Pendente de conferência mais funda (a auditoria dos eventos de webhook está em
-andamento): a lista oficial de eventos que o Asaas envia, cruzada com os que o
-código trata — evento oficial não tratado é falha silenciosa. O site
-`docs.asaas.com` é bloqueado pelo proxy; a busca traz trechos, não a lista completa.
+**Com data marcada:**
+
+| quando | o que acontece | onde estamos |
+|---|---|---|
+| **01/10/2026 — 19 dias** | a resposta do atendente passa a ser cobrada por mensagem | o webhook de status **carrega um objeto `pricing`** dizendo se a mensagem foi cobrada e sob qual categoria, e o código não lê **nenhum** campo de custo. Não guardamos um único dado para prever ou conferir fatura da Meta. `fonte: doc` |
+| **21/01/2027 — 4 meses** | v21.0 expira | 18 literais de versão espalhados; a Meta **troca a versão por baixo do pano**, sem erro. A versão corrente hoje é a **v26.0** (lançada 29/07/2026). `fonte: doc` |
+
+**Sem data, e sérios — ligados diretamente aos avisos de spam que a Meta já mandou:**
+
+- **O opt-out que o cliente faz DENTRO do WhatsApp não é honrado.** A Meta entrega
+  essa preferência pelo webhook `user_preferences` (o botão "Parar promoções"), e
+  `grep user_preferences` no repositório inteiro **não retorna nada** — o evento cai
+  no default de "campo sem handler". Ou seja: a pessoa pede pra parar, o WhatsApp
+  nos avisa, e o sistema não registra. Dado o histórico de dois avisos de spam,
+  este é o item mais sensível da lista. `fonte: doc`
+- **A trava de MARKETING do SmartFlow usa uma foto congelada da categoria.** O
+  passo guarda `templateCategoria` no momento em que o fluxo foi salvo, e a Meta
+  **reclassifica template por conta própria** (avisa no dia 1º, aplica no dia 1º do
+  mês seguinte) e comunica pelo webhook. Um template que virou MARKETING depois do
+  save continua passando pela trava como se fosse UTILITY. `fonte: doc`
+- **A definição de opt-in do código é mais frouxa que a política.** O guard aceita
+  consentimento com **qualquer** mensagem de entrada do contato; a política da Meta
+  exige consentimento coletado antes, declarando que a pessoa aceita receber
+  mensagens e **nomeando a empresa**. `fonte: provável`
+
+**Recursos que a tela oferece e o servidor não ingere:**
+
+- **Instagram e Messenger são conectáveis em Configurações, e nenhuma mensagem
+  deles entra.** O webhook faz `if (body.object !== "whatsapp_business_account")
+  return;` — **retorno silencioso, sem log**. Instagram e Messenger entregam no
+  mesmo endereço, mas com `object` igual a `"instagram"` e `"page"`. O escritório
+  conecta, vê "conectado", e nunca recebe nada. `fonte: doc`
+
+**Mensagens que o sistema entende errado:**
+
+- **Reação de emoji, pedido e mensagem "unsupported" viram texto e DISPARAM o
+  robô.** O default do parse grava `"[reaction]"` como se fosse texto; como o texto
+  não está vazio, o SmartFlow roda. O cliente manda um 👍 e o robô responde ao
+  "[reaction]". `fonte: doc`
+- **Mensagem apagada pelo cliente (`status: "deleted"`) é ignorada** — o texto e a
+  mídia continuam no nosso servidor. `fonte: doc`
+- **Eventos intermediários de chamada** (RINGING, ACCEPTED, REJECTED) caem em
+  "desconhecido" e a chamada volta para "tocando". `fonte: provável`
+
+**Miudezas com efeito real:**
+
+- Lista de templates trunca em 200 **sem paginação e sem aviso**. `fonte: doc`
+- Download de mídia não passa `phone_number_id`, que existe para restringir o
+  acesso ao número certo. `fonte: doc`
+- Tier da conta e alertas só chegam por polling: os webhooks que a Meta criou pra
+  isso (`business_capability_update`, `account_alerts`,
+  `message_template_quality_update`) estão todos ignorados. `fonte: doc`
+- Responder **401** na falha de assinatura faz a Meta retentar com backoff **por
+  até 7 dias** (o retry não é configurável no painel, ao contrário do que o
+  comentário do código diz) e falha continuada pode desativar a inscrição.
+  `fonte: provável`
+- Token de Instagram/Messenger é gravado **sem validade** e nada checa expiração.
+  `fonte: provável`
+
+### 5.4 Asaas — a versão está certa, o tratamento de eventos não
+
+O básico confere: base `https://api.asaas.com/v3`, header `access_token`, e a **v3
+segue sendo a única versão vigente** — não há v4 nem anúncio de sunset. As
+"breaking changes" publicadas são remoções de campo, nenhuma delas nos afeta.
+
+O problema não é a versão: é **o que o sistema faz com os eventos que o Asaas
+manda.** Isto é dinheiro, então vale ler com atenção.
+
+**Onde dinheiro pode se perder hoje:**
+
+- **`PAYMENT_CONFIRMED` e `PAYMENT_RECEIVED` disputam a mesma chave de
+  deduplicação — e o Asaas manda os dois para a mesma cobrança.** No fluxo de
+  boleto a sequência oficial é CREATED → CONFIRMED → RECEIVED. Como a chave de
+  dedup é decidida pelo **status** e não pelo nome do evento, o segundo chega e é
+  descartado como repetido. `fonte: doc`
+- **Chargeback não tem tratamento nenhum.** `PAYMENT_CHARGEBACK_REQUESTED`,
+  `..._DISPUTE` e `..._REVERSAL` caem num upsert genérico que só grava o status
+  cru. O dinheiro sai da conta do escritório e **o painel não muda**. O banco
+  emissor tem até **150 dias** para decidir a disputa. `fonte: doc`
+- **Estorno idem — e o comentário do arquivo promete o contrário.** O cabeçalho do
+  webhook lista "PAYMENT_REFUNDED → marca como estornado", e **não existe esse
+  ramo**. `PAYMENT_REFUNDED`, `..._PARTIALLY_REFUNDED`, `..._REFUND_IN_PROGRESS` e
+  `..._REFUND_DENIED` caem no genérico. `fonte: doc`
+- **`PAYMENT_UPDATED` em cobrança já paga ou vencida é jogado no lixo.** Esse
+  evento é justamente "mudou o vencimento ou o valor" — e o portão de dedup o
+  descarta pelo status. `fonte: doc`
+- **A idempotência não usa o `id` do evento**, que é exatamente o que o Asaas
+  fornece para isso e documenta. A chave montada à mão é mais frágil e é a origem
+  dos dois primeiros itens. `fonte: doc`
+
+**Configuração que pode estar silenciosamente errada:**
+
+- **O webhook é registrado num endpoint que a documentação atual não tem mais:**
+  o código faz `POST /webhook` (singular); a referência é `POST /v3/webhooks`
+  (plural), e o corpo exige `events` — que o código **não manda**. `fonte: provável`
+- **A URL de sandbox é o host antigo.** O código usa
+  `https://sandbox.asaas.com/api/v3`; a documentação atual manda
+  `https://api-sandbox.asaas.com/v3`. Produção está certa. `fonte: provável`
+- **O ambiente é adivinhado pelo texto da chave, com PRODUÇÃO como padrão.** Se a
+  chave não contém "sandbox"/"hmlg" nem o prefixo antigo, o código assume produção.
+  Chave de homologação em formato novo cai em produção. `fonte: doc`
+- **Nenhuma requisição manda `User-Agent`** identificando a aplicação, que a
+  documentação exige desde 13/06/2024. `fonte: doc`
+- **`limit` de até 200 é repassado** a uma API que aceita 1 a 100. `fonte: provável`
+
+**Dois avisos que dizem o contrário do que acontece:**
+
+- Quando a fila de webhooks é interrompida (15 falhas seguidas), o sistema
+  re-arma e avisa o dono que "os pagamentos do período serão reprocessados". A
+  documentação diz que os eventos pendentes ficam na fila e são **apagados depois
+  de 14 dias** — então a promessa tem prazo, e o aviso não menciona. `fonte: doc`
+- **Recebimento em dinheiro desfeito** (`RECEIVED_IN_CASH_UNDONE`) não é tratado, e
+  a deduplicação permanente impede o reconhecimento seguinte. `fonte: doc`
+
+**Na assinatura do próprio JuridFlow:**
+
+- **O plano anual renova em 30 dias fixos.** O webhook calcula
+  `currentPeriodEnd = vencimento + 30 dias` sem olhar o ciclo, e o Asaas aceita
+  `YEARLY`. Quem paga anual tem o período recalculado como mensal. `fonte: doc`
+
+**Um item que a documentação não fecha, e por isso fica registrado como dúvida:**
+
+- `buscarClientePorCpfCnpj` devolve o **primeiro** resultado da busca sem conferir
+  localmente se o CPF bate. A função vizinha faz o oposto (confere). A referência
+  do Asaas documenta o filtro mas **não diz se o casamento é exato ou por
+  prefixo** — então não é possível afirmar daqui se há risco de pegar o cliente
+  errado. `fonte: não confirmado` — vale um teste real no sandbox.
+
+**Segurança do endpoint:** a autenticação do webhook do Asaas é **só o token** no
+header (não existe HMAC do lado deles), e o nosso endpoint não tem allowlist de IP
+nem rate limit. Isso é limitação do provedor, não nossa — mas significa que o token
+é a única defesa, e vale tratá-lo como segredo de primeira classe.
 
 ### 5.5 O que só o dono pode conferir ou resolver
 
