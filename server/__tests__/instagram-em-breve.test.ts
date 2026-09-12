@@ -77,7 +77,8 @@ describe("os textos avisam 'em breve' sem apagar o Instagram", () => {
     // Os outros chips não mudam.
     expect(fonte).toContain('{ nome: "Asaas", cor: "bg-success" }');
     expect(fonte).toContain('{ nome: "WhatsApp", cor: "bg-[#25d366]" }');
-    expect(fonte).toContain('{ nome: "PJe · TJCE", cor: "bg-info" }');
+    // O chip do PJe lê a cobertura da fonte única (texto honesto de tribunais).
+    expect(fonte).toContain('{ nome: chipPjeIntegracoes(), cor: "bg-info" }');
     expect(fonte).toContain('{ nome: "BACEN", cor: "bg-warning" }');
   });
 
