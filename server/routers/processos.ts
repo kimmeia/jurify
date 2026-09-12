@@ -15,6 +15,7 @@
  * operacional externo (só servidor + tribunal de origem).
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { z } from "zod";
 import { eq, desc, and, or, ne, sql, isNull, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -40,13 +41,12 @@ import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
 import { capaPorCnjNoDataJud } from "../processos/capa-datajud";
 import { gravarCapaNoCard } from "../processos/gravar-capa-no-card";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
-import { siglasSuportadas } from "../processos/tribunais-pdpj";
 import { ambienteSuportaTeste } from "../_core/ambiente";
 import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resumir-movimentacao";
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
-import { normalizarTribunais } from "../../shared/tribunais-pje";
+import { mensagemTribunalSemMotor, normalizarTribunais } from "../../shared/tribunais-pje";
 import { normalizarCnj, mascararCnj, validarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import {
   ehRequestMotorProprio,
@@ -295,9 +295,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message:
-            `Consulta para ${tribunal.siglaTribunal} ainda está em desenvolvimento. ` +
-            `Tribunais cobertos hoje: TJCE 1º grau. Próximos: TJSP, TRT-7, TJRJ.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
           cause: { motivo: "tribunal_sem_motor", tribunal: tribunal.codigoTribunal },
         });
       }
@@ -306,7 +304,7 @@ export const processosRouter = router({
       if (!sistemaCofre) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Sistema cofre pra ${tribunal.siglaTribunal} ainda não mapeado`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -608,21 +606,20 @@ export const processosRouter = router({
               "x-api-key": apiKey,
               "anthropic-version": "2023-06-01",
             },
-            body: JSON.stringify({
+            body: JSON.stringify(montarBodyAnthropic({
               model: "claude-opus-4-7",
               system: promptSystem,
               messages: [{ role: "user", content: promptUser }],
-              max_tokens: 2200,
-              temperature: 0.4,
-            }),
+              maxTokens: 2200,
+              temperatura: 0.4,
+            })),
             signal: AbortSignal.timeout(30000),
           });
           if (!res.ok) {
             const text = await res.text();
             throw new Error(`Anthropic ${res.status}: ${text.slice(0, 200)}`);
           }
-          const data = (await res.json()) as { content?: Array<{ text?: string }> };
-          resumo = (data.content?.[0]?.text || "").trim();
+          resumo = textoDaRespostaAnthropic(await res.json());
         } else {
           const res = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
@@ -822,7 +819,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Consulta direta pra ${tribunal.siglaTribunal} ainda não disponível.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -830,7 +827,7 @@ export const processosRouter = router({
       if (!sistemaCofre) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message: `Sistema cofre pra ${tribunal.siglaTribunal} ainda não mapeado`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 
@@ -1253,9 +1250,7 @@ export const processosRouter = router({
       if (!tribunal.temMotorProprio) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
-          message:
-            `O robô ainda não entra no ${tribunal.siglaTribunal}. ` +
-            `Hoje ele cobre: ${siglasSuportadas()}.`,
+          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
         });
       }
 

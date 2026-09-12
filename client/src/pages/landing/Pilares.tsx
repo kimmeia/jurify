@@ -48,12 +48,12 @@ export function Pilares() {
           </div>
           <h3 className="font-display text-2xl font-bold">Atendimento omnichannel</h3>
           <p className="mt-2 max-w-md text-sm leading-relaxed text-info/70">
-            WhatsApp, Instagram e e-mail num inbox só. Brief de IA, linha do tempo unificada e
-            resposta sugerida. O lead nunca esfria.
+            WhatsApp num inbox só — Instagram e e-mail em breve. Brief de IA, linha do tempo
+            unificada e resposta sugerida. O lead nunca esfria.
           </p>
           <div className="mt-5 flex gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#25d366]/20 px-2.5 py-1 text-[11px] font-semibold text-success"><i className="h-1.5 w-1.5 rounded-full bg-[#25d366]" /> WhatsApp</span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-danger/20 px-2.5 py-1 text-[11px] font-semibold text-danger-fg"><i className="h-1.5 w-1.5 rounded-full bg-[#e1306c]" /> Instagram</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-danger/20 px-2.5 py-1 text-[11px] font-semibold text-danger-fg"><i className="h-1.5 w-1.5 rounded-full bg-[#e1306c]" /> Instagram <span className="inline-flex items-center gap-1 rounded-full bg-warning-bg px-1.5 py-0.5 text-[9px] font-bold text-warning-fg"><i className="h-1 w-1 rounded-full bg-warning" /> em breve</span></span>
           </div>
         </motion.div>
 

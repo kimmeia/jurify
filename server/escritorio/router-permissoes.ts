@@ -15,6 +15,7 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "./db-escritorio";
 import { getDb } from "../db";
@@ -400,6 +401,18 @@ export const permissoesRouter = router({
       if (!perm.allowed) throw new Error("Sem permissão.");
       const db = await getDb();
       if (!db) throw new Error("Database indisponível");
+
+      // O cargo tem que ser deste escritório: `permissoes_cargo` só tem
+      // cargoId, então um id alheio gravado aqui faria a matriz de outro
+      // escritório valer para este colaborador.
+      const [cargo] = await db
+        .select({ id: cargosPersonalizados.id })
+        .from(cargosPersonalizados)
+        .where(and(eq(cargosPersonalizados.id, input.cargoId), eq(cargosPersonalizados.escritorioId, perm.escritorioId)))
+        .limit(1);
+      if (!cargo) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Cargo não encontrado neste escritório." });
+      }
 
       await db.update(colaboradores)
         .set({ cargoPersonalizadoId: input.cargoId })

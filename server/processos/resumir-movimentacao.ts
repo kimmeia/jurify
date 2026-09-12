@@ -18,6 +18,7 @@
  * — comportamento atual preservado quando IA cai.
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { escritorios } from "../../drizzle/schema";
@@ -162,13 +163,13 @@ async function chamarAnthropic(system: string, user: string, modelo: string, max
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({
+    body: JSON.stringify(montarBodyAnthropic({
       model: modelo,
       system,
       messages: [{ role: "user", content: user }],
-      max_tokens: maxTokens,
-      temperature: 0.2,
-    }),
+      maxTokens,
+      temperatura: 0.2,
+    })),
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
   if (!res.ok) {
@@ -176,11 +177,8 @@ async function chamarAnthropic(system: string, user: string, modelo: string, max
     log.warn({ status: res.status, body: t.slice(0, 200) }, "Anthropic retornou erro");
     return null;
   }
-  const data = (await res.json()) as {
-    content?: Array<{ text?: string }>;
-  };
-  const out = data.content?.[0]?.text?.trim();
-  return out && out.length > 0 ? out : null;
+  const out = textoDaRespostaAnthropic(await res.json());
+  return out.length > 0 ? out : null;
 }
 
 /**

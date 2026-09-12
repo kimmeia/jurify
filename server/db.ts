@@ -2,6 +2,7 @@ import { eq, and, or, desc, sql, like, inArray, notInArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, users, subscriptions, calculosHistorico, userCredits, InsertCalculoHistorico, escritorios, colaboradores, planos } from "../drizzle/schema";
 import { PLANS } from "./billing/products";
+import { emCarenciaDeCancelamento } from "../shared/assinatura-carencia";
 import { createLogger } from "./_core/logger";
 import { escapeLikePattern } from "./_core/sql-helpers";
 import {
@@ -110,17 +111,23 @@ export async function getUserByGoogleSub(googleSub: string) {
  * Sub é considerada com acesso ativo quando:
  *   - cortesia=true E (cortesiaExpiraEm é null OU ainda não passou), OU
  *   - status='active', OU
- *   - status='trialing' E (trialExpiraEm é null OU ainda não passou)
+ *   - status='trialing' E (trialExpiraEm é null OU ainda não passou), OU
+ *   - status='canceled' E cancelAtPeriodEnd E fimPeriodoPagoEm ainda não
+ *     passou (carência da cláusula 5 dos Termos: o acesso permanece até o
+ *     fim do período já pago)
  *
  * Cortesia tem prioridade sobre status — admin pode conceder acesso a um
  * cliente cuja assinatura está canceled/past_due no Asaas, por exemplo.
  *
  * Defesa em profundidade pro trial: mesmo que o cron de expiração não tenha
  * rodado ainda (status ainda é 'trialing'), respeitamos trialExpiraEm aqui.
+ *
+ * `canceled` SEM a flag ou SEM data continua bloqueando na hora: é o caso
+ * do trial expirado, da troca de plano paga e da assinatura substituída.
  */
 export function temAcessoAtivo(sub: Pick<
   typeof subscriptions.$inferSelect,
-  "status" | "cortesia" | "cortesiaExpiraEm" | "trialExpiraEm"
+  "status" | "cortesia" | "cortesiaExpiraEm" | "trialExpiraEm" | "cancelAtPeriodEnd" | "fimPeriodoPagoEm"
 >): boolean {
   if (sub.cortesia) {
     if (sub.cortesiaExpiraEm == null) return true;
@@ -130,7 +137,36 @@ export function temAcessoAtivo(sub: Pick<
   if (sub.status === "trialing") {
     return sub.trialExpiraEm == null || sub.trialExpiraEm > Date.now();
   }
+  if (sub.status === "canceled") {
+    return emCarenciaDeCancelamento(sub, Date.now());
+  }
   return false;
+}
+
+export { emCarenciaDeCancelamento };
+
+/**
+ * Qual das assinaturas do user vale hoje. Ordem explícita:
+ * cortesia > active > trialing > canceled em carência. Sem ela, quem
+ * cancelou e assinou de novo poderia ter a cancelada (ainda no período
+ * pago) escolhida no lugar da nova — e "Cancelar assinatura" apontaria
+ * pra assinatura errada.
+ */
+export function escolherAssinaturaAtiva<
+  T extends Pick<
+    typeof subscriptions.$inferSelect,
+    "status" | "cortesia" | "cortesiaExpiraEm" | "trialExpiraEm" | "cancelAtPeriodEnd" | "fimPeriodoPagoEm"
+  >,
+>(todas: T[]): T | null {
+  const comAcesso = todas.filter((s) => temAcessoAtivo(s));
+  const cortesia = comAcesso.find((s) => s.cortesia);
+  if (cortesia) return cortesia;
+  const active = comAcesso.find((s) => s.status === "active");
+  if (active) return active;
+  const trialing = comAcesso.find((s) => s.status === "trialing");
+  if (trialing) return trialing;
+  const emCarencia = comAcesso.find((s) => s.status === "canceled");
+  return emCarencia ?? null;
 }
 
 /**
@@ -138,6 +174,8 @@ export function temAcessoAtivo(sub: Pick<
  *
  * Inclui cortesia: se o user tem uma sub marcada como cortesia e ainda
  * dentro do prazo, ela é retornada mesmo se `status` não for 'active'.
+ * Inclui a assinatura cancelada ainda dentro do período pago — por último,
+ * só quando não há nada melhor.
  */
 export async function getActiveSubscription(userId: number) {
   const db = await getDb();
@@ -148,29 +186,7 @@ export async function getActiveSubscription(userId: number) {
     .from(subscriptions)
     .where(eq(subscriptions.userId, userId));
 
-  // Cortesia tem prioridade — se houver, retorna ela
-  const cortesia = todas.find((s) =>
-    temAcessoAtivo({
-      status: s.status,
-      cortesia: s.cortesia,
-      cortesiaExpiraEm: s.cortesiaExpiraEm,
-      trialExpiraEm: s.trialExpiraEm,
-    }) && s.cortesia,
-  );
-  if (cortesia) return cortesia;
-
-  // Senão, comportamento normal: active OU trialing ainda não expirado.
-  // Usa temAcessoAtivo pra centralizar a regra (evita duplicar a checagem
-  // de trialExpiraEm aqui).
-  const ativa = todas.find((s) =>
-    temAcessoAtivo({
-      status: s.status,
-      cortesia: s.cortesia,
-      cortesiaExpiraEm: s.cortesiaExpiraEm,
-      trialExpiraEm: s.trialExpiraEm,
-    })
-  );
-  return ativa ?? null;
+  return escolherAssinaturaAtiva(todas);
 }
 
 /**

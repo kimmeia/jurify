@@ -255,7 +255,7 @@ export function CenarioCard({
 
 export function legendaCoresGatilho(): Array<{ cor: string; label: string }> {
   return [
-    { cor: "bg-info", label: "Mensagem (WhatsApp · Instagram · Facebook)" },
+    { cor: "bg-info", label: "Mensagem (WhatsApp · Instagram e Facebook em breve)" },
     { cor: "bg-success", label: "Asaas (recebido · vencido · próximo)" },
     { cor: "bg-info", label: "CRM (novo lead)" },
     { cor: "bg-muted-foreground/50", label: "Manual" },
