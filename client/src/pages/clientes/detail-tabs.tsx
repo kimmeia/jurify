@@ -1332,7 +1332,12 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
   const [docUrl, setDocUrl] = useState("");
   const [diasExp, setDiasExp] = useState(30);
   const [linkCopiado, setLinkCopiado] = useState<string | null>(null);
-  const [excluirAssinAlvo, setExcluirAssinAlvo] = useState<{ id: number; titulo: string } | null>(null);
+  const [excluirAssinAlvo, setExcluirAssinAlvo] = useState<
+    { id: number; titulo: string; assinado: boolean; assinante: string | null; assinadoAt: string | null } | null
+  >(null);
+  // Aceite do risco, só no documento assinado: apagar prova não pode ser um
+  // clique de reflexo em cima do "Excluir" de sempre.
+  const [aceitouPerder, setAceitouPerder] = useState(false);
   const [dadosAssinaturaId, setDadosAssinaturaId] = useState<number | null>(null);
 
   const comprovanteMut = (trpc as any).assinaturas.gerarComprovante.useMutation({
@@ -1498,7 +1503,24 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
                     <FileText className="h-3 w-3" />
                   </Button>
                 )}
-                {a.status !== "assinado" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setExcluirAssinAlvo({ id: a.id, titulo: a.titulo || "Documento sem título" })}><Trash2 className="h-3 w-3" /></Button>}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-destructive"
+                  title="Excluir documento"
+                  onClick={() => {
+                    setAceitouPerder(false);
+                    setExcluirAssinAlvo({
+                      id: a.id,
+                      titulo: a.titulo || "Documento sem título",
+                      assinado: a.status === "assinado",
+                      assinante: a.assinantNome || null,
+                      assinadoAt: a.assinadoAt || null,
+                    });
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               </div>
             </div>
             );
@@ -1512,25 +1534,78 @@ export function AssinaturasTab({ contatoId, cliente, assinaturas, onRefresh }: {
     <AlertDialog open={!!excluirAssinAlvo} onOpenChange={(o) => !o && setExcluirAssinAlvo(null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Excluir documento de assinatura?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {excluirAssinAlvo?.assinado ? "Excluir um documento assinado?" : "Excluir documento de assinatura?"}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            <strong>{excluirAssinAlvo?.titulo}</strong> será removido permanentemente.
-            Se já tiver sido enviado ao cliente, o link parará de funcionar.
+            <strong>{excluirAssinAlvo?.titulo}</strong>
+            {excluirAssinAlvo?.assinado ? (
+              <>
+                {excluirAssinAlvo.assinadoAt && (
+                  <>
+                    {" — assinado em "}
+                    {new Date(excluirAssinAlvo.assinadoAt).toLocaleString("pt-BR")}
+                    {excluirAssinAlvo.assinante ? ` por ${excluirAssinAlvo.assinante}` : ""}
+                  </>
+                )}
+                .
+              </>
+            ) : (
+              <>
+                {" "}será removido permanentemente. Se já tiver sido enviado ao cliente,
+                o link parará de funcionar.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
+
+        {excluirAssinAlvo?.assinado && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-danger/30 bg-danger-bg p-3">
+              <p className="text-micro font-bold uppercase tracking-wide text-danger-fg mb-1.5">
+                O que some para sempre
+              </p>
+              <ul className="list-disc pl-4 space-y-0.5 text-apoio text-danger-fg">
+                <li>O desenho da assinatura</li>
+                <li>Data, hora e IP de quem assinou</li>
+                <li>O PDF carimbado e o documento original (apagados do servidor)</li>
+                <li>O link de assinatura</li>
+              </ul>
+            </div>
+            <label className="flex items-start gap-2 text-apoio text-foreground cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5 accent-danger"
+                checked={aceitouPerder}
+                onChange={(e) => setAceitouPerder(e.target.checked)}
+              />
+              <span>Entendi que a prova desta assinatura será apagada e que não há como recuperar.</span>
+            </label>
+          </div>
+        )}
+
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             className="bg-danger hover:bg-danger"
-            onClick={() => {
+            onClick={(e) => {
+              // Assinado sem aceite: o clique não fecha o diálogo nem exclui.
+              if (excluirAssinAlvo?.assinado && !aceitouPerder) {
+                e.preventDefault();
+                return;
+              }
               if (excluirAssinAlvo) {
                 excluirMut.mutate({ id: excluirAssinAlvo.id });
                 setExcluirAssinAlvo(null);
               }
             }}
-            disabled={excluirMut.isPending}
+            disabled={excluirMut.isPending || (!!excluirAssinAlvo?.assinado && !aceitouPerder)}
           >
-            {excluirMut.isPending ? "Excluindo..." : "Excluir"}
+            {excluirMut.isPending
+              ? "Excluindo..."
+              : excluirAssinAlvo?.assinado
+                ? "Excluir definitivamente"
+                : "Excluir"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
