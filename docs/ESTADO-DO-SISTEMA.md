@@ -90,6 +90,27 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ---
 
+## 1.1 Se for fazer só cinco coisas, faça estas
+
+Ordenado por dano × prazo, não por dificuldade.
+
+| # | o que | por quê agora |
+|---|---|---|
+| 1 | **Conferir em Admin → Integrações se há chave Anthropic conectada** | é um minuto. Se houver, Atendente IA, JurisIA e captura de campos estão devolvendo erro **hoje** (seção 5.2) |
+| 2 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (item 1 da seção 10.1) |
+| 3 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
+| 4 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam (seção 5.3.1) |
+| 5 | **Corrigir o detector de cobrança duplicada** | ele não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
+
+E duas que são de graça, porque são só texto:
+
+- **Alinhar a skill de mockup com a regra do dono** — ela manda entregar PNG, a
+  regra manda entregar HTML (seção 9.3).
+- **Tirar o "+90 tribunais" da tela de Processos** — o servidor procura em um
+  (seção 9.2).
+
+---
+
 ## 2. Baseline medido
 
 Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
@@ -773,11 +794,24 @@ marcado no aviso no topo do CLAUDE.md.
   um estado como linha no relatório de cobertura, sem derrubar os outros.
   `shared/tribunais-pje.ts` oferece **16 tribunais** (12 estaduais + TRF1/2/3/6;
   TRF5 fica fora porque é consulta pública, TRF4 usa eproc sem adapter).
-  O que segue verdade: **só o TJCE foi validado em campo**, e os endereços dos TRFs
-  foram deduzidos do padrão. A frase correta é "ligado para 16, comprovado em 1".
-  Isso importa comercialmente: a comparação da landing promete "novas ações por
-  CPF/CNPJ" **sem ressalva**, enquanto as vantagens dos planos novos dizem "novas
-  ações: TJCE por enquanto". Uma peça promete demais, a outra promete de menos.
+  **Mas há DOIS caminhos, e eles não são iguais** — é aqui que a frase do doc
+  acerta pela metade:
+
+  | caminho | cobertura real |
+  |---|---|
+  | **vigilância contínua** (o cron de novas ações) | percorre os tribunais do monitoramento; **ligado para os 16** |
+  | **consulta avulsa** (botão "Consultar" por CPF/CNPJ na tela) | **só TJCE, cravado no código.** Mapeia o sistema da credencial para `"tjce"` ou `null`, e `null` recusa com "Busca por CPF/CNPJ ainda só funciona pra TJCE" |
+
+  Então: o doc está **certo sobre a consulta avulsa** e **desatualizado sobre a
+  vigilância**. E só o TJCE foi validado em campo nos dois casos — os endereços dos
+  TRFs foram deduzidos do padrão.
+
+  **O problema comercial é maior do que o do doc.** A tela de Processos anuncia,
+  em dois lugares, "busca por CPF/CNPJ em **+90 tribunais**", e durante a busca
+  escreve "Buscando em **todos os tribunais**". O servidor procura em **um**. A
+  comparação da landing promete "novas ações por CPF/CNPJ" sem ressalva, enquanto as
+  vantagens dos planos novos dizem "novas ações: TJCE por enquanto". Três textos,
+  três promessas diferentes, e a mais visível é a mais errada.
 
 **Coisas que o texto afirma e o código nunca fez, ou faz diferente:**
 
@@ -841,4 +875,166 @@ justamente o que esta seção mostra estar defasada.
 
 Quando a conferência fechar, o resultado entra aqui como tabela `id → estado`, e
 passa a ser mantida pela regra do topo deste documento.
+
+---
+
+## 10. Achados por assunto (auditoria de subsistema)
+
+Os subsistemas do servidor e as telas foram auditados um por um, com uma leitura
+cética em cima de cada achado grave. Abaixo estão **só os de gravidade alta ou
+crítica**, agrupados pelo que interessa ao dono. Os de gravidade média e baixa
+existem em quantidade e entram neste documento conforme forem tratados.
+
+Cada item cita o arquivo. Nenhum foi corrigido — esta passada foi de leitura.
+
+### 10.1 Dinheiro — o que pode sumir, duplicar ou aparecer errado
+
+1. **A faxina diária apaga parcelas de parcelamento longo.** `asaas-sync.ts`
+   remove cobranças com vencimento a mais de um ano. O sistema permite parcelar em
+   até 24×, de mês em mês — então **um parcelamento em 24× perde metade das
+   parcelas** do Financeiro. *(crítico)*
+2. **Transferência do Asaas para o banco é lançada como DESPESA.** A importação do
+   extrato trata todo débito da conta Asaas como despesa, inclusive a retirada do
+   próprio dinheiro. Isso **derruba o lucro do DRE** por um movimento que não é
+   custo nenhum.
+3. **O resumo financeiro do cliente soma só as 20 cobranças mais recentes.**
+   `resumoContato` busca com `limit(20)` e calcula "pendente / vencido / pago"
+   percorrendo esse recorte. Cliente com histórico longo aparece devendo menos do
+   que deve.
+4. **O webhook marca o evento como processado ANTES de gravar a cobrança.** Se a
+   gravação falha, a retentativa do Asaas é descartada como repetida e **o
+   pagamento se perde**.
+5. **Criar assinatura recorrente não tem proteção contra repetição** e a assinatura
+   **não é registrada no banco**. Requisição lenta + segundo clique = cliente
+   assinado duas vezes. As procedures vizinhas (cobrança e parcelamento) têm duas
+   camadas de proteção; esta não tem nenhuma.
+6. **Cobrança manual também não tem.** Timeout + novo clique = lançamento duplicado.
+7. **Um único 429 do Asaas congela a integração inteira por até 12 horas** — não só
+   o endpoint que estourou.
+8. **"Resetar histórico de cobranças" é mais destrutivo do que anuncia.** Apaga a
+   tabela de idempotência do webhook (**o cliente pode receber cobrança por WhatsApp
+   duas vezes**) e o log que impede o robô mensal de fechar o mesmo período
+   novamente (**a comissão pode ser lançada duas vezes**), mas preserva a despesa já
+   lançada. Deixa ainda o acordo apontando para uma cobrança apagada. E o caminho de
+   recuperação que a própria mensagem manda seguir **não existe na tela**.
+9. **A trava que protege comissão já fechada existe em uma porta e não na outra.**
+   Vincular beneficiário pela porta nova recusa mexer em cobrança já comissionada; a
+   tela do Financeiro usa a porta velha, sem trava. E "Desvincular" não devolve a
+   comissão ao atendente original, embora o código prometa que é reversível.
+10. **Os cartões do topo do Financeiro e o gráfico contam status diferentes** —
+    dois totais para a mesma coisa, na mesma tela.
+11. **CPF com máscara versus só dígitos cria ficha duplicada** em pelo menos três
+    caminhos (webhook, adoção de órfãs e "Novo cliente" do Financeiro). O cadastro
+    guarda o CPF exatamente como foi digitado; a busca compara só dígitos.
+
+### 10.2 Quem vê o quê — permissão faltando em coisa sensível
+
+12. **O saldo da conta Asaas e a prévia da chave de API vão para qualquer
+    colaborador logado** (`asaas.status`, sem gate de Financeiro).
+13. **Qualquer colaborador lê o dinheiro de qualquer cliente.** `resumoContato` e
+    `resumoPorContatos` — que alimentam o crachá financeiro da ficha — não checam
+    permissão nenhuma. Na tela, a aba Financeiro da ficha **mostra os valores para
+    quem tem o módulo Financeiro inteiro desligado**.
+14. **Três botões de sincronizar não pedem permissão de Financeiro**, e um deles
+    **move pagamentos entre clientes**.
+15. **"Sincronizar clientes" reescreve nome e CPF de todos os clientes** sem pedir
+    permissão, ao contrário de todas as procedures vizinhas.
+16. **"Monitorar"/"Parar" na ficha do cliente não checa permissão** — qualquer
+    colaborador liga uma vigilância paga ou apaga a existente.
+17. **Assinatura eletrônica não tem gate nenhum** (já detalhado em **D-5**).
+18. **Duas mutations de canal ficaram sem o gate de gestão** — qualquer colaborador
+    marca o número como registrado e rearma o disjuntor anti-banimento.
+19. **Salvar um fluxo do SmartFlow escreve por id sem amarrar o escritório** quando
+    o cargo tem "editar" sem "ver" — o único caminho de tenancy que sobrou nesta
+    varredura.
+
+### 10.3 O robô e a automação
+
+20. **Depois de um passo "Esperar (delay)", o fluxo retoma no bloco errado.** Só os
+    blocos que esperam mensagem do cliente gravam onde pararam; o `esperar` não
+    grava, e a retomada **conta passos em vez de seguir as setas**. *(crítico)*
+21. **Execução pode ficar "rodando" para sempre.** O claim atômico zera o prazo de
+    retomada antes de carregar o cenário; se o cenário não existe mais, aquela linha
+    nunca mais é tocada por ninguém. *(crítico)*
+22. **"Esperar" com minutos negativos trava a execução para sempre**, e o aviso do
+    editor afirma exatamente o contrário.
+23. **Com dois fluxos ativos no mesmo gatilho, qual roda é sorte** — a consulta não
+    tem ordenação.
+24. **"Executar agora" manda WhatsApp frio para qualquer número digitado.** O
+    saneamento do contexto manual remove canal, contato e conversa, mas deixa passar
+    o telefone — e a exigência de opt-in não pega, porque o número não é contato.
+25. **Um botão de menu chamado "Cancelar" ou "Sair" descadastra o cliente dos
+    avisos** e mata o fluxo no meio. A palavra é interpretada como opt-out.
+26. **A confirmação de descadastro é enviada mesmo com o atendente conduzindo a
+    conversa** — o robô fala por cima dele, pelo caminho que as travas de 10 e 11/09
+    não cobrem.
+27. **A resposta fixa do canal é reenviada a cada mensagem do cliente** — cinco
+    mensagens, cinco respostas iguais. Não há controle de repetição.
+28. **A resposta do robô não guarda o identificador da Meta**, então falha de
+    entrega nunca aparece, e no modo celular a bolha duplica.
+29. **As travas de envio não conferem a janela de 24 horas** em todos os caminhos:
+    fluxo automático e aviso de chamada perdida vão para a Meta e tomam erro 131047.
+30. **Uma ligação recebida de número desconhecido grava
+    `contatos.responsavelId`** — exatamente o campo que o resto do sistema evita
+    gravar de propósito, porque ele gruda o cliente no primeiro atendente para
+    sempre.
+31. **O pedido de permissão de ligação é a única mensagem proativa que não exige
+    opt-in**, e não respeita o limite da Meta de um pedido por 24h.
+
+### 10.4 Telas que prometem o que o servidor não faz
+
+32. **"Busca por CPF/CNPJ em +90 tribunais"** — o servidor procura em **um**
+    (detalhado na seção 9.2).
+33. **A tela de Processos cobra em "créditos" que o servidor parou de debitar em
+    11/09.** "Custo: 1 crédito" aparece na consulta, no buscar histórico e no resumo
+    de IA. O que vale hoje é o teto mensal do plano.
+34. **A Central de Movimentações mostra no máximo 80 linhas** — sem paginação, sem
+    "carregar mais" — e **as contagens saem desse recorte**.
+35. **A busca da Central diz "por cliente"** e procura num campo que é sempre o CNJ.
+36. **"Ativar monitoramento automático" da importação do Advbox não funciona com a
+    credencial nacional** — que é justamente a recomendada no Cofre.
+37. **"Monitorar" pega a primeira credencial do Cofre sem olhar o tribunal**, e o
+    servidor aceita.
+38. **"Nova Conversa" diz "Conversa iniciada!" e a mensagem não sai** quando o
+    número nunca falou com o escritório.
+39. **Nos templates de mensagem, `{{email}}` e `{{escritorio}}` sempre saem em
+    branco** — e `{{escritorio}}` é o exemplo que o próprio campo sugere.
+40. **"Ligar via WhatsApp" usa o telefone do cadastro em vez do número da
+    conversa** — e o do cadastro pode estar sem DDI.
+41. **Trocar o "Responsável pelo atendimento" não funciona para atendente**, mas a
+    tela deixa escolher e responde "Atualizado!".
+42. **Instagram e Messenger conectam e mostram "Conectado" sem nunca receber nem
+    enviar mensagem** (detalhado na seção 5.3.1).
+43. **WhatsApp conecta, a inscrição no webhook falha, e a tela comemora
+    "Conectado"** — a falha não é gravada nem mostrada.
+44. **Quem conecta o Asaas durante um rate limit fica "conectado" para sempre sem
+    webhook registrado** — nada em tempo real, e em silêncio.
+45. **O limite de conexões de WhatsApp do plano não é aplicado no fluxo de um
+    clique** — só nos dois caminhos manuais.
+
+### 10.5 O editor de fluxos (SmartFlow) — o que atrapalha quem monta
+
+46. **Ligar/desligar o cenário no topo apaga as alterações não salvas.**
+47. **Sair do editor com alterações não salvas não avisa nada** — apesar de a tela
+    mostrar "Alterações não salvas" em amarelo.
+48. **Duas setas saindo do mesmo ponto de saída: só uma é salva** (as duas aparecem
+    desenhadas).
+49. **Apagar uma opção e criar outra gera duas com o mesmo código** — um caminho se
+    perde.
+50. **"Testar cenário" nunca consegue testar um fluxo de conversa**, porque o
+    servidor remove o contato do contexto — e o próprio diálogo sugere preencher
+    justamente esse campo.
+51. **Bloco sem a configuração obrigatória mostra bolinha VERDE "Configuração OK"**
+    e quebra na execução: a validação não cobre metade dos tipos.
+52. **No "Mover card" do Kanban, o quadro escolhido não é salvo**, e mexer nele
+    apaga a coluna.
+53. **A galeria de "modelos prontos" nasce vazia para todo escritório** — o diálogo
+    convida a escolher um modelo e não há nenhum.
+
+### 10.6 Nada nisto foi inventado
+
+Todo item acima passou por duas leituras: a que encontrou e uma cética que tentou
+derrubar, indo ao código conferir se havia guard, gate, default ou caminho
+alternativo que o primeiro não viu. O que não sobreviveu à segunda leitura ficou
+fora — incluindo, como registrado no item **D-4**, um achado meu.
 
