@@ -935,6 +935,63 @@ REAL no Asaas), R$ 497,00 no cabeçalho de um plano sob consulta e dois
   - **Não conferido daqui**: o ambiente bloqueia os portais dos tribunais e
     o `api-publica.datajud.cnj.jus.br` (proxy 403). O desenho saiu do código;
     o teste real é o dono abrir a aba.
+- **Entregue 11/09 (urgente do dono): "WinAnsi cannot encode Ş (0x015e)".**
+  Print: quatro documentos assinados com "Assinado, mas o PDF carimbado não
+  foi gerado". As 14 fontes padrão do PDF só escrevem WinAnsi (Latin-1 + 27
+  símbolos), e o nome do assinante era "Alexandre Yirtici **Ş**ahin":
+  `estamparAssinatura` estourava e o cliente ficava com a assinatura
+  registrada e sem comprovante. `shared/texto-pdf-winansi.ts`
+  (`textoParaPdfWinAnsi`) filtra todo texto de fora antes do `drawText` —
+  a letra impossível vira a mais próxima (Ş→S, ğ→g, ı→i por mapa, o resto
+  por NFD sem os acentos), **português passa intacto**, e escrita sem
+  equivalente latino vira "?" (`precisaFonteUnicode` avisa) em vez de
+  derrubar o documento. O nome como a pessoa digitou continua no banco e na
+  tela de dados da assinatura; para o PDF sair com o "Ş" exato seria
+  preciso embutir fonte Unicode (fontkit + arquivo de fonte, não feito).
+  `gerarComprovante` refaz o PDF dos já assinados e limpa `comprovanteErro`.
+  Amarra: `pdf-texto-winansi` (8 testes, carimba PDF de verdade com nome
+  turco) — 8 mutações vermelhas. Mesma família NÃO corrigida (pdfkit não
+  estoura, imprime caractere errado): `comissao-pdf` e `conferencia-pdf`.
+- **Entregue 12/09, excluir documento de assinatura — mockup
+  `mockup-excluir-documento-assinado.html`, decisões do dono: apaga do
+  servidor, só atendente do cliente e gestores, sem "arquivar" (o documento
+  já fica guardado em Documentos).** A lixeira existia, mas era desenhada
+  só com `a.status !== "assinado"` — documento assinado não tinha caminho
+  nenhum para sair da lista. Agora aparece em todos os estados.
+  - `assinaturas.excluir` apaga também os arquivos do disco (documentoUrl,
+    documentoAssinadoUrl, assinaturaImagemUrl) passando por `caminhoInterno`
+    — link externo não é nosso para apagar — e arquivo preso não impede a
+    exclusão do registro (senão o documento voltava para a lista).
+  - Status `assinado` exige `podeVerCliente` (que passou a ser EXPORTADA de
+    router-clientes) sobre o `contatoId` do documento: responsável do
+    cadastro, de lead, ou `verTodos`. Documento não assinado segue sem trava
+    de cargo, como sempre foi. Quem só ATENDE a conversa não exclui — a
+    liberação de 02/09 (`atendeConversaDoContato`) continua nos 4 usos de
+    sempre, e o teste que os conta não foi tocado.
+  - `registrarAuditoria("assinatura.excluir")` guarda título, status,
+    contatoId, assinante, data e quantos arquivos sumiram: depois de
+    excluído não existe mais o que consultar.
+  - Tela: confirmação forte no assinado (nomeia documento e assinante,
+    lista o que some, checkbox de aceite que zera a cada abertura, botão
+    travado sem ele); documento não assinado mantém o texto curto de antes.
+  Amarra: `excluir-assinatura` (16 testes) — 15 mutações vermelhas (a do
+  cliente conferido só morreu depois de a amarra olhar a CHAMADA, porque
+  `contatoId` também aparece na auditoria). `tenancy-cargo-assinatura-
+  linha-tempo` atualizado (a resposta ganhou `arquivosApagados`).
+- **Mockup entregue 11/09, aguardando "pode fazer": app preso em versão
+  antiga** (`mockup-versao-nova-atualizar.html`). O dono relatou pela
+  terceira vez "cache no módulo Clientes: o nome do cabeçalho troca e os
+  campos não". As duas proteções (remount por `key={cliente.id}` desde
+  10/08 e re-hidratação desde 09/09) estão em produção e tornam o sintoma
+  impossível no código de hoje — mas `client/public/sw.js` **não muda desde
+  09/08**, então `updatefound` nunca dispara (o aviso de versão nova em
+  `pwa.ts` está morto na prática) e a casca (`/` e `/index.html`) cacheada
+  no install nunca é regravada: uma navegação com rede ruim carrega o app
+  de 09/08 — um dia ANTES do conserto do formulário. Decisão do dono: faixa
+  "Nova versão · Atualizar" (não recarregar sozinho com campo preenchido).
+  Proposta: versão do cache por build, casca regravada a cada abertura boa,
+  Salvar carregando o id de quem preencheu a tela, `key={selId}` na ficha
+  inteira e versão à vista + registro no Sentry.
 - **09/09, autorizado ("pode corrigir também")**: `metricasChurn` (LTV/
   ARPU da Visão Geral) deixou de somar o `PLANS` fixo (R$ 497 por
   "completo" sob consulta) — agrega no banco com a MESMA regra do
