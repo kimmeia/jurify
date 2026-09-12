@@ -42,6 +42,40 @@ function gerarTokenConfirmacao(): string {
   return randomBytes(32).toString("hex");
 }
 
+export const MENSAGEM_EMAIL_JA_CADASTRADO =
+  "Já existe uma conta com este e-mail. Tente fazer login ou, se não lembra a senha, use \"Esqueci a senha\".";
+
+/**
+ * Invalida os tokens de confirmação ainda abertos do usuário, gera um novo
+ * e manda o e-mail. É o mesmo caminho do "Reenviar email" e do cadastro
+ * repetido de conta não confirmada — um só lugar decide como reenviar.
+ */
+async function reenviarEmailDeConfirmacao(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  user: { id: number; email: string; name: string | null },
+): Promise<{ success: boolean; error?: string }> {
+  await db.update(emailConfirmationTokens)
+    .set({ usedAt: new Date() })
+    .where(and(
+      eq(emailConfirmationTokens.userId, user.id),
+      isNull(emailConfirmationTokens.usedAt),
+    ));
+
+  const token = gerarTokenConfirmacao();
+  const expiraEm = new Date(Date.now() + CONFIRMACAO_EMAIL_TTL_MS);
+  await db.insert(emailConfirmationTokens).values({
+    userId: user.id,
+    token,
+    expiresAt: expiraEm,
+  });
+
+  return enviarEmailConfirmacao({
+    email: user.email,
+    nome: user.name || "",
+    token,
+  });
+}
+
 /** Bloqueia login de usuário que foi removido de TODOS os escritórios
  *  em que tinha vínculo. Mantém o flag de remoção visível pra ele entender
  *  por que não consegue mais entrar. */
@@ -323,10 +357,14 @@ export const authRouter = router({
       // Verifica se já existe
       const existing = await getUserByEmail(email);
       if (existing) {
-        // Caso especial: usuário pode ter sido removido como colaborador
-        // antes do hard-delete do PR #33, ficando órfão (sem vínculo
-        // ativo). Permite o re-cadastro nesse caso, deletando o registro
-        // órfão antes de criar o novo.
+        // Conta que já existe NUNCA é apagada nem alterada por esta rota:
+        // ela é pública, e "sem vínculo ativo" (colaborador removido, dono
+        // ainda em onboarding) não é prova de posse do e-mail. Só quem
+        // recebe o e-mail de confirmação segue adiante.
+        if (existing.emailVerificado) {
+          throw new TRPCError({ code: "CONFLICT", message: MENSAGEM_EMAIL_JA_CADASTRADO });
+        }
+
         const db = await getDb();
         let orfao = false;
         if (db) {
@@ -337,28 +375,29 @@ export const authRouter = router({
               and(eq(colaboradores.userId, existing.id), eq(colaboradores.ativo, true)),
             )
             .limit(1);
-          // Sem vínculo ativo → considera órfão
           if (!vincAtivo) orfao = true;
         }
 
-        if (orfao) {
-          // Limpa registros antigos (se houver) e o próprio user
-          if (db) {
-            try {
-              await db.delete(colaboradores).where(eq(colaboradores.userId, existing.id));
-            } catch {}
-            try {
-              await db.delete(users).where(eq(users.id, existing.id));
-            } catch (err: any) {
-              throw new Error(
-                "Não foi possível recriar a conta — entre em contato com o suporte. (FK constraint)",
-              );
-            }
-          }
-          // Continua o fluxo normal de criação abaixo
-        } else {
-          throw new Error("Já existe uma conta com este e-mail. Tente fazer login.");
+        if (!orfao) {
+          throw new TRPCError({ code: "CONFLICT", message: MENSAGEM_EMAIL_JA_CADASTRADO });
         }
+
+        // Não confirmada e sem vínculo: a resposta é idêntica à de um
+        // cadastro novo, pra não revelar que a conta existe. O e-mail de
+        // confirmação vai pra caixa do dono do endereço — quem tem a senha
+        // antiga continua com ela, quem não tem pede "Esqueci a senha".
+        if (db) {
+          const r = await reenviarEmailDeConfirmacao(db, { id: existing.id, email, name: existing.name });
+          if (!r.success) log.warn({ email, error: r.error }, "Falha ao reenviar email de confirmação no cadastro repetido");
+        }
+        log.info({ email }, "Cadastro repetido de conta não confirmada — confirmação reenviada");
+
+        return {
+          success: true,
+          email,
+          name: input.name,
+          needsConfirmation: true,
+        } as const;
       }
 
       const passwordHash = await hashPassword(input.password);
@@ -940,27 +979,8 @@ export const authRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       // Invalida tokens anteriores não usados (mantém histórico via usedAt)
-      await db.update(emailConfirmationTokens)
-        .set({ usedAt: new Date() })
-        .where(and(
-          eq(emailConfirmationTokens.userId, user.id),
-          isNull(emailConfirmationTokens.usedAt),
-        ));
-
-      // Gera token novo
-      const token = gerarTokenConfirmacao();
-      const expiraEm = new Date(Date.now() + CONFIRMACAO_EMAIL_TTL_MS);
-      await db.insert(emailConfirmationTokens).values({
-        userId: user.id,
-        token,
-        expiresAt: expiraEm,
-      });
-
-      const r = await enviarEmailConfirmacao({
-        email,
-        nome: user.name || "",
-        token,
-      });
+      // e gera o novo antes de enviar.
+      const r = await reenviarEmailDeConfirmacao(db, { id: user.id, email, name: user.name });
       if (!r.success) {
         log.warn({ email, error: r.error }, "Falha ao reenviar email de confirmação");
       }
