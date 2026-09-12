@@ -1338,9 +1338,17 @@ pelo proxy; `pnpm dev` roda as 225 migrations sozinho).
 de lado no celular"; com dados, quatro rolavam — e com tarefas/conversas
 povoadas (12/09) apareceu uma quinta e uma sexta.
 
-### Proposta de 12/09 — 6 achados corrigidos, AGUARDANDO APROVAÇÃO
+### Entregue 12/09 — 7 consertos de tela, APROVADA ("pode fazer") e MERGEADA
 
-Branch `claude/proposta-visual-11-09`, **não mergeada**. Mockup navegável
+Mergeada em `develop` e em `main` no mesmo dia, com os pré-requisitos da casa
+conferidos na ponta final DEPOIS de trazer `develop` para dentro da branch:
+`pnpm check` limpo, **5.602 testes verdes (383 arquivos)** e `vite build`
+passando. O único conflito do merge foi em `CLAUDE.md` (as duas pontas
+escreveram no mesmo lugar) — resolvido mantendo os DOIS lados, o bloco do
+`develop` antes da seção nova.
+
+O que foi aprovado saiu do comparador `comparador-antes-depois.html` (ver
+regra 4 acima). Mockup navegável
 `mockup-navegavel-telas-reais.html` (antes ⟷ depois, computador ⟷ celular,
 telas serializadas do app rodando). Medido no navegador, largura do conteúdo
 num celular de 390px: Dashboard 461→390 · Processos 449→390 ·
