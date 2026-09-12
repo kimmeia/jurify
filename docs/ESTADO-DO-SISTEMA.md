@@ -1901,7 +1901,7 @@ aprovado."** Lido item a item:
 | 4 · Cancelar | aprovado: honrar a cláusula 5 |
 | 4b · Reativar | aprovado: sim (cria a assinatura de novo no Asaas, cobrança no fim do período) |
 | 4c · Cancelamento direto no Asaas | aprovado: honra o período também |
-| 5 · Sob medida | aprovado: igualar ao Escala |
+| 5 · Sob medida | aprovado: igualar ao Escala — **ENTREGUE** (migration 0226: cada limite vira `GREATEST(atual, Escala)`, NULL/0 = sem limite preservados, módulos do Escala entram sem duplicar; amarra `sob-medida-igual-escala.test.ts`, 14 testes, 3 mutações vermelhas) |
 
 Ressalva registrada na resposta ao dono: **este ambiente não alcança nenhum portal de
 tribunal**; o motor para TJSP/TRTs é construído e testado com páginas gravadas, e nasce
