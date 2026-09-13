@@ -197,6 +197,19 @@ export default function Configuracoes() {
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
   const { data: convites, refetch: refetchConvites } = trpc.configuracoes.listarConvites.useQuery(undefined, { enabled: !!data });
+  // Deep-link dos Primeiros passos (?tab=equipe&novo=1): leva ao formulário
+  // de convite — o mesmo caminho do botão "Convidar colaborador".
+  useEffect(() => {
+    if (!data || tabAtiva !== "equipe") return;
+    if (new URLSearchParams(window.location.search).get("novo") !== "1") return;
+    const t = setTimeout(() => {
+      const el = document.getElementById("convite-email-input");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement | null)?.focus();
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   // Cargos personalizados criados pelo admin em /configuracoes (aba
   // Permissões). O select de "Cargo" do convite mostra os 3 default +
   // todos os custom (excluindo "Dono", "Gestor", "Atendente", "Estagiário"
@@ -1715,10 +1728,15 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   // Estado do dialog Meta: além do tipo de canal, guarda canalId opcional.
   // canalId definido → editando canal específico (entre os múltiplos).
   // canalId undefined → conectando NOVO canal (caso de "+ Adicionar outro").
+  // Deep-link dos Primeiros passos (?tab=canais&novo=1): abre o diálogo de
+  // conectar um WhatsApp novo, o mesmo do card "Conectar".
   const [metaDialog, setMetaDialog] = useState<{
     type: "whatsapp" | "instagram" | "messenger";
     canalId?: number;
-  } | null>(null);
+  } | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("tab") === "canais" && p.get("novo") === "1" ? { type: "whatsapp" } : null;
+  });
   // Dialog separado: cadastro manual de WhatsApp Cloud API. Bypassa o
   // Embedded Signup (usado quando OAuth tá bloqueado — App Review pendente,
   // BM dona do app coincide com a dos números, etc).

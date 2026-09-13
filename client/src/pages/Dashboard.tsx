@@ -26,6 +26,7 @@ import DashboardComercial from "./dashboards/DashboardComercial";
 import DashboardFinanceiro from "./dashboards/DashboardFinanceiro";
 import DashboardOperacional from "./dashboards/DashboardOperacional";
 import DashboardProcessual from "./dashboards/DashboardProcessual";
+import PrimeirosPassos from "./dashboards/PrimeirosPassos";
 import { AvisoBanner } from "./dashboards/common";
 import { useModulosContratados } from "@/components/ModuloGuard";
 import { pacoteProcessualPuro } from "@shared/modulos-contratacao";
@@ -94,8 +95,16 @@ export default function Dashboard() {
   }
 
   // ─── Modo multi-painel: tabs no topo ────────────────────────────────────
+  // Primeiros passos vai em cima, SÓ pro dono (o servidor devolve a lista
+  // vazia pra quem não é). Na variante processual, acima, o GuiaProcessual
+  // já faz esse papel — por isso o bloco fica depois daquele return.
   if (podeMultiPainel) {
-    return <DashboardComTabs setorTipoInicial={setorTipo} setorNome={setorNome} />;
+    return (
+      <div className="space-y-4">
+        {isDono && <PrimeirosPassos />}
+        <DashboardComTabs setorTipoInicial={setorTipo} setorNome={setorNome} />
+      </div>
+    );
   }
 
   // ─── Setor específico do colaborador ────────────────────────────────────
