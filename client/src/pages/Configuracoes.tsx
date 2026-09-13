@@ -5,6 +5,7 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -828,7 +829,10 @@ export default function Configuracoes() {
                 {/* Header: contagem + botão Convidar */}
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-base font-bold tracking-tight">Equipe</h3>
+                    <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+                      Equipe
+                      <AjudaDaTela tarefa="convidar-equipe" />
+                    </h3>
                     <p className="text-[11px] text-muted-foreground">
                       <b className="text-foreground">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
                       {(equipeData?.extras ?? 0) > 0 && (
@@ -1872,8 +1876,9 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-info-fg">
+            <p className="text-sm font-semibold text-info-fg flex items-center gap-1.5">
               Conexão simplificada via Facebook
+              <AjudaDaTela tarefa="conectar-whatsapp" />
             </p>
             <p className="text-xs text-info-fg mt-1">
               O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar
