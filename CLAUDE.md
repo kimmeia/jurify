@@ -1385,6 +1385,54 @@ saudação, precisa de mockup próprio); tabela do Financeiro virar cartão no
 celular (hoje rola dentro da moldura — virar cartão é redesenho); contraste
 do valor verde-escuro no hero verde (decisão de cor).
 
+### Entregue 13/09 — a cor do menu, nos dois produtos ("pode fazer")
+
+Ele mandou o print do header do Devular: *"vamos usar essa cor do header na
+mesma transparência para o menu de juridflow e também para o menu de devular"*.
+O valor está em `crm-saas` `client/src/pages/Home.tsx:148` —
+`bg-[#07060f]/80 backdrop-blur-md`, borda `white/10`.
+
+**O achado que decidiu a forma:** "a mesma transparência" NÃO dá a mesma cor
+nos dois lugares, porque o que está atrás muda. Medido com canvas, não no olho:
+o header sobre o hero escuro do Devular rende `#080710`; os MESMOS 80% num
+menu lateral, que tem a página clara atrás, rendem `#37363e` — grafite. Por
+isso vai **sólido `#07060f`**: é a cor que se vê, e fica idêntica nos dois
+produtos independente do fundo. Mockup `mockup-cor-do-menu.html` com as quatro
+variantes fotografadas no app rodando, em tamanho real.
+
+- **JuridFlow (feito e conferido):** `--sidebar: #07060f` nos DOIS temas — o
+  menu é o mesmo objeto no claro e no escuro. Item ativo fica no azul de hoje
+  (`#24384f`): sobre o quase-preto ele GANHA contraste; a variante que
+  neutralizava esse azul quase apagava onde o usuário está. O comentário do
+  token dizia "Ardósia, não quase-preto" — era a decisão anterior e virou o
+  contrário do código; reescrito. Sonda de pixel no app rodando confirma
+  `#07060f`. Amarra `cor-do-menu.test.ts` (5 testes, 6 mutações vermelhas em
+  `scratchpad/mutar-cor-do-menu.py`) — ela proíbe a transparência voltar, que é
+  o erro que PARECE certo: copiar a linha do Devular e receber cinza.
+- **Devular (`crm-saas`, branch `claude/cor-do-menu-13-09`, NÃO conferido
+  visualmente):** lá o menu era quase branco com texto escuro, então os cinco
+  tokens mudam juntos (texto, item ativo, contraste do item, borda em branco
+  10%, acento) — trocar só o fundo deixaria texto preto sobre preto. Entrou
+  também `color-scheme: dark` na barra, que o JuridFlow já pagou para aprender
+  (sem isso o navegador pinta a rolagem nativa em cinza claro cortando o menu).
+  **Não foi possível subir aquele app aqui**: o proxy bloqueia
+  `codeload.github.com` (403) e uma dependência vem de lá, então `pnpm install`
+  falha. A amarra de lá (6 testes, 6 mutações vermelhas) foi rodada com o
+  vitest do jurify, porque o teste só lê o CSS.
+
+### Raio-X do design em produção (13/09)
+
+`docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o
+que foi REALMENTE pintado dentro do `<main>`. Base factual para a conversa de
+estética que ele abriu ("insatisfeito com o layout"): **22 tamanhos de texto**
+no sistema (o menor 9px, abaixo do piso de 11px da Fatia 1), **14 raios de
+canto** distintos onde o tema declara 4/5/6/8/10, até **17 cores de fundo**
+numa tela só, e **UMA sombra** no sistema inteiro — nada tem elevação, é tudo
+borda de 1px sobre fundo quase branco. Ferramentas: `raio-x-design.mjs` e
+`fotos-producao.mjs` (esconde a faixa "STAGING", que não existe em produção e
+pintaria de âmbar o topo de toda foto — achado falso num estudo de estética).
+O estudo com as propostas segue aberto.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
