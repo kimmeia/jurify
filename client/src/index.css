@@ -223,11 +223,17 @@
   /* O navy do tema claro invertido pro fundo escuro: mesma matiz (~246), mais
    * claro, senão o acento sumiria no fundo. */
   --primary: oklch(0.700 0.103 250);
-  --primary-foreground: oklch(0.198 0.014 253);
+  --primary-foreground: oklch(0.186 0.029 271);
   --sidebar-primary: oklch(0.70 0.170 293);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  /* Mesmas cinco matizes, re-escalonadas pra superfície escura — não é o
-     inverso automático das claras. */
+  /* O tema escuro inteiro é da MESMA família do menu (navy da marca, matiz
+   * ~271): antes o fundo era um cinza-azulado de outra matiz e o menu ficava
+   * parecendo colado de outro sistema. Fundo e superfícies são os do modo
+   * escuro do Devular (#0E1220 e #151A2B), a escada de claridade é a que já
+   * existia aqui.
+   *
+   * Mesmas cinco matizes de gráfico, re-escalonadas pra superfície escura —
+   * não é o inverso automático das claras. */
   --viz-1: #3987e5;
   --viz-2: #d95926;
   --viz-3: #199e70;
@@ -235,21 +241,21 @@
   --viz-5: #d55181;
   --viz-trilho: oklch(0.30 0.006 286);
 
-  --background: oklch(0.198 0.014 253);
-  --foreground: oklch(0.938 0.009 248);
-  --card: oklch(0.239 0.018 245);
-  --card-foreground: oklch(0.938 0.009 248);
-  --popover: oklch(0.239 0.018 245);
-  --popover-foreground: oklch(0.938 0.009 248);
-  --secondary: oklch(0.264 0.020 245);
-  --secondary-foreground: oklch(0.843 0.017 245);
-  --muted: oklch(0.264 0.020 245);
-  --muted-foreground: oklch(0.702 0.024 244);
-  --accent: oklch(0.268 0.042 252);
-  --accent-foreground:  oklch(0.938 0.009 248);
+  --background: oklch(0.186 0.029 271);
+  --foreground: oklch(0.938 0.012 271);
+  --card: oklch(0.222 0.034 271);
+  --card-foreground: oklch(0.938 0.012 271);
+  --popover: oklch(0.222 0.034 271);
+  --popover-foreground: oklch(0.938 0.012 271);
+  --secondary: oklch(0.264 0.038 271);
+  --secondary-foreground: oklch(0.850 0.027 272);
+  --muted: oklch(0.264 0.038 271);
+  --muted-foreground: oklch(0.702 0.035 271);
+  --accent: oklch(0.290 0.048 271);
+  --accent-foreground:  oklch(0.938 0.012 271);
   --destructive: oklch(0.661 0.152 26);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.320 0.021 246);
+  --border: oklch(0.304 0.052 271);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.700 0.103 250);
   --chart-1: oklch(0.800 0.090 248);
@@ -257,9 +263,9 @@
   --chart-3: oklch(0.600 0.100 250);
   --chart-4: oklch(0.500 0.095 252);
   --chart-5: oklch(0.400 0.080 254);
-  --sidebar: oklch(0.222 0.034 271);
+  --sidebar: oklch(0.254 0.044 272);
   --sidebar-foreground: oklch(0.850 0.027 272);
-  --sidebar-accent: oklch(0.272 0.046 271);
+  --sidebar-accent: oklch(0.304 0.052 271);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.70 0.170 293);

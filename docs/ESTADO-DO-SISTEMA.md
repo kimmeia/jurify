@@ -2550,6 +2550,24 @@ acento continua sendo o violeta da marca, e a logo não mudou. Medido depois
 no navegador: fundo `#1b2138`, texto `#c7cde0`, item aberto `#252d49`,
 marca branca + `#9a73ff`.
 
+### 19.2.2 O tema escuro inteiro entrou na mesma família
+
+Resposta dele à primeira troca: *"Não ta muito alinhado com o tema escuro."*
+Estava certo, e dá pra medir: no escuro o menu ficou `#151a2b` (matiz 271) e
+o conteúdo continuava `#11161c` com cartões `#182027` (matiz ~245, cinza-
+azulado). Menu e conteúdo eram de famílias diferentes, e é isso que se vê.
+
+O modo escuro do Devular está escrito no `BRAND.md` dele: fundo `#0E1220`,
+superfícies `#151A2B`. O tema escuro do JuridFlow passou a usar esses dois e
+a mesma matiz (~271) nas neutras — a escada de claridade que já existia aqui
+não mudou, só a matiz. O menu usa o MESMO navy `#1B2138` nos dois temas, o
+que o deixa um passo mais claro que os cartões e mantém a separação que o
+comentário do bloco sempre pediu. Medido no navegador: fundo `#0e1220`,
+cartão `#151a2b`, menu `#1b2138`, borda `#252d49`.
+
+Fora do alcance de propósito: as cinco cores de gráfico e as semânticas
+(verde/âmbar/vermelho), que são estado e não marca.
+
 ### 19.2.1 O que a primeira versão tinha (registro)
 
 `--sidebar`, `--sidebar-accent`, `--sidebar-primary` e `--sidebar-ring`

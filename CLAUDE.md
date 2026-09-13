@@ -1527,7 +1527,12 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   passou a ser o navy do Devular (`#1B2138`, tirado de `app/lib/core/theme.dart`
   do repositório dele, anexado à sessão), com texto `#C7CDE0` e superfície
   `#252D49`; o violeta ficou só na marca e no realce do item aberto — a regra
-  de lá é "navy é a base, o acento entra com moderação". Histórico abaixo.
+  de lá é "navy é a base, o acento entra com moderação". Em seguida ele apontou
+  que o TEMA ESCURO não acompanhava: o fundo era cinza-azulado de outra matiz
+  (~245) e o menu navy (271) parecia colado de outro sistema. O escuro inteiro
+  passou pra família do navy, com o fundo e as superfícies do modo escuro do
+  Devular (#0E1220 e #151A2B); gráfico e cores de estado ficaram de fora.
+  Histórico abaixo.
 - **Versão anterior do mesmo dia**: o menu lateral
   veste a cor da logo — fundo roxo-quase-preto, «Jurid» em branco puro, «Flow»
   e o item aberto em violeta; o marinho segue sendo a cor de ação do CONTEÚDO.
