@@ -33,7 +33,6 @@ export const MODULO_POR_NAMESPACE: Record<string, ModuloAppId | null> = {
   upload: null,
   roadmap: null,
   dashboard: null,
-  ajuda: null, // Central de ajuda / Primeiros passos — core, vale pra qualquer plano
 
   // gate próprio (add-on JurisIA) — não sobrepor
   jurisia: null,

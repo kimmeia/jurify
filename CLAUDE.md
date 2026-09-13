@@ -1657,18 +1657,19 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   `menu-cor-da-logo.test.ts`, 11 mutações vermelhas. Detalhe na seção 19 do
   documento de estado; a skill `mockup-juridflow` foi corrigida junto, porque
   dizia que violeta não é o app.
-- **Mergeado em develop e main (13/09, "pode mergear")**: Central de ajuda (`mockup-central-de-
-  ajuda.html`, "pode fazer" com as recomendações; ESTADO seção 18) — `/ajuda`
-  e `/ajuda/:tarefa` (`ClientAreaSoTermos`), 5 tarefas com prints reais + 16
-  "em breve", botão Ajuda na barra lateral, `AjudaDaTela` nas 5 telas,
-  Primeiros passos no Dashboard do dono (`ajuda.primeirosPassos`,
-  `shared/primeiros-passos.ts`), Visão rápida de Saúde em 3 linhas
-  (`shared/saude-semaforos.ts`; `capturaConfigurada` = `SENTRY_DSN_BACKEND ||
-  SENTRY_DSN`). Regra que nasceu aqui: rótulo de tela citado no manual vai
-  entre «» e tem que existir no arquivo da tela (teste `central-de-ajuda`).
-  O mockup foi desenhado na paleta antiga (violeta/Poppins); a implementação
-  segue o app (marinho, Inter). Amarras: `central-de-ajuda`,
-  `primeiros-passos`, `saude-semaforos` — 146 mutações vermelhas.
+- **Central de ajuda: entregue 13/09 de manhã e REMOVIDA por inteiro 13/09 à
+  noite**, por pedido expresso do dono (*"remova todo o módulo ajuda"*, depois
+  de *"remova esse ajuda, irei gravar os vídeos"*). Saíram: `/ajuda` e
+  `/ajuda/:tarefa`, o wrapper `ClientAreaSoTermos`, as 5 tarefas + 16 "em
+  breve", os 9 prints de `client/public/ajuda/`, o `AjudaDaTela` das 5 telas,
+  o botão do menu e o item do avatar no celular, e Primeiros passos por
+  completo (`router-ajuda.ts`, `shared/primeiros-passos.ts`,
+  `PrimeirosPassos.tsx`, namespace em `modulos-contratacao`) — com as duas
+  amarras do módulo. **Ficou de pé**: a Visão rápida de `/admin/saude` em 3
+  linhas (`shared/saude-semaforos.ts`; `capturaConfigurada` =
+  `SENTRY_DSN_BACKEND || SENTRY_DSN`), que é painel do admin e não faz parte da
+  Central, e o `redirect: false` do `serveStatic`. Detalhe na seção 18 do
+  documento de estado.
 
 ## Fila combinada com o dono (31/08/2026)
 

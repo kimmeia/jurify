@@ -4,7 +4,6 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -2828,7 +2827,6 @@ function HeroFinanceiro({
           <div>
             <p className="text-xs font-medium text-white/85 uppercase tracking-wider mb-1 flex items-center gap-1.5">
               Painel Financeiro
-              <AjudaDaTela tarefa="cobrar-cliente" />
             </p>
             <p className="text-xs text-white/70">
               {rangeCustom

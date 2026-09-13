@@ -2402,119 +2402,45 @@ certo:
 - **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
   laço, não a consulta.
 
-## 18. Central de ajuda — ENTREGUE e mergeada em develop e main (13/09)
+## 18. Central de ajuda — REMOVIDA por inteiro (13/09)
 
-Origem: o dono, olhando `/admin/saude`: *"esse robô funciona? está muito
-complexo. O princípio é ser fácil de usar. Precisamos criar um manual para
-ensinar a usar"* → *"vamos fazer"* → mockup `mockup-central-de-ajuda.html`
-(raiz do repo) → *"pode fazer"* (12/09), com as recomendações: página própria
-`/ajuda`; prints a partir do app real; "Primeiros passos" só pro dono; a ordem
-proposta dos 5 passos; Visão rápida em 3 linhas sem remover nada. **Mergeada em
-develop e main em 13/09 ("pode mergear"), junto com o motor fase 1.**
-Atenção: o mockup foi desenhado na paleta antiga (violeta/Poppins); a
-implementação segue o app (marinho, Inter, componentes de `components/ui`).
+O dono mandou: *"remova todo o módulo ajuda"*, depois de *"remova esse ajuda,
+irei gravar os vídeos"*. A Central inteira saiu do produto; o lugar dela vai
+ser ocupado por vídeos que ele mesmo vai gravar.
 
-### 18.1 O que existe agora
+**O que foi apagado** (tudo em um commit, com o histórico no git):
 
-- **Central `/ajuda` e `/ajuda/:tarefa`** (`client/src/pages/Ajuda.tsx`,
-  `client/src/pages/ajuda/`): busca por título e palavra-chave, tarefas
-  agrupadas nos MESMOS grupos do menu lateral (derivado de `GRUPOS_MENU`),
-  faixa "Primeiros passos" (só dono, fica mesmo depois de completo — é onde se
-  revê), rodapé "Falar com a gente" pelo `subscription.contatoComercial`
-  (nunca número cravado). Rotas dentro do app pelo wrapper `ClientAreaSoTermos` (AppLayout +
-  `TermosGate`, sem porteiro de módulo e sem guarda de assinatura); sem o módulo a página avisa e segue
-  legível (`contratoLibera`, a mesma régua do `ModuloGuard`, por
-  `modulosDaRota`). Botão **Ajuda** no rodapé da barra lateral (ao lado do
-  Buscar ⌘K), item "Ajuda" no menu do avatar do modo atendimento; `/ajuda`
-  liberada no modo focado do celular.
-- **Conteúdo** em `client/src/pages/ajuda/tarefas.ts` (fonte única, dados
-  tipados): 5 tarefas completas — Conectar o WhatsApp · Cadastrar um cliente ·
-  Vigiar um processo · Convidar alguém e dar permissões · Cobrar um cliente
-  (boleto ou Pix) — e 16 títulos "em breve" (sem link). Regra de escrita: todo
-  rótulo de tela vai entre «» e TEM que existir, letra por letra, no arquivo
-  da tela (`arquivoTela` + `arquivosApoio`) — o teste trava; foi isso que
-  corrigiu o mockup («Testar login» → «Validar», «Monitoramentos» →
-  «Monitoramento», o Novo Cliente exige qualificação e endereço).
-- **Prints reais** em `client/public/ajuda/*.png` (9, ≤ 250 KB, capturados
-  com Playwright do app rodando com escritório de demonstração fictício).
-  `serveStatic` ganhou `redirect: false` — com a pasta `dist/public/ajuda`
-  existindo, `GET /ajuda` devolvia 301 pra `/ajuda/`. Falta o print do
-  passo "Conectar com Facebook" (precisa de app Meta configurado).
-- **"?" ao lado do título** (`AjudaDaTela`) em Processos, Clientes,
-  Configurações → Equipe, Configurações → Canais e Financeiro, cada um
-  apontando pra tarefa da tela.
-- **Primeiros passos** (`server/escritorio/router-ajuda.ts`, procedure
-  `ajuda.primeirosPassos`; regras puras em `shared/primeiros-passos.ts`;
-  bloco `client/src/pages/dashboards/PrimeirosPassos.tsx`): 5 passos com
-  detecção por escritório — WhatsApp = canal `whatsapp_api` conectado com
-  telefone (régua da aba Canais); cliente = contato do escritório que NÃO
-  nasceu de mensagem de WhatsApp; Cofre = credencial ativa/validando;
-  processo = monitoramento de movimentações ativo; equipe = 2º colaborador
-  ativo ou convite enviado. Dono = `cargo === "dono"` do vínculo (mesma regra
-  do TermosGate); não-dono recebe lista vazia sem consulta nenhuma. Passo de
-  módulo não contratado sai da lista e do total. Cada passo abre o fluxo real
-  por deep-link (`?novo=1` — Clientes e Canais passaram a ler; Equipe rola e
-  foca o convite). Bloco some quando completo; a variante processual do
-  Dashboard NÃO monta o bloco (o `GuiaProcessual` segue lá).
-- **Saúde do sistema → Visão rápida em 3 linhas** (`shared/saude-semaforos.ts`:
-  `semaforoErros`, `semaforoAuditor`, `semaforoJornada`, `achadosRepetidos`,
-  `jornadaNaoConfiavel`; montagem query → semáforo também pura): semáforo +
-  frase + botão. Erros: o painel passou a AFIRMAR a captura do Sentry
-  (`capturaConfigurada` em `adminErros.listar`, lido do env do servidor —
-  fecha a observação da seção 11.1 "diz conectado sem conferir"); leitura do
-  Sentry falhando nunca vira verde. Auditor: sem rodar há mais de 36 h =
-  vermelho; achados repetidos (comparados pelas regras violadas, ou pelo
-  número quando o histórico não as traz) viram card "Precisa de você" na
-  Visão Geral. Jornada: menos de 2 s por tela = vermelho "resultado não
-  confiável" com "Rodar de novo" — e selo "NÃO CONFIÁVEL" no card da aba.
-  Tudo que existia (4 cards, Últimos erros, Últimas rondas, Fila de
-  tribunais) continua, dobrado em "Detalhes técnicos".
+- Telas: `client/src/pages/Ajuda.tsx`, `client/src/pages/ajuda/`
+  (`AjudaTarefa.tsx`, `TextoComRotulos.tsx`, `tarefas.ts` — as 5 tarefas
+  escritas e os 16 títulos "em breve").
+- O "?" das telas: `client/src/components/AjudaDaTela.tsx` e os 5 usos
+  (Processos, Clientes, Configurações → Equipe, Configurações → Canais,
+  Financeiro).
+- Rotas `/ajuda` e `/ajuda/:tarefa` no `App.tsx`, junto com o wrapper
+  `ClientAreaSoTermos`, que só existia para elas.
+- Portas de entrada no `AppLayout`: o botão do rodapé da barra lateral, o item
+  "Ajuda" do menu do avatar no modo atendimento e a liberação de `/ajuda` no
+  modo focado do celular.
+- Primeiros passos por completo: `server/escritorio/router-ajuda.ts`
+  (procedure `ajuda.primeirosPassos` e as 5 detecções), as regras puras de
+  `shared/primeiros-passos.ts`, o bloco
+  `client/src/pages/dashboards/PrimeirosPassos.tsx` (bloco do Dashboard +
+  resumo da Central) e o namespace `ajuda` de `shared/modulos-contratacao.ts`.
+- Os 9 prints reais de `client/public/ajuda/` (1,9 MB).
+- As amarras do módulo: `central-de-ajuda.test.ts` e `primeiros-passos.test.ts`.
 
-### 18.2 Como foi feito e conferido
+**O que FICOU de pé, de propósito:** a "Visão rápida" de `/admin/saude` em 3
+linhas e o `shared/saude-semaforos.ts` nasceram na mesma entrega, mas são o
+painel de saúde do admin — não são a Central, e ninguém mandou tirá-los. O
+`redirect: false` do `serveStatic` também fica: ele nasceu por causa da pasta
+`dist/public/ajuda`, mas vale para qualquer rota da SPA que colida com pasta de
+arquivo estático (o comentário foi reescrito para não citar a Central).
 
-Três frentes em worktrees (commits 500ed7e, 1ddb8f4, 6952acb), integradas em
-1563b95; 26 achados de três revisores independentes (tenancy, fidelidade ao
-mockup, qualidade das amarras), cada um julgado por 3 céticos — 25
-confirmados, 1 refutado (o card "Precisa de você" não pisca: as seis queries
-saem num único lote do `httpBatchLink`) — e corrigidos por área (7992a28,
-d2e6e28, 1d3b3c4). Verificação final no worktree: `tsc` limpo, **5.944
-testes em 398 arquivos**, `vite build` ok, árvore limpa. Dois prints foram
-RECAPTURADOS porque o seed de demonstração carregava um telefone real
-(trocado por fictício em `scratchpad/estudo-telas/povoar.sql`; amarra
-confere). Amarras: `central-de-ajuda` (rotas derivadas do
-App.tsx, rótulos no arquivo da tela, prints existem e são renderizados, botão
-e «?» no lugar), `primeiros-passos` (WHERE renderizado com `escritorioId` em
-cada consulta, dono/não-dono, cadeado, módulo, rotas), `saude-semaforos`
-(regras e bordas) — mutações em `scratchpad/mutar-central-ajuda.py`,
-`mutar-primeiros-passos.py`, `mutar-saude-semaforos.py`.
+O bloco "Primeiros passos" já tinha saído do Dashboard minutos antes, por um
+pedido separado dele ("informação demais aqui") — a remoção do módulo alcançou
+o resto.
 
-### 18.3 O que fica pra decisão do dono
-
-- O diálogo Novo Cliente exige CPF, qualificação e endereço; o manual diz a
-  verdade da tela. Se "nome e WhatsApp bastam" for a regra desejada, é
-  mudança no diálogo (mockup antes).
-- Lead que chega sozinho pelo WhatsApp não conta como "1º cliente cadastrado"
-  (decisão do integrador); convite expirado conta como "equipe convidada".
-- A promessa "sem risco de banimento" saiu do manual, mas continua no cartão
-  WhatsApp Business de Configurações e no diálogo da Meta — texto de produto,
-  mockup antes de mudar. Hoje o manual diz uma coisa e a tela outra.
-- **Dado real no repositório público**: o telefone de um cliente real ainda
-  aparece em `shared/telefone.ts`, testes, docs de auditoria e no CLAUDE.md
-  (caso Tirzah), além do histórico do git com os PNG antigos. Esta entrega
-  fechou só o print servido pelo app. Varrer o resto é decisão do dono.
-- Conferência visual no app rodando: feita pelo integrador em 13/09 (11 fotos,
-  1440px e 390px, nenhuma rola de lado; enviadas ao dono). O print do passo
-  "Conectar com Facebook" continua faltando (precisa de app Meta configurado).
-  Dois pontos vistos no celular, ambos comportamento ANTERIOR a esta entrega:
-  o Dashboard do dono em 390px abre direto no modo Atendimento (então o bloco
-  "Primeiros passos" só aparece no computador — a faixa da Central cobre o
-  celular), e o cabeçalho fixo desse modo escreve "Atendimento" mesmo com a
-  Central aberta embaixo.
-- Print de Canais mostra um número já conectado (ilustrativo).
-- Dentro da dobra "Detalhes técnicos", a lista antiga ainda usa a heurística
-  de 60 s pra jornada suspeita; as 3 linhas usam 2 s/tela. Unificar é
-  remoção da antiga.
-- Fatia 4 (mais 15 tarefas, prints pelo robô, vídeos) não começou.
+Medido depois: typecheck limpo, 5.920 testes verdes em 400 arquivos.
 
 ## 19. A cor do menu vem da logo — APROVADA pelo dono (13/09)
 
@@ -2702,3 +2628,22 @@ conserto e o teste continuava verde). 5 mutações vermelhas em
 Varrido de passagem: o único outro `!` sobre dado do servidor nos painéis é
 `cashFlow!` no Financeiro, e ele está dentro de um `(cashFlow?.x ?? 0) > 0` —
 não alcança o mesmo buraco.
+
+## 27. Buscar e Ajuda saem do menu; módulo de ajuda removido (13/09)
+
+Três pedidos seguidos do dono, na ordem em que chegaram:
+
+1. *"remova o buscar no menu lateral"* — saiu o BOTÃO do rodapé da barra
+   lateral. A busca do cabeçalho (seção 25) ficou como única porta visível e o
+   atalho ⌘K/Ctrl+K continua ligado no `AppLayout`.
+2. *"não continua, os cards, se continuar já mandei remover"* — o bloco
+   "Primeiros passos" saiu do topo do Dashboard do dono.
+3. *"remova esse ajuda, irei gravar os vídeos"* → *"remova todo o módulo
+   ajuda"* — a Central inteira, detalhada na seção 18.
+
+O rodapé da barra lateral ficou só com o avatar, engrenagem e sair.
+
+Amarra: o teste do módulo foi apagado junto com ele; o que sobrou guardando a
+decisão é o de "as telas cabem num celular", que trava a régua de abas, e o
+`modulos-contratacao.test.ts`, que quebraria se um router `ajuda` voltasse sem
+se declarar.

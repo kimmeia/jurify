@@ -535,7 +535,7 @@ function AppSidebarContent({
   useEffect(() => {
     if (!modoFocadoMobile) return;
     const permitida =
-      location === "/atendimento" || location.startsWith("/configuracoes") || location.startsWith("/ajuda");
+      location === "/atendimento" || location.startsWith("/configuracoes");
     if (!permitida) setLocation("/atendimento");
   }, [modoFocadoMobile, location, setLocation]);
 
@@ -700,25 +700,10 @@ function AppSidebarContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 shrink-0">
-            {/* A busca saiu daqui: ela vive no cabeçalho, alinhada ao nome do
-                usuário. O atalho ⌘K continua valendo — quem some é o botão. */}
-            <div className="mb-2 flex items-center gap-1.5 group-data-[collapsible=icon]:mb-1 group-data-[collapsible=icon]:justify-center">
-              {/* Central de ajuda: fora do `navigateOrBlock` de propósito —
-                  quem está sem plano é justamente quem mais precisa ler. */}
-              <button
-                onClick={() => setLocation("/ajuda")}
-                title="Central de ajuda"
-                aria-label="Ajuda"
-                className={`flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:px-1.5 ${
-                  location.startsWith("/ajuda")
-                    ? "border-sidebar-primary bg-sidebar-primary/10 text-sidebar-primary"
-                    : "border-sidebar-border bg-sidebar-accent/40 text-sidebar-foreground/60"
-                }`}
-              >
-                <CircleHelp className="h-3.5 w-3.5 shrink-0" />
-                <span className="group-data-[collapsible=icon]:hidden">Ajuda</span>
-              </button>
-            </div>
+            {/* A linha que ficava aqui tinha Buscar e Ajuda; os dois saíram a
+                pedido do dono (13/09). A busca vive no cabeçalho e o atalho
+                ⌘K continua ligado. O módulo de ajuda foi removido inteiro —
+                os vídeos vão ocupar o lugar dele. */}
             <div className="flex items-center gap-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:gap-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -863,10 +848,6 @@ function AppSidebarContent({
                   <DropdownMenuItem onClick={() => setLocation("/configuracoes")} className="cursor-pointer">
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Configurações</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setLocation("/ajuda")} className="cursor-pointer">
-                    <CircleHelp className="mr-2 h-4 w-4" />
-                    <span>Ajuda</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={abrirVersaoCompleta} className="cursor-pointer">
                     <Monitor className="mr-2 h-4 w-4" />
