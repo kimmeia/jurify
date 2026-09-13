@@ -42,6 +42,58 @@ export interface ResumoBackoffice {
   integracoes: IntegracaoResumo[];
 }
 
+/** Uma conta que paga (ou testa) o produto. Nunca o cliente FINAL dela. */
+export interface ContaBackoffice {
+  id: number;
+  nome: string;
+  email: string;
+  /** Nome do plano como o catálogo mostra, ou null em conta sem plano. */
+  plano: string | null;
+  /** "ativa" | "em_teste" | "inadimplente" | "cortesia" | "sem_assinatura" */
+  situacao: string;
+  /** Mensalidade em centavos. null = cortesia, sem plano ou sob consulta. */
+  valorCentavos: number | null;
+  /** ISO 8601 — quando a conta foi criada. */
+  desde: string;
+  /** ISO 8601 do último acesso, ou null se nunca entrou. */
+  ultimoAcesso: string | null;
+}
+
+export interface ListaContasBackoffice {
+  contrato: number;
+  produto: string;
+  geradoEm: string;
+  /** Total no produto inteiro, não só nesta página. */
+  total: number;
+  pagina: number;
+  porPagina: number;
+  contas: ContaBackoffice[];
+}
+
+export const CONTAS_POR_PAGINA = 50;
+
+/**
+ * Traduz o vocabulário interno de cada produto para o do painel.
+ *
+ * Cortesia é decidida ANTES do status porque no banco ela fica com
+ * `status = "active"` — sem esta ordem, cortesia apareceria como conta
+ * pagante e engordaria a lista de quem paga.
+ */
+export function situacaoDaConta(entrada: {
+  subStatus: string | null;
+  cortesia?: boolean | null;
+  cortesiaExpiraEm?: number | null;
+  agoraMs: number;
+}): string {
+  const { subStatus, cortesia, cortesiaExpiraEm, agoraMs } = entrada;
+  if (cortesia && (!cortesiaExpiraEm || cortesiaExpiraEm > agoraMs)) return "cortesia";
+  if (!subStatus) return "sem_assinatura";
+  if (subStatus === "active") return "ativa";
+  if (subStatus === "trialing") return "em_teste";
+  if (subStatus === "past_due" || subStatus === "unpaid") return "inadimplente";
+  return subStatus;
+}
+
 /** O que cada produto precisa reunir para montar a resposta. */
 export interface EntradaResumo {
   produto: string;
@@ -74,6 +126,55 @@ export interface EntradaResumo {
  * testada cairia em "falha" e pintaria de vermelho um painel saudável —
  * por isso ela vira "desconhecido" e só "erro" vira falha.
  */
+/** Pura: recebe as linhas já lidas do banco e monta a página de contas. */
+export function montarListaContas(entrada: {
+  produto: string;
+  agora: Date;
+  total: number;
+  pagina: number;
+  linhas: Array<{
+    id: number;
+    name: string | null;
+    email: string | null;
+    planNome: string | null;
+    planId: string | null;
+    subStatus: string | null;
+    valorMensalCentavos: number | null;
+    cortesia?: boolean | null;
+    cortesiaExpiraEm?: number | null;
+    createdAt: Date | string | number;
+    lastSignedIn?: Date | string | number | null;
+  }>;
+}): ListaContasBackoffice {
+  const agoraMs = entrada.agora.getTime();
+
+  return {
+    contrato: CONTRATO_BACKOFFICE_VERSAO,
+    produto: entrada.produto,
+    geradoEm: entrada.agora.toISOString(),
+    total: entrada.total,
+    pagina: entrada.pagina,
+    porPagina: CONTAS_POR_PAGINA,
+    contas: entrada.linhas.map((l) => ({
+      id: l.id,
+      // conta sem nome existe (cadastro parado antes de completar); o painel
+      // precisa de algo para escrever na linha, e o id não ajuda ninguém
+      nome: l.name?.trim() || "(sem nome)",
+      email: l.email ?? "",
+      plano: l.planNome ?? l.planId ?? null,
+      situacao: situacaoDaConta({
+        subStatus: l.subStatus,
+        cortesia: l.cortesia,
+        cortesiaExpiraEm: l.cortesiaExpiraEm,
+        agoraMs,
+      }),
+      valorCentavos: typeof l.valorMensalCentavos === "number" ? l.valorMensalCentavos : null,
+      desde: paraIso(l.createdAt) ?? entrada.agora.toISOString(),
+      ultimoAcesso: paraIso(l.lastSignedIn ?? null),
+    })),
+  };
+}
+
 export function statusDaIntegracao(bruto: string): StatusIntegracao {
   if (bruto === "conectado") return "ok";
   if (bruto === "erro") return "falha";

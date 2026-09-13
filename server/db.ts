@@ -329,6 +329,11 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
     situacao: import("./admin/funil-remarketing").TipoSituacao | null;
     trialIniciadoEm: number | null;
     trialExpiraEm: number | null;
+    /**
+     * Cortesia SEM validade fica com `cortesiaExpiraEm: null`, igual a quem
+     * não tem cortesia nenhuma — só este marcador separa os dois casos.
+     */
+    cortesia: boolean;
     cortesiaExpiraEm: number | null;
     ultimoContatoComercialEm: Date | null;
     ultimoContatoComercialCanal: string | null;
@@ -546,6 +551,7 @@ export async function getAllUsersWithSubscription(opts: GetAllUsersOpts = {}): P
       situacao,
       trialIniciadoEm: subInfo?.trialIniciadoEm ?? null,
       trialExpiraEm: subInfo?.trialExpiraEm ?? null,
+      cortesia: Boolean(subInfo?.cortesia),
       cortesiaExpiraEm: subInfo?.cortesia ? (subInfo?.cortesiaExpiraEm ?? null) : null,
       ultimoContatoComercialEm: u.ultimoContatoComercialEm ?? null,
       ultimoContatoComercialCanal: u.ultimoContatoComercialCanal ?? null,

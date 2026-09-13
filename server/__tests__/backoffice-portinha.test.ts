@@ -16,14 +16,19 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  CONTAS_POR_PAGINA,
   CONTRATO_BACKOFFICE_VERSAO,
+  montarListaContas,
   montarResumoBackoffice,
+  situacaoDaConta,
   statusDaIntegracao,
 } from "../../shared/backoffice-contrato";
 import {
   TAMANHO_MINIMO_CHAVE,
+  buscaPedida,
   conferirChave,
   extrairBearer,
+  paginaPedida,
 } from "../backoffice/rota-resumo";
 
 const CHAVE = "k".repeat(48);
@@ -185,6 +190,116 @@ describe("banco fora não vira notícia falsa", () => {
   });
 });
 
+describe("lista de contas", () => {
+  const linha = (over: Record<string, unknown> = {}) => ({
+    id: 7,
+    name: "Castro Nogueira Sociedade de Advogados",
+    email: "contato@castronogueira.adv.br",
+    planNome: "Escritório",
+    planId: "escritorio",
+    subStatus: "active",
+    valorMensalCentavos: 29700,
+    cortesia: false,
+    cortesiaExpiraEm: null,
+    createdAt: new Date("2026-03-12T10:00:00.000Z"),
+    lastSignedIn: new Date("2026-09-11T18:22:00.000Z"),
+    ...over,
+  });
+
+  const montar = (over: Record<string, unknown> = {}) =>
+    montarListaContas({
+      produto: "juridflow",
+      agora: new Date("2026-09-13T12:00:00.000Z"),
+      total: 38,
+      pagina: 1,
+      linhas: [linha(over)],
+    });
+
+  it("traduz a linha do banco para o vocabulário do painel", () => {
+    const r = montar();
+    expect(r.total).toBe(38);
+    expect(r.porPagina).toBe(CONTAS_POR_PAGINA);
+    expect(r.contas[0]).toEqual({
+      id: 7,
+      nome: "Castro Nogueira Sociedade de Advogados",
+      email: "contato@castronogueira.adv.br",
+      plano: "Escritório",
+      situacao: "ativa",
+      valorCentavos: 29700,
+      desde: "2026-03-12T10:00:00.000Z",
+      ultimoAcesso: "2026-09-11T18:22:00.000Z",
+    });
+  });
+
+  it("cortesia NÃO conta como conta paga, mesmo sem validade", () => {
+    const agoraMs = Date.parse("2026-09-13T12:00:00.000Z");
+    // no banco cortesia fica com status "active" — sem a ordem certa ela
+    // engordaria a lista de quem paga
+    expect(situacaoDaConta({ subStatus: "active", cortesia: true, cortesiaExpiraEm: null, agoraMs }))
+      .toBe("cortesia");
+    expect(montar({ cortesia: true }).contas[0].situacao).toBe("cortesia");
+  });
+
+  it("cortesia VENCIDA volta a ser o que o status diz", () => {
+    const agoraMs = Date.parse("2026-09-13T12:00:00.000Z");
+    expect(situacaoDaConta({
+      subStatus: "active", cortesia: true,
+      cortesiaExpiraEm: Date.parse("2026-01-01T00:00:00.000Z"), agoraMs,
+    })).toBe("ativa");
+  });
+
+  it("traduz os outros estados e não inventa nome para os desconhecidos", () => {
+    const agoraMs = Date.now();
+    expect(situacaoDaConta({ subStatus: "trialing", agoraMs })).toBe("em_teste");
+    expect(situacaoDaConta({ subStatus: "past_due", agoraMs })).toBe("inadimplente");
+    expect(situacaoDaConta({ subStatus: "unpaid", agoraMs })).toBe("inadimplente");
+    expect(situacaoDaConta({ subStatus: null, agoraMs })).toBe("sem_assinatura");
+    expect(situacaoDaConta({ subStatus: "incomplete", agoraMs })).toBe("incomplete");
+  });
+
+  it("conta sem nome e sem último acesso não quebra a linha", () => {
+    const r = montar({ name: null, email: null, lastSignedIn: null, planNome: null, planId: null });
+    expect(r.contas[0].nome).toBe("(sem nome)");
+    expect(r.contas[0].email).toBe("");
+    expect(r.contas[0].ultimoAcesso).toBeNull();
+    expect(r.contas[0].plano).toBeNull();
+  });
+
+  it("página fora da faixa vira 1 — nunca OFFSET negativo", () => {
+    expect(paginaPedida("3")).toBe(3);
+    expect(paginaPedida("-3")).toBe(1);
+    expect(paginaPedida("0")).toBe(1);
+    expect(paginaPedida("abacaxi")).toBe(1);
+    expect(paginaPedida(undefined)).toBe(1);
+    expect(paginaPedida(["2", "9"])).toBe(2);
+    expect(paginaPedida("2.9")).toBe(2);
+  });
+
+  it("busca é aparada e limitada", () => {
+    expect(buscaPedida("  castro  ")).toBe("castro");
+    expect(buscaPedida("x".repeat(500))).toHaveLength(120);
+    expect(buscaPedida(undefined)).toBe("");
+    expect(buscaPedida({ nao: "texto" })).toBe("");
+  });
+
+  it("a rota lê a MESMA função da tela Clientes do painel admin", () => {
+    // consulta própria aqui faria os dois painéis divergirem no dia em que a
+    // regra de "quem é cliente" mudasse num lugar só
+    expect(fonteRota).toContain("getAllUsersWithSubscription");
+    expect(fonteRota).toContain('tipo: "cliente"');
+    expect(fonteRota).toMatch(/app\.get\("\/api\/backoffice\/contas"/);
+  });
+
+  it("contas também recusa sem chave e cala com o banco fora", () => {
+    const trecho = fonteRota.slice(fonteRota.indexOf('"/api/backoffice/contas"'));
+    expect(trecho).toContain("servidor_sem_chave");
+    expect(trecho).toContain("status(401)");
+    expect(trecho).toMatch(/instanceof BancoIndisponivel[\s\S]*status\(503\)/);
+    const corpo = fonteRota.slice(fonteRota.indexOf("export async function montarContas"));
+    expect(corpo).toMatch(/if\s*\(!\(await getDb\(\)\)\)\s*throw/);
+  });
+});
+
 describe("registro no servidor", () => {
   it("a rota é registrada e tem teto de requisições", () => {
     // a CHAMADA, não o import: apagar só a chamada deixava o nome de pé na
@@ -193,8 +308,11 @@ describe("registro no servidor", () => {
     expect(fonteCore).toMatch(/app\.use\("\/api\/backoffice",\s*rateLimit\(/);
   });
 
-  it("a resposta não é cacheável", () => {
-    expect(fonteRota).toContain("no-store");
+  it("as DUAS rotas marcam a resposta como não cacheável", () => {
+    // contar: com só um `toContain`, apagar o no-store de uma rota passava
+    // batido porque o da outra ainda estava no arquivo
+    const quantos = fonteRota.match(/Cache-Control", "no-store"/g)?.length ?? 0;
+    expect(quantos).toBe(2);
   });
 });
 

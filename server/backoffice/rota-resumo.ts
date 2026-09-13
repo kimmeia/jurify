@@ -90,6 +90,46 @@ export async function montarResposta() {
   });
 }
 
+/**
+ * Lê a MESMA função que alimenta a tela Clientes do painel admin. Escrever
+ * uma consulta própria aqui faria o painel novo e o antigo divergirem no dia
+ * em que a regra de "quem é cliente" mudasse num lugar só.
+ */
+export async function montarContas(pagina: number, busca: string) {
+  const { getDb, getAllUsersWithSubscription } = await import("../db");
+  if (!(await getDb())) throw new BancoIndisponivel("banco indisponível");
+
+  const { CONTAS_POR_PAGINA, montarListaContas } = await import(
+    "../../shared/backoffice-contrato"
+  );
+
+  const { itens, total } = await getAllUsersWithSubscription({
+    limit: CONTAS_POR_PAGINA,
+    offset: (pagina - 1) * CONTAS_POR_PAGINA,
+    busca,
+    tipo: "cliente",
+  });
+
+  return montarListaContas({
+    produto: PRODUTO_BACKOFFICE,
+    agora: new Date(),
+    total,
+    pagina,
+    linhas: itens,
+  });
+}
+
+/** Página fora da faixa vira 1: `?pagina=-3` não pode virar OFFSET negativo. */
+export function paginaPedida(cru: unknown): number {
+  const n = Number(Array.isArray(cru) ? cru[0] : cru);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+}
+
+export function buscaPedida(cru: unknown): string {
+  const t = Array.isArray(cru) ? cru[0] : cru;
+  return typeof t === "string" ? t.slice(0, 120).trim() : "";
+}
+
 export function registerBackofficeRoutes(app: Express) {
   app.get("/api/backoffice/resumo", async (req, res) => {
     // Resposta de painel interno nunca é cacheável por intermediário.
@@ -121,6 +161,38 @@ export function registerBackofficeRoutes(app: Express) {
       }
       log.error({ err }, "Falha ao montar resumo do backoffice");
       res.status(500).json({ erro: "Não foi possível montar o resumo." });
+    }
+  });
+
+  app.get("/api/backoffice/contas", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+
+    const veredicto = conferirChave(req.headers.authorization, process.env.BACKOFFICE_API_KEY);
+
+    if (veredicto === "servidor_sem_chave") {
+      log.warn(
+        {},
+        "BACKOFFICE_API_KEY ausente ou curta demais — /api/backoffice/contas recusando tudo",
+      );
+      res.status(503).json({ erro: "Portinha do backoffice não configurada neste ambiente." });
+      return;
+    }
+
+    if (veredicto === "chave_invalida") {
+      res.status(401).json({ erro: "Chave inválida." });
+      return;
+    }
+
+    try {
+      res.json(await montarContas(paginaPedida(req.query.pagina), buscaPedida(req.query.busca)));
+    } catch (err) {
+      if (err instanceof BancoIndisponivel) {
+        log.error({}, "Contas do backoffice pedidas com o banco fora");
+        res.status(503).json({ erro: "Banco indisponível — a lista estaria incompleta." });
+        return;
+      }
+      log.error({ err }, "Falha ao montar contas do backoffice");
+      res.status(500).json({ erro: "Não foi possível montar a lista." });
     }
   });
 }

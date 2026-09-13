@@ -115,6 +115,41 @@ MUTACOES = [
      'res.status(503).json({ erro: "Banco indisponível — nenhum número é confiável agora." });',
      'res.status(500).json({ erro: "Banco indisponível." });'),
 
+    ("cortesia deixa de ser decidida antes do status (vira conta paga)",
+     CONTRATO,
+     'if (cortesia && (!cortesiaExpiraEm || cortesiaExpiraEm > agoraMs)) return "cortesia";',
+     ''),
+
+    ("cortesia vencida continua contando como cortesia",
+     CONTRATO,
+     'if (cortesia && (!cortesiaExpiraEm || cortesiaExpiraEm > agoraMs)) return "cortesia";',
+     'if (cortesia) return "cortesia";'),
+
+    ("inadimplente vira ativa",
+     CONTRATO,
+     'if (subStatus === "past_due" || subStatus === "unpaid") return "inadimplente";',
+     'if (subStatus === "unpaid") return "inadimplente";'),
+
+    ("página negativa passa (OFFSET negativo)",
+     ROTA,
+     'return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;',
+     'return Number.isFinite(n) ? Math.floor(n) : 1;'),
+
+    ("busca deixa de ser limitada",
+     ROTA,
+     'return typeof t === "string" ? t.slice(0, 120).trim() : "";',
+     'return typeof t === "string" ? t.trim() : "";'),
+
+    ("contas passa a listar TODO tipo de usuário, não só cliente",
+     ROTA,
+     'tipo: "cliente",',
+     ''),
+
+    ("contas serve sem conferir o banco",
+     ROTA,
+     'if (!(await getDb())) throw new BancoIndisponivel("banco indisponível");\n\n  const { CONTAS_POR_PAGINA, montarListaContas }',
+     'const { CONTAS_POR_PAGINA, montarListaContas }'),
+
     ("cookie de sessão passa a valer no domínio inteiro",
      COOKIES,
      'return {\n    httpOnly: true,',

@@ -159,7 +159,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.762 verdes, 391 arquivos** (13/09, depois da portinha do backoffice; eram 5.746 em 390 em 12/09, e 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.771 verdes, 391 arquivos** (13/09, depois da portinha do backoffice com a lista de contas; eram 5.746 em 390 em 12/09, e 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -922,7 +922,7 @@ O que existe deste lado, entregue hoje:
 | item | onde | o que faz |
 |---|---|---|
 | contrato | `montarResumoBackoffice`, `CONTRATO_BACKOFFICE_VERSAO` em `shared/backoffice-contrato.ts` | forma da resposta; o Devular terá cópia idêntica, e a versão deixa o painel avisar quando as duas divergirem |
-| rota | `registerBackofficeRoutes` em `server/backoffice/rota-resumo.ts` | `GET /api/backoffice/resumo` — contas, MRR e status das integrações |
+| rotas | `registerBackofficeRoutes` em `server/backoffice/rota-resumo.ts` | `GET /api/backoffice/resumo` (contas, MRR, integrações) e `GET /api/backoffice/contas` (lista paginada, via `getAllUsersWithSubscription` — a MESMA função da tela Clientes do painel) |
 | chave | `conferirChave`, env `BACKOFFICE_API_KEY` | `Bearer`, comparação de tempo constante, mínimo de 32 caracteres |
 
 Quatro decisões de desenho que valem mais que o código:
@@ -948,7 +948,7 @@ Quatro decisões de desenho que valem mais que o código:
 compartilha sessão com `backoffice.devular.com.br`. Escrever um `domain` ali
 junta os três apps numa sessão só, em silêncio — há teste travando.
 
-Amarra: `backoffice-portinha.test.ts` (16 testes) — 20 mutações vermelhas em
+Amarra: `backoffice-portinha.test.ts` (25 testes) — 27 mutações vermelhas em
 `scratchpad/mutar-backoffice.py`.
 
 **Estado das outras pontas (13/09):** a portinha gêmea do Devular está
