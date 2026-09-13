@@ -6,7 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * SubscriptionGuard wraps client-area pages.
- * Allows access if user has active subscription OR has credits (avulso/trial).
+ * Libera o app só com assinatura (paga, teste ou cortesia). Crédito era a
+ * segunda porta e saiu do produto em 13/09.
  * Admins bypass this check entirely.
  */
 export default function SubscriptionGuard({
@@ -28,30 +29,18 @@ export default function SubscriptionGuard({
     refetchOnWindowFocus: false,
   });
 
-  const {
-    data: credits,
-    isLoading: creditsLoading,
-    isFetched: creditsFetched,
-    error: creditsError,
-  } = trpc.dashboard.credits.useQuery(undefined, {
-    enabled: !!user && user.role === "user",
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
-  const isLoading = authLoading || (user?.role === "user" && (subLoading || creditsLoading));
-  const hasSubscription = !!subscription;
-  const hasCredits = (credits?.creditsRemaining ?? 0) > 0;
-  const hasAccess = hasSubscription || hasCredits;
-  const queriesDone = subFetched && creditsFetched;
+  const isLoading = authLoading || (user?.role === "user" && subLoading);
+  // Acesso é assinatura, e só. Saldo de crédito era a segunda porta — saiu do
+  // produto em 13/09. Teste, cortesia e pagante todos têm linha de assinatura;
+  // quem entrava SÓ por crédito sobrante passa a cair em "Meu plano".
+  const hasAccess = !!subscription;
+  const queriesDone = subFetched;
 
   // Se as queries falharam por UNAUTHORIZED (ex: colaborador removido),
   // o handler global em main.tsx faz logout + redirect. NÃO devemos
   // mandar pra /plans nesse caso — isso confunde o usuário (sugere que
   // ele só precisa assinar, quando na verdade perdeu acesso ao escritório).
-  const authError =
-    (subError as any)?.data?.code === "UNAUTHORIZED" ||
-    (creditsError as any)?.data?.code === "UNAUTHORIZED";
+  const authError = (subError as any)?.data?.code === "UNAUTHORIZED";
 
   useEffect(() => {
     if (isLoading) return;

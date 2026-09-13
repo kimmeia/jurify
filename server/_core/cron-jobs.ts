@@ -256,14 +256,6 @@ export function iniciarJobs() {
   setTimeout(() => syncAsaas(), 15000);
   setTimeout(async () => {
     try {
-      const { cobrarMonitoramentosMensais } = await lazyMotorCrons();
-      await cobrarMonitoramentosMensais();
-    } catch (err) {
-      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] cobrarMonitoramentosMensais falhou");
-    }
-  }, 25000);
-  setTimeout(async () => {
-    try {
       const { pollMonitoramentosMovs } = await lazyMotorCrons();
       await pollMonitoramentosMovs();
     } catch (err) {
@@ -538,19 +530,6 @@ export function iniciarJobs() {
     }
   }, 60_000);
 
-  // A cada 6h: reset mensal de cota dos planos. Idempotente (só roda
-  // pra escritórios cujo ultimoReset > 30 dias atrás). Soma cotaMensal
-  // ao saldo (preserva sobras + pacotes pré-pagos).
-  setInterval(async () => {
-    try {
-      const { resetCotaMensalEscritorios } = await import("../billing/escritorio-creditos");
-      const { resetados } = await resetCotaMensalEscritorios();
-      if (resetados > 0) log.info(`[Cron] resetCotaMensal: ${resetados} escritórios renovados`);
-    } catch (err: any) {
-      log.error("[Cron] resetCotaMensal falhou:", err.message);
-    }
-  }, 6 * 60 * 60 * 1000);
-
   // A cada 1h: processa trials próximos da expiração + expira os vencidos.
   // Idempotente — flags `trial_avisado_3d/1d` impedem reenvio do mesmo email.
   // Roda de hora em hora pra dar precisão de até 1h no momento dos avisos
@@ -644,18 +623,9 @@ export function iniciarJobs() {
     }
   }, 60 * 60 * 1000);
 
-  // A cada 6h: cobrança mensal de monitoramentos
-  setInterval(async () => {
-    try {
-      const { cobrarMonitoramentosMensais } = await lazyMotorCrons();
-      await cobrarMonitoramentosMensais();
-    } catch (err) {
-      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] cobrarMonitoramentosMensais interval falhou");
-    }
-  }, 6 * 60 * 60 * 1000);
-
-  // Cron de monitoramento próprio entra em Sprint 2 (substitui antigo
-  // cron Judit que cobrava monitoramentos mensais)
+  // Cron de monitoramento próprio (substituiu o antigo cron Judit). Cobrança
+  // por crédito saiu em 13/09: quem barra é a VAGA do plano, conferida na
+  // criação — o cron de cobrança ainda PAUSAVA monitoramento por saldo baixo.
 
   // A cada 15 minutos: processar agendas de lançamento automático de
   // comissões. Worker decide internamente se cada agenda deve disparar

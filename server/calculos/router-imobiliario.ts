@@ -9,7 +9,7 @@ import { gerarParecerImobiliario } from "./parecer-imobiliario";
 import { obterTaxaMedia } from "./db-taxas-medias";
 import { buscarTaxaMediaComFallback } from "./bcb-taxas-medias";
 import { buscarIndexadorComFallback, buscarSerieHistoricaComFallback } from "./bcb-indexadores";
-import { registarCalculo, consumirCredito } from "../db";
+import { registarCalculo, contarCalculoNoMes } from "../db";
 import type { ParametrosImobiliario, ResultadoImobiliario } from "../../shared/imobiliario-types";
 import { INDEXADOR_LABELS } from "../../shared/imobiliario-types";
 
@@ -105,9 +105,9 @@ export const imobiliarioRouter = router({
     .input(parametrosSchema)
     .mutation(async ({ input, ctx }) => {
       // Verificar e consumir crédito
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) {
+        throw new Error("Você atingiu o limite de cálculos do seu plano neste mês. Fale com a gente pra liberar mais ou trocar de plano.");
       }
 
       const params = toParametros(input);

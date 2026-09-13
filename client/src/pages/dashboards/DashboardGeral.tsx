@@ -81,10 +81,6 @@ export default function DashboardGeral() {
   // do escritório, pra não depender do relógio do browser (que fazia o gráfico
   // "pular o dia 1" perto da virada de dia em UTC).
 
-  const { data: credits } = trpc.dashboard.credits.useQuery(undefined, {
-    enabled: !!user,
-    retry: false,
-  });
   const { data: r } = trpc.dashboard.resumoEscritorio.useQuery(undefined, {
     enabled: !!user,
     retry: false,
@@ -94,12 +90,6 @@ export default function DashboardGeral() {
     undefined,
     { enabled: !!user, retry: false, refetchInterval: 120_000 },
   );
-  const creditsUsed = credits?.creditsUsed ?? 0;
-  const creditsTotal = credits?.creditsTotal ?? 50;
-  const creditsRemaining = credits?.creditsRemaining ?? creditsTotal;
-  const isUnlimited = creditsTotal >= 999_999;
-  const percentCreditos =
-    creditsTotal > 0 ? Math.min(100, Math.round((creditsUsed / creditsTotal) * 100)) : 0;
   const ok = !!r;
 
   const totalHoje = ok ? r.agenda.totalHojeCount : 0;
@@ -350,7 +340,7 @@ export default function DashboardGeral() {
         <CardCampanhas nav={nav} />
         <CardFunil />
 
-        {/* Créditos */}
+        {/* Uso do plano no mês — substituiu a barra de saldo de créditos. */}
         <ListaCard
           titulo="Uso do plano neste mês"
           subtitulo="Consultas, buscas, resumos e cálculos"

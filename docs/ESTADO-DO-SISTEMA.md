@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.106 verdes, 410 arquivos** (13/09, na ponta do merge, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 28 e `develop` dentro; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3263,6 +3263,9 @@ estado junto», que é decisão antiga da casa e continua valendo.
 Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
 trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
 limpo e `pnpm vite build` passando.
+
+---
+
 ## 26. Cabeçalho do Dashboard: busca no topo, abas minimalistas (13/09)
 
 Três pedidos do dono depois de ver o navegável: *"só gostei do buscar ficar
@@ -3304,3 +3307,214 @@ classes que impedem as abas de empurrarem a página inteira de lado num celular
 de 390px, e `telas-cabem-no-celular.test.ts` trava as duas.
 
 Medido depois: 5.983 testes verdes, typecheck limpo, build ok.
+
+---
+
+## 27. A moeda "crédito" saiu do produto (13/09)
+
+Autorização do dono, na mesma mensagem que tirou o Ponto do cartão: *"tudo
+referente a creditos pode excluir caso pois não usaremos mais isso"*.
+
+### 27.1 Por que a remoção era segura — e por que era urgente
+
+**Crédito já não decidia nada desde 11/09.** `consumirCredito`, chamada pelos
+quatro routers de cálculo, por dentro chamava `verificarUso`/`registrarUso` do
+TETO MENSAL e não encostava em saldo nenhum. O nome sobreviveu à troca, e era
+ele que fazia a tela dizer **"Seus créditos acabaram. Adquira mais créditos"** —
+mandando o cliente comprar o que não estava à venda. Virou
+`contarCalculoNoMes`, e a mensagem passou a dizer o que de fato aconteceu.
+
+**O achado grave.** `cobrarMonitoramentosMensais` rodava **a cada 6 horas**, em
+produção: debitava crédito por processo vigiado (2/mês) e por CPF vigiado
+(15/mês) e, quando o saldo não dava, marcava o monitoramento como **`pausado`**
+e notificava "Monitoramento pausado por falta de créditos". O saldo só era
+reposto por outro cron (`resetCotaMensalEscritorios`). Ou seja: a moeda
+continuava viva o bastante para **desligar vigia de processo** por uma conta
+que ninguém mais olhava. Os dois crons saíram juntos — e é por isso que
+remover o mecanismo pela metade seria pior que não remover.
+
+### 27.2 O que saiu
+
+| Camada | O que era | Substituto que já existia |
+|---|---|---|
+| operação avulsa | débito de saldo | teto mensal (`limites-uso`, `contarUso`) |
+| vaga de monitoramento | 2 ou 15 créditos/mês | vaga do plano (`limites-monitoramento`) |
+| "dar créditos" no painel | `concederCreditos` | `aumentarLimiteDoMes` (extra deste mês) |
+| barra do Dashboard | saldo × consumido | `UsoDoMes` |
+
+Módulos apagados: `billing/escritorio-creditos.ts`,
+`processos/custos-creditos.ts`, `billing/migrate-legacy-credits.ts`.
+Procedures: `processos.saldo`, `processos.pacotes`, `processos.transacoes`,
+`processos.adicionarCreditos`, `dashboard.credits`, `admin.concederCreditos`,
+`admin.retirarCreditos`, `admin.migrarCreditosLegacy`. Telas: chip de saldo e
+todos os textos de custo em Processos, "consome 1 crédito" nos cálculos, cartão
+de créditos e botões do painel admin, barra do Dashboard.
+
+**Consequência que vale registrar:** acesso ao app passou a ser **só
+assinatura**. `hasAccess = hasSubscription || hasCredits` era a regra;
+`hasCredits` deixou de existir. Pagante, teste e cortesia têm linha de
+assinatura e não sentem nada — quem entrava **só** por crédito sobrante agora
+cai em "Meu plano". É o comportamento correto e é uma mudança de porta.
+
+### 27.3 O que NÃO saiu, e por quê
+
+1. **`creditosCalculosMes`.** A coluna guardou o nome antigo, mas É o teto
+   mensal de cálculos (`CAMPO_DO_PLANO.calculo`). Apagá-la tiraria o limite.
+   Mudou o RÓTULO na tela do painel: «Créditos cálculo/mês» → «Cálculos por
+   mês».
+2. **As tabelas** `escritorio_creditos` e `escritorio_transacoes`. Histórico não
+   se joga fora por migration — a convenção da casa é ALTER não-destrutivo.
+   Ninguém mais lê. **Se o dono quiser apagar de vez, é decisão dele.**
+3. **"Crédito" no sentido financeiro**: «Cartão de crédito», «Crédito Pessoal»
+   do módulo bancário, `creditoMesDiferente` do Financeiro, «Banco Crédito S/A».
+   Mesma palavra, outro assunto — **uma varredura cega por "crédito" destruiria
+   o módulo de cálculo bancário**, e duas mutações da bateria existem só pra
+   travar essa distinção.
+4. **O rótulo `user.concederCreditos` na Auditoria**, marcado
+   "(descontinuado)": as linhas antigas continuam no banco e alguém precisa
+   conseguir ler o que elas dizem.
+
+### 27.4 O cartão do Escala parou de vender o Ponto
+
+Migration **0229**. O módulo saiu de produção em 13/09 (seção 23) e o cartão
+seguia anunciando "Comissões automáticas por colaborador e ponto da equipe" —
+o cliente assinava lendo isso e não achava o módulo. A **cesta não foi tocada**:
+o Ponto continua contratado e volta sozinho quando sair do beta. A troca é por
+TEXTO EXATO (`JSON_SEARCH`), não por posição: `features` é editável no painel,
+quem já reescreveu a frase não é afetado, e rodar duas vezes não faz nada.
+
+### 27.5 Amarras
+
+`credito-saiu-do-produto` (19 testes) — **28 mutações vermelhas**
+(`scratchpad/mutar-credito-e-cartao.py`). Duas sobreviveram na 1ª volta pelo
+motivo de sempre: o literal de pé em outra ocorrência (o import × a chamada de
+`consumirUso`; o `JSON_SEARCH` do caminho × o do `WHERE`).
+
+Seis amarras existentes foram **atualizadas para a verdade nova em vez de
+apagadas**, e em três delas a metade que ainda protege foi preservada de
+propósito: `lancamento-creditos-limites` perdeu `cotaMensalDoPlano` e manteve
+`limitesDoPlano` (a tabela `planos` como fonte); `admin-excluir-conta-alvo`
+perdeu o caminho de retirar crédito e manteve o de **excluir conta**, que é o
+bloqueador P0-D; `superlancamento-planos` passou a travar a VAGA em vez da
+ordem "vaga antes do crédito". As outras: `creditos-viram-limites`,
+`pacote-3-planos`, `processos-cofre-lancamento`, `novas-acoes-capa` e
+`processos-cabecalho-enxuto` (esta inverteu: o aviso «Saldo baixo» tinha ficado
+de pé em 13/09 porque ele pediu só a PASTILHA — na mensagem seguinte veio a
+moeda inteira).
+
+Baseline: **6.119 testes verdes em 411 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.
+
+---
+
+## 28. O uso só libera depois de escolher plano ou teste (13/09)
+
+**Pedido do dono**, depois de ele descrever o fluxo que quer — *"cadastra >
+confirma e-mail > aceita termos > escolhe plano ou teste > libera uso do
+sistema"* — e perguntar como garantir: *"quero que só libere o uso após
+escolha do plano/teste. resolva logo isso"*.
+
+### 28.1 O que estava garantido e o que era só desenho
+
+Conferido degrau a degrau no código antes de mexer:
+
+| degrau | quem segurava | valia fora da tela? |
+|---|---|---|
+| cadastra | `auth.signup` (exige WhatsApp e aceite, grava `aceites_termos`) | sim |
+| confirma e-mail | o cadastro **não cria sessão**; `login` recusa com `email_nao_confirmado` | sim — sem confirmar não existe cookie, e sem cookie não existe API |
+| aceita termos | `TermosGate` | **não** — diálogo no navegador; nenhum porteiro confere `termosVersaoAceita` |
+| escolhe plano ou teste | `SubscriptionGuard` | **não** — a API respondia tudo |
+| libera uso | consequência do anterior | **não** |
+
+O quarto degrau era o mais frouxo, e por um motivo que não se vê olhando a
+tela: o porteiro de módulos (`gate-modulos.ts`) é **fail-open de propósito** e
+lê "sem assinatura" como "não sei" — então liberava a cesta inteira. Quem
+fechasse a tela e chamasse o servidor direto usava o produto sem plano nenhum.
+
+O terceiro degrau (termos) **continua só na tela** — não foi o que ele pediu, e
+fica registrado aqui como pendência conhecida.
+
+### 28.2 O que entrou
+
+`shared/acesso-sem-plano.ts` (regra pura) + `server/_core/gate-assinatura.ts`
+(o porteiro) + `requirePlanoEscolhido` na corrente do `protectedProcedure`,
+entre `requireUser` e `requireModuloContratado`.
+
+**A régua de quem tem acesso NÃO mudou.** É a mesma
+`getActiveSubscriptionComHeranca` que o `SubscriptionGuard` já consultava —
+cortesia > paga > teste > cancelada dentro do período pago, colaborador
+herdando a do dono. O que mudou é o lugar onde ela é conferida. Por isso a
+mudança é invisível pra quem segue o fluxo: ninguém que entra hoje passa a ser
+barrado, e ninguém que era barrado na tela passa a entrar.
+
+Quatro decisões que valem lembrar:
+
+1. **Deny-by-default, o oposto do porteiro de módulos.** Namespace que ninguém
+   declarou EXIGE plano. Lá o fail-open protege contra derrubar escritório
+   pagante; aqui o mesmo desenho entregaria o produto de graça toda vez que um
+   router novo nascesse sem porteiro. O teste confere a lista contra o
+   `appRouter`, então "desconhecido" só acontece com chamada inventada.
+2. **O caminho de escolher o plano fica aberto** — `auth`, `termos`,
+   `subscription`, `configuracoes`, `permissoes`, `notificacoes`, `push`,
+   `ajuda`. Não é generosidade: o «Meu plano» mora DENTRO de Configurações, que
+   pede escritório e cargos ao montar. Sem esses dois, a pessoa ficaria
+   trancada fora da própria tela de pagamento — exatamente o defeito que ele
+   relatou hoje de manhã ("clico em adicionar pagamento e não acontece nada").
+   Os `admin*` estão na lista por honestidade do teste: passam por
+   `adminProcedure`, que não é `protectedProcedure` e não chega no porteiro.
+3. **O cache guarda o SIM e nunca o NÃO.** Guardar o "não" por 30s faria quem
+   acabou de clicar em «Testar grátis» levar recusa na cara nos segundos
+   seguintes. Quem tem plano custa uma consulta por 30s; quem não tem é
+   re-consultado a cada chamada, e são poucas — a tela dele é uma só.
+4. **Fail-open na indeterminação.** Banco fora, exceção na consulta: passa. Só
+   um "não tem assinatura" explícito bloqueia. Admin da plataforma e
+   impersonação passam sempre — a impersonação é justamente o dono olhando a
+   conta SEM plano.
+
+No client, as três contagens de badge do menu (`movimentacoes.contador`,
+`agenda.contadores`, `crm.contarConversas`) pararam de perguntar sem plano: o
+servidor recusa, o menu já está trancado, e seriam três 403 a cada 2 minutos na
+tela onde a pessoa está escolhendo o plano.
+
+### 28.3 Conferido no app rodando (não deduzido)
+
+Conta com a assinatura apagada do banco, navegador de verdade:
+
+- login cai em `/configuracoes?tab=meu-plano` e **a tela renderiza inteira** —
+  três planos, toggle Mensal/Anual, 4 botões «Testar grátis»;
+- `agenda.contadores` e `movimentacoes.contador` respondem **403** com
+  "Escolha um plano ou comece o teste grátis para usar o JuridFlow.";
+- `subscription.plans`, `configuracoes.meuEscritorio`, `termos.status` e
+  `ajuda.primeirosPassos` respondem **200**;
+- `/clientes` devolve pra Meu plano, como antes;
+- clicar em «Testar grátis» leva ao Dashboard e o produto responde **200 na
+  hora** — sem esperar os 30s do cache. É a decisão 3 valendo na prática.
+
+### 28.4 Efeitos colaterais conscientes
+
+- **Teste vencido e assinatura cancelada fora da carência** param de responder
+  pela API, não só pela tela. É a mesma régua de sempre; a diferença é que
+  agora ela vale nos dois lugares.
+- **Caller de servidor tem path sem namespace.** O cron de relatórios
+  programados (`createCallerFactory` de um router solto) chama
+  `comercialDashboard`, não `relatorios.comercialDashboard` — cai no
+  deny-by-default. Para escritório com plano nada muda; sem plano, o envio
+  grava `ultimoErro` com a frase do porteiro e o cron segue, sem quebrar.
+- **Teste que chama procedure por caller precisa desligar o porteiro**
+  (`vi.mock("../_core/gate-assinatura", …)`): o banco falso desses testes não
+  tem assinatura nenhuma. Cinco arquivos já foram ajustados com o comentário
+  explicando; quem escrever o sexto vai encontrar o mesmo 403.
+
+### 28.5 Amarra
+
+`uso-so-com-plano.test.ts` (17 testes) — **32 mutações vermelhas**
+(`scratchpad/mutar-uso-so-com-plano.py`). Quatro sobreviveram na 1ª volta, três
+pelo motivo de sempre (o literal de pé em outro lugar: o import × a chamada; o
+comentário × o código; a linha que aparece 3× em `subscription.ts`) e uma por
+falta de relógio — a validade do cache só morre com `vi.useFakeTimers` e 31s de
+avanço, senão "plano vencido segue passando pra sempre" passa despercebido.
+`modulos-contratacao` teve só o `expect` da corrente atualizado (a de módulo
+continua sendo o último elo, e é isso que ele guarda).
+
+Baseline: **6.136 testes verdes em 412 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.

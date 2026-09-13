@@ -293,20 +293,11 @@ function AppSidebarContent({
     }
   );
 
-  const { data: credits, isFetched: creditsFetched } = trpc.dashboard.credits.useQuery(
-    undefined,
-    {
-      enabled: !!user && user.role === "user",
-      retry: false,
-      refetchOnWindowFocus: false,
-    }
-  );
-
   const hasSubscription = !!subscription;
-  const hasCredits = (credits?.creditsRemaining ?? 0) > 0;
   const isUser = user?.role === "user";
-  // Items are locked only if user has NEITHER subscription NOR credits
-  const itemsLocked = isUser && subFetched && creditsFetched && !hasSubscription && !hasCredits;
+  // Sem assinatura, o menu tranca. Saldo de crédito destrancava junto até
+  // 13/09; a moeda saiu do produto e o acesso passou a ser só o contrato.
+  const itemsLocked = isUser && subFetched && !hasSubscription;
 
   // Nome do escritório — exibido no header do sidebar para deixar
   // claro a qual escritório o colaborador pertence.
@@ -450,19 +441,25 @@ function AppSidebarContent({
   // Contadores dos badges. Cada um é uma query barata (COUNT) — o menu vive
   // em toda tela, então puxar as listas completas só pra mostrar um número
   // seria caro a cada navegação.
+  // Sem plano o servidor recusa os três (porteiro de 13/09), e o menu já está
+  // trancado: perguntar a cada 2min seria 403 em loop na tela onde a pessoa
+  // está justamente escolhendo o plano. Admin não tem assinatura e conta.
+  const contadoresLiberados = !isUser || hasSubscription;
   const { data: contMovs } = (trpc as any).movimentacoes?.contador?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    enabled: contadoresLiberados,
   }) ?? { data: null };
   const { data: contAgenda } = trpc.agenda.contadores.useQuery(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
     // Sem Agenda no contrato a chamada só devolveria FORBIDDEN a cada 2min.
-    enabled: contratoLibera(modulosContratados, ["agenda"]),
+    enabled: contadoresLiberados && contratoLibera(modulosContratados, ["agenda"]),
   });
   const { data: contConversas } = (trpc as any).crm?.contarConversas?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    enabled: contadoresLiberados,
   }) ?? { data: null };
 
   const badges: Record<string, number> = {

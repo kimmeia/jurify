@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-const CUSTO_MONITORAMENTO_MES = 2;
 
 const TAMANHO_CHUNK = 50;
 
@@ -410,7 +409,7 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                         Ativar monitoramento automático
                       </Label>
                       <p className="text-[11px] text-muted-foreground mt-0.5">
-                        Cada processo monitorado consome {CUSTO_MONITORAMENTO_MES} créditos/mês.
+                        Cada processo monitorado ocupa uma vaga do seu plano.
                       </p>
                     </div>
                   </div>
@@ -473,7 +472,6 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                         : 0;
                       const total = monitoraveisCred + preview.resumo.monitoraveisConsultaPublica;
                       if (total === 0) return null;
-                      const custo = total * CUSTO_MONITORAMENTO_MES;
                       return (
                         <div className="text-xs bg-card border rounded p-2 space-y-1">
                           <p>
@@ -481,8 +479,8 @@ export function ImportarAdvboxDialog({ open, onOpenChange, onSuccess }: Props) {
                             monitorar. Os demais ficam como vínculo (sem poll).
                           </p>
                           <p className="text-info-fg font-medium">
-                            Custo estimado: <span className="tabular-nums">{custo}</span> créditos
-                            (1ª mensalidade).
+                            Ocupam <span className="tabular-nums">{total}</span> vaga(s) das que o seu
+                            plano oferece.
                           </p>
                         </div>
                       );

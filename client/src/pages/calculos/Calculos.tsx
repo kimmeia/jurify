@@ -146,7 +146,6 @@ export default function Calculos() {
 
   const { data: stats } = trpc.dashboard.stats.useQuery();
   const { data: historico } = trpc.dashboard.historico.useQuery();
-  const { data: credits } = trpc.dashboard.credits.useQuery();
   // Uso do mês: cálculo passou a contar no teto do plano (11/09/2026), no
   // lugar do saldo de créditos que era compartilhado com o motor de processos.
   const { data: usoMes } = (trpc as any).dashboard.usoDoMes.useQuery(undefined, {
@@ -189,13 +188,6 @@ export default function Calculos() {
     }
     return lista;
   }, [historico, filtro, busca]);
-
-  const diasAteReset = useMemo(() => {
-    if (!credits?.resetAt) return null;
-    const reset = new Date(credits.resetAt);
-    const diff = Math.ceil((reset.getTime() - Date.now()) / 86400000);
-    return diff > 0 ? diff : 0;
-  }, [credits?.resetAt]);
 
   return (
     <div className="space-y-6">

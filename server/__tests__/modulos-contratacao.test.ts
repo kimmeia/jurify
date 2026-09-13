@@ -108,7 +108,10 @@ describe("fiação — servidor e client usam o porteiro", () => {
   it("protectedProcedure passa pelo gate de módulo", () => {
     const trpc = ler("server/_core/trpc.ts");
     expect(trpc).toContain("conferirModuloDoPath");
-    expect(trpc).toContain(".use(requireUser).use(requireModuloContratado)");
+    // A corrente ganhou o porteiro do plano em 13/09 (requirePlanoEscolhido);
+    // o de módulo continua sendo o último elo, e é isso que se protege aqui.
+    expect(trpc).toContain(".use(requireUser)");
+    expect(trpc).toContain(".use(requireModuloContratado);");
   });
 
   it("a área logada envolve as páginas com o ModuloGuard", () => {

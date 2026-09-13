@@ -601,7 +601,6 @@ function ClienteDetalheDialog({
   onOpenChange: (o: boolean) => void;
   onRefresh: () => void;
 }) {
-  const [creditosQtd, setCreditosQtd] = useState("");
   const [novaNota, setNovaNota] = useState("");
   const [categoriaNota, setCategoriaNota] = useState<string>("geral");
   const [motivoBloqueio, setMotivoBloqueio] = useState("");
@@ -609,7 +608,6 @@ function ClienteDetalheDialog({
   const [excluirOpen, setExcluirOpen] = useState(false);
   const [motivoExclusao, setMotivoExclusao] = useState("");
   const [forcarExcluir, setForcarExcluir] = useState(false);
-  const [retirarConfirm, setRetirarConfirm] = useState<{ qtd: number; motivo?: string } | null>(null);
   const [cortesiaOpen, setCortesiaOpen] = useState(false);
   const [motivoCortesia, setMotivoCortesia] = useState("");
   const [expiraEmCortesia, setExpiraEmCortesia] = useState("");
@@ -637,26 +635,6 @@ function ClienteDetalheDialog({
     { userId: current! },
     { enabled: !!current && open, retry: false },
   );
-
-  const concederMut = trpc.admin.concederCreditos.useMutation({
-    onSuccess: (res) => {
-      toast.success(res.mensagem);
-      setCreditosQtd("");
-      utils.admin.clienteDetalhes.invalidate({ userId: current! });
-      onRefresh();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message }),
-  });
-
-  const retirarMut = trpc.admin.retirarCreditos.useMutation({
-    onSuccess: (res) => {
-      toast.success(res.mensagem);
-      setCreditosQtd("");
-      utils.admin.clienteDetalhes.invalidate({ userId: current! });
-      onRefresh();
-    },
-    onError: (err) => toast.error("Erro", { description: err.message }),
-  });
 
   const bloquearMut = trpc.admin.bloquearUsuario.useMutation({
     onSuccess: () => {
@@ -880,7 +858,6 @@ function ClienteDetalheDialog({
   if (!userId) return null;
 
   const user = data?.user as any;
-  const credits = data?.credits;
   const sub = data?.subscription;
   const stats = data?.stats;
   const calculos = data?.calculos;
@@ -1089,10 +1066,6 @@ function ClienteDetalheDialog({
                 <div className="rounded-xl bg-white/10 border border-white/15 p-3">
                   <p className="text-[10px] uppercase tracking-wide text-white/65">Plano</p>
                   <p className="text-base font-bold mt-0.5 capitalize">{sub?.planId || "—"}</p>
-                </div>
-                <div className="rounded-xl bg-white/10 border border-white/15 p-3">
-                  <p className="text-[10px] uppercase tracking-wide text-white/65">Créditos</p>
-                  <p className="text-base font-bold tabular-nums mt-0.5">{(credits as any)?.saldo ?? ((credits?.creditsTotal ?? 0) - (credits?.creditsUsed ?? 0))}</p>
                 </div>
                 <div className="rounded-xl bg-white/10 border border-white/15 p-3">
                   <p className="text-[10px] uppercase tracking-wide text-white/65">Cálculos</p>
@@ -1335,109 +1308,6 @@ function ClienteDetalheDialog({
                   <span className="text-muted-foreground">Último acesso:</span>{" "}
                   <span>{user?.lastSignedIn ? new Date(user.lastSignedIn).toLocaleDateString("pt-BR") : "—"}</span>
                 </div>
-              </div>
-
-              {/* Créditos */}
-              <div className="border rounded-lg p-3 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Coins className="h-4 w-4 text-muted-foreground" />
-                  Créditos
-                  {(data as any)?.creditsSource === "escritorio" && (
-                    <Badge variant="outline" className="text-[9px] ml-auto">Escritório</Badge>
-                  )}
-                  {(data as any)?.creditsSource === "legacy" && (
-                    <Badge variant="outline" className="text-[9px] ml-auto bg-warning-bg text-warning-fg border-warning/30">Legacy</Badge>
-                  )}
-                </div>
-                {credits ? (
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Disponíveis:</span>
-                      <span className="font-bold text-success-fg">
-                        {(credits as any).saldo ?? ((credits.creditsTotal ?? 0) - (credits.creditsUsed ?? 0))}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Usados:</span>
-                      <span>{(credits as any).totalConsumido ?? credits.creditsUsed ?? 0}</span>
-                    </div>
-                    {(credits as any).cotaMensal !== undefined && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Cota mensal:</span>
-                        <span>{(credits as any).cotaMensal}</span>
-                      </div>
-                    )}
-                    {(credits as any).totalComprado !== undefined && (
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Total comprado:</span>
-                        <span>{(credits as any).totalComprado}</span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Sem créditos</p>
-                )}
-
-                <div className="flex gap-2 pt-1">
-                  <Input
-                    type="number"
-                    min={1}
-                    placeholder="Qtd"
-                    value={creditosQtd}
-                    onChange={(e) => setCreditosQtd(e.target.value)}
-                    className="w-20 text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const qtd = parseInt(creditosQtd);
-                      if (!qtd || qtd < 1) { toast.error("Quantidade inválida"); return; }
-                      concederMut.mutate({ userId: current!, quantidade: qtd });
-                    }}
-                    disabled={concederMut.isPending || retirarMut.isPending}
-                    className="flex-1"
-                  >
-                    {concederMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Coins className="h-3 w-3 mr-1" />}
-                    Conceder
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      const qtd = parseInt(creditosQtd);
-                      if (!qtd || qtd < 1) { toast.error("Quantidade inválida"); return; }
-                      const saldoAtual = (credits as any)?.saldo ?? ((credits?.creditsTotal ?? 0) - (credits?.creditsUsed ?? 0));
-                      if (qtd > saldoAtual) {
-                        toast.error("Quantidade maior que saldo", { description: `Saldo atual: ${saldoAtual}` });
-                        return;
-                      }
-                      setRetirarConfirm({ qtd });
-                    }}
-                    disabled={concederMut.isPending || retirarMut.isPending || (data as any)?.creditsSource !== "escritorio"}
-                    className="flex-1 text-destructive hover:text-destructive"
-                    title={(data as any)?.creditsSource !== "escritorio" ? "Disponível só pra users com escritório" : ""}
-                  >
-                    {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Coins className="h-3 w-3 mr-1" />}
-                    Retirar
-                  </Button>
-                </div>
-                {(data as any)?.creditsSource === "escritorio" && (() => {
-                  const saldoAtual = (credits as any)?.saldo ?? 0;
-                  if (saldoAtual <= 0) return null;
-                  return (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="w-full text-xs text-muted-foreground hover:text-destructive"
-                      onClick={() => setRetirarConfirm({ qtd: saldoAtual, motivo: "Zerado pelo admin" })}
-                      disabled={retirarMut.isPending}
-                    >
-                      {retirarMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
-                      Zerar saldo ({saldoAtual} cred)
-                    </Button>
-                  );
-                })()}
               </div>
 
               {/* Estatísticas */}
@@ -1764,41 +1634,6 @@ function ClienteDetalheDialog({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={retirarConfirm !== null} onOpenChange={(o) => { if (!o) setRetirarConfirm(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {retirarConfirm?.motivo === "Zerado pelo admin"
-                ? `Zerar saldo (${retirarConfirm?.qtd} créditos)?`
-                : `Retirar ${retirarConfirm?.qtd} créditos do escritório?`}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa operação é registrada na auditoria. Use apenas pra correção
-              manual de saldo (ex: reembolso, ajuste pós-suporte) ou pra resetar
-              testes em produção.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={retirarMut.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={retirarMut.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                if (!retirarConfirm || !current) return;
-                retirarMut.mutate({
-                  userId: current,
-                  quantidade: retirarConfirm.qtd,
-                  motivo: retirarConfirm.motivo,
-                });
-                setRetirarConfirm(null);
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {retirarMut.isPending ? "Retirando..." : "Confirmar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={excluirOpen} onOpenChange={(o) => { if (!o) { setExcluirOpen(false); setMotivoExclusao(""); setForcarExcluir(false); } }}>
         <AlertDialogContent>
@@ -2231,19 +2066,7 @@ export default function AdminClients() {
   const total = data?.total ?? 0;
   const totalPaginas = Math.ceil(total / LIMITE);
 
-  // Migração one-shot userCredits (legacy) → escritorio_creditos. Idempotente.
-  const migrarLegacyMut = trpc.admin.migrarCreditosLegacy.useMutation({
-    onSuccess: (res) => {
-      toast.success("Migração concluída", {
-        description: `${res.migrados} escritório(s) migrados, ${res.totalCreditos} créditos transferidos. ${res.pulados} pulados (já migrados ou sem saldo).`,
-        duration: 10000,
-      });
-      refetch();
-    },
-    onError: (err) => toast.error("Erro na migração", { description: err.message }),
-  });
 
-  const [migrarLegacyAberto, setMigrarLegacyAberto] = useState(false);
 
   // Cadastro do cliente ocupa a tela inteira (estilo CRM do dono) — substitui
   // a lista enquanto aberto, em vez de abrir um dialog por cima.
@@ -2294,16 +2117,6 @@ export default function AdminClients() {
             <div className="flex items-center gap-2 flex-wrap">
               <Button size="sm" className="text-xs" onClick={() => setCriarOpen(true)}>
                 <Plus className="h-3.5 w-3.5 mr-1" /> Criar cliente
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setMigrarLegacyAberto(true)}
-                disabled={migrarLegacyMut.isPending}
-                className="text-xs"
-              >
-                {migrarLegacyMut.isPending ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <RotateCcw className="h-3 w-3 mr-1" />}
-                Migrar legacy
               </Button>
               <select
                 value={tipo}
@@ -2444,32 +2257,6 @@ export default function AdminClients() {
 
       <CriarClienteDialog open={criarOpen} onOpenChange={setCriarOpen} onCriado={aposContato} />
 
-      <AlertDialog open={migrarLegacyAberto} onOpenChange={setMigrarLegacyAberto}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Migrar saldo userCredits (legacy)?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Vai transferir saldo de <code>userCredits</code> (modelo antigo)
-              para <code>escritorio_creditos</code>. <strong>Idempotente</strong> —
-              pode rodar várias vezes sem duplicar saldo. Deve rodar 1× em produção
-              após o deploy do novo modelo de créditos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={migrarLegacyMut.isPending}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={migrarLegacyMut.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                migrarLegacyMut.mutate();
-                setMigrarLegacyAberto(false);
-              }}
-            >
-              {migrarLegacyMut.isPending ? "Migrando..." : "Migrar agora"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
