@@ -53,6 +53,9 @@ export function normalizarTribunais(escolhidos: unknown): string[] {
   return [...new Set([TRIBUNAL_SEDE, ...validos])];
 }
 
+/** Fato da numeração do CNJ: a Justiça do Trabalho tem 24 regiões (TRT-1 a TRT-24). */
+export const NUMEROS_TRT: readonly number[] = Array.from({ length: 24 }, (_, i) => i + 1);
+
 // Segmento TR do CNJ (NNNNNNN-DD.AAAA.8.TR.OOOO) → tribunal estadual.
 const TR_PARA_TRIBUNAL: Record<string, string> = {
   "06": "tjce", "17": "tjpe", "07": "tjdf", "19": "tjrj", "13": "tjmg",
@@ -95,6 +98,16 @@ export const TRIBUNAIS_CONSULTA_PUBLICA_PJE = [
 
 export type TribunalCoberto = { codigo: string; sigla: string; uf?: string };
 
+/**
+ * Justiça do Trabalho com credencial: os TRTs estão no registro do PJe-JT
+ * com o endereço do padrão histórico, mas NENHUM foi comprovado em campo —
+ * por isso entram como "em teste": o robô aceita o processo e tenta, e o
+ * número vendido não os conta.
+ */
+export function trtsEmTeste(): TribunalCoberto[] {
+  return NUMEROS_TRT.map((n) => ({ codigo: `trt${n}`, sigla: `TRT${n}` }));
+}
+
 /** Sigla curta de exibição: TJs usam a sigla do seletor (TJDFT, não TJDF);
  *  TRFs viram o código em maiúsculas ("Federal 1ª" é rótulo de seletor). */
 function siglaCurta(t: (typeof TRIBUNAIS_PJE)[number]): string {
@@ -123,22 +136,45 @@ export function trfsCobertos(): TribunalCoberto[] {
 export function coberturaTribunais(): {
   comCredencial: TribunalCoberto[];
   consultaPublica: TribunalCoberto[];
+  /** Com credencial, sem comprovação em campo: aceitos, não vendidos. */
+  emTeste: TribunalCoberto[];
 } {
   return {
     comCredencial: [...tjsCobertos(), ...trfsCobertos()],
     consultaPublica: TRIBUNAIS_CONSULTA_PUBLICA_PJE.map((t) => ({ codigo: t.codigo, sigla: t.sigla })),
+    emTeste: trtsEmTeste(),
   };
 }
 
-/** Todos os códigos que o robô sabe vigiar por número (com credencial ou não). */
+/** Todos os códigos que o robô aceita vigiar por número (com credencial, sem, ou em teste). */
 export function codigosTribunaisCobertos(): string[] {
   const c = coberturaTribunais();
-  return [...c.comCredencial, ...c.consultaPublica].map((t) => t.codigo);
+  return [...new Set([...c.comCredencial, ...c.consultaPublica, ...c.emTeste].map((t) => t.codigo))];
+}
+
+/** Só os caminhos comprovados ou abertos: é o número que as telas vendem. */
+export function codigosTribunaisVendidos(): string[] {
+  const c = coberturaTribunais();
+  return [...new Set([...c.comCredencial, ...c.consultaPublica].map((t) => t.codigo))];
+}
+
+/** TRTs que só existem pelo caminho em teste (fora da consulta pública). */
+function trtsSoEmTeste(): TribunalCoberto[] {
+  const publicos = new Set(coberturaTribunais().consultaPublica.map((t) => t.codigo));
+  return trtsEmTeste().filter((t) => !publicos.has(t.codigo));
+}
+
+/** "outros 22 TRTs em teste" — vazio quando não há TRT em teste. */
+export function textoTrtsEmTeste(): string {
+  const n = trtsSoEmTeste().length;
+  if (n === 0) return "";
+  const publicos = coberturaTribunais().consultaPublica.some(ehTrt);
+  return `${publicos ? "outros " : ""}${n} TRTs em teste`;
 }
 
 /** Quantos tribunais dá pra vigiar por número de processo. */
 export function totalTribunaisVigiaveis(): number {
-  return codigosTribunaisCobertos().length;
+  return codigosTribunaisVendidos().length;
 }
 
 /**
@@ -179,8 +215,9 @@ function ehTrt(t: { codigo: string }): boolean {
  */
 export function textoJusticaDoTrabalho(): string {
   const trts = coberturaTribunais().consultaPublica.filter(ehTrt).map((t) => t.sigla);
-  if (trts.length === 0) return "Justiça do Trabalho ainda não";
-  return `Justiça do Trabalho: ${listaComE(trts)} por consulta pública`;
+  const emTeste = textoTrtsEmTeste();
+  if (trts.length === 0) return emTeste ? `Justiça do Trabalho: ${emTeste}` : "Justiça do Trabalho ainda não";
+  return `Justiça do Trabalho: ${listaComE(trts)} por consulta pública${emTeste ? `, ${emTeste}` : ""}`;
 }
 
 /** "12 TJs + 4 TRFs (TRF5, TRT2 e TRT15 por consulta pública)" */
@@ -223,9 +260,10 @@ export function textoCoberturaComparativo(): string {
 export function textoCoberturaPricing(): string {
   const tjs = tjsCobertos().map((t) => t.sigla).join(", ");
   const trfs = listaComE(trfsCobertos().map((t) => t.sigla));
+  const emTeste = textoTrtsEmTeste();
   return (
-    `Cobertura hoje: PJe do ${tjs}, mais ${trfs} (${siglasConsultaPublica()} por consulta pública). ` +
-    `TJSP e os demais ainda não; ${textoJusticaDoTrabalho()} — conte pra gente e entra na fila.`
+    `Cobertura hoje: PJe do ${tjs}, mais ${trfs} (${siglasConsultaPublica()} por consulta pública${emTeste ? `; ${emTeste}` : ""}). ` +
+    `TJSP e os demais ainda não — conte pra gente e entra na fila.`
   );
 }
 
@@ -242,9 +280,10 @@ export function textoCoberturaGuia(): string {
 
 /** Bullet "Vigia…" dos planos — a migration escreve o mesmo texto que sai daqui. */
 export function bulletVigiaPlano(processos: string, cpfs: string): string {
+  const emTeste = textoTrtsEmTeste();
   return (
-    `Vigia ${processos} processos nos tribunais cobertos (${tjsCobertos().length} TJs e ${trfsCobertos().length} TRFs, ` +
-    `mais ${siglasConsultaPublica()} por consulta pública — TJSP ainda não; ${textoJusticaDoTrabalho()}) · ` +
+    `Vigia ${processos} processos nos tribunais cobertos (${tjsCobertos().length} TJs e ${trfsCobertos().length} TRFs com credencial; ` +
+    `${siglasConsultaPublica()} sem credencial${emTeste ? `; ${emTeste}` : ""} — TJSP ainda não) · ` +
     `${cpfs} CPFs/CNPJs (novas ações: comprovado no ${siglaConsultaNaHora()})`
   );
 }
@@ -286,7 +325,7 @@ export function parseCnjTribunalPuro(cnj: string | null | undefined): TribunalDo
     if (!tj) return null;
     codigo = tj.toLowerCase();
     sigla = tj;
-  } else if (j === "5" && n >= 1 && n <= 24) {
+  } else if (j === "5" && n >= 1 && n <= NUMEROS_TRT.length) {
     codigo = `trt${n}`;
     sigla = `TRT-${n}`;
   } else if (j === "4" && n >= 1 && n <= 6) {
@@ -297,6 +336,6 @@ export function parseCnjTribunalPuro(cnj: string | null | undefined): TribunalDo
     sigla = `J${j}-${tr}`;
   }
   const c = coberturaTribunais();
-  const coberto = [...c.comCredencial, ...c.consultaPublica].find((t) => t.codigo === codigo);
+  const coberto = [...c.comCredencial, ...c.consultaPublica, ...c.emTeste].find((t) => t.codigo === codigo);
   return { codigo, sigla: coberto?.sigla ?? sigla, coberto: !!coberto };
 }

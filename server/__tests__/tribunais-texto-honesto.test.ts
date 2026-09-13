@@ -117,7 +117,9 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
   });
 
   it("a lista compartilhada bate com o registro do motor no servidor", () => {
-    expect(new Set(coberturaTribunais().comCredencial.map((t) => t.codigo))).toEqual(new Set(tribunaisPjeDisponiveis()));
+    const c = coberturaTribunais();
+    expect(new Set([...c.comCredencial, ...c.emTeste].map((t) => t.codigo))).toEqual(new Set(tribunaisPjeDisponiveis()));
+    expect(c.emTeste.map((t) => t.codigo)).toEqual(Array.from({ length: 24 }, (_, i) => `trt${i + 1}`));
     expect(new Set(coberturaTribunais().consultaPublica.map((t) => t.codigo))).toEqual(TRIBUNAIS_CONSULTA_PUBLICA);
     expect(new Set(codigosTribunaisCobertos())).toEqual(new Set(TRIBUNAIS_MOTOR_PROPRIO));
     expect(TRIBUNAIS_MOTOR_PROPRIO).toContain("trf5");
@@ -135,8 +137,8 @@ describe("fonte única: cobertura derivada da lista, nunca digitada", () => {
 
   it("textos do site e do guia levam os números derivados", () => {
     expect(textoCoberturaPricing()).toBe(
-      `Cobertura hoje: PJe do TJCE, TJDFT, TJMA, TJMG, TJMT, TJPA, TJPB, TJPE, TJRJ, TJRN, TJRO, TJRR, mais TRF1, TRF2, TRF3 e TRF6 (${publicas} por consulta pública). ` +
-        `TJSP e os demais ainda não; Justiça do Trabalho: ${trtsPublicos.join(" e ")} por consulta pública — conte pra gente e entra na fila.`,
+      `Cobertura hoje: PJe do TJCE, TJDFT, TJMA, TJMG, TJMT, TJPA, TJPB, TJPE, TJRJ, TJRN, TJRO, TJRR, mais TRF1, TRF2, TRF3 e TRF6 (${publicas} por consulta pública; outros 22 TRTs em teste). ` +
+        `TJSP e os demais ainda não — conte pra gente e entra na fila.`,
     );
     expect(textoCoberturaGuia()).toBe(
       `Cobertura hoje: PJe em ${nTjs} estados (CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR) e TRF1/2/3/6, ` +
@@ -154,7 +156,7 @@ describe("parser puro do CNJ (client) concorda com o do servidor", () => {
     ["0000000-00.2024.4.05.0001", "TRF5", true],
     ["0000000-00.2024.4.01.0001", "TRF1", true],
     ["0000000-00.2024.4.04.0001", "TRF-4", false],
-    ["0000000-00.2024.5.07.0001", "TRT-7", false],
+    ["0000000-00.2024.5.07.0001", "TRT7", true],
   ];
   for (const [cnj, sigla, coberto] of casos) {
     it(`${cnj} → ${sigla} (${coberto ? "coberto" : "fora"})`, () => {

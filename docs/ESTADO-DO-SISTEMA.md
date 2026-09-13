@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.746 testes verdes** (12/09, depois das entregas do dia, da correção da IA, das travas D-13/D-15 e do merge do develop; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.831 testes verdes** (13/09, com o motor próprio fase 1 integrado na branch; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -102,9 +102,11 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 12. **Backup em dois níveis, os dois furados:** o da plataforma **nunca termina**
     em banco de tamanho real (**D-14**), e no do escritório **20 tabelas ficam de
     fora** porque a trava que deveria impedir isso tem um ponto cego (**D-2**).
-13. **A venda promete o que o produto não entrega, e o pior é a cobertura de
-    tribunais: o motor conhece 16, e TJSP e todos os TRTs ficam de fora.** Um
-    escritório trabalhista ou paulista não vigia um único processo. Junto: Instagram
+13. **A venda promete o que o produto não entrega, e o pior era a cobertura de
+    tribunais: o motor conhecia 16, e TJSP e todos os TRTs ficavam de fora.**
+    **Em 12–13/09 a Justiça do Trabalho entrou** (TRT2 e TRT15 por consulta
+    pública, os outros 22 TRTs com credencial em teste — seção 15.1.1); TJSP
+    segue fora, e nada disso foi comprovado em portal real. Junto: Instagram
     vendido em três lugares sem receber uma mensagem, armazenamento e número de
     WhatsApp vendidos sem trava, e o plano "Sob medida" entregando menos que o
     Escala. Seção 15.
@@ -135,7 +137,7 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 9 | **Decidir o que fazer com a cobertura de tribunais** | a venda diz "monitora processos" sem ressalva e o motor não conhece TJSP nem nenhum TRT. Ou muda o texto, ou muda a cobertura — mas não dá pra vender assim (seção 15.1) |
+| 9 | ~~Decidir o que fazer com a cobertura de tribunais~~ **decidido e em andamento** | o dono escolheu as duas coisas: texto honesto (feito 12/09) e ampliar o motor (fase 1 na branch, 13/09 — seção 15.1.1). Falta o que só ele faz: testar nos portais |
 | 10 | **Completar o "excluir cliente"** | ele deixa 5 tabelas intactas — telefone, CNJ, acordo, pergunta à IA — e os arquivos no disco, dizendo que apagou. É a ferramenta com que o escritório cumpre pedido de exclusão do cliente dele (seções 16.1 e 16.2) |
 | 11 | ~~Validar o cargo em `atribuirCargo`~~ **feito 12/09** | `atribuirCargo` recusa cargo de outro escritório (NOT_FOUND) e `checkPermission` ignora cargo alheio, caindo no cargo pelo nome (item **D-15**) |
 | 12 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
@@ -159,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.746 verdes, 390 arquivos** (12/09, depois de Instagram, tribunais, Sob medida, cancelamento, helper da Anthropic, D-13/D-15 e o merge do develop; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.831 verdes, 395 arquivos** (13/09, na branch com o motor fase 1; em develop/main: 5.746 em 390, 12/09; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -203,7 +205,7 @@ A coluna **estado** significa:
 | Atendimento (WhatsApp + IG) | completo na tela | ligar por telefone está desligado com trava de teste; a operação segue aberta na API (**D-4**) | sim |
 | Funil Kanban | não auditado | — | sim |
 | Agenda e Tarefas | parcial | lembrete por e-mail e WhatsApp desabilitado com "em breve" (decisão consciente) | sim |
-| Monitoramento de Processos | ligado para 16 tribunais no código, **comprovado em campo só no TJCE** (seção 9.2) | validação real nos outros 15 | sim |
+| Monitoramento de Processos | ligado para 16 tribunais com credencial + 3 por consulta pública + 24 TRTs em teste (na branch, 13/09), **comprovado em campo só no TJCE** (seções 9.2 e 15.1.1) | validação real nos outros; TJSP (e-SAJ) ainda sem adapter | sim |
 | SmartFlow (automação) | **completo** — os 32 tipos de bloco têm executor de verdade (conferido) | — | sim |
 | Agentes IA | não auditado | cobrança por uso não implementada (`router-agente-chat.ts`, único TODO do repo) | sim |
 | Cálculos Jurídicos | parcial | Tributário é rota viva que abre um cartão vazio, mas **nenhum caminho de tela leva até ela** (**D-7**) | sim |
@@ -1782,18 +1784,25 @@ um texto que o cliente lê antes de pagar com o código que atende aquilo depois
 
 ### 15.1 O mais grave: a cobertura de tribunais
 
-A comparação da landing diz **"Monitora processos e novas ações por CPF/CNPJ com
+> **Estado em 13/09:** o texto da venda ficou honesto em 12/09 (seção 15.4.1) e o
+> motor ganhou a Justiça do Trabalho em 12–13/09 (seção 15.1.1, ainda na branch,
+> sem comprovação em portal). O diagnóstico abaixo é o de 12/09 e continua valendo
+> para o TJSP.
+
+A comparação da landing dizia **"Monitora processos e novas ações por CPF/CNPJ com
 motor próprio"**, sem uma linha de ressalva. Os três cartões de plano vendem
 **"Vigia 300 / 1.000 / 2.500 processos"**.
 
-O motor conhece **16 tribunais**. Conferi contando o registro:
+O que o motor conhece hoje (fonte: `coberturaTribunais()` em
+`shared/tribunais-pje.ts`, que alimenta todos os textos):
 
-| cobertos | quais |
-|---|---|
-| 12 estaduais | CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR |
-| 4 federais | TRF1, TRF2, TRF3, TRF6 |
+| caminho | quais | comprovado em campo |
+|---|---|---|
+| com credencial no Cofre | 12 TJs (CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR) e TRF1, TRF2, TRF3, TRF6 | só o TJCE (o TJMT teve login validado pelo dono em 31/08) |
+| consulta pública, sem credencial | TRF5, TRT2, TRT15 | nenhum (os adapters dos TRTs nunca abriram o portal) |
+| em teste, com credencial | TRT1 a TRT24, 1º e 2º grau | nenhum; endereços deduzidos do padrão histórico do PJe-JT |
 
-**Não estão na lista: TJSP e todos os TRTs.**
+**Fora: TJSP** (e-SAJ; adapter é a próxima fase) — e os demais estaduais.
 
 Isso não é um detalhe de cobertura. São Paulo é o maior tribunal do país, e os TRTs
 são a Justiça do Trabalho inteira. Um escritório trabalhista que assinar o plano hoje
@@ -1805,6 +1814,70 @@ lugar.
 E há a camada de baixo, da seção 5.7: dos 16 que estão na lista, o endereço de seis
 deles é montado com o padrão do TJCE e provavelmente está errado. Então o número
 realmente comprovado continua sendo **um** pelo código — **dois** contando o TJMT, que o dono validou com login real em 31/08 (relato dele no CLAUDE.md; o sistema não guarda esse resultado fora da grade do Cofre em produção, que é a fonte a conferir antes de publicar qualquer número).
+
+### 15.1.1 Motor próprio — fase 1 (12–13/09), na branch, aguardando validação em campo
+
+Origem: o dono, 12/09 — *"quero que crie logo o motor, nada de DataJud, processos
+lá têm atrasos de meses"*. Três frentes em worktrees, integradas em 13/09. **Está
+na branch `claude/code-audit-documentation-rkhvtu`, NÃO em develop/main**: não
+existia quando ele autorizou o merge, e nada dela pode ser conferido daqui (o
+ambiente não alcança portal nenhum).
+
+O que mudou:
+- **Despachante** (`consultarProcesso` em `server/processos/adapters/index.ts`):
+  um lugar só decide o caminho pelo tribunal do CNJ. Consulta pública quando
+  existe adapter aberto (vence mesmo com sessão — o caminho com credencial dos
+  TRTs é candidato não comprovado e o aberto não pede login); senão PJe com a
+  config DO tribunal (antes o runner da aba Consultar chamava sem config e caía
+  sempre no TJCE — com credencial de outro estado a aba não funcionava); tribunal
+  do registro sem sessão dá "exige credencial no Cofre"; fora dos dois, a mesma
+  mensagem do router. O cron perdeu o `if (tribunal === 'trf5')` literal.
+- **Consulta pública**: `pje-trt.ts` (TRT2 e TRT15, adapter do spike do TRF5
+  reaproveitado), mapa `ADAPTERS_PUBLICOS` com import sob demanda; a lista
+  compartilhada `TRIBUNAIS_CONSULTA_PUBLICA_PJE` tem que bater com o mapa
+  (teste trava nos dois sentidos).
+- **Justiça do Trabalho com credencial**: os 24 TRTs entraram em `REGISTRO` e
+  `REGISTRO_G2` (`pdpjTrtConfig`, `/primeirograu/` e `/segundograu/`), o Cofre
+  aceita `pje_trt1..24`, `sistemaCofrePorTribunal(trtN)` = nacional, processo
+  trabalhista passa a "ter motor próprio". Na shared são o balde `emTeste` de
+  `coberturaTribunais()`: o robô aceita e tenta, o número vendido
+  (`totalTribunaisVigiaveis`) não os conta.
+- **Busca por CPF/CNPJ** (`consultarPorDocumento`, `consultarDocumento`,
+  `criarMonitoramentoNovasAcoes`): só em tribunal que EXIGE credencial
+  (`tribunalRequerCredencial`) — consulta pública não tem busca por parte, e os
+  TRTs ficaram FORA do seletor de CPF de propósito (só o TJCE é comprovado). O
+  tribunal-base do monitor de novas ações passou a entrar na lista vigiada.
+- **Parsers puros** (`adapters/parse/`, `linkedom` como devDependency) com
+  fixtures sintéticas feliz/nenhum/layout-mudado — ainda NÃO substituem o
+  `page.evaluate` do adapter de produção: precisam de HTML real salvo de um
+  portal antes de assumir.
+- **Textos**: `bulletVigiaPlano` → "12 TJs e 4 TRFs com credencial; TRF5, TRT2 e
+  TRT15 sem credencial; outros 22 TRTs em teste — TJSP ainda não"; migration
+  0227 troca o bullet dos 3 planos (só onde o texto ainda é o da 0223; editado
+  no painel fica). Aba Consultar e guia usam `textoConsultaNaHora()`.
+- **Amarras**: `adapters/index.test` (14), `pje-trt.test` (5),
+  `parse/pje-lista.test` (15), `motor-proprio-despachante` (20),
+  `processos-consulta-publica-router` (15), bloco PJe-JT em
+  `tribunais-pdpj.test` (12) — 29 mutações vermelhas
+  (`scratchpad/mutar-motor-despachante.py`, `mutar-trt.py`).
+
+**Só o dono valida (ordem sugerida):** (1) rodar a auditoria de portais do
+painel admin com os alvos `trt2-1g/2g` e `trt15-1g/2g` — diz se o PJe-JT
+redireciona pro SSO do PDPJ antes de gastar login; (2) consulta real no TRT2 e
+TRT15 pela aba Consultar, sem credencial; (3) aba Consultar num tribunal do
+registro fora do TJCE (TJMG, TJRJ, TRF1) com credencial; (4) "Testar tudo" no
+Cofre — atenção: com credencial nacional passou a ter **78 combinações** (24
+TRTs × 2 graus a mais), sem teto de tempo; "Parar" continua funcionando.
+
+**Ficou de fora, anotado (tela → precisa de mockup):** a tela não manda
+`codigoTribunal` na busca por CPF (o servidor aceita; o padrão é a sede);
+`ImportarAdvboxDialog.tsx` escreve "consulta pública (TRF-5…)" em texto fixo em
+três lugares; `GradeTribunais.tsx` diz "12 estados" no cabeçalho; o rótulo
+derivado "PJe — todos os estados (N)" conta TRFs e TRTs como estados;
+`consultarCNJSincrono` ("Carregar detalhes" das novas ações) não passa pelo
+despachante; filtro por segmento (TJ/TRF/TRT) na grade do "Testar tudo".
+**Próxima fase**: TJSP (e-SAJ, `esaj_tjsp`), a partir do spike `EsajTjceScraper`
+(login + busca prontos, extração não).
 
 ### 15.2 Limites vendidos que o código não impõe
 

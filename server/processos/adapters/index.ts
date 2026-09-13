@@ -4,15 +4,17 @@
  * Existiam dois "if (tribunal === 'tjce')" no runner da aba Consultar e um
  * "if (mon.tribunal === 'trf5')" no cron — três lugares decidindo a mesma
  * coisa, cada um sabendo de um tribunal só. Agora a decisão mora aqui:
+ *  - tribunal de consulta pública → adapter aberto, carregado sob demanda
+ *    (cada um puxa o Playwright do spike; carregar só quando usa). Vence
+ *    mesmo com sessão: os TRTs também estão no registro com credencial, mas
+ *    esse caminho é candidato não comprovado e o aberto não pede login;
  *  - tribunal do REGISTRO (PDPJ, com credencial) → `consultarTjce` com a
  *    config DO tribunal (o runner chamava sem config e caía sempre no TJCE);
- *  - tribunal de consulta pública → adapter aberto, carregado sob demanda
- *    (cada um puxa o Playwright do spike; carregar só quando usa);
  *  - fora dos dois → a mesma mensagem que o router já dá.
  */
 
 import { consultarTjce, consultarTjcePorCpf, type OpcoesConsulta } from "./pje-tjce";
-import { getConfigTribunal } from "../tribunais-pdpj";
+import { getConfigTribunal, tribunalRequerCredencial } from "../tribunais-pdpj";
 import { mensagemTribunalSemMotor, siglaDoTribunal } from "../../../shared/tribunais-pje";
 import type { ResultadoScraper } from "../../../scripts/spike-motor-proprio/lib/types-spike";
 
@@ -52,13 +54,13 @@ export async function consultarProcesso(
   opts?: OpcoesDespacho,
 ): Promise<ResultadoScraper> {
   const { grau, ...opcoesConsulta } = opts ?? {};
-  const cfg = getConfigTribunal(codigoTribunal, grau ?? 1);
-  if (storageStateJson && cfg) {
-    return consultarTjce(cnj, storageStateJson, cfg, opcoesConsulta);
-  }
   if (temAdapterPublico(codigoTribunal)) {
     const adapter = await ADAPTERS_PUBLICOS[codigoTribunal]();
     return adapter(cnj);
+  }
+  const cfg = getConfigTribunal(codigoTribunal, grau ?? 1);
+  if (storageStateJson && cfg) {
+    return consultarTjce(cnj, storageStateJson, cfg, opcoesConsulta);
   }
   if (cfg) {
     throw new Error(
@@ -70,7 +72,8 @@ export async function consultarProcesso(
 
 /**
  * Busca processos por CPF/CNPJ no tribunal informado. Só existe com sessão,
- * em tribunal do registro: a busca por parte é tela autenticada do PJe.
+ * em tribunal que EXIGE credencial: a busca por parte é tela autenticada do
+ * PJe, e a consulta pública não a tem.
  */
 export async function consultarPorDocumento(
   codigoTribunal: string,
@@ -79,10 +82,10 @@ export async function consultarPorDocumento(
   storageStateJson: string,
 ): Promise<Awaited<ReturnType<typeof consultarTjcePorCpf>>> {
   const cfg = getConfigTribunal(codigoTribunal);
-  if (!cfg) {
+  if (!cfg || !tribunalRequerCredencial(codigoTribunal)) {
     throw new Error(
       `Busca por ${tipo.toUpperCase()} não disponível no ${siglaDoTribunal(codigoTribunal)}: ` +
-        `o tribunal não está no registro do PJe com credencial.`,
+        (cfg ? `a consulta pública não tem busca por parte.` : `o tribunal não está no registro do PJe com credencial.`),
     );
   }
   return consultarTjcePorCpf(valor, storageStateJson, cfg);

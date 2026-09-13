@@ -186,9 +186,11 @@ describe("cobertura compartilhada: TRT2 e TRT15 por consulta pública", () => {
     expect(shared.parseCnjTribunalPuro(CNJ_TRT15)).toEqual({ codigo: "trt15", sigla: "TRT15", coberto: true });
     expect(parseCnjTribunal(CNJ_TRT2)?.temMotorProprio).toBe(true);
     expect(parseCnjTribunal(CNJ_TRT15)?.temMotorProprio).toBe(true);
-    // TRT-7 continua fora: adapter não existe.
-    expect(parseCnjTribunal("0001234-12.2024.5.07.0001")?.temMotorProprio).toBe(false);
-    expect(shared.parseCnjTribunalPuro("0001234-12.2024.5.07.0001")?.coberto).toBe(false);
+    // TRT-7 entra pelo registro com credencial (em teste): aceito, não vendido.
+    expect(parseCnjTribunal("0001234-12.2024.5.07.0001")?.temMotorProprio).toBe(true);
+    expect(shared.parseCnjTribunalPuro("0001234-12.2024.5.07.0001")?.coberto).toBe(true);
+    expect(shared.codigosTribunaisVendidos()).not.toContain("trt7");
+    expect(shared.codigosTribunaisCobertos()).toContain("trt7");
   });
 
   it("os TRTs continuam FORA do seletor por CPF (é consulta pública, sem credencial)", () => {
@@ -198,10 +200,11 @@ describe("cobertura compartilhada: TRT2 e TRT15 por consulta pública", () => {
   });
 
   it("os textos derivam da lista: Justiça do Trabalho deixa de ser 'ainda não'", () => {
-    expect(shared.textoJusticaDoTrabalho()).toBe("Justiça do Trabalho: TRT2 e TRT15 por consulta pública");
+    expect(shared.textoJusticaDoTrabalho()).toBe("Justiça do Trabalho: TRT2 e TRT15 por consulta pública, outros 22 TRTs em teste");
+    expect(shared.textoTrtsEmTeste()).toBe("outros 22 TRTs em teste");
     expect(shared.bulletVigiaPlano("300", "15")).toBe(
-      "Vigia 300 processos nos tribunais cobertos (12 TJs e 4 TRFs, mais TRF5, TRT2 e TRT15 por consulta pública — " +
-        "TJSP ainda não; Justiça do Trabalho: TRT2 e TRT15 por consulta pública) · 15 CPFs/CNPJs (novas ações: comprovado no TJCE)",
+      "Vigia 300 processos nos tribunais cobertos (12 TJs e 4 TRFs com credencial; TRF5, TRT2 e TRT15 sem credencial; " +
+        "outros 22 TRTs em teste — TJSP ainda não) · 15 CPFs/CNPJs (novas ações: comprovado no TJCE)",
     );
     expect(shared.bulletVigiaPlano("300", "15")).not.toContain("TRTs ainda não");
     expect(shared.textoCoberturaPricing()).not.toContain("Justiça do Trabalho e os demais ainda não");

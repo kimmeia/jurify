@@ -76,7 +76,7 @@ describe("tribunal de consulta pública (sem credencial)", () => {
     }
   });
 
-  it("sessão informada não muda nada: consulta pública não tem config no registro", async () => {
+  it("sessão informada não muda nada: o caminho aberto vence o do registro (candidato não comprovado)", async () => {
     await consultarProcesso("trt2", CNJ, "sessao-de-outro-lugar");
     expect(consultarTrt2).toHaveBeenCalledWith(CNJ);
     expect(consultarTjce).not.toHaveBeenCalled();
@@ -100,7 +100,9 @@ describe("tribunal de consulta pública (sem credencial)", () => {
 describe("fora da cobertura", () => {
   it("lança a MESMA mensagem que o router dá, sem chamar adapter nenhum", async () => {
     await expect(consultarProcesso("tjsp", CNJ, "s")).rejects.toThrow(mensagemTribunalSemMotor("TJSP"));
-    await expect(consultarProcesso("trt7", CNJ, null)).rejects.toThrow(mensagemTribunalSemMotor("TRT7"));
+    await expect(consultarProcesso("tjsp", CNJ, null)).rejects.toThrow(mensagemTribunalSemMotor("TJSP"));
+    // TRT7 está no registro (candidato, com credencial): sem sessão é falta de credencial, não falta de motor.
+    await expect(consultarProcesso("trt7", CNJ, null)).rejects.toThrow(/TRT7 exige credencial no Cofre/);
     expect(consultarTjce).not.toHaveBeenCalled();
     expect(consultarTrf5).not.toHaveBeenCalled();
     expect(consultarTrt2).not.toHaveBeenCalled();

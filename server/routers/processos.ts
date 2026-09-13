@@ -751,7 +751,7 @@ export const processosRouter = router({
       // escolhida pra ELE. Sem config no registro não há busca por parte
       // (é tela autenticada do PJe) — consulta pública não serve aqui.
       const codigoTribunal = input.codigoTribunal ?? TRIBUNAL_SEDE;
-      if (!getConfigTribunal(codigoTribunal)) {
+      if (!tribunalRequerCredencial(codigoTribunal)) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
           message: `Busca por CPF/CNPJ ainda não funciona no ${siglaDoTribunal(codigoTribunal)}.`,
@@ -2030,7 +2030,7 @@ export const processosRouter = router({
       // sistemas. Fora do registro não há busca por parte.
       const tribunalDaCred = input.codigoTribunal ?? TRIBUNAL_SEDE;
       const siglaBase = siglaDoTribunal(tribunalDaCred);
-      if (!getConfigTribunal(tribunalDaCred)) {
+      if (!tribunalRequerCredencial(tribunalDaCred)) {
         throw new TRPCError({
           code: "NOT_IMPLEMENTED",
           message: `Monitoramento de novas ações ainda não funciona no ${siglaBase}.`,

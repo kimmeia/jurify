@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.746 verdes em 12/09/2026 (390 arquivos, ~1min35)
+pnpm test               # vitest (server/**/*.test.ts) — 5.831 verdes em 13/09/2026 (395 arquivos, ~1min35; develop/main: 5.746 em 390)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1505,6 +1505,26 @@ zeros, então nada gravado precisa de recadastro. A chave colada em
 Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
 (crypto-utils) — não era o problema. Amarra: `agentes-api-key-crypto.test.ts`
 (6 mutações vermelhas).
+
+## Entregas de 12–13/09/2026 (resumo; detalhe em `docs/ESTADO-DO-SISTEMA.md`)
+
+- **Mergeado em develop e main (12/09, "pode mergear")**: Instagram "em breve"
+  (`canalEmBreve`), texto honesto de tribunais (`coberturaTribunais` na shared,
+  migrations 0223/0224, fila "Avisar quando chegar" com e-mail), cancelar
+  honrando a cláusula 5 (migration 0225, `emCarenciaDeCancelamento`,
+  Reativar), "Sob medida" ≥ Escala (0226), helper único da Anthropic
+  (seção acima), D-13 (cadastro nunca apaga conta) e D-15 (cargo só do próprio
+  escritório).
+- **Na branch, NÃO mergeado (13/09)**: motor próprio fase 1 — despachante por
+  tribunal, TRT2/TRT15 por consulta pública, 24 TRTs com credencial "em teste",
+  parsers puros com `linkedom`, migration 0227. Regras de integração que
+  ficaram: consulta pública vence a credencial quando existe; busca por CPF só
+  onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
+  Só o dono valida nos portais (ordem em ESTADO 15.1.1).
+- **Aprovado ("pode fazer"), em implementação**: Central de ajuda
+  (`mockup-central-de-ajuda.html`, ESTADO seção 18) — decisões 1A, 2A, 3A, 4
+  como proposto, 5A. Atenção: o mockup foi desenhado na paleta antiga
+  (violeta/Poppins); a implementação segue o app (marinho `#194b86`, Inter).
 
 ## Fila combinada com o dono (31/08/2026)
 
