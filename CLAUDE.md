@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.016 verdes em 13/09/2026 (403 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.038 verdes em 13/09/2026 (404 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1583,6 +1583,38 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   contra o próprio comentário; falha de TJ comprovado fora do ar ainda derruba a
   credencial inteira (pré-existente); e o laço de novas ações não guarda foto
   (grava falha por tribunal em `varreduraJson`, sem campo pra isso).
+
+- **Entregue 13/09, bloco comercial ("pode fazer" do dono, com os extras SOMANDO
+  ao teto do plano — recomendação dele aceitada). Detalhe na seção 21 do
+  documento de estado.** Origem: ele perguntou o que melhorar no serviço; a
+  resposta que virou código foram três coisas que custavam venda.
+  (1) **Cupom**: `criarCupom` conferia `planosIds` contra a lista fixa de
+  `products.ts`, mas a tela lista o CATÁLOGO por slug — a tela oferecia o que o
+  servidor recusava, e nenhum dos três planos vendidos podia entrar em promoção.
+  Agora confere catálogo ∪ lista fixa (a fixa fica como reserva).
+  (2) **Extras avulsos** (usuário, processos, CPFs, número de WhatsApp): sem
+  migration, moram em `escritorio_addons` com produto `extra:<chave>`,
+  `limiteMensal` = quantidade e `precoCentavos` = total mensal congelado (é
+  PACOTE, não unidade — "200 por R$ 49" tem que caber). Regra pura em
+  `shared/extras-avulsos.ts`. **A sutileza que decide**: os tetos discordam sobre
+  o que é zero — em monitoramento `0` é SEM TETO, em conexões de WhatsApp `0` é
+  NENHUMA; por isso cada extra declara `zeroEIlimitado` e `somarAoTeto` exige a
+  opção explícita. Enforcement em 4 tetos; nas conexões de WhatsApp a conta
+  estava copiada em 3 lugares e virou `limiteConexoesWhatsapp`. Fatura ganhou
+  `ItemFatura.tipo = "extra"` e `extras` opcional (caller antigo = fatura de
+  antes). Painel: botão «Extra» no cartão Módulos & cobrança, auditado como
+  `extra.avulso`.
+  (3) **JurisIA cobrava OU liberava, nunca os dois**: o cartão grava produto
+  `jurisia` seco (a fatura varre `modulo:%` e não o via → guardava o preço e não
+  cobrava); o diálogo de avulsos grava `modulo:jurisia` (a leitura de acesso
+  buscava só o seco → cobrava e não liberava). Fechados os dois lados,
+  aditivamente, sem cobrar dobrado quando as duas concessões existem.
+  Amarra: `bloco-comercial-extras-cupom-jurisia` (22) — 24 mutações vermelhas;
+  2 sobreviveram na 1ª volta (a do botão conferia o `onClick` e não o rótulo; a
+  do prefixo só morreu com `"modulousuarios"`, o caso que discrimina).
+  **Anotado**: `getUserCreditsInfo`, `health.plansCount` e os dois getters de
+  `db.ts` seguem no `PLANS`; o extra não aparece pro cliente (mostrar pede
+  mockup); JurisIA segue sem Sentry e sem tela de consumo (resto do A.6).
 
 ## Fila combinada com o dono (31/08/2026)
 

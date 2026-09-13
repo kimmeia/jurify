@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.016 verdes, 403 arquivos** (13/09, com o conserto do monitoramento da seção 20 e os dois resíduos da 20.7; 5.975 em 400 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.038 verdes, 404 arquivos** (13/09, com o bloco comercial da seção 21; 6.016 em 403 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2763,3 +2763,118 @@ todas vermelhas** (`scratchpad/mutar-publica-e-print.py`).
 - A foto só é guardada no **poll de movimentações**. O laço de novas ações grava
   as falhas por tribunal em `varreduraJson` e não tem campo para foto — cabe o
   mesmo tratamento, não foi pedido.
+
+---
+
+## 21. Bloco comercial — ENTREGUE e autorizado pelo dono (13/09)
+
+Ele perguntou o que dá pra melhorar no serviço oferecido. A resposta que deu
+código foram três coisas que estavam **custando venda**, achadas conferindo o
+repo e não de memória. Nenhuma é bug de tela: as três são dinheiro que não
+entrava.
+
+### 21.1 O cupom recusava exatamente os planos que estão à venda
+
+`criarCupom` conferia `planosIds` contra a lista FIXA de
+`server/billing/products.ts` (`free`, `basico`, `intermediario`, `completo`).
+A tela do cupom (`CuponsSection`) lista os planos de
+`admin.listarPlanosEditaveis` — a tabela `planos`, por slug. **A tela oferecia
+o que o servidor recusava**: marcar «Escritório» no diálogo devolvia
+`Plano "escritorio" não existe`. Ou seja, promoção, campanha e desconto de
+fechamento não funcionavam em nenhum dos três planos vendidos desde 09/09.
+
+Agora a conferência é a união catálogo + lista fixa — a fixa fica como reserva
+pra base sem catálogo, mesmo padrão do `planosAtuais`. Nada removido.
+
+### 21.2 Extras avulsos: os upsells anunciados agora têm mecanismo
+
+Usuário a R$ 29, +100 processos a R$ 29, número extra a R$ 49 foram anunciados
+com o pacote de 3 planos e ficaram **sem mecanismo** — o teto vive na linha do
+PLANO, e não havia onde registrar "este cliente comprou 200 processos a mais".
+O upsell mais fácil que existe (cliente dentro, já pagando, já com a dor) não
+era vendável.
+
+**Sem migration**: moram em `escritorio_addons` com produto `extra:<chave>`, a
+MESMA tabela e a mesma semântica dos módulos avulsos. `limiteMensal` guarda a
+QUANTIDADE e `precoCentavos` o preço mensal TOTAL, congelado na concessão.
+
+Por que o preço é o total e não o unitário: ele anunciou "+100 processos por
+R$ 29", que é pacote, não unidade — e negociar "200 por R$ 49 pra fechar o
+cliente" tem que caber. Total congelado deixa a fatura somar a linha como já
+soma a dos módulos, sem multiplicação e sem discutir o que é "um".
+
+**A decisão do dono foi somar** ao que o plano dá: é aditivo, não mexe em quem
+já tem, e revogar é apagar a linha.
+
+**A sutileza que decide a correção** (`shared/extras-avulsos.ts`): os tetos do
+produto **discordam sobre o que significa zero**. Em monitoramentos, `0` e
+`null` querem dizer "sem teto" — `avaliarLimiteMonitoramentos` libera. Em
+conexões de WhatsApp, `0` quer dizer "nenhuma" e bloqueia. Somar sem saber disso
+daria dois erros opostos: transformaria plano ilimitado em plano limitado ao
+extra, e deixaria o número comprado sem efeito em plano sem WhatsApp. Por isso
+cada extra declara `zeroEIlimitado`, e `somarAoTeto` exige a opção explícita no
+lugar de adivinhar.
+
+Enforcement em quatro tetos: processos e CPFs (`limites-monitoramento`),
+colaboradores (`plan-limits`) e conexões de WhatsApp. Neste último a conta
+estava **copiada em três lugares** (a leitura da tela e os dois caminhos que
+criam canal); virou `limiteConexoesWhatsapp`, uma função — extra que valesse só
+num deles faria o número comprado funcionar ou não dependendo de por onde o
+cliente entrou. Cortesia segue acima de qualquer teto.
+
+Na fatura, `ItemFatura.tipo` ganhou `"extra"` e `calcularFatura` um campo
+`extras` opcional — caller antigo sem extras produz a fatura de antes, e o
+desconto do escritório incide sobre o extra também.
+
+No painel, o cartão «Módulos & cobrança» ganhou o botão **Extra**, a lista das
+concessões e o diálogo «Vender um extra» (quantidade + preço mensal + validade
++ observação, com sugestão por tipo). O X cancela zerando a quantidade, e o teto
+volta a ser o do plano. Auditado como `extra.avulso`.
+
+### 21.3 O JurisIA era vendido e a fatura não cobrava
+
+Ele entrou no plano Escala em 09/09 com 200 consultas. Há **dois** caminhos de
+concessão no painel e cada um quebrava de um lado:
+
+- o **cartão do JurisIA** grava o produto `jurisia` seco (é o add-on mais antigo,
+  anterior ao prefixo `modulo:`). A composição da fatura varre `modulo:%`, então
+  nunca o via: o preço digitado era guardado no banco e **jamais cobrado**;
+- o **diálogo de módulos avulsos** grava `modulo:jurisia`. A fatura somava, mas
+  `acessoJurisIA` buscava só o produto seco — **cobrava e não liberava**, e o
+  cliente batia na tela de bloqueio.
+
+Os dois lados foram fechados, aditivamente: a fatura passou a incluir o add-on
+do cartão (`avulsoJurisiaCobravel`) e a leitura de acesso passou a aceitar os
+dois produtos (`addonJurisiaPorQualquerCaminho`). Duas proteções que valem a
+pena registrar: concessão de graça (`precoCentavos <= 0`) não vira linha de
+R$ 0 na fatura, e quando as duas concessões existem e estão vigentes a cobrança
+**não dobra**. Vencido ou suspenso nos dois devolve a linha existente em vez de
+null, pra a decisão pura explicar o motivo certo em vez de "nunca contratou".
+
+### 21.4 Amarra
+
+`bloco-comercial-extras-cupom-jurisia.test.ts` (22 testes) — **24 mutações,
+todas vermelhas** (`scratchpad/mutar-bloco-comercial.py`). Duas sobreviveram na
+primeira volta: a amarra do botão do painel conferia o `onClick` e não o RÓTULO
+(apagar o texto deixava um botão invisível e ela passava), e a do prefixo do
+produto só morreu com um caso que discrimina de verdade — `"modulousuarios"`,
+que tem seis letras antes de uma chave válida, então quem cortasse cego sem
+conferir o prefixo devolveria `usuarios` pra um produto que não é extra.
+
+### 21.5 O que fica anotado, e a pergunta que sobrou
+
+- **`getUserCreditsInfo`, `health.plansCount` e `db.ts` getPlanName/getPlanPrice
+  ainda leem `PLANS`.** O cupom saiu da lista; esses quatro seguem nela e não
+  foram autorizados.
+- **Os extras não aparecem para o cliente.** Ele não vê "você tem +200
+  processos" em lugar nenhum, e não há autoatendimento para comprar — hoje é
+  venda pela conversa e concessão pelo painel, que é como ele descreveu.
+  Mostrar na tela do advogado pede mockup.
+- **O JurisIA segue sem Sentry e sem tela de consumo** (itens A.1/A.6 da fila).
+  A cobrança cruzada — que era o A.1 — está fechada; o resto do A.6 continua:
+  erro da OpenAI vai cru pro advogado e fica gravado no histórico dele, e a
+  tabela `jurisia_uso` não é lida por tela nenhuma.
+- **O maior limite do produto não é conserto, é investimento**: TJSP não tem
+  adapter (é e-SAJ, motor diferente), e é o maior mercado de advocacia do país.
+  Ou o motor cresce para lá, ou a venda se concentra nos estados que funcionam e
+  o site diz isso com clareza. Decisão do dono.

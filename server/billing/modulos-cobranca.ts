@@ -145,6 +145,36 @@ export async function salvarModuloAvulso(args: {
   });
 }
 
+/**
+ * O add-on JurisIA concedido pelo CARTÃO do JurisIA, como linha de fatura.
+ *
+ * Ele é gravado com o produto `jurisia` seco (é o add-on mais antigo, anterior
+ * ao prefixo `modulo:`), então a composição da fatura — que varre `modulo:%` —
+ * nunca o enxergava: o preço digitado no cartão era guardado no banco e jamais
+ * cobrado. Concedido pelo OUTRO caminho, o diálogo de módulos avulsos, ele entra
+ * como `modulo:jurisia` e já era somado aqui — então só falta este.
+ *
+ * Devolve null quando não há concessão vigente, quando ela é de graça, ou quando
+ * o `modulo:jurisia` também existe e vigente: dois caminhos para o mesmo módulo
+ * não podem virar cobrança dobrada.
+ */
+async function avulsoJurisiaCobravel(
+  escritorioId: number,
+  agoraMs: number,
+): Promise<{ chave: string; rotulo: string; precoCentavos: number } | null> {
+  const { MODULO_JURISIA } = await import("@shared/addon-jurisia");
+  const { buscarAddon } = await import("./addons-repo");
+  const doCartao = await buscarAddon(escritorioId, MODULO_JURISIA);
+  if (!doCartao || doCartao.precoCentavos <= 0) return null;
+  if (!avulsoVigente(doCartao, agoraMs)) return null;
+
+  const comoModulo = await buscarAddon(escritorioId, moduloParaProduto(MODULO_JURISIA));
+  if (comoModulo && avulsoVigente(comoModulo, agoraMs)) return null;
+
+  const nome = MODULOS_APP.find((m) => m.id === MODULO_JURISIA)?.nome ?? "JurisIA";
+  return { chave: MODULO_JURISIA, rotulo: nome, precoCentavos: doCartao.precoCentavos };
+}
+
 export async function atendentesAtivosDoEscritorio(escritorioId: number): Promise<number> {
   const db = await getDb();
   if (!db) return 0;
@@ -222,11 +252,30 @@ export async function faturaDoEscritorio(escritorioId: number): Promise<FaturaEs
   const avulsos = (await listarAvulsosDoEscritorio(escritorioId, agoraMs)).filter((a) => a.vigente);
   const atendentesAtivos = await atendentesAtivosDoEscritorio(escritorioId);
 
+  // Extras avulsos (mais usuários, processos, CPFs, números) e o add-on JurisIA
+  // concedido pelo cartão dele. Os dois moram na mesma tabela mas FORA do
+  // prefixo "modulo:", então a fatura simplesmente não os via: o preço digitado
+  // era guardado e nunca cobrado.
+  const { listarExtrasDoEscritorio } = await import("./extras-avulsos");
+  const extrasVigentes = (await listarExtrasDoEscritorio(escritorioId, agoraMs)).filter(
+    (e) => e.vigente && e.quantidade > 0,
+  );
+  const { rotuloDoExtra } = await import("@shared/extras-avulsos");
+  const extras = extrasVigentes.map((e) => ({
+    chave: e.chave as string,
+    rotulo: rotuloDoExtra(e.chave, e.quantidade),
+    precoCentavos: e.precoCentavos,
+  }));
+
+  const jurisiaAvulso = await avulsoJurisiaCobravel(escritorioId, agoraMs);
+  if (jurisiaAvulso) extras.push(jurisiaAvulso);
+
   const fatura = calcularFatura({
     nomePlano: plano?.nome ?? planoSlug ?? "sem plano",
     precoPacoteCentavos: plano?.precoMensalCentavos ?? 0,
     valorNegociadoCentavos,
     avulsos: avulsos.map((a) => ({ modulo: a.modulo, nome: a.nome, precoCentavos: a.precoCentavos })),
+    extras,
     atendentesAtivos,
     atendentesInclusos: plano?.atendentesInclusos ?? null,
     precoAtendenteAdicionalCentavos: plano?.precoAtendenteAdicionalCentavos ?? 0,
