@@ -2450,9 +2450,14 @@ cada consulta, dono/não-dono, cadeado, módulo, rotas), `saude-semaforos`
   aparece em `shared/telefone.ts`, testes, docs de auditoria e no CLAUDE.md
   (caso Tirzah), além do histórico do git com os PNG antigos. Esta entrega
   fechou só o print servido pelo app. Varrer o resto é decisão do dono.
-- Conferência visual no app rodando: feita pelo integrador em 13/09 (fotos
-  enviadas ao dono); o print do passo "Conectar com Facebook" continua
-  faltando (precisa de app Meta configurado).
+- Conferência visual no app rodando: feita pelo integrador em 13/09 (11 fotos,
+  1440px e 390px, nenhuma rola de lado; enviadas ao dono). O print do passo
+  "Conectar com Facebook" continua faltando (precisa de app Meta configurado).
+  Dois pontos vistos no celular, ambos comportamento ANTERIOR a esta entrega:
+  o Dashboard do dono em 390px abre direto no modo Atendimento (então o bloco
+  "Primeiros passos" só aparece no computador — a faixa da Central cobre o
+  celular), e o cabeçalho fixo desse modo escreve "Atendimento" mesmo com a
+  Central aberta embaixo.
 - Print de Canais mostra um número já conectado (ilustrativo).
 - Dentro da dobra "Detalhes técnicos", a lista antiga ainda usa a heurística
   de 60 s pra jornada suspeita; as 3 linhas usam 2 s/tela. Unificar é
