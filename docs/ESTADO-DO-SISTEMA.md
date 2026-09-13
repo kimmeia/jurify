@@ -3263,3 +3263,44 @@ estado junto», que é decisão antiga da casa e continua valendo.
 Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
 trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
 limpo e `pnpm vite build` passando.
+## 26. Cabeçalho do Dashboard: busca no topo, abas minimalistas (13/09)
+
+Três pedidos do dono depois de ver o navegável: *"só gostei do buscar ficar
+alinhado com nome do usuário. e pode remover o botão outro período também.
+[…] e o navbar geral, comercial, operacional e financeiro podemos refazer
+também o estilo para algo mais minimalista"*.
+
+### 26.1 Busca alinhada com o nome
+
+`BuscaDoTopo` (em `dashboards/common.tsx`) entra dentro do `PainelTopo`, na
+mesma linha do "Bom dia, <nome>". Abre a **mesma** paleta do ⌘K — não é uma
+busca nova: `AbrirPaletaContexto`
+(`components/paleta-comandos-contexto.tsx`) leva o `setPaletaAberta` do
+`AppLayout` até a tela. Fora do AppLayout (login, assinatura) o contexto é
+`null` e o botão não é desenhado.
+
+**A busca do rodapé do menu CONTINUA onde estava.** Ele pediu a do topo, não
+pediu para tirar a outra; são duas portas para a mesma paleta. Se ele quiser
+uma só, é apagar o bloco do `SidebarFooter`.
+
+Vale para os cinco painéis que usam `PainelTopo` (Geral, Comercial,
+Operacional, Financeiro, Processual) — é o mesmo cabeçalho.
+
+### 26.2 "Ver outros períodos" saiu
+
+Removido do `PainelTopo` do Dashboard Geral, a pedido expresso. `/relatorios`
+continua no menu e é por onde se vê outro período; o comentário do arquivo que
+explicava a ausência de seletor de range continua válido.
+
+### 26.3 Abas em sublinhado
+
+`Geral · Comercial · Operacional · Financeiro` deixaram de ser pílulas dentro
+de uma moldura com fundo (`rounded-md border bg-muted p-1.5` + `data-[state=
+active]:bg-card`) e viraram texto com **sublinhado de 2px na ativa**, sobre uma
+linha fina que atravessa a tira. Sem moldura, sem fundo, sem sombra.
+
+`max-w-full overflow-x-auto` ficou no invólucro de propósito: são as duas
+classes que impedem as abas de empurrarem a página inteira de lado num celular
+de 390px, e `telas-cabem-no-celular.test.ts` trava as duas.
+
+Medido depois: 5.983 testes verdes, typecheck limpo, build ok.

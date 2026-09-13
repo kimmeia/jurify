@@ -16,8 +16,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Progress } from "@/components/ui/progress";
 import { UsoDoMes } from "@/components/UsoDoMes";
-import { Button } from "@/components/ui/button";
-import { ArrowRight, AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp } from "lucide-react";
 import { useLocation } from "wouter";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import {
@@ -161,12 +160,6 @@ export default function DashboardGeral() {
           ) : (
             `Painel geral · ${nomeMesAtual}`
           )
-        }
-        acao={
-          <Button variant="outline" size="sm" className="h-8 text-[12px]" onClick={() => nav("/relatorios")}>
-            Ver outros períodos
-            <ArrowRight className="ml-1 h-3.5 w-3.5" />
-          </Button>
         }
       />
 
