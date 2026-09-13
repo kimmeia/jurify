@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 27; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 28 e `develop` dentro; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
