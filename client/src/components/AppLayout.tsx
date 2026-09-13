@@ -292,20 +292,11 @@ function AppSidebarContent({
     }
   );
 
-  const { data: credits, isFetched: creditsFetched } = trpc.dashboard.credits.useQuery(
-    undefined,
-    {
-      enabled: !!user && user.role === "user",
-      retry: false,
-      refetchOnWindowFocus: false,
-    }
-  );
-
   const hasSubscription = !!subscription;
-  const hasCredits = (credits?.creditsRemaining ?? 0) > 0;
   const isUser = user?.role === "user";
-  // Items are locked only if user has NEITHER subscription NOR credits
-  const itemsLocked = isUser && subFetched && creditsFetched && !hasSubscription && !hasCredits;
+  // Sem assinatura, o menu tranca. Saldo de crédito destrancava junto até
+  // 13/09; a moeda saiu do produto e o acesso passou a ser só o contrato.
+  const itemsLocked = isUser && subFetched && !hasSubscription;
 
   // Nome do escritório — exibido no header do sidebar para deixar
   // claro a qual escritório o colaborador pertence.

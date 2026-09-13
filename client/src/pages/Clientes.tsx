@@ -76,7 +76,7 @@ import { useLocation, useSearch } from "wouter";
 function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: string }) {
   const clean = cpfCnpj.replace(/\D/g, "");
   // CPF (11) ou CNPJ (14) — fora disso é cadastro malformado, e o backend
-  // rejeitaria com erro genérico depois do usuário pagar 35 créditos.
+  // rejeitaria com erro genérico depois de consumir a vaga do plano.
   const documentoValido = clean.length === 11 || clean.length === 14;
   const tipo: "cpf" | "cnpj" = clean.length === 14 ? "cnpj" : "cpf";
 
@@ -217,7 +217,7 @@ function MonitorarProcessosButton({ cpfCnpj, nome }: { cpfCnpj: string; nome: st
           </AlertDialogHeader>
           <EstadosPicker selecionados={tribunais} onChange={setTribunais} />
           <p className="text-corpo text-muted-foreground leading-relaxed">
-            <span className="text-foreground font-medium">Cobrança: 15 créditos/mês</span>, independente
+            <span className="text-foreground font-medium">Conta no limite do mês do seu plano</span>, independente
             dos estados escolhidos — renovada automaticamente, cancela quando quiser. A varredura usa a
             credencial nacional do Cofre.
           </p>

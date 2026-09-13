@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.106 verdes, 410 arquivos** (13/09, na ponta do merge, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.119 verdes, 411 arquivos** (13/09, com a seção 26; 6.106 em 410 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3263,3 +3263,100 @@ estado junto», que é decisão antiga da casa e continua valendo.
 Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
 trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
 limpo e `pnpm vite build` passando.
+
+---
+
+## 26. A moeda "crédito" saiu do produto (13/09)
+
+Autorização do dono, na mesma mensagem que tirou o Ponto do cartão: *"tudo
+referente a creditos pode excluir caso pois não usaremos mais isso"*.
+
+### 26.1 Por que a remoção era segura — e por que era urgente
+
+**Crédito já não decidia nada desde 11/09.** `consumirCredito`, chamada pelos
+quatro routers de cálculo, por dentro chamava `verificarUso`/`registrarUso` do
+TETO MENSAL e não encostava em saldo nenhum. O nome sobreviveu à troca, e era
+ele que fazia a tela dizer **"Seus créditos acabaram. Adquira mais créditos"** —
+mandando o cliente comprar o que não estava à venda. Virou
+`contarCalculoNoMes`, e a mensagem passou a dizer o que de fato aconteceu.
+
+**O achado grave.** `cobrarMonitoramentosMensais` rodava **a cada 6 horas**, em
+produção: debitava crédito por processo vigiado (2/mês) e por CPF vigiado
+(15/mês) e, quando o saldo não dava, marcava o monitoramento como **`pausado`**
+e notificava "Monitoramento pausado por falta de créditos". O saldo só era
+reposto por outro cron (`resetCotaMensalEscritorios`). Ou seja: a moeda
+continuava viva o bastante para **desligar vigia de processo** por uma conta
+que ninguém mais olhava. Os dois crons saíram juntos — e é por isso que
+remover o mecanismo pela metade seria pior que não remover.
+
+### 26.2 O que saiu
+
+| Camada | O que era | Substituto que já existia |
+|---|---|---|
+| operação avulsa | débito de saldo | teto mensal (`limites-uso`, `contarUso`) |
+| vaga de monitoramento | 2 ou 15 créditos/mês | vaga do plano (`limites-monitoramento`) |
+| "dar créditos" no painel | `concederCreditos` | `aumentarLimiteDoMes` (extra deste mês) |
+| barra do Dashboard | saldo × consumido | `UsoDoMes` |
+
+Módulos apagados: `billing/escritorio-creditos.ts`,
+`processos/custos-creditos.ts`, `billing/migrate-legacy-credits.ts`.
+Procedures: `processos.saldo`, `processos.pacotes`, `processos.transacoes`,
+`processos.adicionarCreditos`, `dashboard.credits`, `admin.concederCreditos`,
+`admin.retirarCreditos`, `admin.migrarCreditosLegacy`. Telas: chip de saldo e
+todos os textos de custo em Processos, "consome 1 crédito" nos cálculos, cartão
+de créditos e botões do painel admin, barra do Dashboard.
+
+**Consequência que vale registrar:** acesso ao app passou a ser **só
+assinatura**. `hasAccess = hasSubscription || hasCredits` era a regra;
+`hasCredits` deixou de existir. Pagante, teste e cortesia têm linha de
+assinatura e não sentem nada — quem entrava **só** por crédito sobrante agora
+cai em "Meu plano". É o comportamento correto e é uma mudança de porta.
+
+### 26.3 O que NÃO saiu, e por quê
+
+1. **`creditosCalculosMes`.** A coluna guardou o nome antigo, mas É o teto
+   mensal de cálculos (`CAMPO_DO_PLANO.calculo`). Apagá-la tiraria o limite.
+   Mudou o RÓTULO na tela do painel: «Créditos cálculo/mês» → «Cálculos por
+   mês».
+2. **As tabelas** `escritorio_creditos` e `escritorio_transacoes`. Histórico não
+   se joga fora por migration — a convenção da casa é ALTER não-destrutivo.
+   Ninguém mais lê. **Se o dono quiser apagar de vez, é decisão dele.**
+3. **"Crédito" no sentido financeiro**: «Cartão de crédito», «Crédito Pessoal»
+   do módulo bancário, `creditoMesDiferente` do Financeiro, «Banco Crédito S/A».
+   Mesma palavra, outro assunto — **uma varredura cega por "crédito" destruiria
+   o módulo de cálculo bancário**, e duas mutações da bateria existem só pra
+   travar essa distinção.
+4. **O rótulo `user.concederCreditos` na Auditoria**, marcado
+   "(descontinuado)": as linhas antigas continuam no banco e alguém precisa
+   conseguir ler o que elas dizem.
+
+### 26.4 O cartão do Escala parou de vender o Ponto
+
+Migration **0229**. O módulo saiu de produção em 13/09 (seção 23) e o cartão
+seguia anunciando "Comissões automáticas por colaborador e ponto da equipe" —
+o cliente assinava lendo isso e não achava o módulo. A **cesta não foi tocada**:
+o Ponto continua contratado e volta sozinho quando sair do beta. A troca é por
+TEXTO EXATO (`JSON_SEARCH`), não por posição: `features` é editável no painel,
+quem já reescreveu a frase não é afetado, e rodar duas vezes não faz nada.
+
+### 26.5 Amarras
+
+`credito-saiu-do-produto` (19 testes) — **28 mutações vermelhas**
+(`scratchpad/mutar-credito-e-cartao.py`). Duas sobreviveram na 1ª volta pelo
+motivo de sempre: o literal de pé em outra ocorrência (o import × a chamada de
+`consumirUso`; o `JSON_SEARCH` do caminho × o do `WHERE`).
+
+Seis amarras existentes foram **atualizadas para a verdade nova em vez de
+apagadas**, e em três delas a metade que ainda protege foi preservada de
+propósito: `lancamento-creditos-limites` perdeu `cotaMensalDoPlano` e manteve
+`limitesDoPlano` (a tabela `planos` como fonte); `admin-excluir-conta-alvo`
+perdeu o caminho de retirar crédito e manteve o de **excluir conta**, que é o
+bloqueador P0-D; `superlancamento-planos` passou a travar a VAGA em vez da
+ordem "vaga antes do crédito". As outras: `creditos-viram-limites`,
+`pacote-3-planos`, `processos-cofre-lancamento`, `novas-acoes-capa` e
+`processos-cabecalho-enxuto` (esta inverteu: o aviso «Saldo baixo» tinha ficado
+de pé em 13/09 porque ele pediu só a PASTILHA — na mensagem seguinte veio a
+moeda inteira).
+
+Baseline: **6.119 testes verdes em 411 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.

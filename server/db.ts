@@ -1010,94 +1010,18 @@ export async function getEstatisticasUso(userId: number) {
   return { totalCalculos, totalPareceres, porTipo };
 }
 
-// ─── Créditos ──────────────────────────────────────────────────────────────────
+// ─── Teto mensal de cálculos ──────────────────────────────────────────────────
 
 /**
- * Buscar créditos do utilizador.
- * Funciona com OU sem assinatura ativa (suporta créditos avulsos e trial).
- */
-export async function getUserCreditsInfo(userId: number) {
-  const db = await getDb();
-  if (!db) return null;
-
-  const sub = await getActiveSubscription(userId);
-
-  const existing = await db
-    .select()
-    .from(userCredits)
-    .where(eq(userCredits.userId, userId))
-    .limit(1);
-
-  // Com assinatura ativa
-  if (sub) {
-    const plan = PLANS.find((p) => p.id === sub.planId);
-    const creditsLimit = plan?.creditsPerMonth ?? 10;
-
-    if (existing.length === 0) {
-      const resetAt = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
-      await db.insert(userCredits).values({
-        userId,
-        creditsTotal: creditsLimit,
-        creditsUsed: 0,
-        resetAt,
-      });
-      return { creditsTotal: creditsLimit, creditsUsed: 0, creditsRemaining: creditsLimit, resetAt };
-    }
-
-    const rec = existing[0];
-
-    const now = new Date();
-    if (rec.resetAt && now > rec.resetAt) {
-      const newResetAt = sub.currentPeriodEnd ? new Date(sub.currentPeriodEnd) : null;
-      await db
-        .update(userCredits)
-        .set({ creditsUsed: 0, creditsTotal: creditsLimit, resetAt: newResetAt })
-        .where(eq(userCredits.userId, userId));
-      return { creditsTotal: creditsLimit, creditsUsed: 0, creditsRemaining: creditsLimit, resetAt: newResetAt };
-    }
-
-    // Never decrease creditsTotal — preserves avulso credits bought on top
-    const effectiveTotal = Math.max(rec.creditsTotal, creditsLimit);
-    if (rec.creditsTotal < creditsLimit) {
-      await db
-        .update(userCredits)
-        .set({ creditsTotal: creditsLimit })
-        .where(eq(userCredits.userId, userId));
-    }
-
-    const creditsRemaining = Math.max(0, effectiveTotal - rec.creditsUsed);
-    return { creditsTotal: effectiveTotal, creditsUsed: rec.creditsUsed, creditsRemaining, resetAt: rec.resetAt };
-  }
-
-  // Sem assinatura — verificar créditos avulsos / trial
-  if (existing.length === 0) {
-    // Primeiro acesso: dar 3 créditos grátis para testar
-    await db.insert(userCredits).values({
-      userId,
-      creditsTotal: 3,
-      creditsUsed: 0,
-    });
-    return { creditsTotal: 3, creditsUsed: 0, creditsRemaining: 3, resetAt: null };
-  }
-
-  const rec = existing[0];
-  const creditsRemaining = Math.max(0, rec.creditsTotal - rec.creditsUsed);
-  return { creditsTotal: rec.creditsTotal, creditsUsed: rec.creditsUsed, creditsRemaining, resetAt: null };
-}
-
-/**
- * Conta um cálculo no limite mensal do plano.
+ * Conta um cálculo no teto do mês do plano e diz se ele pode acontecer.
  *
- * O nome ficou por compatibilidade com os cinco routers de cálculo. O que
- * mudou em 11/09/2026 (decisão do dono) foi a régua: em vez de debitar do
- * saldo de créditos do escritório — que era o mesmo bolso de consultar
- * processo e vigiar CNJ, com preços diferentes por operação —, o cálculo
- * conta no teto de "cálculos por mês" escrito no plano.
+ * Chamava-se `consumirCredito` e por dentro já não encostava em crédito nenhum
+ * desde 11/09 — o nome sobreviveu à troca e era ele que fazia a tela dizer
+ * "seus créditos acabaram" quando o que acabou foi o limite do mês.
  *
- * `false` = o mês acabou (o router devolve o erro ao usuário). Dúvida nossa
- * (sem banco, sem escritório, plano não resolvido) libera.
+ * Fail-open de propósito: falha nossa ao contar nunca barra o advogado.
  */
-export async function consumirCredito(userId: number): Promise<boolean> {
+export async function contarCalculoNoMes(userId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return true;
 
@@ -1117,29 +1041,3 @@ export async function consumirCredito(userId: number): Promise<boolean> {
   return true;
 }
 
-/**
- * Adicionar créditos avulsos ao utilizador.
- */
-export async function addCreditsToUser(userId: number, credits: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  const existing = await db
-    .select()
-    .from(userCredits)
-    .where(eq(userCredits.userId, userId))
-    .limit(1);
-
-  if (existing.length === 0) {
-    await db.insert(userCredits).values({
-      userId,
-      creditsTotal: credits,
-      creditsUsed: 0,
-    });
-  } else {
-    await db
-      .update(userCredits)
-      .set({ creditsTotal: sql`${userCredits.creditsTotal} + ${credits}` })
-      .where(eq(userCredits.userId, userId));
-  }
-}

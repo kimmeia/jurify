@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.106 verdes em 13/09/2026 (410 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.119 verdes em 13/09/2026 (411 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1837,6 +1837,54 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   quem alimentava o número — dava pra reatribuir a variável à página com o
   literal de pé em outro lugar). `central-grupos` ganhou 2 testes e teve o
   `expect` de objeto inteiro atualizado; os 17 de comportamento, intocados.
+
+- **Entregue 13/09, a moeda "crédito" saiu do produto + o cartão do Escala parou
+  de vender o Ponto (seção 26 do documento de estado).** Autorização dele:
+  *"remova ponto da equipe do cartão / tudo referente a creditos pode excluir
+  caso pois não usaremos mais isso"*.
+  - **Por que era seguro**: crédito já não decidia nada desde 11/09.
+    `consumirCredito` (chamada pelos 4 routers de cálculo) por dentro chamava o
+    TETO MENSAL e não encostava em saldo — o NOME sobreviveu à troca e era ele
+    que fazia a tela dizer "Seus créditos acabaram. Adquira mais créditos",
+    mandando comprar o que não estava à venda. Virou `contarCalculoNoMes`.
+  - **Por que era urgente**: `cobrarMonitoramentosMensais` rodava **a cada 6h em
+    produção**, debitava 2 cred/mês por processo e 15 por CPF e, sem saldo,
+    marcava o monitoramento como **`pausado`** com notificação "pausado por
+    falta de créditos". O saldo só voltava por outro cron. A moeda estava viva
+    o bastante pra **desligar vigia de processo** por uma conta que ninguém
+    olhava — os dois crons saíram juntos, e remover pela metade seria pior que
+    não remover.
+  - **Saiu**: os módulos `escritorio-creditos`, `custos-creditos` e
+    `migrate-legacy-credits`; as procedures `processos.saldo/pacotes/transacoes/
+    adicionarCreditos`, `dashboard.credits` e `admin.concederCreditos/
+    retirarCreditos/migrarCreditosLegacy`; o chip de saldo e todos os textos de
+    custo em Processos; "consome 1 crédito" nos cálculos; o cartão de créditos
+    do painel; a barra do Dashboard. Cada um já tinha substituto: teto mensal
+    (`contarUso`), vaga do plano, `aumentarLimiteDoMes` e `UsoDoMes`.
+  - **Mudança de porta que vale saber**: acesso virou **só assinatura**.
+    `hasAccess = hasSubscription || hasCredits` perdeu a segunda metade. Pagante,
+    teste e cortesia têm linha de assinatura e não sentem nada; quem entrava SÓ
+    por crédito sobrante cai em "Meu plano".
+  - **NÃO saiu, de propósito**: (1) `creditosCalculosMes` — a coluna guardou o
+    nome, mas É o teto mensal de cálculos (`CAMPO_DO_PLANO.calculo`); apagar
+    tiraria o limite, então mudou só o RÓTULO no painel («Cálculos por mês»);
+    (2) as tabelas `escritorio_creditos`/`escritorio_transacoes` — histórico não
+    se joga fora por migration, e ninguém mais lê (apagar é decisão do dono);
+    (3) **"crédito" no sentido financeiro** — «Cartão de crédito», «Crédito
+    Pessoal» do bancário, `creditoMesDiferente`: **varredura cega por "crédito"
+    destrói o módulo de cálculo bancário**, e duas mutações da bateria existem
+    só pra travar essa distinção.
+  - **Cartão do Escala** (migration 0229): "Comissões automáticas por
+    colaborador e ponto da equipe" → sem o ponto. A **cesta não foi tocada** (o
+    módulo volta sozinho quando sair do beta), e a troca é por TEXTO EXATO
+    (`JSON_SEARCH`), não por posição — `features` é editável no painel.
+  Amarra: `credito-saiu-do-produto` (19) — **28 mutações vermelhas**
+  (`scratchpad/mutar-credito-e-cartao.py`; 2 sobreviveram na 1ª volta pelo
+  literal de pé em outra ocorrência). Seis amarras foram ATUALIZADAS em vez de
+  apagadas, e em três a metade que ainda protege ficou: `lancamento-creditos-
+  limites` manteve `limitesDoPlano`; `admin-excluir-conta-alvo` manteve o
+  caminho de EXCLUIR CONTA (bloqueador P0-D); `superlancamento-planos` passou a
+  travar a VAGA.
 
 ## Fila combinada com o dono (31/08/2026)
 

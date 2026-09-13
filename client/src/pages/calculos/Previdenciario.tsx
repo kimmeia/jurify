@@ -148,7 +148,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
   const [resultado, setResultado] = useState<ResultadoSimulacao | null>(null);
 
   const mutation = trpc.previdenciario.simular.useMutation({
-    onSuccess: (data) => { setResultado(data); setStep(3); toast.success("Simulação realizada! (1 crédito)"); },
+    onSuccess: (data) => { setResultado(data); setStep(3); toast.success("Simulação realizada!"); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -302,7 +302,7 @@ function Simulador({ onVoltar }: { onVoltar: () => void }) {
               </Button>
             </div>
             <p className="text-xs text-center text-muted-foreground">
-              Cada simulação consome 1 crédito do seu plano
+              Cada simulação conta no limite de cálculos do mês
             </p>
           </CardContent>
         </Card>
@@ -469,7 +469,7 @@ function CalculoRMI({ onVoltar }: { onVoltar: () => void }) {
   const [tcMeses, setTcMeses] = useState(""); const [regra, setRegra] = useState("PERMANENTE");
   const [salarios, setSalarios] = useState<string[]>(["", "", ""]);
   const [resultado, setResultado] = useState<ResultadoRMI | null>(null);
-  const mutation = trpc.previdenciario.calcularRMI.useMutation({ onSuccess: d => { setResultado(d); toast.success("RMI calculada! (1 crédito)"); }, onError: e => toast.error(e.message) });
+  const mutation = trpc.previdenciario.calcularRMI.useMutation({ onSuccess: d => { setResultado(d); toast.success("RMI calculada!"); }, onError: e => toast.error(e.message) });
   const addS = () => setSalarios(p => [...p, ""]); const rmS = (i: number) => setSalarios(p => p.filter((_, x) => x !== i)); const upS = (i: number, v: string) => setSalarios(p => p.map((s, x) => x === i ? v : s));
   const calc = () => { if (!dataNasc || !dataApos || !tcMeses) { toast.error("Preencha campos."); return; } const sl = salarios.map(s => parseFloat(s || "0")).filter(v => v > 0); if (!sl.length) { toast.error("Informe salários."); return; } mutation.mutate({ sexo, dataNascimento: dataNasc, dataAposentadoria: dataApos, tempoContribuicaoMeses: parseInt(tcMeses), salariosContribuicao: sl, regraAplicavel: regra as any, aplicarFatorPrevidenciario: regra === "PEDAGIO_50" }); };
 
@@ -521,7 +521,7 @@ function CalculoGPS({ onVoltar }: { onVoltar: () => void }) {
   const [cat, setCat] = useState("CONTRIBUINTE_INDIVIDUAL"); const [plano, setPlano] = useState("NORMAL"); const [sal, setSal] = useState("");
   const [jaInsc, setJaInsc] = useState(true); const [primDia, setPrimDia] = useState(true); const [comps, setComps] = useState<string[]>([""]);
   const [resultado, setResultado] = useState<ResultadoGPS | null>(null);
-  const mutation = trpc.previdenciario.calcularGPS.useMutation({ onSuccess: d => { setResultado(d); toast.success("GPS calculada! (1 crédito)"); }, onError: e => toast.error(e.message) });
+  const mutation = trpc.previdenciario.calcularGPS.useMutation({ onSuccess: d => { setResultado(d); toast.success("GPS calculada!"); }, onError: e => toast.error(e.message) });
   const addC = () => setComps(p => [...p, ""]); const rmC = (i: number) => setComps(p => p.filter((_, x) => x !== i)); const upC = (i: number, v: string) => setComps(p => p.map((s, x) => x === i ? v : s));
   const calc = () => { if (!sal) { toast.error("Informe salário."); return; } const cs = comps.filter(c => c.length === 7); if (!cs.length) { toast.error("Informe ao menos 1 mês."); return; } mutation.mutate({ categoria: cat as any, plano: plano as any, salarioContribuicao: parseFloat(sal), competenciasAtrasadas: cs, jaInscritoNoINSS: jaInsc, primeiraContribuicaoEmDia: primDia }); };
 

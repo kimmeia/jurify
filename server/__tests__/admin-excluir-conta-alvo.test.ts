@@ -27,17 +27,13 @@ describe("AdminClients — quem é excluído/retirado é quem está na tela", ()
     expect(b).not.toMatch(/mutate\(\{\s*userId,/);
   });
 
-  it("retirarMut.mutate usa `current`, não `userId` da prop", () => {
-    const b = bloco(fonte, "retirarMut.mutate({");
-    expect(b).toMatch(/userId:\s*current,/);
-    expect(b).not.toMatch(/mutate\(\{\s*userId,/);
+  it("retirar créditos saiu da tela junto com a moeda", () => {
+    expect(fonte).not.toContain("retirarMut");
   });
 
   it("as guardas de clique também olham `current`", () => {
     expect(fonte).toMatch(/if \(!current \|\| motivoExclusao\.trim\(\)\.length < 5\) return;/);
-    expect(fonte).toMatch(/if \(!retirarConfirm \|\| !current\) return;/);
     expect(fonte).not.toMatch(/if \(!userId \|\| motivoExclusao/);
-    expect(fonte).not.toMatch(/if \(!retirarConfirm \|\| !userId\)/);
   });
 
   it("o diálogo de exclusão diz qual conta vai sair", () => {

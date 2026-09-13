@@ -6,7 +6,7 @@ import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { simularAposentadoria, calcularRMI, calcularGPSAtraso } from "./engine-previdenciario";
 import { gerarParecerSimulacao } from "./parecer-previdenciario";
-import { registarCalculo, consumirCredito } from "../db";
+import { registarCalculo, contarCalculoNoMes } from "../db";
 
 const periodoSchema = z.object({
   id: z.string(),
@@ -48,8 +48,8 @@ export const previdenciarioRouter = router({
   simular: protectedProcedure
     .input(simulacaoSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) throw new Error("Você atingiu o limite de cálculos do seu plano neste mês.");
 
       const resultado = simularAposentadoria({ ...input, continuaContribuindo: input.continuaContribuindo ?? true });
       resultado.parecerTecnico = gerarParecerSimulacao(input, resultado);
@@ -78,8 +78,8 @@ export const previdenciarioRouter = router({
   calcularRMI: protectedProcedure
     .input(rmiSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) throw new Error("Você atingiu o limite de cálculos do seu plano neste mês.");
       const resultado = calcularRMI(input);
       await registarCalculo({
         userId: ctx.user.id, tipo: "previdenciario",
@@ -93,8 +93,8 @@ export const previdenciarioRouter = router({
   calcularGPS: protectedProcedure
     .input(gpsSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) throw new Error("Créditos esgotados.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) throw new Error("Você atingiu o limite de cálculos do seu plano neste mês.");
       const resultado = calcularGPSAtraso(input);
       await registarCalculo({
         userId: ctx.user.id, tipo: "previdenciario",

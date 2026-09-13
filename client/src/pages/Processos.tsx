@@ -278,7 +278,7 @@ function poloDaParte(p: any): string {
 
 /**
  * `criarMonitoramento` devolve o monitor que já existia em vez de criar outro
- * — aí não há sucesso a comemorar nem crédito cobrado. Devolve true quando
+ * — aí não há sucesso a comemorar nem consumo a contar. Devolve true quando
  * foi esse o caso, pra quem chamou não emitir o toast de sucesso por cima.
  */
 function avisarSeJaMonitorado(d: any): boolean {
@@ -301,7 +301,7 @@ function ProcessoCard({
   onMonitorar?: (cnj: string) => void;
   /** Dados enriquecidos vindos de `consultarCNJSincrono` (mescla com `processo.response_data`). */
   detalhe?: any;
-  /** Handler que carrega detalhes pra esse CNJ (custa 1 cred). Quando definido, mostra botão se card vazio. */
+  /** Handler que carrega detalhes pra esse CNJ. Quando definido, mostra botão se card vazio. */
   onCarregarDetalhes?: (cnj: string) => void;
   carregandoDetalhes?: boolean;
   /** O "Monitorar" deste card está em voo — trava o botão pra o 2º clique não virar 2º monitor. */
@@ -478,7 +478,7 @@ function ConsultarTab() {
     onSuccess: (d: any, vars: { cnj: string }) => {
       if (d?.lawsuit) {
         setDetalhesPorCnj((prev) => ({ ...prev, [vars.cnj]: d.lawsuit }));
-        toast.success("Detalhes carregados (1 cred)");
+        toast.success("Detalhes carregados");
       }
       setCarregandoCnj(null);
     },
@@ -535,7 +535,7 @@ function ConsultarTab() {
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
       if (avisarSeJaMonitorado(d)) return;
-      toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`);
+      toast.success("Processo adicionado às Movimentações");
     },
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
@@ -592,7 +592,7 @@ function ConsultarTab() {
 
   const { data: statusData } = trpc.processos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
-  // `resultados` virou mutation (tem efeito colateral: cobra créditos por
+  // `resultados` virou mutation (tem efeito colateral: conta no limite do mês por
   // processo encontrado). Chamamos uma vez quando o status fica completed.
   const resultadosMut = trpc.processos.resultados.useMutation({
     onSuccess: (data: any) => {
@@ -725,7 +725,7 @@ function ConsultarTab() {
             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-bg border border-success/30">
               <Coins className="h-3 w-3 text-success-fg" />
               <p className="text-apoio text-success-fg">
-                Custo: <strong>1 crédito</strong> — consulta direta por número do processo.
+                Consulta direta por número do processo — conta no limite do mês do seu plano.
               </p>
             </div>
           ) : (
@@ -735,8 +735,7 @@ function ConsultarTab() {
                 <div>
                   <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
                   <p className="mt-0.5 text-apoio opacity-90">
-                    <strong>3 créditos base</strong> + <strong>1 crédito por lote de 10 processos</strong> encontrados (sem teto).
-                    Ex: 30 processos = 6 créditos. Sem resultados? Só os 3 base.
+                    Conta como uma busca no limite do mês do seu plano, não importa quantos processos voltem.
                   </p>
                   <p className="mt-0.5 text-micro opacity-75">Pode levar até 2 minutos.</p>
                 </div>
@@ -812,7 +811,7 @@ function ConsultarTab() {
                   <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
                   {ehListaCpf && (
                     <p className="text-micro text-muted-foreground">
-                      Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações (1 cred cada).
+                      Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações.
                     </p>
                   )}
                 </div>
@@ -1079,7 +1078,7 @@ function MonitoramentoCard({
       // (estágios antigos da pipeline). Mostra como "análise IA" igual
       // ao caso "ia" — usuário só precisa saber que veio de IA.
       const fonteLabel = data.fonte === "judit_ia" || data.fonte === "ia" ? " — análise IA" : "";
-      toast.success(`Resumo gerado (1 crédito)${fonteLabel}`);
+      toast.success(`Resumo gerado${fonteLabel}`);
       setConfirmResumoOpen(false);
     },
     onError: (e: any) => {
@@ -1088,7 +1087,7 @@ function MonitoramentoCard({
     },
   });
 
-  // Lock síncrono pra impedir double-click cobrar 2 créditos. mutation.isPending
+  // Lock síncrono pra impedir double-click contar 2 consultas. mutation.isPending
   // só vira true no próximo render — entre o 1º click e o re-render, um 2º click
   // passaria pelo disabled e dispararia 2ª request. Lock baseado em ref bloqueia
   // imediatamente.
@@ -1099,14 +1098,14 @@ function MonitoramentoCard({
         setProcessoCompleto(data.processo);
         const totalMovs = typeof data.totalMovs === "number" ? data.totalMovs : null;
         if (totalMovs === 0) {
-          toast.success("Processo encontrado, sem movimentações no tribunal (1 crédito)", {
+          toast.success("Processo encontrado, sem movimentações no tribunal", {
             description: "O tribunal retornou 0 movimentações. O processo pode estar sem trâmite recente ou em segredo de justiça.",
             duration: 8000,
           });
         } else if (totalMovs !== null) {
-          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s) (1 crédito)`);
+          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s)`);
         } else {
-          toast.success("Histórico completo carregado e salvo (1 crédito)");
+          toast.success("Histórico completo carregado e salvo");
         }
         // Refetch historico local pra que o dado persistido apareça
         if (mon.id) refetchHist();
@@ -1418,12 +1417,12 @@ function MonitoramentoCard({
                     <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
                       <Search className="h-3.5 w-3.5 mr-2" />
                       Buscar histórico
-                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
+                      
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={resumoMut.isPending} onClick={() => setConfirmResumoOpen(true)}>
                       <FileText className="h-3.5 w-3.5 mr-2" />
                       Resumo IA
-                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
+                      
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -1467,7 +1466,7 @@ function MonitoramentoCard({
               <div className="text-center py-8 text-xs text-muted-foreground">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>Ainda não há dados do processo.</p>
-                <p className="text-micro mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
+                <p className="text-micro mt-1">Clique em <strong>Histórico</strong> pra puxar agora ou aguarde o próximo poll automático (até 6h).</p>
               </div>
             ) : (
               <>
@@ -1610,8 +1609,7 @@ function MonitoramentoCard({
           <AlertDialogTitle>Gerar resumo IA?</AlertDialogTitle>
           <AlertDialogDescription>
             A IA analisará a capa e as movimentações deste processo e gerará um resumo
-            estruturado. <strong>Esta operação custa 1 crédito</strong> e é debitada
-            imediatamente do saldo do escritório.
+            estruturado. <strong>Conta no limite de resumos do mês do seu plano.</strong>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1624,7 +1622,7 @@ function MonitoramentoCard({
             disabled={resumoMut.isPending}
           >
             {resumoMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}
-            Gerar resumo (1 crédito)
+            Gerar resumo
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1962,7 +1960,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
             variant="outline"
             disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
             onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
-            title="Reconsulta todos os monitoramentos, inclusive os parados. Sem custo de créditos."
+            title="Reconsulta todos os monitoramentos, inclusive os parados. Não conta no limite do mês."
           >
             {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
               <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2026,7 +2024,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
               size="sm"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando" || idsParados.length === 0}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsParados })}
-              title="Reconsulta apenas os processos parados. Sem custo de créditos."
+              title="Reconsulta apenas os processos parados. Não conta no limite do mês."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2183,19 +2181,19 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
         </div>
       )}
 
-      {/* O saldo aparecia em destaque sem dizer o que o consome, e não havia
-          nada na tela dizendo com que frequência o robô roda. */}
+      {/* A tela não dizia com que frequência o robô roda — e sem isso a
+          impressão era de que cada atualização saía do bolso de alguém. */}
       {listaMons.length > 0 && (
         <div className="rounded-xl border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap text-corpo text-muted-foreground">
           <RefreshCcw className="h-3.5 w-3.5 shrink-0" />
           <span>
-            O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b>, sem
-            consumir créditos.
+            O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b> —
+            isso não conta no limite do seu plano.
           </span>
           <span className="h-3.5 w-px bg-border" />
           <span>
-            Crédito é gasto só na <b className="font-bold text-foreground">consulta avulsa</b>, no{" "}
-            <b className="font-bold text-foreground">histórico completo</b> e no{" "}
+            Contam no limite do mês a <b className="font-bold text-foreground">consulta avulsa</b>, o{" "}
+            <b className="font-bold text-foreground">histórico completo</b> e o{" "}
             <b className="font-bold text-foreground">resumo IA</b> de um processo.
           </span>
         </div>
@@ -2256,7 +2254,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
                   O monitoramento de movimentações requer credencial OAB para garantir que apenas
-                  advogados habilitados acessem dados processuais. Custo: 2 créditos/mês.
+                  advogados habilitados acessem dados processuais.
                 </p>
               </div>
             </div>
@@ -2371,9 +2369,6 @@ export default function Processos() {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("abrirMonitor") === "1" && tab === "central") setTab("movimentacoes");
   }, [tab]);
-  const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
-  const saldo = saldoData?.saldo ?? 0;
-
   // SSE global de credencial: quando o backend detecta que uma credencial
   // caiu (motor-proprio ou cron-revalidar) emite `credencial_erro`. Sem
   // este listener, o badge "ativa" no cofre + dropdown de credenciais
@@ -2408,13 +2403,6 @@ export default function Processos() {
   return (
     <div className="space-y-5">
       <CabecalhoProcessos />
-
-      {saldo < 5 && (
-        <div className="flex items-center gap-2 rounded-xl bg-warning-bg border border-warning/30 px-4 py-2.5">
-          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span className="text-sm text-warning-fg">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
-        </div>
-      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="!bg-muted !border-0 !rounded-[10px] !p-[3px] !h-auto !inline-flex !w-auto gap-1 flex-wrap">
@@ -2648,7 +2636,7 @@ function NovasAcoesTab() {
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
   const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
   const [buscaTexto, setBuscaTexto] = useState("");
-  // Detalhes enriquecidos por nova ação (on-demand via consultarCNJSincrono — 1 cred/cnj).
+  // Detalhes enriquecidos por nova ação (on-demand via consultarCNJSincrono).
   // Cards chegam só com cnj+tribunal+data; partes/assunto/valor não são persistidos.
   const [detalhesPorAcaoId, setDetalhesPorAcaoId] = useState<Record<number, any>>({});
   const [carregandoAcaoId, setCarregandoAcaoId] = useState<number | null>(null);
@@ -2777,7 +2765,7 @@ function NovasAcoesTab() {
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
       if (avisarSeJaMonitorado(d)) return;
-      toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
+      toast.success("Processo agora monitorado", {
         description: "As próximas movimentações vão aparecer na aba Movimentações.",
         duration: 6000,
       });
@@ -3012,7 +3000,7 @@ function NovasAcoesTab() {
               className="h-9 rounded-lg border-danger/30 bg-card hover:bg-danger-bg hover:border-danger/30 text-danger-fg"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
-              title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
+              title="Atualiza todos os monitoramentos de novas ações em paralelo. Não conta no limite do mês."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -3553,7 +3541,7 @@ function NovasAcoesTab() {
                             {capa?.daDeteccao && !capa.fonte && (
                               <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-micro font-semibold">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
-                                Capa lida na detecção — sem crédito extra
+                                Capa lida na detecção — sem consulta extra
                               </span>
                             )}
                           </p>
@@ -3692,7 +3680,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             className="h-7 text-apoio rounded-lg bg-info text-info-on shadow-sm"
-                            title="Monitorar movimentações deste processo (2 cred/mês) — resolve o card"
+                            title="Monitorar movimentações deste processo — resolve o card"
                             disabled={monitorarMut.isPending || resolverMut.isPending}
                             onClick={() => handleMonitorarAcao(a)}
                           >
@@ -3845,7 +3833,7 @@ function NovasAcoesTab() {
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>,
+                  tratamento dos dados processuais.
                   independente dos estados escolhidos.
                 </p>
               </div>

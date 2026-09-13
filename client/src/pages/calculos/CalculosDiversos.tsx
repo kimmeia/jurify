@@ -1083,7 +1083,7 @@ export default function CalculosDiversos() {
                 </p>
               </div>
               <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-success/25 text-success-fg border border-success/30 h-fit">
-                <Gift className="w-3 h-3" /> Gratuito · sem créditos
+                <Gift className="w-3 h-3" /> Gratuito · não conta no limite
               </span>
             </div>
           </div>
