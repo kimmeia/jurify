@@ -19,6 +19,7 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -421,7 +422,12 @@ export default function Clientes() {
     const n = Number(idParam);
     return Number.isInteger(n) && n > 0 ? n : null;
   });
-  const [showNovo, setShowNovo] = useState(false);
+  // `?novo=1` é o mesmo deep-link que o guia processual, os Primeiros passos
+  // e a Central de ajuda usam: abre o cadastro direto. O Clientes essencial
+  // já o lia, o completo não.
+  const [showNovo, setShowNovo] = useState(
+    () => new URLSearchParams(window.location.search).get("novo") === "1",
+  );
   // Aba Clientes (fecharam contrato) × Leads (em atendimento). Default
   // 'cliente' — a tela Clientes mostra clientes de verdade; leads ficam
   // a um clique de distância sem poluir a lista.
@@ -696,6 +702,7 @@ export default function Clientes() {
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Clientes
                     </p>
+                    <AjudaDaTela tarefa="cadastrar-cliente" />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Cadastro · histórico · documentos · financeiro

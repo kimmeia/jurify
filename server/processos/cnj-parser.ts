@@ -104,6 +104,13 @@ export function sistemaCofrePorTribunal(codigoTribunal: string): string | null {
     trf2: "pje_*",
     trf3: "pje_*",
     trf6: "pje_*",
+    // Justiça do Trabalho: mesma regra dos TRFs — o PJe-JT é candidato a
+    // entrar pelo login nacional do PDPJ, e a nacional é o que o import de
+    // planilha espera pra não tratar processo trabalhista como consulta
+    // pública. O específico (`pje_trtN`) vem por `sistemasQueAtendem`.
+    ...Object.fromEntries(
+      Array.from({ length: 24 }, (_, i) => [`trt${i + 1}`, "pje_*"]),
+    ),
     // TRF-5 e demais tribunais de consulta pública NÃO entram aqui — eles
     // têm motor próprio mas sem cofre (acesso aberto). Retornar null aqui
     // é o sinal pra UI/router não pedir credencial.

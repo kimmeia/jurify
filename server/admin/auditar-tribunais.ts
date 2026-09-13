@@ -62,6 +62,12 @@ export const ALVOS: AlvoAuditoria[] = [
   // Justiça do Trabalho
   { id: "trt7", label: "TRT-7 Ceará (PJe)", url: "https://pje.trt7.jus.br/" },
   { id: "trt2", label: "TRT-2 SP (PJe)", url: "https://pje.trt2.jus.br/" },
+  // Portas de login do PJe-JT (grau no path). É o teste que diz se o portal
+  // redireciona pro SSO do PDPJ — sem isso o adapter não entra.
+  { id: "trt2-1g", label: "TRT-2 1º grau (login PJe-JT)", url: "https://pje.trt2.jus.br/primeirograu/login.seam" },
+  { id: "trt2-2g", label: "TRT-2 2º grau (login PJe-JT)", url: "https://pje.trt2.jus.br/segundograu/login.seam" },
+  { id: "trt15-1g", label: "TRT-15 Campinas 1º grau (login PJe-JT)", url: "https://pje.trt15.jus.br/primeirograu/login.seam" },
+  { id: "trt15-2g", label: "TRT-15 Campinas 2º grau (login PJe-JT)", url: "https://pje.trt15.jus.br/segundograu/login.seam" },
 
   // SSO central — checagem direta da disponibilidade do Keycloak
   { id: "pdpj-sso", label: "PDPJ-cloud SSO (Keycloak)", url: "https://sso.cloud.pje.jus.br/" },

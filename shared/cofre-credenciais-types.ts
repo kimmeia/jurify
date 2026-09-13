@@ -56,6 +56,34 @@ export type SistemaCofre =
   | "pje_tjmt"
   | "pje_tjrr"
   | "pje_*"
+  | "pje_trf1"
+  | "pje_trf2"
+  | "pje_trf3"
+  | "pje_trf6"
+  | "pje_trt1"
+  | "pje_trt2"
+  | "pje_trt3"
+  | "pje_trt4"
+  | "pje_trt5"
+  | "pje_trt6"
+  | "pje_trt7"
+  | "pje_trt8"
+  | "pje_trt9"
+  | "pje_trt10"
+  | "pje_trt11"
+  | "pje_trt12"
+  | "pje_trt13"
+  | "pje_trt14"
+  | "pje_trt15"
+  | "pje_trt16"
+  | "pje_trt17"
+  | "pje_trt18"
+  | "pje_trt19"
+  | "pje_trt20"
+  | "pje_trt21"
+  | "pje_trt22"
+  | "pje_trt23"
+  | "pje_trt24"
   | "pje_restrito_trt1"
   | "pje_restrito_trt2"
   | "pje_restrito_trt7"
@@ -169,6 +197,34 @@ export const SISTEMAS_COFRE_LABELS: Record<SistemaCofre, { label: string; descri
   pje_tjmt: { label: "PJe TJMT", descricao: "Tribunal de Justiça do Mato Grosso (autenticado)" },
   pje_tjrr: { label: "PJe TJRR", descricao: "Tribunal de Justiça de Roraima (autenticado)" },
   "pje_*": { label: "PJe — qualquer (TJ)", descricao: "Credencial coringa pra qualquer TJ que use PJe" },
+  pje_trf1: { label: "PJe TRF1", descricao: "Tribunal Regional Federal da 1ª Região (autenticado)" },
+  pje_trf2: { label: "PJe TRF2", descricao: "Tribunal Regional Federal da 2ª Região (autenticado)" },
+  pje_trf3: { label: "PJe TRF3", descricao: "Tribunal Regional Federal da 3ª Região (autenticado)" },
+  pje_trf6: { label: "PJe TRF6", descricao: "Tribunal Regional Federal da 6ª Região (autenticado)" },
+  pje_trt1: { label: "PJe TRT-1 — 1º grau", descricao: "Tribunal Regional do Trabalho da 1ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt2: { label: "PJe TRT-2 — 1º grau", descricao: "Tribunal Regional do Trabalho da 2ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt3: { label: "PJe TRT-3 — 1º grau", descricao: "Tribunal Regional do Trabalho da 3ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt4: { label: "PJe TRT-4 — 1º grau", descricao: "Tribunal Regional do Trabalho da 4ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt5: { label: "PJe TRT-5 — 1º grau", descricao: "Tribunal Regional do Trabalho da 5ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt6: { label: "PJe TRT-6 — 1º grau", descricao: "Tribunal Regional do Trabalho da 6ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt7: { label: "PJe TRT-7 — 1º grau", descricao: "Tribunal Regional do Trabalho da 7ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt8: { label: "PJe TRT-8 — 1º grau", descricao: "Tribunal Regional do Trabalho da 8ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt9: { label: "PJe TRT-9 — 1º grau", descricao: "Tribunal Regional do Trabalho da 9ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt10: { label: "PJe TRT-10 — 1º grau", descricao: "Tribunal Regional do Trabalho da 10ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt11: { label: "PJe TRT-11 — 1º grau", descricao: "Tribunal Regional do Trabalho da 11ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt12: { label: "PJe TRT-12 — 1º grau", descricao: "Tribunal Regional do Trabalho da 12ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt13: { label: "PJe TRT-13 — 1º grau", descricao: "Tribunal Regional do Trabalho da 13ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt14: { label: "PJe TRT-14 — 1º grau", descricao: "Tribunal Regional do Trabalho da 14ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt15: { label: "PJe TRT-15 — 1º grau", descricao: "Tribunal Regional do Trabalho da 15ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt16: { label: "PJe TRT-16 — 1º grau", descricao: "Tribunal Regional do Trabalho da 16ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt17: { label: "PJe TRT-17 — 1º grau", descricao: "Tribunal Regional do Trabalho da 17ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt18: { label: "PJe TRT-18 — 1º grau", descricao: "Tribunal Regional do Trabalho da 18ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt19: { label: "PJe TRT-19 — 1º grau", descricao: "Tribunal Regional do Trabalho da 19ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt20: { label: "PJe TRT-20 — 1º grau", descricao: "Tribunal Regional do Trabalho da 20ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt21: { label: "PJe TRT-21 — 1º grau", descricao: "Tribunal Regional do Trabalho da 21ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt22: { label: "PJe TRT-22 — 1º grau", descricao: "Tribunal Regional do Trabalho da 22ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt23: { label: "PJe TRT-23 — 1º grau", descricao: "Tribunal Regional do Trabalho da 23ª Região (PJe-JT — candidato, não testado)" },
+  pje_trt24: { label: "PJe TRT-24 — 1º grau", descricao: "Tribunal Regional do Trabalho da 24ª Região (PJe-JT — candidato, não testado)" },
   esaj_tjsp: { label: "E-SAJ TJSP", descricao: "Tribunal de Justiça de São Paulo (autenticado)" },
   esaj_tjsc: { label: "E-SAJ TJSC", descricao: "Tribunal de Justiça de Santa Catarina (autenticado)" },
   esaj_tjba: { label: "E-SAJ TJBA", descricao: "Tribunal de Justiça da Bahia (autenticado)" },

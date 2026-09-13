@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>PJe — Consulta de processos (fixture sintética)</title></head>
+<body>
+<div id="barraTopo"><span>Usuário: ADVOGADO (VIA-SESSAO)</span></div>
+<form id="fPP">
+  <!-- A grade tem as colunas fora da ordem "usual" de propósito: o parser
+       tem que ler pelo TÍTULO, nunca pela posição. -->
+  <table id="fPP:processosTable" class="rich-table">
+    <thead>
+      <tr>
+        <th>Polo Passivo</th>
+        <th>Classe Judicial</th>
+        <th>Número do Processo</th>
+        <th>Órgão Julgador</th>
+        <th>Autuado em</th>
+        <th>Polo Ativo</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="rich-table-row">
+        <td>MARCOS AURÉLIO RIBEIRO LIMA - CPF: 048.512.377-15 (REU)<br>&nbsp;LIMA E FILHOS LTDA - CNPJ: 21.884.309/0001-46 (REU)</td>
+        <td>Busca e Apreensão em Alienação Fiduciária</td>
+        <td><a href="javascript:void(0)">3024938-55.2026.8.06.0001</a></td>
+        <td>3ª Vara Cível de Fortaleza</td>
+        <td>11 ago 2025</td>
+        <td>AURORA TELECOM NORDESTE S.A. (AUTOR)</td>
+        <td><a id="fPP:processosTable:0:j_id492" class="btn-link btn-condensed" href="javascript:void(0)">Ver detalhes</a></td>
+      </tr>
+      <tr class="rich-table-row">
+        <td>JOANA PEREIRA DA SILVA (REQUERIDO)</td>
+        <td>Procedimento do Juizado Especial Cível</td>
+        <td><a href="javascript:void(0)">0001234-12.2024.8.06.0001</a></td>
+        <td>Juizado Especial Cível de Sobral</td>
+        <td>07/05/2026</td>
+        <td>BANCO NORTE S.A. (REQUERENTE)</td>
+        <td><a id="fPP:processosTable:1:j_id492" class="btn-link btn-condensed" href="javascript:void(0)">Ver detalhes</a></td>
+      </tr>
+    </tbody>
+  </table>
+  <table id="fPP:paginacao">
+    <tr><th>Página</th><th>Total</th></tr>
+    <tr><td>1</td><td>2 registros — nenhum CNJ aqui</td></tr>
+  </table>
+</form>
+<footer>Atualizado em 12/09/2026 — Tribunal de Justiça (fixture)</footer>
+</body>
+</html>

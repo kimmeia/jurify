@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>PJe — Detalhe do processo (fixture sintética, layout mudado)</title></head>
+<body>
+<div id="panelDetalhesProcesso">
+  <!-- O tribunal renomeou os rótulos. O parser não conhece "Tipo de ação"
+       nem "Unidade judiciária": tem que devolver null, não o vizinho. -->
+  <dl>
+    <dt>Tipo de ação</dt>
+    <dd>Busca e Apreensão em Alienação Fiduciária</dd>
+    <dt>Unidade judiciária</dt>
+    <dd>3ª Vara Cível de Fortaleza</dd>
+    <dt>Montante</dt>
+    <dd>R$ 18.400,00</dd>
+  </dl>
+  <!-- Rótulo conhecido sem célula de valor: o próximo irmão é OUTRO rótulo. -->
+  <dl>
+    <dt>Classe judicial</dt>
+    <dt>Assuntos</dt>
+    <dd>Dano Moral</dd>
+  </dl>
+</div>
+</body>
+</html>

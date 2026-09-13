@@ -66,7 +66,12 @@ describe("qual credencial serve", () => {
   it("a ordem dos sistemas é a preferência de quem chamou", () => {
     // O TJCE quer pje antes de esaj; o consultarCNJ quer o sistema do tribunal
     // antes do PJe nacional. Um seletor só atende os dois sem saber deles.
-    expect(processos).toContain('sistemas: ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL]');
+    // Os fluxos por CPF passam por `sistemasParaDocumento`: na sede, a lista
+    // de sempre (pje antes de esaj, nacional por último); nos outros, o
+    // específico e o nacional.
+    expect(processos).toContain('if (codigoTribunal === TRIBUNAL_SEDE) return ["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL];');
+    expect(processos).toContain("return sistemasQueAtendem(codigoTribunal);");
+    expect(processos.split("sistemas: sistemasParaDocumento(").length - 1).toBe(2);
     // `sistemasQueAtendem` devolve [específico, nacional], nessa ordem.
     expect(processos).toContain("sistemas: sistemasQueAtendem(tribunal.codigoTribunal)");
   });
@@ -77,10 +82,12 @@ describe("qual credencial serve", () => {
     // (consultarDocumento e o "Monitorar" do cliente) recusavam a MESMA
     // credencial com "nenhuma de TJCE". Foi o erro visto em produção 20/08.
     expect(processos).not.toContain('sistemas: ["pje_tjce", "esaj_tjce"],');
-    const mapeamentos = processos.match(/cred\.sistema === "esaj_tjce"|cred\.sistema === "pje_tjce"/g) ?? [];
-    expect(mapeamentos.length).toBeGreaterThanOrEqual(2);
-    // E o mapeamento sistema→tribunal não anula o curinga que o seletor aceitou.
-    expect(processos).toContain('cred.sistema === SISTEMA_PJE_NACIONAL');
+    expect(processos).toContain('["pje_tjce", "esaj_tjce", SISTEMA_PJE_NACIONAL]');
+    // O tribunal não é mais deduzido do sistema da credencial (era o mapeamento
+    // que cravava "tjce"): vem do pedido, e a credencial é escolhida pra ele.
+    expect(processos).not.toContain('? "tjce"');
+    expect(processos).toContain("const codigoTribunal = input.codigoTribunal ?? TRIBUNAL_SEDE;");
+    expect(processos).toContain("const tribunalDaCred = input.codigoTribunal ?? TRIBUNAL_SEDE;");
   });
 });
 
@@ -99,7 +106,8 @@ describe("a mensagem quando realmente não dá", () => {
   it("separa 'não tem nenhuma' de 'tem, mas de outro tribunal'", () => {
     // São problemas diferentes, e a mensagem antiga mandava cadastrar de novo
     // nos dois casos — inclusive pra quem já tinha cadastrado.
-    expect(processos).toContain("mas nenhuma de TJCE");
+    expect(processos).toContain("mas nenhuma de ${siglaBase}");
+    expect(processos).toContain("const siglaBase = siglaDoTribunal(tribunalDaCred);");
     expect(processos).toContain("Nenhuma credencial no cofre");
   });
 
