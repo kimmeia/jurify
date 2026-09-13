@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.944 verdes, 398 arquivos** (13/09, em develop e main com o motor fase 1 e a Central de ajuda; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.969 verdes, 399 arquivos** (13/09, em develop e main, com o motor fase 1, a Central de ajuda e a portinha do backoffice; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -910,6 +910,58 @@ Coisas fora do código. Marcadas com o que muda se ficarem como estão.
 Do ambiente: só `JWT_SECRET` e `DATABASE_URL` derrubam o boot se faltarem. Todo o
 resto falha em silêncio — é o que torna a linha "Há chave Anthropic conectada?" tão
 barata de checar e tão caro de ignorar.
+
+### 5.12 Backoffice — a portinha de leitura (13/09/2026)
+
+O dono aprovou um painel interno único para os dois produtos da empresa
+(JuridFlow e Devular), em **`backoffice.devular.com.br`**, repositório
+próprio. O painel **não tem banco**: pergunta a cada produto por uma rota nova
+e mostra as duas respostas lado a lado. Mockup aprovado:
+`mockup-backoffice-unificado.html`.
+
+O que existe deste lado, entregue hoje:
+
+| item | onde | o que faz |
+|---|---|---|
+| contrato | `montarResumoBackoffice`, `CONTRATO_BACKOFFICE_VERSAO` em `shared/backoffice-contrato.ts` | forma da resposta; o Devular terá cópia idêntica, e a versão deixa o painel avisar quando as duas divergirem |
+| rotas | `registerBackofficeRoutes` em `server/backoffice/rota-resumo.ts` | `GET /api/backoffice/resumo` (contas, MRR, integrações) e `GET /api/backoffice/contas` (lista paginada, via `getAllUsersWithSubscription` — a MESMA função da tela Clientes do painel) |
+| chave | `conferirChave`, env `BACKOFFICE_API_KEY` | `Bearer`, comparação de tempo constante, mínimo de 32 caracteres |
+
+Quatro decisões de desenho que valem mais que o código:
+
+1. **Fail-CLOSED**, ao contrário do porteiro de módulos e do HMAC da Meta:
+   sem `BACKOFFICE_API_KEY` no ambiente a rota responde 503 e recusa **todo
+   mundo**, inclusive quem manda a chave certa. Esta rota é fronteira entre
+   dois produtos; configuração ausente não pode virar porta aberta.
+2. **Banco fora responde 503, não zeros.** `getAdminStats` devolve tudo zero
+   quando o banco não responde; servir isso faria o painel anunciar "R$ 0 de
+   MRR" sem nada de errado no negócio. `BancoIndisponivel` corta antes.
+3. **Segredo nenhum sai.** `admin_integracoes` guarda a chave cifrada na mesma
+   linha do status, então a consulta lista as colunas uma a uma — um
+   `select()` sem lista vazaria as três.
+4. **Integração nunca testada é "desconhecido", não "falha"** —
+   `desconectado` é o default da coluna e pintaria de vermelho um painel são.
+5. **`cortesias` é `number | null`.** O `getAdminStats` do Devular não conta
+   cortesias; responder 0 afirmaria "conferi e não há nenhuma". Ausente vira
+   null e o painel mostra "—".
+
+**O isolamento depende de um detalhe:** `getSessionCookieOptions` não define
+`domain`, então o cookie de sessão é host-only e `devular.com.br` não
+compartilha sessão com `backoffice.devular.com.br`. Escrever um `domain` ali
+junta os três apps numa sessão só, em silêncio — há teste travando.
+
+Amarra: `backoffice-portinha.test.ts` (25 testes) — 27 mutações vermelhas em
+`scratchpad/mutar-backoffice.py`.
+
+**Estado das outras pontas (13/09):** a portinha gêmea do Devular está
+escrita e commitada na branch de lá, mas **NÃO conferida** — `pnpm install`
+falha naquele repo neste ambiente (403 do proxy no codeload, dependência do
+Baileys), então `pnpm check` e `pnpm test` precisam rodar antes de qualquer
+merge. O painel (`kimmeia/backoffice`, `backoffice.devular.com.br`) tem a
+fundação e a tela Visão geral rodando, com 22 testes verdes. Falta o segundo
+fator no login. Decisão do dono: 2FA **depois**; por isso vale a regra de que
+o painel fica só leitura até o código de 6 dígitos existir — nenhuma ação que
+muda dado de cliente é ligada antes disso.
 
 ---
 
