@@ -226,11 +226,13 @@ describe("Central de ajuda — rotas e navegação", () => {
     expect(areaCliente).toContain("<TermosGate />");
   });
 
-  it("o botão «Ajuda» está no rodapé da barra lateral, ao lado do Buscar, e leva a /ajuda", () => {
+  it("o botão «Ajuda» está no rodapé da barra lateral e leva a /ajuda", () => {
     const layout = semComentarios(ler("client/src/components/AppLayout.tsx"));
     const rodape = layout.slice(layout.indexOf("<SidebarFooter"), layout.indexOf("</SidebarFooter>"));
     expect(rodape, "rodapé da barra lateral não encontrado").not.toBe("");
-    expect(rodape).toContain("⌘K");
+    // O botão «Buscar» saiu do rodapé por pedido do dono (13/09): a busca do
+    // cabeçalho é a única, e o atalho ⌘K segue ligado no AppLayout.
+    expect(rodape).not.toContain("⌘K");
     const i = rodape.indexOf('aria-label="Ajuda"');
     expect(i, "botão Ajuda sumiu do rodapé").toBeGreaterThan(-1);
     const botao = rodape.slice(rodape.lastIndexOf("<button", i), rodape.indexOf("</button>", i));

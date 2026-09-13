@@ -184,7 +184,13 @@ function DashboardComTabs({
               <TabsTrigger
                 key={valor}
                 value={valor}
-                className="gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2.5 pt-0 text-[13px] text-muted-foreground shadow-none transition-colors data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                /* `border-0 border-b-2` e `border-b-foreground` (não
+                   `border-foreground`): o TabsTrigger da casa já traz
+                   `border border-transparent` nos quatro lados, então pintar
+                   "a borda" no estado ativo desenhava um RETÂNGULO em volta
+                   do rótulo — 1px em cima e nas laterais além do sublinhado.
+                   Aqui só o lado de baixo existe e só ele ganha cor. */
+                className="gap-1.5 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 pb-2.5 pt-0 text-[13px] text-muted-foreground shadow-none outline-none transition-colors focus-visible:ring-0 data-[state=active]:border-b-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 <Icone className="h-3.5 w-3.5" />
                 {rotulo}

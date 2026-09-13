@@ -48,6 +48,27 @@ describe("as telas cabem num celular de 390px", () => {
     expect(inv![1], "sem max-w-full a tira cresce além da tela").toContain("max-w-full");
   });
 
+  it("Dashboard: a aba ativa é sublinhado, não retângulo em volta do rótulo", () => {
+    // O `TabsTrigger` da casa já traz `border border-transparent` nos quatro
+    // lados. Pintar `data-[state=active]:border-foreground` colore os quatro
+    // e desenha uma caixa preta em volta da aba — foi o que o dono viu na
+    // tela. Só o lado de baixo pode existir, e só ele ganha cor.
+    const src = tela("Dashboard.tsx");
+    const i = src.indexOf("<TabsTrigger");
+    expect(i, "as abas do Dashboard sumiram").toBeGreaterThan(-1);
+    const classes = src.slice(i, src.indexOf("/>", i)).match(/className="([^"]*)"/);
+    expect(classes, "className do TabsTrigger não encontrado").toBeTruthy();
+    const c = classes![1];
+    expect(c, "as bordas laterais/superior voltaram").toContain("border-0");
+    expect(c, "o sublinhado da aba sumiu").toContain("border-b-2");
+    expect(c, "a aba ativa tem que colorir só a borda DE BAIXO").toContain(
+      "data-[state=active]:border-b-foreground",
+    );
+    expect(c, "border-foreground pinta os quatro lados — é o retângulo").not.toMatch(
+      /data-\[state=active\]:border-foreground/,
+    );
+  });
+
   it("Financeiro: abas rolam e as duas tabelas rolam dentro da moldura", () => {
     const src = tela("Financeiro.tsx");
     // A régua principal da tela (7 abas). A outra TabsList do arquivo é a

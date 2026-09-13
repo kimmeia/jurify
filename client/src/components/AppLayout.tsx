@@ -57,7 +57,6 @@ import {
   Sun,
   Moon,
   Check,
-  Search,
   CircleHelp,
 } from "lucide-react";
 import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
@@ -701,20 +700,9 @@ function AppSidebarContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3 shrink-0">
-            {/* O atalho precisa se anunciar: paleta de comandos que ninguém
-                descobre é paleta que ninguém usa. Some no modo ícone, onde
-                não há largura pro rótulo. */}
+            {/* A busca saiu daqui: ela vive no cabeçalho, alinhada ao nome do
+                usuário. O atalho ⌘K continua valendo — quem some é o botão. */}
             <div className="mb-2 flex items-center gap-1.5 group-data-[collapsible=icon]:mb-1 group-data-[collapsible=icon]:justify-center">
-              <button
-                onClick={() => setPaletaAberta(true)}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground group-data-[collapsible=icon]:hidden"
-              >
-                <Search className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1 text-left">Buscar</span>
-                <kbd className="rounded border border-sidebar-border bg-sidebar-accent px-1 py-px font-mono text-[10px] font-semibold text-sidebar-foreground/75">
-                  ⌘K
-                </kbd>
-              </button>
               {/* Central de ajuda: fora do `navigateOrBlock` de propósito —
                   quem está sem plano é justamente quem mais precisa ler. */}
               <button

@@ -48,6 +48,15 @@ export default function DashboardComercial() {
       <Aviso texto='Você não está atribuído a nenhum setor comercial. Peça ao administrador para vincular você a um setor do tipo "Comercial".' />
     );
   }
+  // Escritório sem NENHUM colaborador em setor comercial: o servidor devolve
+  // cedo, com `modo: "gestor"` e sem `totais`. Sem esta saída a tela quebrava
+  // em branco no primeiro clique da aba — era o `totais!` logo abaixo lendo
+  // `contratosFechados` de undefined.
+  if (data.modo === "gestor" && !data.totais) {
+    return (
+      <Aviso texto='Nenhum colaborador está em um setor do tipo "Comercial" ainda. Crie o setor em Configurações → Equipe e vincule quem vende: os números aparecem aqui em seguida.' />
+    );
+  }
 
   const meu = data.meu;
   const ranking: any[] = data.ranking ?? [];

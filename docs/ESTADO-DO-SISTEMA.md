@@ -2632,9 +2632,12 @@ busca nova: `AbrirPaletaContexto`
 `AppLayout` até a tela. Fora do AppLayout (login, assinatura) o contexto é
 `null` e o botão não é desenhado.
 
-**A busca do rodapé do menu CONTINUA onde estava.** Ele pediu a do topo, não
-pediu para tirar a outra; são duas portas para a mesma paleta. Se ele quiser
-uma só, é apagar o bloco do `SidebarFooter`.
+**A busca do rodapé do menu SAIU** — ele pediu logo depois ("remova o buscar
+no menu lateral"). Ficou só a do cabeçalho. O que some é o BOTÃO: o atalho de
+teclado ⌘K/Ctrl+K continua ligado no `AppLayout` (o `keydown` não foi tocado),
+e o rodapé do menu segue com o botão **Ajuda**, agora sozinho na linha. A
+amarra `central-de-ajuda.test.ts` inverteu o sinal: o rodapé agora é conferido
+por **não** conter `⌘K`, para o botão não voltar sem querer.
 
 Vale para os cinco painéis que usam `PainelTopo` (Geral, Comercial,
 Operacional, Financeiro, Processual) — é o mesmo cabeçalho.
@@ -2656,4 +2659,46 @@ linha fina que atravessa a tira. Sem moldura, sem fundo, sem sombra.
 classes que impedem as abas de empurrarem a página inteira de lado num celular
 de 390px, e `telas-cabem-no-celular.test.ts` trava as duas.
 
-Medido depois: 5.983 testes verdes, typecheck limpo, build ok.
+**Defeito da 1ª versão, achado pelo dono na tela (13/09): um retângulo preto em
+volta da aba ativa.** O `TabsTrigger` da casa já traz `border border-transparent`
+nos QUATRO lados; `data-[state=active]:border-foreground` colore os quatro, então
+o que devia ser sublinhado virou caixa (1px em cima e nas laterais + 2px
+embaixo). Conserto: `border-0 border-b-2` no trigger e
+`data-[state=active]:border-b-foreground` — só o lado de baixo existe e só ele
+ganha cor. `focus-visible:ring-0` entrou junto para o anel de foco do
+componente-base não redesenhar a caixa no clique. Amarra no mesmo arquivo de
+testes (3 mutações vermelhas).
+
+**A régua NÃO é curta** (ele também estranhou o comprimento): medido no
+navegador com o app rodando, a linha da tira tem exatamente a largura do
+conteúdo — 1132px numa janela de 1440, 1612px em 1920, 2252px em 2560, sempre
+igual ao cartão mais largo da página. O que fazia a linha parecer solta era o
+painel de baixo estar em branco, pela quebra descrita na seção 26.
+
+Medido depois: 5.987 testes verdes, typecheck limpo, build ok.
+
+## 26. Painel Comercial abria em BRANCO sem setor comercial (13/09)
+
+`dashboard.comercial` tem uma saída antecipada para quando nenhum colaborador
+está num setor do tipo Comercial: devolve `modo: "gestor"`, `ranking: []`,
+`temSetor: false` — **e nenhuma chave `totais`**. A tela seguia direto para
+`totais!.contratosFechados`, confiando no `!` do TypeScript, e derrubava o React
+inteiro: aba Comercial em branco, sem mensagem nenhuma.
+
+Quem via era exatamente quem tem menos chance de entender: o dono de conta nova,
+no primeiro clique da aba, antes de montar a equipe. A não-nulidade do `!` é
+promessa de quem escreveu, não garantia do servidor — e aqui a promessa era
+falsa por um caminho de retorno que ninguém releu.
+
+Conserto na tela (o servidor não foi tocado): guarda `if (data.modo ===
+"gestor" && !data.totais)` **antes** do primeiro uso, devolvendo o `Aviso` que
+o arquivo já tinha, com texto que diz o que fazer ("Crie o setor em
+Configurações → Equipe e vincule quem vende"). Amarra:
+`painel-comercial-sem-setor.test.ts` (3 testes; a guarda é conferida com o
+`if (` colado na condição — sem isso, um `false &&` na frente desligava o
+conserto e o teste continuava verde). 5 mutações vermelhas em
+`scratchpad/mutar-abas-e-comercial.py`.
+
+Varrido de passagem: o único outro `!` sobre dado do servidor nos painéis é
+`cashFlow!` no Financeiro, e ele está dentro de um `(cashFlow?.x ?? 0) > 0` —
+não alcança o mesmo buraco.
