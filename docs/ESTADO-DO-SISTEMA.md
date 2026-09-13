@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.075 verdes, 408 arquivos** (13/09, na ponta do merge da cor do menu + seções 22 e 23; 6.070 em 407 antes do merge; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.106 verdes, 410 arquivos** (13/09, na ponta do merge, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3101,6 +3101,9 @@ Baseline depois destas duas entregas: **6.070 testes verdes em 407 arquivos**
 (**6.075 em 408** na ponta final, depois de trazer `develop` — a cor do menu
 chegou com um arquivo de teste a mais)
 (`pnpm test`), `pnpm check` limpo, `pnpm vite build` passando.
+
+---
+
 ## 24. Editar plano cabia 2110px numa janela de 1440 — ENTREGUE (13/09)
 
 Print do dono: *"aqui também está feio. Vamos refazer essa tela"* — o editor
@@ -3151,3 +3154,112 @@ Está escrito e fotografado na branch `descartavel/editor-plano`, commit
 a foto do tema escuro rendeu: no cartão verde do Financeiro o valor "R$ 10,7
 mil" é verde escuro sobre verde e o vizinho sai violeta — decisão de paleta,
 não de layout.
+
+---
+
+## 25. Dois achados do dono em produção, consertados no mesmo dia (13/09)
+
+Os dois vieram de print dele usando o sistema, e os dois foram **reproduzidos no
+app rodando** antes de qualquer linha de código — receita em
+`docs/rodar-o-app-localmente.md`. O "antes" de cada um é foto, não dedução.
+
+### 25.1 A Central escondia movimentação pendente atrás do teto da página
+
+Print: «Nada pendente nos últimos 30 dias · As 80 movimentações do período já
+foram resolvidas», com o badge da aba marcando **11**.
+
+**Causa única.** A lista pede as movimentações do período ordenadas por DATA e
+cortadas em `limite` (80 por padrão; a tela nunca pede mais e não tem "carregar
+mais"). Só depois do corte é que ela separava resolvida de pendente. O
+escritório tinha 91 no período e as 11 pendentes eram mais ANTIGAS que as 80
+que couberam: **caíam fora da consulta**. Não eram só mal contadas — não havia
+como chegar nelas por aquela tela (trocar para 90 dias piora: janela maior,
+mesmo teto; só a busca alcançava, porque ela roda antes do corte).
+
+Os dois números discordavam porque nasciam de lugares diferentes: o badge
+(`contarMovimentacoesNaoLidas`) conta o BANCO, sem teto; a tela contava a
+PÁGINA. O `80` de «Resolvidas (80)» era o tamanho da página, não o total.
+
+Conferido de passagem para não acusar a causa errada: contador e lista filtram
+exatamente o mesmo recorte (movimentação, 30 dias, escritório), e
+`prazos_sugeridos` tem UNIQUE em `evento_id` — o `leftJoin` não duplica linha.
+A única diferença entre os dois era o teto.
+
+**Conserto, em duas garantias que só valem juntas:**
+
+1. **Ordem** — `asc(lido), desc(dataEvento)`: pendente vem primeiro, sempre.
+   É isso que impede o teto de comer trabalho. Nas abas «A resolver» e
+   «Resolvidas» a ordem na tela não muda (a lista já é de um estado só); em
+   «Todas», pendente sobe — que é o que essa aba deveria fazer.
+2. **Janela** — uma contagem à parte, no banco, separada por estado
+   (`aResolverPeriodo` / `resolvidasPeriodo`), viaja em `triar(...).janela`.
+   `contagem` continua descrevendo a PÁGINA e continua encolhendo com o filtro
+   de tipo, como foi decidido quando a tela nasceu; a janela é a régua que diz
+   se a página é tudo.
+
+A tela passou a usar a janela onde antes usava a página: o texto «as N do
+período já foram resolvidas», a decisão entre «nada no período» × «tudo
+resolvido», e o rótulo «Resolvidas (N)» (que volta ao número da página quando
+há filtro de tipo — é o que o seletor promete). E ganhou o aviso que faltava:
+**«Mostrando 69 de 80 resolvidas…»**, só quando falta algo de verdade. Sem ele,
+a mesma mentira voltaria na 81ª pendência.
+
+**Medido no app, mesmo banco, 91 eventos (80 resolvidas recentes + 11 pendentes
+de 20–25 dias atrás):** antes, «Nada pendente» com badge 11; depois, as 11 na
+tela, badge 11, e o aviso correto na aba Resolvidas.
+
+### 25.2 Cliente em teste não tinha como pagar o plano que estava testando
+
+Print: «quando clico em adicionar pagamento não acontece nada». Não era o botão
+— eram **três portas fechadas** ao mesmo tempo, com o servidor pronto do outro
+lado:
+
+1. A faixa do topo mandava para `/configuracoes?tab=meu-plano` — a tela em que
+   ele **já estava**. Navegar para a rota atual é um não-evento.
+2. O bloco do plano atual só oferecia botão para plano **sob consulta**
+   («Fechar valor com a gente») e para **carência de cancelamento**
+   («Reativar»). Para plano de preço fechado em teste: nada — só a frase
+   "Pagamento seguro via Asaas".
+3. O cartão do próprio plano ficava **travado** em «✓ Você está aqui», que é o
+   texto de quem JÁ paga. O rótulo **«Continuar com este plano»**, escrito
+   exatamente para este caso, existia no código e **nunca chegava à tela**.
+
+O servidor nunca foi o problema: `createCheckout` tem o caminho documentado
+("Cenário B: conversão trial → pago", que aproveita a linha do teste e marca
+`trialConvertido`) e não recusa o plano atual. Faltava porta.
+
+O único jeito de pagar era escolher um plano **diferente** — pagar o que não se
+escolheu. Numa véspera de venda, isso é receita parada.
+
+**Conserto:** botão «Adicionar pagamento» no bloco do plano atual, só para
+teste em plano de preço fechado e fora de carência, levando ao checkout do
+PRÓPRIO plano (vira «Ver o pagamento» quando já há cobrança aberta);
+`travadoPorSerOAtual` passou a distinguir quem já paga de quem está testando,
+destravando o cartão e deixando o rótulo antigo aparecer; e a faixa do topo
+ganhou `irPagar()` — de outra tela navega, já em «Meu plano» rola até o botão e
+põe o foco nele.
+
+**Medido no app com conta em teste no Atende:** antes — nenhum botão no bloco,
+cartão travado em «✓ Você está aqui», clique na faixa sem efeito. Depois —
+botão presente, cartão com «Continuar com este plano» **habilitado**, e o
+clique na faixa levando o foco para `#adicionar-pagamento`. (O travamento por
+`billingOk === false` continua valendo: em ambiente sem Asaas conectado os dois
+botões seguem desabilitados, como antes.)
+
+### 25.3 Amarras
+
+`central-nao-esconde-pendente` (12) e `pagar-o-plano-em-teste` (14) —
+**31 mutações vermelhas** (`scratchpad/mutar-pendente-e-pagamento.py`).
+Três sobreviveram na 1ª volta, todas pelo mesmo motivo de sempre: a amarra
+conferia que o NOME existia, não que ele alimentava o número — dava para
+reatribuir a variável à página com o literal de pé em outro lugar do arquivo.
+Ancoradas na atribuição, morreram.
+
+`central-grupos` ganhou dois testes e teve um `expect` de objeto inteiro
+atualizado (o retorno de `triar` cresceu); os 17 de comportamento não foram
+tocados — inclusive o que trava «o filtro de tipo encolhe as contagens de
+estado junto», que é decisão antiga da casa e continua valendo.
+
+Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
+trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
+limpo e `pnpm vite build` passando.

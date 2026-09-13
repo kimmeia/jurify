@@ -947,7 +947,7 @@ function AppSidebarContent({
  *   - 0-1 dia: vermelho
  */
 function TrialBanner() {
-  const [, setLocation] = useLocation();
+  const [local, setLocation] = useLocation();
   const { data: subscription } = trpc.subscription.current.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
@@ -978,6 +978,29 @@ function TrialBanner() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  /**
+   * Quem já está em "Meu plano" clicava e não acontecia NADA: mandar o
+   * navegador pra rota em que ele já está é um não-evento. Estando lá, o
+   * certo é levar os olhos até o botão de pagar; de qualquer outra tela, a
+   * navegação de sempre.
+   */
+  const irPagar = () => {
+    const destino = "/configuracoes?tab=meu-plano";
+    const alvo = document.getElementById("adicionar-pagamento");
+    if (alvo) {
+      alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+      alvo.focus({ preventScroll: true });
+      return;
+    }
+    if (local.startsWith("/configuracoes")) {
+      // Mesma tela, aba certa, e o botão ainda não pintou (troca de aba ou
+      // plano ainda carregando): recarrega em vez de fingir que navegou.
+      window.location.assign(destino);
+      return;
+    }
+    setLocation(destino);
+  };
+
   const cor =
     dias >= 4 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
     dias >= 2 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
@@ -995,7 +1018,7 @@ function TrialBanner() {
     <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>
       <span className="font-medium">{texto}</span>
       <button
-        onClick={() => (sobConsulta ? abrirConversa() : setLocation("/configuracoes?tab=meu-plano"))}
+        onClick={() => (sobConsulta ? abrirConversa() : irPagar())}
         className="text-xs font-semibold underline underline-offset-2 hover:opacity-80"
       >
         {sobConsulta ? "💬 Fechar valor com a gente →" : "Adicionar pagamento →"}
