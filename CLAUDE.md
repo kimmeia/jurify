@@ -1564,6 +1564,32 @@ contexto reescreve depois de hidratar). Achado que só a foto do escuro pegou e
 NÃO foi corrigido: o "R$ 10,7 mil" do cartão verde do Financeiro é verde
 escuro sobre verde, e o vizinho sai violeta.
 
+### Entregue 13/09 — busca no cabeçalho, "outros períodos" fora, abas minimalistas
+
+Pedido dele depois do navegável: *"só gostei do buscar ficar alinhado com nome
+do usuário. e pode remover o botão outro período também […] e o navbar geral,
+comercial, operacional e financeiro podemos refazer também o estilo para algo
+mais minimalista"*. As três feitas no app, não em mockup.
+
+A busca do cabeçalho abre a **mesma** paleta do ⌘K — `AbrirPaletaContexto`
+leva o `setPaletaAberta` do `AppLayout` até a tela, senão a tela teria que
+duplicar a paleta ou simular tecla. **A busca do rodapé do menu ficou onde
+estava**: ele pediu a de cima, não pediu para tirar a de baixo. Abas viraram
+texto com sublinhado de 2px na ativa; `max-w-full overflow-x-auto` continua no
+invólucro porque é o que impede a tira de empurrar a página no celular (teste
+trava). Detalhe na seção 26 do documento de estado.
+
+**As quatro rodadas de redesenho ANTES disso foram reprovadas, e a lição vale
+mais que elas**: ele mandou um print do painel que queria (escuro, rico,
+cartão arredondado, elevação, gráfico, mapa de calor, avatares) e eu respondi
+três vezes com tipografia seca, fio de 1px, sem cartão e sem gráfico —
+impondo a minha tese de "menos é mais" por cima da referência que ele
+escolheu. A quarta versão, já na linguagem do print dele, está em
+`mockup-navegavel-redesenho.html` (3 telas, antes/depois, computador/celular,
+12/12 combinações conferidas). Dela ele aproveitou só a busca alinhada.
+**Regra que fica: quando o dono manda uma referência visual, ela é o briefing
+— não o ponto de partida de um debate.**
+
 ### Raio-X do design em produção (13/09)
 
 `docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o
@@ -1839,7 +1865,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   `expect` de objeto inteiro atualizado; os 17 de comportamento, intocados.
 
 - **Entregue 13/09, a moeda "crédito" saiu do produto + o cartão do Escala parou
-  de vender o Ponto (seção 26 do documento de estado).** Autorização dele:
+  de vender o Ponto (seção 27 do documento de estado).** Autorização dele:
   *"remova ponto da equipe do cartão / tudo referente a creditos pode excluir
   caso pois não usaremos mais isso"*.
   - **Por que era seguro**: crédito já não decidia nada desde 11/09.
@@ -1887,7 +1913,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   travar a VAGA.
 
 - **Entregue 13/09, o uso só libera depois de escolher plano ou teste — "resolva
-  logo isso" do dono (seção 27 do documento de estado).** Ele descreveu o fluxo
+  logo isso" do dono (seção 28 do documento de estado).** Ele descreveu o fluxo
   ("cadastra > confirma e-mail > aceita termos > escolhe plano ou teste > libera
   uso") e perguntou como garantir. A conferência achou **dois degraus que eram
   só desenho**: termos e plano viviam no navegador, e a API respondia sem

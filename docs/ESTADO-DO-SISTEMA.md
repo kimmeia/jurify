@@ -3266,12 +3266,56 @@ limpo e `pnpm vite build` passando.
 
 ---
 
-## 26. A moeda "crédito" saiu do produto (13/09)
+## 26. Cabeçalho do Dashboard: busca no topo, abas minimalistas (13/09)
+
+Três pedidos do dono depois de ver o navegável: *"só gostei do buscar ficar
+alinhado com nome do usuário. e pode remover o botão outro período também.
+[…] e o navbar geral, comercial, operacional e financeiro podemos refazer
+também o estilo para algo mais minimalista"*.
+
+### 26.1 Busca alinhada com o nome
+
+`BuscaDoTopo` (em `dashboards/common.tsx`) entra dentro do `PainelTopo`, na
+mesma linha do "Bom dia, <nome>". Abre a **mesma** paleta do ⌘K — não é uma
+busca nova: `AbrirPaletaContexto`
+(`components/paleta-comandos-contexto.tsx`) leva o `setPaletaAberta` do
+`AppLayout` até a tela. Fora do AppLayout (login, assinatura) o contexto é
+`null` e o botão não é desenhado.
+
+**A busca do rodapé do menu CONTINUA onde estava.** Ele pediu a do topo, não
+pediu para tirar a outra; são duas portas para a mesma paleta. Se ele quiser
+uma só, é apagar o bloco do `SidebarFooter`.
+
+Vale para os cinco painéis que usam `PainelTopo` (Geral, Comercial,
+Operacional, Financeiro, Processual) — é o mesmo cabeçalho.
+
+### 26.2 "Ver outros períodos" saiu
+
+Removido do `PainelTopo` do Dashboard Geral, a pedido expresso. `/relatorios`
+continua no menu e é por onde se vê outro período; o comentário do arquivo que
+explicava a ausência de seletor de range continua válido.
+
+### 26.3 Abas em sublinhado
+
+`Geral · Comercial · Operacional · Financeiro` deixaram de ser pílulas dentro
+de uma moldura com fundo (`rounded-md border bg-muted p-1.5` + `data-[state=
+active]:bg-card`) e viraram texto com **sublinhado de 2px na ativa**, sobre uma
+linha fina que atravessa a tira. Sem moldura, sem fundo, sem sombra.
+
+`max-w-full overflow-x-auto` ficou no invólucro de propósito: são as duas
+classes que impedem as abas de empurrarem a página inteira de lado num celular
+de 390px, e `telas-cabem-no-celular.test.ts` trava as duas.
+
+Medido depois: 5.983 testes verdes, typecheck limpo, build ok.
+
+---
+
+## 27. A moeda "crédito" saiu do produto (13/09)
 
 Autorização do dono, na mesma mensagem que tirou o Ponto do cartão: *"tudo
 referente a creditos pode excluir caso pois não usaremos mais isso"*.
 
-### 26.1 Por que a remoção era segura — e por que era urgente
+### 27.1 Por que a remoção era segura — e por que era urgente
 
 **Crédito já não decidia nada desde 11/09.** `consumirCredito`, chamada pelos
 quatro routers de cálculo, por dentro chamava `verificarUso`/`registrarUso` do
@@ -3289,7 +3333,7 @@ continuava viva o bastante para **desligar vigia de processo** por uma conta
 que ninguém mais olhava. Os dois crons saíram juntos — e é por isso que
 remover o mecanismo pela metade seria pior que não remover.
 
-### 26.2 O que saiu
+### 27.2 O que saiu
 
 | Camada | O que era | Substituto que já existia |
 |---|---|---|
@@ -3312,7 +3356,7 @@ assinatura**. `hasAccess = hasSubscription || hasCredits` era a regra;
 assinatura e não sentem nada — quem entrava **só** por crédito sobrante agora
 cai em "Meu plano". É o comportamento correto e é uma mudança de porta.
 
-### 26.3 O que NÃO saiu, e por quê
+### 27.3 O que NÃO saiu, e por quê
 
 1. **`creditosCalculosMes`.** A coluna guardou o nome antigo, mas É o teto
    mensal de cálculos (`CAMPO_DO_PLANO.calculo`). Apagá-la tiraria o limite.
@@ -3330,7 +3374,7 @@ cai em "Meu plano". É o comportamento correto e é uma mudança de porta.
    "(descontinuado)": as linhas antigas continuam no banco e alguém precisa
    conseguir ler o que elas dizem.
 
-### 26.4 O cartão do Escala parou de vender o Ponto
+### 27.4 O cartão do Escala parou de vender o Ponto
 
 Migration **0229**. O módulo saiu de produção em 13/09 (seção 23) e o cartão
 seguia anunciando "Comissões automáticas por colaborador e ponto da equipe" —
@@ -3339,7 +3383,7 @@ o Ponto continua contratado e volta sozinho quando sair do beta. A troca é por
 TEXTO EXATO (`JSON_SEARCH`), não por posição: `features` é editável no painel,
 quem já reescreveu a frase não é afetado, e rodar duas vezes não faz nada.
 
-### 26.5 Amarras
+### 27.5 Amarras
 
 `credito-saiu-do-produto` (19 testes) — **28 mutações vermelhas**
 (`scratchpad/mutar-credito-e-cartao.py`). Duas sobreviveram na 1ª volta pelo
@@ -3363,14 +3407,14 @@ Baseline: **6.119 testes verdes em 411 arquivos**, `pnpm check` limpo,
 
 ---
 
-## 27. O uso só libera depois de escolher plano ou teste (13/09)
+## 28. O uso só libera depois de escolher plano ou teste (13/09)
 
 **Pedido do dono**, depois de ele descrever o fluxo que quer — *"cadastra >
 confirma e-mail > aceita termos > escolhe plano ou teste > libera uso do
 sistema"* — e perguntar como garantir: *"quero que só libere o uso após
 escolha do plano/teste. resolva logo isso"*.
 
-### 27.1 O que estava garantido e o que era só desenho
+### 28.1 O que estava garantido e o que era só desenho
 
 Conferido degrau a degrau no código antes de mexer:
 
@@ -3390,7 +3434,7 @@ fechasse a tela e chamasse o servidor direto usava o produto sem plano nenhum.
 O terceiro degrau (termos) **continua só na tela** — não foi o que ele pediu, e
 fica registrado aqui como pendência conhecida.
 
-### 27.2 O que entrou
+### 28.2 O que entrou
 
 `shared/acesso-sem-plano.ts` (regra pura) + `server/_core/gate-assinatura.ts`
 (o porteiro) + `requirePlanoEscolhido` na corrente do `protectedProcedure`,
@@ -3432,7 +3476,7 @@ No client, as três contagens de badge do menu (`movimentacoes.contador`,
 servidor recusa, o menu já está trancado, e seriam três 403 a cada 2 minutos na
 tela onde a pessoa está escolhendo o plano.
 
-### 27.3 Conferido no app rodando (não deduzido)
+### 28.3 Conferido no app rodando (não deduzido)
 
 Conta com a assinatura apagada do banco, navegador de verdade:
 
@@ -3446,7 +3490,7 @@ Conta com a assinatura apagada do banco, navegador de verdade:
 - clicar em «Testar grátis» leva ao Dashboard e o produto responde **200 na
   hora** — sem esperar os 30s do cache. É a decisão 3 valendo na prática.
 
-### 27.4 Efeitos colaterais conscientes
+### 28.4 Efeitos colaterais conscientes
 
 - **Teste vencido e assinatura cancelada fora da carência** param de responder
   pela API, não só pela tela. É a mesma régua de sempre; a diferença é que
@@ -3461,7 +3505,7 @@ Conta com a assinatura apagada do banco, navegador de verdade:
   tem assinatura nenhuma. Cinco arquivos já foram ajustados com o comentário
   explicando; quem escrever o sexto vai encontrar o mesmo 403.
 
-### 27.5 Amarra
+### 28.5 Amarra
 
 `uso-so-com-plano.test.ts` (17 testes) — **32 mutações vermelhas**
 (`scratchpad/mutar-uso-so-com-plano.py`). Quatro sobreviveram na 1ª volta, três

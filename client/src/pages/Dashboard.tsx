@@ -174,13 +174,13 @@ function DashboardComTabs({
         {/* `max-w-full` + rolagem própria: as 4 abas somam 430px e numa tela
             de 390px empurravam a PÁGINA inteira de lado. Agora quem rola é a
             tira, e o resto da tela fica parado. */}
-        <div className="inline-flex max-w-full overflow-x-auto rounded-md border bg-muted p-1.5">
-          <TabsList className="h-auto gap-1 bg-transparent p-0">
+        <div className="max-w-full overflow-x-auto border-b">
+          <TabsList className="h-auto gap-6 rounded-none bg-transparent p-0">
             {ABAS.map(({ valor, rotulo, icone: Icone }) => (
               <TabsTrigger
                 key={valor}
                 value={valor}
-                className="gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm dark:data-[state=active]:bg-background"
+                className="gap-1.5 rounded-none border-b-2 border-transparent bg-transparent px-0 pb-2.5 pt-0 text-[13px] text-muted-foreground shadow-none transition-colors data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
               >
                 <Icone className="h-3.5 w-3.5" />
                 {rotulo}

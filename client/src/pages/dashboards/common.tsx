@@ -9,9 +9,10 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
-import { ArrowRight, TrendingUp, TrendingDown, Info } from "lucide-react";
+import { ArrowRight, TrendingUp, TrendingDown, Info, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { moedaBR, moedaCurtaBR } from "@shared/formato-numero";
+import { useAbrirPaleta } from "@/components/paleta-comandos-contexto";
 
 // ─── Formatadores ────────────────────────────────────────────────────────────
 
@@ -420,6 +421,29 @@ export function AvisoBanner({
  *  na checagem de daltonismo — não trocar por uma cor "que combina". */
 export const COR_SERIE = "var(--viz-1)";
 
+/**
+ * Busca do cabeçalho: abre a MESMA paleta do ⌘K, na linha do nome de quem está
+ * logado. A do rodapé do menu continua onde estava — esta é um segundo caminho
+ * para a mesma porta, no lugar onde o olho já está quando a tela abre.
+ *
+ * Sem AppLayout em volta (login, assinatura) o contexto é nulo e o botão
+ * simplesmente não existe.
+ */
+function BuscaDoTopo() {
+  const abrir = useAbrirPaleta();
+  if (!abrir) return null;
+  return (
+    <button
+      onClick={abrir}
+      className="flex h-9 min-w-[190px] items-center gap-2 rounded-lg border bg-card px-3 text-[12.5px] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+    >
+      <Search className="h-3.5 w-3.5 shrink-0" />
+      <span className="flex-1 text-left">Buscar</span>
+      <kbd className="rounded border bg-muted px-1 py-px font-mono text-[10px] font-semibold">⌘K</kbd>
+    </button>
+  );
+}
+
 export function PainelTopo({
   titulo,
   subtitulo,
@@ -435,7 +459,10 @@ export function PainelTopo({
         <h1 className="text-[22px] font-bold tracking-tight leading-tight">{titulo}</h1>
         {subtitulo && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitulo}</p>}
       </div>
-      {acao}
+      <div className="flex flex-wrap items-center gap-2">
+        <BuscaDoTopo />
+        {acao}
+      </div>
     </div>
   );
 }
