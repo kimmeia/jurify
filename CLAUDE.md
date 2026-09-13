@@ -1476,35 +1476,41 @@ saudação, precisa de mockup próprio); tabela do Financeiro virar cartão no
 celular (hoje rola dentro da moldura — virar cartão é redesenho); contraste
 do valor verde-escuro no hero verde (decisão de cor).
 
-### A cor do menu — DUAS decisões do dono colidiram em 13/09; a dele que está
-### no ar VENCEU, e a outra ficou em espera
+### A cor do menu — DUAS decisões colidiram em 13/09; o dono desempatou:
+### fundo `#07060f`, resto da família violeta
 
 Duas sessões receberam pedidos diferentes sobre o MESMO token no mesmo dia, e
-os dois foram aprovados por ele. **Quem lê isto depois: não "corrija" um pelo
-outro sem ele mandar.**
+os dois foram aprovados por ele:
 
-- **O que está no ar** (sessão da tarde, mergeado em `develop` e `main`): o
-  menu veste a cor da LOGO — `--sidebar: oklch(0.205 0.045 296)`, que rende
-  `#191229`, roxo-quase-preto. Pedido dele: *"Vamos deixar a cor desse menu
-  mais alinhado com a logo real?"*. Seção 19 do `docs/ESTADO-DO-SISTEMA.md`,
-  amarra `menu-cor-da-logo.test.ts`.
-- **O que ficou de fora** (esta sessão): `--sidebar: #07060f`, a cor do header
-  do Devular. Pedido dele, com o print do header: *"vamos usar essa cor do
-  header na mesma transparência para o menu de juridflow e também para o menu
-  de devular"*, aprovado no `mockup-cor-do-menu-devular.html` (variante B —
-  renomeado no merge porque a outra sessão chamou o comparador DELA pelo mesmo
-  nome, e o nome curto ficou com a decisão que está no ar)
-  e com "merge" autorizado.
+- **Tarde** (mergeada em `develop` e `main`): o menu veste a cor da LOGO —
+  fundo roxo-quase-preto `#191229`, «Jurid» em branco puro, «Flow», item
+  aberto e anel em violeta. Pedido: *"Vamos deixar a cor desse menu mais
+  alinhado com a logo real?"*. Seção 19 do `docs/ESTADO-DO-SISTEMA.md`.
+- **Noite** (esta): `--sidebar: #07060f`, a cor do header do Devular, *"para
+  o menu de juridflow e também para o menu de devular"* — aprovada no
+  `mockup-cor-do-menu-devular.html` (variante B; renomeado porque a outra
+  sessão usou o mesmo nome de arquivo).
 
-**Por que a do ar venceu, e não a mais nova.** O mockup que ele aprovou aqui
-fotografou o "hoje" como `#16202c` — o azul-ardósia, que já estava substituído
-pelo roxo quando ele olhou. Ou seja: ele nunca comparou `#07060f` contra o
-roxo da logo; comparou contra uma tela que não existe mais. Trocar seria
-desfazer, sem mockup, uma decisão dele que está em produção — as duas regras
-da casa (mockup antes, nunca remover sem autorização expressa) apontam pro
-mesmo lado. O código de `#07060f` está inteiro no commit `48e8236` desta
-branch (CSS, `cor-do-menu.test.ts`, `scratchpad/mutar-cor-do-menu.py`): se ele
-escolher essa, é um `git cherry-pick` e resolver o token.
+**Como ficou.** Segurei a troca e mostrei as duas juntas
+(`mockup-menu-duas-decisoes.html`, fotografadas na mesma tela, `#191229` ×
+`#07060f`), porque o mockup aprovado aqui fotografou o "hoje" ainda no
+azul-ardósia — ele nunca tinha comparado as duas propostas entre si. Ele
+desempatou: *"eu quero a cor do menu que aprovei"*, e disse com todas as
+letras que segurar custou tempo dele. **Lição registrada: com duas aprovações
+válidas, aplicar a mais recente e mostrar o conflito DEPOIS — o custo de
+segurar recaiu nele.**
+
+Entregue: **só o FUNDO** virou `#07060f` (`:root` e `.dark`, sólido). Nada da
+entrega da tarde foi desfeito — `--sidebar-accent`, `--sidebar-primary`,
+`--sidebar-ring`, `--marca-em-escuro` e o «Jurid» branco do `MarcaJ` seguem
+violeta, e sobre o quase-preto o item aberto ganha contraste em vez de
+perder. Sonda de pixel no app rodando: `#07060f`.
+Amarras: `cor-do-menu.test.ts` (5 testes, 6 mutações vermelhas em
+`scratchpad/mutar-cor-do-menu.py`) trava a cor exata e proíbe a transparência
+voltar; `menu-cor-da-logo.test.ts` teve **só o primeiro `it` reescrito** (o
+fundo saiu dela e virou "escuro e igual nos dois temas") — os outros cinco,
+que guardam violeta no realce/anel/marca e marinho como cor de ação do
+conteúdo, ficaram intactos.
 
 **O achado que sobrevive à escolha, e que vale pros dois produtos:** "a mesma
 transparência" NÃO dá a mesma cor em lugares diferentes, porque o que está
