@@ -46,6 +46,7 @@ import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resu
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { exigirTribunalComprovado } from "../processos/tribunal-comprovado";
 import {
   TRIBUNAL_SEDE,
   mensagemTribunalSemMotor,
@@ -339,6 +340,11 @@ export const processosRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Tribunal candidato (PJe-JT) só responde depois de um login real ter
+      // passado nele. Antes de cobrar: consulta que já nasce condenada a falhar
+      // não pode consumir consulta do plano.
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
 
       // Cofre é compartilhado pelo escritório: qualquer membro
       // (dono ou colaborador) usa as credenciais cadastradas no escritório.
@@ -864,6 +870,8 @@ export const processosRouter = router({
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
+
       // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
       // cópia com a nota dizendo que é igual.
       const escolhido = await escolherCredencial(db, esc.escritorio.id, {
@@ -1289,6 +1297,10 @@ export const processosRouter = router({
 
       // Tribunais PDPJ-cloud precisam de credencial; consulta pública (TRF-5)
       // não. Bifurcação cedo pra erro claro sem mexer no caminho TJCE.
+      // Vigiar processo de tribunal candidato sem prova de login cria um monitor
+      // que só sabe errar, e cada ciclo dele tenta o portal derivado de novo.
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
+
       const requerCred = tribunalRequerCredencial(tribunal.codigoTribunal);
       let credencialIdParaSalvar: number | null = null;
       if (requerCred) {
@@ -2036,6 +2048,7 @@ export const processosRouter = router({
           message: `Monitoramento de novas ações ainda não funciona no ${siglaBase}.`,
         });
       }
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunalDaCred);
 
       const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
         sistemas: sistemasParaDocumento(tribunalDaCred),

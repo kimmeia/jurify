@@ -113,7 +113,7 @@ import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
 import LeitorQr from "@/components/LeitorQr";
-import GradeTribunais from "@/components/GradeTribunais";
+import GradeTribunais, { alvosDaBateria } from "@/components/GradeTribunais";
 
 /** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
 const SISTEMA_NACIONAL = "pje_*";
@@ -4317,7 +4317,10 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
   }) ?? { mutate: () => {} };
 
   async function rodarLote() {
-    const alvos = ((q.data?.tribunais ?? []) as any[]).filter((t) => !t.semCobertura);
+    // A MESMA regra que a grade usa pra decidir o que entra na bateria — duas
+    // contas separadas fariam a barra de progresso prometer um total e a fila
+    // rodar outro.
+    const alvos = alvosDaBateria((q.data?.tribunais ?? []) as any[]);
     if (alvos.length === 0 || !validarAsync) return;
     pararRef.current = false;
     setLote({ feitos: 0, total: alvos.length, atual: null });
@@ -4364,7 +4367,7 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
       lote={{
         rodando: lote != null,
         feitos: lote?.feitos ?? 0,
-        total: lote?.total ?? ((q.data.tribunais ?? []) as any[]).filter((t: any) => !t.semCobertura).length,
+        total: lote?.total ?? alvosDaBateria((q.data.tribunais ?? []) as any[]).length,
         atual: lote?.atual ?? null,
         onIniciar: () => { void rodarLote(); },
         onParar: () => { pararRef.current = true; },
