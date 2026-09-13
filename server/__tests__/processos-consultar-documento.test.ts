@@ -228,4 +228,25 @@ describe("processos.consultarDocumento — sucesso", () => {
     // a sessão é por portal. Sem ele, o cookie do CE seria mandado pro MG.
     expect(recuperarSessao).toHaveBeenCalledWith(5, "tjce", { tentarRelogin: true });
   });
+
+  it("o tribunal vem do pedido: codigoTribunal tjmg escolhe credencial e sessão do TJMG", async () => {
+    // "tjce" nos testes acima é o PADRÃO (a tela não manda tribunal), não um
+    // valor cravado: com `codigoTribunal` o mesmo caminho vai pro TJMG.
+    dbState.credenciais = [
+      { id: 8, escritorioId: 1, sistema: "pje_tjmg", status: "ativa", apelido: "OAB MG" },
+    ];
+    recuperarSessao.mockResolvedValue("storage-state-mg");
+
+    const caller = appRouter.createCaller(fakeCtx());
+    await caller.processos.consultarDocumento({ tipo: "cpf", valor: "12345678901", codigoTribunal: "tjmg" });
+
+    expect(recuperarSessao).toHaveBeenCalledWith(8, "tjmg", { tentarRelogin: true });
+    expect(iniciarConsultaDocumentoMotorProprio).toHaveBeenCalledWith(
+      "cpf",
+      "12345678901",
+      "storage-state-mg",
+      "tjmg",
+      8,
+    );
+  });
 });

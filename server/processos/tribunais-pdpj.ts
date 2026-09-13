@@ -64,6 +64,43 @@ export function pdpjTrfConfig(
   };
 }
 
+/**
+ * Config de um Tribunal Regional do Trabalho no PJe-JT.
+ *
+ * O PJe-JT tem o grau no PATH (`/primeirograu/`, `/segundograu/`), não no
+ * subdomínio como os TRFs nem no `pjeNgrau` dos TJs — daí o terceiro helper.
+ *
+ * CANDIDATOS, sem exceção: os endereços saem do padrão histórico e não foram
+ * abertos daqui (o ambiente não alcança portais). Pior: o adapter só sabe
+ * entrar por SSO do PDPJ e falha com "não redirecionou pro PDPJ-cloud" se o
+ * portal não aceitar esse login — a grade do Cofre mostra "não testado" até
+ * um login real passar, e é esse login que diz se a Justiça do Trabalho entra
+ * pelo mesmo caminho.
+ */
+export function pdpjTrtConfig(
+  n: number,
+  grau: 1 | 2 = 1,
+  override?: Partial<TribunalPdpjConfig>,
+): TribunalPdpjConfig {
+  const tribunal = `trt${n}`;
+  const base = `https://pje.trt${n}.jus.br/${grau === 2 ? "segundograu" : "primeirograu"}`;
+  return {
+    tribunal,
+    grau,
+    nome: `Tribunal Regional do Trabalho da ${n}ª Região — PJe ${grau}º grau`,
+    urlEntrada: `${base}/login.seam`,
+    urlBusca: `${base}/Processo/ConsultaProcesso/listView.seam`,
+    ...override,
+  };
+}
+
+/** TRT-1 a TRT-24: todos os regionais da Justiça do Trabalho. */
+const NUMEROS_TRT: readonly number[] = Array.from({ length: 24 }, (_, i) => i + 1);
+
+function registroTrt(grau: 1 | 2): Record<string, TribunalPdpjConfig> {
+  return Object.fromEntries(NUMEROS_TRT.map((n) => [`trt${n}`, pdpjTrtConfig(n, grau)]));
+}
+
 // Tribunais PJe habilitados (motor próprio). Adicionar um estado = uma linha.
 // Ex.: tjmg: pdpjTjConfig("mg")  — depois de validar login + consulta reais.
 //
@@ -119,6 +156,14 @@ const REGISTRO: Record<string, TribunalPdpjConfig> = {
   trf2: pdpjTrfConfig(2),
   trf3: pdpjTrfConfig(3),
   trf6: pdpjTrfConfig(6),
+
+  // ── Justiça do Trabalho ──────────────────────────────────────────────────
+  // TRT-1 a TRT-24 entram como CANDIDATOS: o PJe-JT precisa aceitar o SSO do
+  // PDPJ, senão o login falha com a mensagem do adapter — a grade do Cofre
+  // mostra "não testado" até um login real. Um TRT que também esteja na
+  // consulta pública continua aqui: quem tem credencial usa a config, quem não
+  // tem vigia pelo caminho público (`tribunalRequerCredencial` decide).
+  ...registroTrt(1),
 };
 
 /**
@@ -163,6 +208,9 @@ const REGISTRO_G2: Record<string, TribunalPdpjConfig | null> = {
   trf2: pdpjTrfConfig(2, 2),
   trf3: pdpjTrfConfig(3, 2),
   trf6: pdpjTrfConfig(6, 2),
+  // Nos TRTs o grau está no path (`/primeirograu/` → `/segundograu/`): a
+  // transformação é direta, mas continua candidata como o 1º grau.
+  ...registroTrt(2),
 };
 
 /** Estados cujo 2º grau ainda não tem endereço mapeado. */
@@ -203,16 +251,35 @@ export function tribunalTemMotorProprio(tribunal: string): boolean {
   return tribunal in REGISTRO || TRIBUNAIS_CONSULTA_PUBLICA.has(tribunal);
 }
 
+/** O tribunal roda por consulta pública (sem credencial)? */
+export function tribunalTemConsultaPublica(tribunal: string): boolean {
+  return TRIBUNAIS_CONSULTA_PUBLICA.has(tribunal);
+}
+
 /** Indica se o tribunal precisa de credencial OAB no Cofre. False pra
- *  consulta pública (trf5 etc), true pra PDPJ-cloud (TJs). */
+ *  consulta pública (trf5 etc), true pra PDPJ-cloud (TJs).
+ *
+ *  Tribunal que está nos DOIS lugares (registro e consulta pública) não
+ *  exige credencial: quem não cadastrou senha ainda vigia pelo caminho
+ *  público, e quem cadastrou pode usar a config — o despachante decide pela
+ *  presença da sessão. */
 export function tribunalRequerCredencial(tribunal: string): boolean {
-  return tribunal in REGISTRO;
+  return tribunal in REGISTRO && !tribunalTemConsultaPublica(tribunal);
+}
+
+/** Quantos tribunais o registro cobre, por segmento — pro rótulo da tela. */
+export function contagemRegistro(): { tjs: number; trfs: number; trts: number; total: number } {
+  const chaves = Object.keys(REGISTRO);
+  const tjs = chaves.filter((t) => t.startsWith("tj")).length;
+  const trfs = chaves.filter((t) => t.startsWith("trf")).length;
+  const trts = chaves.filter((t) => t.startsWith("trt")).length;
+  return { tjs, trfs, trts, total: chaves.length };
 }
 
 /**
  * Mapeia o `sistema` de uma credencial do cofre (ex: "pje_tjmg", "pje_trf1")
  * pra a config do tribunal — pro LOGIN usar o portal certo. Cobre os PJe do
- * REGISTRO (TJs PDPJ e TRFs); outros (esaj_*, eproc_*, pje_restrito_trt*,
+ * REGISTRO (TJs PDPJ, TRFs e TRTs); outros (esaj_*, eproc_*, pje_restrito_trt*,
  * pje_*) → null.
  *
  * Casos especiais: alguns sistemas no cofre usam sigla histórica diferente
@@ -272,7 +339,7 @@ export function sistemasQueAtendem(codigoTribunal: string): string[] {
 }
 
 export function configPorSistema(sistema: string): TribunalPdpjConfig | null {
-  const m = /^pje_((?:tj|trf)[a-z0-9]+)$/.exec(sistema);
+  const m = /^pje_((?:tj|trf|trt)[a-z0-9]+)$/.exec(sistema);
   if (!m) return null;
   const trib = ALIAS_SISTEMA_PARA_TRIBUNAL[m[1]] ?? m[1];
   return getConfigTribunal(trib);

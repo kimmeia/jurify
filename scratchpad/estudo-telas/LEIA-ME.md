@@ -16,6 +16,7 @@ existe sai do app rodando, navegável, antes ⟷ depois.** Receita contada em
 | `gera-navegavel.mjs` | Versão anterior: passeio tela por tela com chave Antes/Depois. Serve para navegar, **não** para comparar (foi reprovado justamente por isso — ver `docs/mockup-navegavel.md`). |
 | `confere-navegavel.mjs` | Dirige o navegável com Playwright, mede cada combinação, acusa tela vazia e tira as fotos. |
 | `culpado-tarefas.mjs` | Acha QUEM empurra uma tela de lado no celular (elemento, classe, largura). Trocar a rota para reusar. |
+| `captura-prints-ajuda.mjs` | Recaptura os prints de «Cadastrar um cliente» da Central de ajuda (1440×900, Asaas marcado como conectado, sem o aviso de ambiente, mouse fora das linhas). |
 | `captura.mjs` · `cel-completo.mjs` · `medir.mjs` | Da rodada do estudo (11/09): fotos PNG e medições por tela. |
 
 Ordem de uso:

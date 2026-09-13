@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
@@ -31,6 +32,7 @@ import {
   resumoPjeNacional,
   siglaConsultaNaHora,
   siglaDoTribunal,
+  textoConsultaNaHora,
   totalTribunaisVigiaveis,
   tribunalDoCnj,
 } from "@shared/tribunais-pje";
@@ -646,7 +648,7 @@ function ConsultarTab() {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold tracking-tight">Consultar processo</p>
-            <p className="text-apoio text-muted-foreground">Número do processo direto, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.</p>
+            <p className="text-apoio text-muted-foreground">Número do processo direto {textoConsultaNaHora()}, ou busca por CPF/CNPJ — hoje no {siglaConsultaNaHora()}.</p>
           </div>
         </div>
 
@@ -835,7 +837,7 @@ function ConsultarTab() {
             <Scale className="h-7 w-7 text-info/70" />
           </div>
           <p className="font-semibold text-foreground">Consulte processos judiciais</p>
-          <p className="text-sm text-muted-foreground">Consulta na hora: {siglaConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.</p>
+          <p className="text-sm text-muted-foreground">Consulta na hora {textoConsultaNaHora()}. Para vigiar, {totalTribunaisVigiaveis()} tribunais.</p>
         </div>
       ) : null}
       </div>
@@ -2325,7 +2327,10 @@ function CabecalhoProcessos({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-pagina font-bold tracking-tight leading-none">Processos</h1>
+        <h1 className="text-pagina font-bold tracking-tight leading-none flex items-center gap-2">
+          Processos
+          <AjudaDaTela tarefa="vigiar-processo" />
+        </h1>
         <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
         </p>
