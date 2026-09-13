@@ -69,6 +69,28 @@ describe("as telas cabem num celular de 390px", () => {
     );
   });
 
+  it("Cofre: a grade de tribunais é uma linha por estado e a credencial nacional ocupa a fileira", () => {
+    // O cartão media 2.566px de altura porque a grade dos 78 pares vivia num
+    // cartão de 1/3 da largura (335px úteis, 800px vazios ao lado). Duas
+    // classes seguram o conserto.
+    const grade = readFileSync(
+      join(__dirname, "..", "..", "client", "src", "components", "GradeTribunais.tsx"),
+      "utf8",
+    );
+    expect(grade, "a grade voltou a empilhar caixa por grau").not.toContain(
+      "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+    );
+    expect(grade, "a grade perdeu as colunas que se ajustam sozinhas").toMatch(
+      /grid-cols-\[repeat\(auto-fill,minmax\(\d+px,1fr\)\)\]/,
+    );
+    expect(grade, "sem [&>*]:min-w-0 a sigla estica a coluna").toContain("[&>*]:min-w-0");
+
+    const proc = tela("Processos.tsx");
+    const i = proc.indexOf("SISTEMA_NACIONAL ?");
+    expect(i, "a regra de largura do cartão nacional sumiu").toBeGreaterThan(-1);
+    expect(proc.slice(i, i + 120)).toContain("lg:col-span-3");
+  });
+
   it("Financeiro: abas rolam e as duas tabelas rolam dentro da moldura", () => {
     const src = tela("Financeiro.tsx");
     // A régua principal da tela (7 abas). A outra TabsList do arquivo é a

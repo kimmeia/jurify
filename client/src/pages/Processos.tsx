@@ -4691,7 +4691,13 @@ function CofreTab() {
             return (
               <div
                 key={c.id}
-                className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
+                /* Credencial nacional ocupa a fileira inteira: a grade dos
+                   estados mora dentro dela, e num terço da largura ela media
+                   2.143px de altura com 800px vazios ao lado. A credencial de
+                   um tribunal só continua no cartão de 1/3. */
+                className={`rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] transition-all hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] ${
+                  c.sistema === SISTEMA_NACIONAL ? "md:col-span-2 lg:col-span-3" : ""
+                }`}
               >
                 <div className="flex items-start gap-2.5">
                   <div className="h-10 w-10 rounded-xl bg-info flex items-center justify-center shrink-0 shadow-sm">

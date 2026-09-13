@@ -99,9 +99,13 @@ describe("a grade usa o resumo, não o texto cru", () => {
       path.resolve(__dirname, "../../client/src/components/GradeTribunais.tsx"),
       "utf-8",
     );
-    expect(grade).toContain("resumirErroCofre");
+    // A CHAMADA, não o import: trocar `resumirErroCofre(erro)` por outra coisa
+    // deixava o import de pé e a amarra verde.
+    expect(grade).toMatch(/=\s*resumirErroCofre\(/);
     // O cru não pode sumir: é ele que diz o realm e a URL exata.
     expect(grade).toContain("detalhe técnico");
-    expect(grade).toMatch(/<pre[\s\S]{0,200}erro\.ultimoErro/);
+    // O texto cru sai da variável `erro` — a grade passou a agrupar um resumo
+    // por estado (13/09) em vez de repetir o bloco embaixo de cada linha.
+    expect(grade).toMatch(/<pre[\s\S]{0,200}\{erro\}/);
   });
 });
