@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.103 verdes, 410 arquivos** (13/09, com a seção 24; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.103 verdes, 410 arquivos** (13/09, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3104,13 +3104,66 @@ chegou com um arquivo de teste a mais)
 
 ---
 
-## 24. Dois achados do dono em produção, consertados no mesmo dia (13/09)
+## 24. Editar plano cabia 2110px numa janela de 1440 — ENTREGUE (13/09)
+
+Print do dono: *"aqui também está feio. Vamos refazer essa tela"* — o editor
+de plano (`/admin/planos/:slug`) com a coluna da direita cortada.
+
+### 24.1 O que estava acontecendo, medido
+
+| Onde | Antes | Depois |
+|---|---|---|
+| Conteúdo numa janela de 1440px | 2110px (670 fora da tela) | 1440px |
+| Conteúdo num celular de 390px | 1605px (1215 fora) | 390px |
+| Coluna "Geral" | 206px — o aviso do código caía POR CIMA do slug | 300px |
+| Linha do destaque longo | 1531px exigidos, em 1 linha | 3 linhas dentro da coluna |
+
+### 24.2 A causa, que era uma só
+
+Na lista "Destaques do cartão" o texto usava `flex-1 truncate`. `truncate` é
+`white-space: nowrap`, e um **item de flex nasce com `min-width: auto`** — os
+dois juntos fazem o texto EXIGIR a largura inteira dele (1467px medidos no
+navegador), o que estica cartão → coluna → grid → página. Não era a tela que
+era larga: era uma linha de texto que se recusava a quebrar.
+
+Trocar `truncate` por `break-words` sozinho **não** resolveria: sem `min-w-0`
+o item continua com a largura mínima do conteúdo.
+
+### 24.3 O que mudou (quatro classes, nada removido)
+
+- destaque: `flex-1 truncate` → `min-w-0 flex-1 break-words` (decisão do dono:
+  quebrar em linhas, não cortar — é o texto que ele está editando);
+- grid: `1fr 1.15fr 0.95fr` → `300px minmax(0,1fr) 330px`;
+- "Código interno": o aviso "não muda depois de criado" saiu de dentro da
+  faixa de 36px e virou linha de apoio embaixo, como os outros campos;
+- grade de limites: `grid-cols-2 sm:grid-cols-3` → `grid-cols-1
+  [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-3`.
+
+Campo, aviso, botão, prévia do cartão e módulos: todos intactos.
+
+Amarra: 3 testes novos em `telas-cabem-no-celular.test.ts` (12 no total) — 6
+mutações novas em `scratchpad/mutar-telas-celular.py`, 21/21 vermelhas.
+Comparador `mockup-editor-plano-e-visual.html`.
+
+### 24.4 O que NÃO entrou (o dono aprovou "a tela editar plano apenas")
+
+O **piloto da linguagem visual** do mesmo comparador — raio de 12px, elevação
+de verdade no cartão e Poppins nos títulos, tudo em token — ficou de fora.
+Está escrito e fotografado na branch `descartavel/editor-plano`, commit
+`3a691e07`, se ele voltar ao assunto. Junto com ele fica anotado o achado que
+a foto do tema escuro rendeu: no cartão verde do Financeiro o valor "R$ 10,7
+mil" é verde escuro sobre verde e o vizinho sai violeta — decisão de paleta,
+não de layout.
+
+---
+
+## 25. Dois achados do dono em produção, consertados no mesmo dia (13/09)
 
 Os dois vieram de print dele usando o sistema, e os dois foram **reproduzidos no
 app rodando** antes de qualquer linha de código — receita em
 `docs/rodar-o-app-localmente.md`. O "antes" de cada um é foto, não dedução.
 
-### 24.1 A Central escondia movimentação pendente atrás do teto da página
+### 25.1 A Central escondia movimentação pendente atrás do teto da página
 
 Print: «Nada pendente nos últimos 30 dias · As 80 movimentações do período já
 foram resolvidas», com o badge da aba marcando **11**.
@@ -3155,7 +3208,7 @@ a mesma mentira voltaria na 81ª pendência.
 de 20–25 dias atrás):** antes, «Nada pendente» com badge 11; depois, as 11 na
 tela, badge 11, e o aviso correto na aba Resolvidas.
 
-### 24.2 Cliente em teste não tinha como pagar o plano que estava testando
+### 25.2 Cliente em teste não tinha como pagar o plano que estava testando
 
 Print: «quando clico em adicionar pagamento não acontece nada». Não era o botão
 — eram **três portas fechadas** ao mesmo tempo, com o servidor pronto do outro
@@ -3193,7 +3246,7 @@ clique na faixa levando o foco para `#adicionar-pagamento`. (O travamento por
 `billingOk === false` continua valendo: em ambiente sem Asaas conectado os dois
 botões seguem desabilitados, como antes.)
 
-### 24.3 Amarras
+### 25.3 Amarras
 
 `central-nao-esconde-pendente` (12) e `pagar-o-plano-em-teste` (14) —
 **31 mutações vermelhas** (`scratchpad/mutar-pendente-e-pagamento.py`).

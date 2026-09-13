@@ -1535,6 +1535,35 @@ usada num menu, ela vai **sólida**.
   da logo e o Devular vai pro `#07060f`, cada produto veste a própria marca —
   que é o que eu recomendo, e não é o que o pedido dele dizia ("nos dois").
 
+### Entregue 13/09 — editar plano cabia 2110px numa janela de 1440
+
+Print do dono: *"aqui também está feio. Vamos refazer essa tela"*. Medido antes
+de mexer: `/admin/planos/:slug` pedia **2110px numa janela de 1440** (670 fora
+da tela, que é a coluna cortada no print dele) e **1605px num celular de 390**.
+
+**Causa única, e vale como regra:** `flex-1 truncate` na lista "Destaques do
+cartão". `truncate` é `white-space: nowrap` e **item de flex nasce com
+`min-width: auto`** — juntos, o texto EXIGE a largura inteira dele (1467px
+medidos) e estica cartão → coluna → grid → página. Trocar truncate por
+`break-words` sem `min-w-0` NÃO resolve: a largura mínima continua sendo a do
+conteúdo. Quatro classes no total (destaque, grid
+`300px minmax(0,1fr) 330px`, aviso do código interno virando linha de apoio,
+grade de limites `grid-cols-1 [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-3`).
+Nada removido. Detalhe na seção 24 do documento de estado. Amarra: 3 testes
+novos em `telas-cabem-no-celular.test.ts` — 21/21 mutações vermelhas.
+
+**O piloto visual do mesmo comparador (`mockup-editor-plano-e-visual.html`)
+NÃO entrou** — ele aprovou "a tela editar plano apenas". Raio de 12px,
+elevação no cartão e Poppins nos títulos (só tokens) estão escritos e
+fotografados na branch `descartavel/editor-plano`, commit `3a691e07`. Dois
+fatos que saíram do estudo e valem pra próxima conversa de estética: **a fonte
+do anúncio que ele gostou já está no projeto** (Poppins, hoje só na marca e no
+login) e **o tema escuro já existe** (preferência `jurify:tema` resolvida pelo
+`ThemeContext` — forçar a classe `.dark` no `<html>` por fora não funciona, o
+contexto reescreve depois de hidratar). Achado que só a foto do escuro pegou e
+NÃO foi corrigido: o "R$ 10,7 mil" do cartão verde do Financeiro é verde
+escuro sobre verde, e o vizinho sai violeta.
+
 ### Raio-X do design em produção (13/09)
 
 `docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o
@@ -1767,7 +1796,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
     conferia a POSIÇÃO da recusa de ambiente e dava pra desarmar a condição no
     lugar; agora confere que o `if` é incondicional).
 
-- **Entregue 13/09, dois achados do dono usando o sistema — "ok faça" (seção 24
+- **Entregue 13/09, dois achados do dono usando o sistema — "ok faça" (seção 25
   do documento de estado).** Os dois foram REPRODUZIDOS no app rodando antes de
   consertar, e o "antes" de cada um é foto.
   - **A Central escondia movimentação pendente** ("tudo marcado como resolvido e
