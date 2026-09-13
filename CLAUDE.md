@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.944 verdes em 13/09/2026 (398 arquivos, ~1min30; develop/main: 5.746 em 390)
+pnpm test               # vitest (server/**/*.test.ts) — 5.944 verdes em 13/09/2026 (398 arquivos, ~1min30)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1515,13 +1515,13 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   Reativar), "Sob medida" ≥ Escala (0226), helper único da Anthropic
   (seção acima), D-13 (cadastro nunca apaga conta) e D-15 (cargo só do próprio
   escritório).
-- **Na branch, NÃO mergeado (13/09)**: motor próprio fase 1 — despachante por
+- **Mergeado em develop e main (13/09, "pode mergear")**: motor próprio fase 1 — despachante por
   tribunal, TRT2/TRT15 por consulta pública, 24 TRTs com credencial "em teste",
   parsers puros com `linkedom`, migration 0227. Regras de integração que
   ficaram: consulta pública vence a credencial quando existe; busca por CPF só
   onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
   Só o dono valida nos portais (ordem em ESTADO 15.1.1).
-- **Na branch, NÃO mergeado (13/09)**: Central de ajuda (`mockup-central-de-
+- **Mergeado em develop e main (13/09, "pode mergear")**: Central de ajuda (`mockup-central-de-
   ajuda.html`, "pode fazer" com as recomendações; ESTADO seção 18) — `/ajuda`
   e `/ajuda/:tarefa` (`ClientAreaSoTermos`), 5 tarefas com prints reais + 16
   "em breve", botão Ajuda na barra lateral, `AjudaDaTela` nas 5 telas,

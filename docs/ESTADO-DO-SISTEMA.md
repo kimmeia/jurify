@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.944 testes verdes** (13/09, na branch com o motor próprio fase 1 e a Central de ajuda; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.944 testes verdes** (13/09, em develop e main com o motor próprio fase 1 e a Central de ajuda; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.944 verdes, 398 arquivos** (13/09, na branch com o motor fase 1 e a Central de ajuda; em develop/main: 5.746 em 390, 12/09; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.944 verdes, 398 arquivos** (13/09, em develop e main com o motor fase 1 e a Central de ajuda; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -1790,9 +1790,9 @@ um texto que o cliente lê antes de pagar com o código que atende aquilo depois
 ### 15.1 O mais grave: a cobertura de tribunais
 
 > **Estado em 13/09:** o texto da venda ficou honesto em 12/09 (seção 15.4.1) e o
-> motor ganhou a Justiça do Trabalho em 12–13/09 (seção 15.1.1, ainda na branch,
-> sem comprovação em portal). O diagnóstico abaixo é o de 12/09 e continua valendo
-> para o TJSP.
+> motor ganhou a Justiça do Trabalho em 12–13/09 (seção 15.1.1, mergeado em
+> develop e main em 13/09, sem comprovação em portal). O diagnóstico abaixo é o de
+> 12/09 e continua valendo para o TJSP.
 
 A comparação da landing dizia **"Monitora processos e novas ações por CPF/CNPJ com
 motor próprio"**, sem uma linha de ressalva. Os três cartões de plano vendem
@@ -1820,13 +1820,13 @@ E há a camada de baixo, da seção 5.7: dos 16 que estão na lista, o endereço
 deles é montado com o padrão do TJCE e provavelmente está errado. Então o número
 realmente comprovado continua sendo **um** pelo código — **dois** contando o TJMT, que o dono validou com login real em 31/08 (relato dele no CLAUDE.md; o sistema não guarda esse resultado fora da grade do Cofre em produção, que é a fonte a conferir antes de publicar qualquer número).
 
-### 15.1.1 Motor próprio — fase 1 (12–13/09), na branch, aguardando validação em campo
+### 15.1.1 Motor próprio — fase 1 (12–13/09), em produção, aguardando validação em campo
 
 Origem: o dono, 12/09 — *"quero que crie logo o motor, nada de DataJud, processos
-lá têm atrasos de meses"*. Três frentes em worktrees, integradas em 13/09. **Está
-na branch `claude/code-audit-documentation-rkhvtu`, NÃO em develop/main**: não
-existia quando ele autorizou o merge, e nada dela pode ser conferido daqui (o
-ambiente não alcança portal nenhum).
+lá têm atrasos de meses"*. Três frentes em worktrees, integradas em 13/09 e
+**mergeadas em develop e main em 13/09 ("pode mergear")**. Nada dela pôde ser
+conferido daqui (o ambiente não alcança portal nenhum): a validação é nos portais,
+pelo dono, na ordem abaixo.
 
 O que mudou:
 - **Despachante** (`consultarProcesso` em `server/processos/adapters/index.ts`):
@@ -2350,15 +2350,15 @@ certo:
 - **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
   laço, não a consulta.
 
-## 18. Central de ajuda — ENTREGUE na branch (13/09), aguardando conferência visual e "pode mergear"
+## 18. Central de ajuda — ENTREGUE e mergeada em develop e main (13/09)
 
 Origem: o dono, olhando `/admin/saude`: *"esse robô funciona? está muito
 complexo. O princípio é ser fácil de usar. Precisamos criar um manual para
 ensinar a usar"* → *"vamos fazer"* → mockup `mockup-central-de-ajuda.html`
 (raiz do repo) → *"pode fazer"* (12/09), com as recomendações: página própria
 `/ajuda`; prints a partir do app real; "Primeiros passos" só pro dono; a ordem
-proposta dos 5 passos; Visão rápida em 3 linhas sem remover nada. **Está na
-branch `claude/code-audit-documentation-rkhvtu`, NÃO em develop/main.**
+proposta dos 5 passos; Visão rápida em 3 linhas sem remover nada. **Mergeada em
+develop e main em 13/09 ("pode mergear"), junto com o motor fase 1.**
 Atenção: o mockup foi desenhado na paleta antiga (violeta/Poppins); a
 implementação segue o app (marinho, Inter, componentes de `components/ui`).
 
