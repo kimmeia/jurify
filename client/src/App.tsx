@@ -9,6 +9,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Roadmap from "./pages/Roadmap";
+import Ajuda from "./pages/Ajuda";
+import AjudaTarefa from "./pages/ajuda/AjudaTarefa";
 import Termos from "./pages/Termos";
 import Privacidade from "./pages/Privacidade";
 import EsqueciSenha from "./pages/EsqueciSenha";
@@ -239,6 +241,18 @@ function Router() {
         <AdminArea>
           <Roadmap />
         </AdminArea>
+      </Route>
+      {/* Central de ajuda: dentro do app, sem porteiro de módulo nem guarda
+          de assinatura — quem não tem o módulo ainda lê como funciona. */}
+      <Route path="/ajuda/:tarefa">
+        <ClientAreaNoGuard>
+          <AjudaTarefa />
+        </ClientAreaNoGuard>
+      </Route>
+      <Route path="/ajuda">
+        <ClientAreaNoGuard>
+          <Ajuda />
+        </ClientAreaNoGuard>
       </Route>
       <Route path="/admin/settings">
         <AdminArea>
