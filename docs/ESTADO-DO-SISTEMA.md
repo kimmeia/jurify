@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.944 testes verdes** (13/09, em develop e main com o motor próprio fase 1 e a Central de ajuda; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.975 testes verdes** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.969 verdes, 399 arquivos** (13/09, em develop e main, com o motor fase 1, a Central de ajuda e a portinha do backoffice; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.975 verdes, 400 arquivos** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2515,3 +2515,52 @@ cada consulta, dono/não-dono, cadeado, módulo, rotas), `saude-semaforos`
   de 60 s pra jornada suspeita; as 3 linhas usam 2 s/tela. Unificar é
   remoção da antiga.
 - Fatia 4 (mais 15 tarefas, prints pelo robô, vídeos) não começou.
+
+## 19. A cor do menu vem da logo — APROVADA pelo dono (13/09)
+
+Pedido dele, com um print do menu ao lado da logo: *"Vamos deixar a cor desse
+menu mais alinhado com a logo real? vc tambem mudou a cor do icon."* As duas
+observações estavam certas, e foram medidas no app rodando antes de propor.
+
+### 19.1 O que estava acontecendo
+
+| Onde | Antes | Na logo |
+|---|---|---|
+| Fundo do menu | `#16202c`, azul-ardósia | roxo-quase-preto |
+| «Jurid» | `#c4ced8`, cinza-azulado | branco puro |
+| «Flow» e o ponto do «J.» | `#a584ff`, violeta clareado | `#7c3aed` |
+| Item aberto (barra e ícone) | `#6fa5dd`, azul | a logo não tem azul |
+
+A cor do ícone mudou mesmo, e o histórico diz quando: em 02/09 uma troca de
+paleta levou a marca junto e ela virou azul; em 04/09 ela voltou ao violeta
+por um token só dela (`--marca`), mas um passo mais clara, para continuar
+legível sobre o menu azul.
+
+### 19.2 O que foi entregue (opção B do mockup)
+
+`--sidebar`, `--sidebar-accent`, `--sidebar-primary` e `--sidebar-ring`
+passam ao matiz da marca nos DOIS temas; `MarcaJ` escreve «Jurid» em branco
+puro e mantém o acento no token da marca. Medido no navegador: fundo
+`#191229`, marca branca + `#9a73ff`, item aberto `#a583ff` sobre `#32284b`.
+
+O violeta EXATO da logo não passa no menu: dá 2,89:1 sobre o azul de antes e
+3,18:1 sobre o roxo novo, contra o mínimo de 4,5:1 de leitura. O tom entregue
+é a clareada mínima que passa — 5,41:1.
+
+**A cor de ação do conteúdo não mudou**: à direita continua o marinho
+`#194b86`. O violeta ficou dentro do menu, que é onde a marca aparece.
+
+Amarra: `menu-cor-da-logo.test.ts` (6 testes) — 11 mutações, todas vermelhas
+(`scratchpad/mutar-menu-cor.py`). Ela guarda as duas pontas: o menu na família
+da logo e o marinho como cor de ação do conteúdo.
+
+### 19.3 O que fica anotado
+
+- `InstallPWA` e o cabeçalho do modo atendimento no celular pintam o ponto do
+  «J.» com `--sidebar-primary` em vez do token da marca. Com esta entrega os
+  dois passam a sair violeta por consequência, não por desenho — apontar para
+  o token da marca é higiene e não foi pedido.
+- A skill `mockup-juridflow` dizia "violeta não é o app". Continua verdade
+  para o CONTEÚDO e deixou de ser para o menu; o texto foi corrigido junto.
+- As opções A (só a marca) e C (meio-termo) ficaram no comparador
+  `mockup-cor-do-menu.html`, caso ele queira voltar atrás.

@@ -13,6 +13,9 @@ existe sai do app rodando, navegável, antes ⟷ depois.** Receita contada em
 | `gera-comparador.mjs` | **O entregável de hoje.** Monta o comparador ANTES \| DEPOIS: uma comparação por achado, lado a lado, com lupa, anel no elemento que mudou e a linha da borda do celular. |
 | `mede-alvos.mjs` | Confere se o alvo do anel realmente MUDA entre os dois estados (`cruza→cabe` · `muda de tamanho` · `MESMO retângulo`). Anel idêntico nos dois lados = comparação que não comunica. |
 | `confere-comparador.mjs` | Dirige o comparador, mede anéis/borda/zoom e fotografa cada comparação. |
+| `serializa-decisoes.mjs` | Serializa as telas desta rodada de decisões, inclusive as que exigem preparo: diálogo aberto (Novo cliente, WhatsApp), formulário preenchido e enviado, e a de Canais, que estaciona o canal do escritório no banco e devolve no fim. |
+| `gera-comparador-decisoes.mjs` | Comparador organizado por DECISÃO: cada seção traz o que se decide, as opções com a recomendada marcada, o que fica de fora e as comparações — ou uma tabela `arquivo · antes · depois`, quando a decisão não tem tela. Os itens vêm de um JSON. |
+| `confere-comparador-decisoes.mjs` | Dirige o comparador por decisão, confere que os dois lados têm conteúdo e que o anel muda de um lado pro outro, e fotografa cada comparação. |
 | `gera-navegavel.mjs` | Versão anterior: passeio tela por tela com chave Antes/Depois. Serve para navegar, **não** para comparar (foi reprovado justamente por isso — ver `docs/mockup-navegavel.md`). |
 | `confere-navegavel.mjs` | Dirige o navegável com Playwright, mede cada combinação, acusa tela vazia e tira as fotos. |
 | `culpado-tarefas.mjs` | Acha QUEM empurra uma tela de lado no celular (elemento, classe, largura). Trocar a rota para reusar. |

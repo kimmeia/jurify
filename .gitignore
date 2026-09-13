@@ -134,6 +134,8 @@ docs/lp-mockups/out-*.png
 # repositório sem dar nada em troca.
 scratchpad/mockup-navegavel-*.html
 scratchpad/comparador-antes-depois*.html
+/mockup-cor-do-menu.html
+/mockup-quatro-decisoes.html
 
 # Sondagem de fontes públicas (respostas brutas dos tribunais)
 scripts/.sondagem/
