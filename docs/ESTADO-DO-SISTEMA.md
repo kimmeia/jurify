@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.975 verdes, 400 arquivos** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.016 verdes, 403 arquivos** (13/09, com o conserto do monitoramento da seção 20 e os dois resíduos da 20.7; 5.975 em 400 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2564,3 +2564,202 @@ da logo e o marinho como cor de ação do conteúdo.
   para o CONTEÚDO e deixou de ser para o menu; o texto foi corrigido junto.
 - As opções A (só a marca) e C (meio-termo) ficaram no comparador
   `mockup-cor-do-menu.html`, caso ele queira voltar atrás.
+
+---
+
+## 20. Monitoramento voltando erro — ENTREGUE e autorizado pelo dono (13/09)
+
+O dono relatou: *"processos estão retornando erro em monitoramentos, antes
+funcionava mas outra sessão fez alterações e quebrou algo"*, e depois mandou o
+texto do erro:
+
+> O processo apareceu na busca, mas a página dele não abriu.
+> URL: https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam
+
+São **duas causas diferentes** na mesma frente, uma de cada entrega recente. A
+que ele está vendo na tela é a 20.1. As outras três nasceram da entrada dos 24
+TRTs no registro e já estavam envenenando a credencial dele em silêncio.
+
+### 20.1 A guarda de 11/09 recusava página boa (é o erro do print)
+
+Em 11/09 o adapter ganhou uma guarda contra ler a TABELA DE RESULTADOS: quando
+a página do processo não abre, «Classe judicial» e «Polo ativo» estão na tela
+como TÍTULOS DE COLUNA, e o scraper devolvia o título vizinho como valor do
+campo — foi assim que «Polo ativo» virou a natureza da ação num card, e o poll
+regravava `hashUltimasMovs` com o hash de ZERO movimentações, soltando uma
+avalanche de "novas" no ciclo seguinte.
+
+O diagnóstico estava certo; o **mecanismo** estava errado. A guarda decidia por
+sniffing de página (`estaNaPaginaDoProcesso`): *"ainda tem a grade no DOM e
+nenhum marcador de detalhe que eu conheça → desisto"*. Só que o PJe também
+**monta o detalhe na MESMA aba, por AJAX**: não abre aba, a URL continua
+`listView.seam` — é a URL do print — e a grade de resultados fica no DOM. Se o
+painel usa um id fora da lista de marcadores, a guarda recusava uma página que
+TINHA o processo aberto. Antes de 11/09 esse caso funcionava, porque o código
+extraía da página atual sem perguntar.
+
+Pior: a guarda passava **na frente** de uma rede de segurança que já existia
+desde sempre no mesmo arquivo — o `conseguiuExtrair`, que reporta `parse_falhou`
+com diagnóstico rico (tabelas da página, mensagens, estado do RichFaces, forms).
+
+**O que mudou:** a decisão saiu do palpite sobre a página e foi pro RESULTADO da
+extração. O clique que não confirma nada agora só levanta uma bandeira
+(`detalheNaoAbriu`) e tira a foto; o fluxo segue, tenta extrair, e o erro só sai
+se não vier conteúdo. Quem protege contra ler a tabela de resultados continua
+sendo a recusa de rótulo dentro da extração (`ehRotuloDeTabela`), que devolve
+campo nulo — não o sniffing. `orgaoJulgador` entrou na conta de "veio conteúdo"
+junto com classe, partes e movimentações: detalhe que trouxe só a vara é página
+do processo do mesmo jeito.
+
+De passagem, o mesmo clique deixou de torrar o tempo do cron: ele esperava
+`context.waitForEvent("page")` por 15s, **duas vezes**, por uma aba que nunca
+vem quando o PJe resolve na mesma página — 30s por processo. Agora a espera é
+uma corrida entre "abriu aba" e "o marcador apareceu aqui", com
+`primeiroSinal`, que ignora quem falha (um `Promise.race` cru deixaria o null
+ganhar a corrida e matar a espera que ia dar certo). Os marcadores do detalhe
+viraram **uma** constante (`SELETOR_DETALHE_PROCESSO`) usada pela espera e pela
+conferência — duas listas divergindo faria a espera desistir de uma página que a
+conferência aceitaria.
+
+### 20.2 Falha de portal candidato para de falar pela credencial
+
+Medido neste container com `tsx`: o registro do PJe foi de **16 para 40**
+tribunais (12 TJs + 4 TRFs + 24 TRTs), e a grade do Cofre de uma credencial
+nacional foi de **30 para 78 logins reais**, 48 deles TRT. Os endereços dos TRTs
+saíram do padrão histórico do PJe-JT e o próprio comentário de `pdpjTrtConfig`
+diz "CANDIDATOS, sem exceção".
+
+O estrago estava em `atualizarStatusAposLogin` e `marcarCredencialExpirada`:
+as duas escrevem na **linha da credencial**, sem escopo de tribunal. Como os
+TRTs entram no fim da fila de `Object.keys(REGISTRO)` e nenhum tem como
+responder, era **sempre um TRT que dava a palavra final** — a credencial do
+TJCE, que funciona todo dia, terminava a bateria marcada como `erro`. O mesmo
+por outro caminho: qualquer relogin num TRT falhava e marcava a credencial como
+`expirada`, com notificação "credencial caiu" pro dono.
+
+`falhaDerrubaCredencial(tribunal)` (cofre-helpers) é a régua nova: **sucesso
+sempre promove** a credencial — é ele que religa monitoramento preso —, e
+**falha só derruba em caminho comprovado**. O resultado por tribunal continua
+gravado sempre por `registrarTribunal`, inclusive no crash técnico (que antes
+não registrava em tribunal nenhum): a célula do TRT fica vermelha e explicada, e
+nada sai da tela. A de "credencial não pôde ser decriptada" segue global de
+propósito — essa é da credencial, não de portal nenhum.
+
+### 20.3 Os candidatos saem da fila do "Testar tudo", não da tela
+
+O servidor marca cada linha da grade com `emTeste` (pela mesma régua da shared),
+e a bateria roda só caminho comprovado com endereço: **78 → 30 alvos**, medido na
+amarra. Os TRTs ficam numa dobra «Em teste — Justiça do Trabalho», cada um
+testável pelo botão da própria linha, com o texto dizendo por que estão fora.
+
+`alvosDaBateria` é fonte única: a barra de progresso e a fila usam a MESMA
+conta — antes a tela tinha a sua, e prometer um total e rodar outro é o tipo de
+coisa que ninguém nota até o dono ficar olhando a barra.
+
+As contagens do rodapé passaram a falar só do caminho comprovado. Somar os
+candidatos ali diria "48 falharam" sobre portais que ninguém prometeu.
+
+### 20.4 Processo trabalhista só entra com prova de login
+
+Decisão do dono, nas palavras dele: *"processos trabalhistas nega até credencial
+de verdade"*.
+
+`server/processos/tribunal-comprovado.ts`: `tribunalPrecisaDeProva` = é
+candidato **e** depende de credencial (os 22 TRTs; TRT2 e TRT15 têm consulta
+pública aberta e ficam de fora — barrar eles fecharia um caminho que já
+funciona). A prova é objetiva e já estava no banco desde 01/09: uma linha `ativa`
+daquele tribunal em `cofre_credencial_tribunais`, numa credencial não removida do
+escritório. **Passou um login real, o tribunal libera sozinho** — sem mudar uma
+linha de código, que é o ponto: quem decide se a Justiça do Trabalho entra é o
+portal, não a nossa aposta.
+
+O portão está nas quatro portas de processo (`consultarCNJ`,
+`consultarCNJSincrono`, `criarMonitoramento`, `criarMonitoramentoNovasAcoes`) e,
+na importação de planilha, como linha não elegível **com o motivo escrito** — a
+planilha não aborta por causa de um processo trabalhista, e a leitura da prova é
+UMA consulta pro lote inteiro (por linha, 500 processos seriam 500 idas ao
+banco). Na consulta o portão vem **antes de `contarUso`**: consulta que já nasce
+condenada a falhar não gasta consulta do plano.
+
+### 20.5 `linkedom` era devDependency de um import de produção
+
+`server/processos/adapters/parse/dom.ts` importa `linkedom`, e `pnpm build` usa
+`--packages=external` — o pacote não é embutido, é resolvido em runtime. Hoje
+nada de produção chama esse parser, então era uma mina: o dia em que
+`adapters/parse/pje-lista.ts` entrasse no caminho de produção, o servidor
+morreria no import, e o typecheck não vê isso. Movido pra `dependencies`, com
+amarra.
+
+### 20.6 Amarras
+
+`tribunal-candidato-nao-derruba.test.ts` (18) e
+`detalhe-no-lugar-nao-e-falha.test.ts` (10) — **27 mutações, todas vermelhas**
+(`scratchpad/mutar-candidato-e-detalhe.py`). Quatro sobreviveram na primeira
+volta e pelo MESMO motivo, que já é história conhecida da casa: o literal
+continuava de pé em outro lugar do arquivo. As duas leituras de prova têm as
+mesmas três condições (então conferir o arquivo inteiro deixava tirar de uma); os
+dois caminhos de falha do relogin têm a mesma guarda (conferir um deixava o outro
+escapar); e contar o nome da constante de marcadores não impede passar a
+constante pro `evaluate` e procurar um seletor cravado lá dentro.
+
+`cofre-grau.test.ts` teve um `expect` atualizado: a conta de quem entra na
+bateria mudou de lugar (virou `alvosDaBateria`), a regra não.
+
+### 20.7 Os dois resíduos — FECHADOS no mesmo dia ("pode fazer" do dono)
+
+**Consulta pública no `consultarCNJSincrono`.** O `consultarCNJ` ganhou o desvio
+em 12/09 e esta procedure não: ela pedia credencial do Cofre para tribunal que
+não tem login. Ficou pior em 13/09, quando `sistemaCofrePorTribunal` passou a
+devolver a credencial nacional para os 24 TRTs — TRT2 e TRT15, que funcionam
+pela consulta aberta, passaram a tentar o login do PJe-JT, que não responde.
+
+Agora os dois caminhos nascem do MESMO despachante: `consultaPublica =
+!tribunalRequerCredencial(...)`, tudo que é do Cofre (sistema, credencial,
+sessão) vive dentro do ramo que exige credencial, e o scrape é
+`consultarProcesso(codigo, cnj, storageState)` com `storageState` nulo na
+consulta aberta. Cobra igual — o que o tribunal dispensa é o login, não o custo
+de rodar o robô — e cobra **depois** de todas as guardas, inclusive a do
+tribunal candidato. Tribunal do registro sem endereço mapeado continua recusado
+sem cobrar: não é tentativa que falhou, é cobertura que não existe.
+
+**A foto do erro sobrevive ao deploy.** `tirarScreenshotErro` já fotografava a
+tela do tribunal na falha e gravava em
+`scripts/spike-motor-proprio/samples/screenshots/` — disco efêmero do container,
+fora do volume, e nenhuma tela lia o caminho. O robô tirava a prova do que viu e
+a jogava fora; foi exatamente o que faltou no diagnóstico da 20.1, que saiu de
+leitura de código em vez de evidência.
+
+`server/processos/print-do-erro.ts` move o arquivo para
+`./uploads/monitor-erros/escritorio_<id>/` (servido com sessão + checagem de
+escritório, como o resto de `/uploads`) e devolve a URL; a migration 0228 guarda
+ela em `motor_monitoramentos.ultimo_erro_print_url`. A divisão é de propósito: o
+adapter é código de spike e não sabe de tenancy, então quem CONHECE o dono do
+monitoramento é que coloca o arquivo na pasta do escritório — a origem continua
+sendo escrita onde sempre foi, nada mudou lá. Copia e apaga em vez de renomear
+(o volume é outro mount, e `rename` falha entre dispositivos), nunca lança
+(problema de disco não derruba o ciclo do cron) e o nome do arquivo é saneado
+porque entra numa URL e num caminho de disco.
+
+**Sucesso limpa a foto nos quatro caminhos** que limpam o erro — foto de erro
+antigo ao lado de monitoramento saudável manda procurar problema na tela errada.
+É o item 3 do padrão de observabilidade da casa (persistir → mostrar → auto-cura).
+
+Na tela, o único pixel novo: um link «ver a tela do tribunal» ao lado do motivo
+da parada no card do monitoramento, que só aparece quando há erro **e** foto.
+
+Amarra: `consulta-publica-e-print-do-erro.test.ts` (13 testes) — **18 mutações,
+todas vermelhas** (`scratchpad/mutar-publica-e-print.py`).
+
+### 20.8 O que segue anotado e NÃO mexido
+
+- **`sistemaCofrePorTribunal` devolve `pje_*` para trt2 e trt15**, que são
+  consulta pública — o comentário logo abaixo do mapa afirma o contrário
+  ("TRF-5 e demais tribunais de consulta pública NÃO entram aqui"). Com o desvio
+  da 20.7 isso deixou de causar dano no caminho da consulta, mas o mapa continua
+  discordando do próprio comentário.
+- A falha de um TJ comprovado que esteja fora do ar (TJMG, digamos) continua
+  marcando a credencial inteira. É pré-existente e não foi autorizado: a régua
+  entregue trata só o portal candidato.
+- A foto só é guardada no **poll de movimentações**. O laço de novas ações grava
+  as falhas por tribunal em `varreduraJson` e não tem campo para foto — cabe o
+  mesmo tratamento, não foi pedido.

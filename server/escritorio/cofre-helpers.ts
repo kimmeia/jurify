@@ -22,8 +22,24 @@ import { cofreCredencialTribunais, cofreCredenciais, cofreSessoes } from "../../
 import { createLogger } from "../_core/logger";
 import { classificarErroMonitor } from "../processos/diagnostico-monitoramento";
 import { getConfigTribunal } from "../processos/tribunais-pdpj";
+import { tribunalEmTeste } from "../../shared/tribunais-pje";
 
 const log = createLogger("cofre-helpers");
+
+/**
+ * Falha NESTE tribunal pode marcar a credencial inteira como caída?
+ *
+ * Não quando o portal é candidato (os 24 TRTs: endereço derivado do padrão do
+ * PJe-JT, nenhum aberto por ninguém). Uma credencial vale em muitos portais, e
+ * quem não abre é o portal — deixar a falha dele pintar a linha da credencial
+ * fazia o TJCE, que funciona todo dia, aparecer quebrado por causa de um TRT
+ * do qual o escritório não tem processo. O resultado por tribunal continua
+ * sendo gravado por `registrarTribunal`, que é o que a grade do Cofre lê: a
+ * célula do TRT fica vermelha e explicada, e nada se perde.
+ */
+export function falhaDerrubaCredencial(tribunal: string | null | undefined): boolean {
+  return !tribunalEmTeste(tribunal);
+}
 
 export interface CredencialDecriptada {
   id: number;
@@ -473,12 +489,27 @@ async function tentarReloginAutomaticoImpl(
 
     const motivo = `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`;
     await registrarTribunal(credencialId, tribunal, { ok: false, motivo });
-    await marcarCredencialExpirada(credencialId, motivo);
+    if (falhaDerrubaCredencial(tribunal)) {
+      await marcarCredencialExpirada(credencialId, motivo);
+    } else {
+      log.warn(
+        { credencialId, tribunal },
+        "[cofre] portal candidato falhou — credencial preservada, resultado gravado só neste tribunal",
+      );
+    }
     return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.error({ credencialId, err: msg }, "[cofre] relogin automático crashed");
-    await marcarCredencialExpirada(credencialId, `Erro técnico: ${msg.slice(0, 200)}`);
+    log.error({ credencialId, tribunal, err: msg }, "[cofre] relogin automático crashed");
+    // Crash contra portal candidato também é problema do portal: registra nele e
+    // deixa a credencial em paz.
+    await registrarTribunal(credencialId, tribunal, {
+      ok: false,
+      motivo: `Erro técnico: ${msg.slice(0, 200)}`,
+    });
+    if (falhaDerrubaCredencial(tribunal)) {
+      await marcarCredencialExpirada(credencialId, `Erro técnico: ${msg.slice(0, 200)}`);
+    }
     return null;
   }
 }

@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.975 verdes em 13/09/2026 (400 arquivos, ~1min30)
+pnpm test               # vitest (server/**/*.test.ts) — 6.016 verdes em 13/09/2026 (403 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1542,6 +1542,47 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   O mockup foi desenhado na paleta antiga (violeta/Poppins); a implementação
   segue o app (marinho, Inter). Amarras: `central-de-ajuda`,
   `primeiros-passos`, `saude-semaforos` — 146 mutações vermelhas.
+
+- **Entregue 13/09, monitoramento voltando erro — "pode fazer" do dono, com a
+  decisão dele: "processos trabalhistas nega até credencial de verdade".**
+  Duas causas, uma de cada entrega recente; detalhe na seção 20 do documento de
+  estado. (1) A guarda de 11/09 (`estaNaPaginaDoProcesso`) decidia por sniffing
+  de página e recusava página BOA: o PJe também monta o detalhe na MESMA aba, por
+  AJAX — a URL continua `listView.seam` e a grade fica no DOM. A decisão passou
+  pro RESULTADO da extração: o clique sem confirmação só levanta bandeira, e o
+  erro sai se não vier conteúdo. Quem barra a leitura da tabela de resultados é a
+  recusa de rótulo, não o sniffing. De passagem, a espera pós-clique virou corrida
+  aba-nova × marcador-na-mesma (eram 15s × 2 por processo à espera de uma aba que
+  nunca vem). (2) Os 24 TRTs no registro levaram o Cofre de **16 pra 40**
+  tribunais e a bateria de **30 pra 78 logins** (medido): `atualizarStatusAposLogin`
+  e `marcarCredencialExpirada` escrevem na CREDENCIAL, então o último TRT da fila
+  dava a palavra final e a credencial do TJCE terminava "erro".
+  `falhaDerrubaCredencial` é a régua: sucesso sempre promove, falha só derruba em
+  caminho comprovado; o por-tribunal continua gravado sempre. Candidatos saíram da
+  fila do "Testar tudo" (dobra "Em teste", `alvosDaBateria` como fonte única da
+  conta) sem sair da tela. Processo trabalhista exige prova = linha `ativa` em
+  `cofre_credencial_tribunais` (`tribunal-comprovado.ts`), nas 4 portas + import;
+  TRT2/TRT15 ficam fora da exigência porque a consulta pública deles funciona.
+  `linkedom` virou dependency (é import de produção com `--packages=external`).
+  Amarras: `tribunal-candidato-nao-derruba` (18) e `detalhe-no-lugar-nao-e-falha`
+  (10) — 27 mutações vermelhas; 4 sobreviveram na 1ª volta pelo mesmo motivo de
+  sempre, o literal de pé em outro lugar do arquivo.
+  **Os dois resíduos foram fechados no mesmo dia (novo "pode fazer" dele),
+  seção 20.7 do documento de estado**: (a) `consultarCNJSincrono` ganhou o desvio
+  de consulta pública — tudo que é do Cofre foi para dentro do ramo que exige
+  credencial e o scrape virou `consultarProcesso(codigo, cnj, storageState)`, com
+  sessão nula no tribunal aberto; cobra igual e só depois das guardas. (b) A foto
+  do erro sobrevive: `print-do-erro.ts` move para
+  `./uploads/monitor-erros/escritorio_<id>/` (o adapter não sabe de tenancy, quem
+  conhece o dono é que coloca na pasta), migration 0228 guarda a URL em
+  `ultimo_erro_print_url`, sucesso limpa nos 4 caminhos, e o card ganhou o link
+  «ver a tela do tribunal» quando há erro e foto. Copia e apaga em vez de
+  renomear (o volume é outro mount) e nunca lança. Amarra:
+  `consulta-publica-e-print-do-erro` (13) — 18 mutações vermelhas.
+  **Segue anotado**: `sistemaCofrePorTribunal` devolve `pje_*` pra trt2/trt15
+  contra o próprio comentário; falha de TJ comprovado fora do ar ainda derruba a
+  credencial inteira (pré-existente); e o laço de novas ações não guarda foto
+  (grava falha por tribunal em `varreduraJson`, sem campo pra isso).
 
 ## Fila combinada com o dono (31/08/2026)
 

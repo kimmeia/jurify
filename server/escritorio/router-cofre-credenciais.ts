@@ -47,7 +47,7 @@ import {
   type SistemaCofre,
   type StatusCredencial,
 } from "@shared/cofre-credenciais-types";
-import { rotuloPjeNacional } from "@shared/tribunais-pje";
+import { rotuloPjeNacional, tribunalEmTeste } from "@shared/tribunais-pje";
 
 /**
  * Cofre é restrito a admin do módulo processos: cargo com `verTodos=true`
@@ -539,6 +539,11 @@ export const cofreCredenciaisRouter = router({
               tribunal: t,
               grau,
               semCobertura,
+              // Caminho candidato: endereço derivado, nenhum login real passou.
+              // A tela agrupa esses fora da bateria — testar 48 portais que não
+              // têm como responder gastava ~40min e pintava a credencial de
+              // vermelho no fim. Continuam na grade, testáveis um por um.
+              emTeste: tribunalEmTeste(t),
               status: r?.status ?? ("nao_testado" as const),
               ultimoErro: r?.ultimoErro ?? null,
               ultimoSucessoEm: r?.ultimoSucessoEm?.toISOString() ?? null,
@@ -982,8 +987,13 @@ export const cofreCredenciaisRouter = router({
         .limit(1);
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "Credencial não encontrada" });
 
-      const { buscarCredencialDecriptada, atualizarStatusAposLogin, salvarSessao, registrarTribunal } =
-        await import("./cofre-helpers");
+      const {
+        buscarCredencialDecriptada,
+        atualizarStatusAposLogin,
+        salvarSessao,
+        registrarTribunal,
+        falhaDerrubaCredencial,
+      } = await import("./cofre-helpers");
       const cred = await buscarCredencialDecriptada(input.id);
       if (!cred) {
         throw new TRPCError({
@@ -1047,7 +1057,15 @@ export const cofreCredenciaisRouter = router({
           ? null
           : `${resultado.mensagem}${resultado.detalhes ? ` (${resultado.detalhes})` : ""}`;
 
-        await atualizarStatusAposLogin(input.id, { ok: resultado.ok, mensagemErro: motivoErro });
+        // Sucesso sempre promove a credencial (e religa os monitoramentos que
+        // ficaram presos). FALHA só derruba quando o portal é um caminho
+        // comprovado: um TRT candidato que não aceita o SSO não é prova de que a
+        // senha do advogado parou de funcionar — e a credencial é a mesma do
+        // TJCE. A bateria do "Testar tudo" termina na fila dos candidatos, então
+        // sem esta ressalva era SEMPRE um TRT que dava a palavra final.
+        if (resultado.ok || falhaDerrubaCredencial(tribunalAlvo)) {
+          await atualizarStatusAposLogin(input.id, { ok: resultado.ok, mensagemErro: motivoErro });
+        }
         // O resultado é DAQUELE tribunal. Sem registrar por estado, uma falha
         // em MG faria o CE — que funciona — aparecer quebrado junto.
         await registrarTribunal(input.id, tribunalAlvo, {
