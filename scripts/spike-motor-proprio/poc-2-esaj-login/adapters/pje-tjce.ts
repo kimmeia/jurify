@@ -53,6 +53,9 @@ const HOST_KEYCLOAK = "sso.cloud.pje.jus.br";
  * JSF/Seam (`/pjeNgrau/.../listView.seam`), por isso também é parametrizada.
  * Ver issue #529 (expansão de tribunais).
  */
+const ATRIBUTO_LINK_MARCADO = "data-abrir-processo";
+const SELETOR_LINK_MARCADO = `[${ATRIBUTO_LINK_MARCADO}="1"]`;
+
 export interface TribunalPdpjConfig {
   tribunal: string;
   grau: 1 | 2;
@@ -609,10 +612,14 @@ export class PjeTjceScraper {
       }
 
       // Procura link/linha do processo no resultado.
-      // PJe TJCE 1º grau (RichFaces): cada linha tem múltiplos botões:
-      //   - :j_id492 (btn-link-condensed) = link do CNJ → "Ver detalhes"
-      //   - :j_id487 (btn-default-sm) = botão "Ações" (ver autos, etc)
-      // Preferimos :j_id492 (link do CNJ) que vai pra página de detalhe.
+      // PJe TJCE 1º grau (RichFaces): cada linha tem múltiplos botões —
+      // o link do NÚMERO abre o processo; o botão "Ações" abre um menu.
+      // Os ids (`j_id492`, `j_id487`) são gerados pelo JSF e MUDAM quando o
+      // tribunal republica o portal; e `locator("a, b").first()` devolve o
+      // primeiro do HTML, não o primeiro da lista de preferências — ou seja,
+      // bastava o "Ações" vir antes na linha pra o robô clicar nele e a
+      // página do processo nunca abrir. Por isso a escolha passou a ser pelo
+      // NÚMERO escrito no link, que é o que não muda.
       const seletorLinkResultado =
         "a[id*='processosTable'][id$=':j_id492'], " +
         "a.btn-link.btn-condensed[id*='processosTable'], " +
@@ -645,8 +652,13 @@ export class PjeTjceScraper {
 
           // Dispara click natural com force:true (ignora overlays).
           // Se PJe usa target="_blank" ou window.open, nova page é criada.
+          // A marcação é refeita a cada volta: o RichFaces redesenha a grade
+          // depois de um clique que não deu certo e leva o marcador junto.
+          const alvo = (await this.marcarLinkDoProcesso(pageBusca, cnjLimpo))
+            ? SELETOR_LINK_MARCADO
+            : seletorLinkResultado;
           await pageBusca
-            .locator(seletorLinkResultado)
+            .locator(alvo)
             .first()
             .click({ force: true, timeout: 5000 })
             .catch(() => {});
@@ -1124,6 +1136,41 @@ export class PjeTjceScraper {
    * passa — o custo de recusar uma página boa é perder o processo inteiro, e
    * o de aceitar é conhecido e coberto pela recusa de rótulos na extração.
    */
+  /**
+   * Marca, na grade de resultados, o link que abre ESTE processo.
+   *
+   * A escolha é pelo número escrito no link (só os dígitos, porque a grade
+   * traz máscara). Sem número que bata, cai no primeiro link que pareça o do
+   * processo — nunca no botão "Ações", que abre menu e não sai da página.
+   * Devolve `false` quando não achou nada pra marcar; aí o chamador usa o
+   * seletor antigo e o comportamento é o de antes.
+   */
+  private async marcarLinkDoProcesso(page: Page, cnjLimpo: string): Promise<boolean> {
+    return page
+      .evaluate(
+        ({ cnj, marcador }) => {
+          const links = Array.from(
+            document.querySelectorAll<HTMLAnchorElement>("a[id*='processosTable']"),
+          );
+          if (links.length === 0) return false;
+          for (const a of links) a.removeAttribute(marcador);
+          const digitos = (t: string | null | undefined) => (t ?? "").replace(/\D/g, "");
+          const ehAcoes = (a: HTMLAnchorElement) =>
+            /a[cç][õo]es|op[çc][õo]es/i.test((a.textContent ?? "") + " " + (a.title ?? ""));
+          const porNumero = links.find((a) => digitos(a.textContent).includes(cnj));
+          const porClasse = links.find(
+            (a) => a.classList.contains("btn-link") && !ehAcoes(a),
+          );
+          const escolhido = porNumero ?? porClasse ?? links.find((a) => !ehAcoes(a)) ?? null;
+          if (!escolhido) return false;
+          escolhido.setAttribute(marcador, "1");
+          return true;
+        },
+        { cnj: cnjLimpo, marcador: ATRIBUTO_LINK_MARCADO },
+      )
+      .catch(() => false);
+  }
+
   private async estaNaPaginaDoProcesso(page: Page): Promise<boolean> {
     // O marcador do detalhe chega por AJAX; sem esta espera a conferência
     // acontece antes da página terminar de se montar.

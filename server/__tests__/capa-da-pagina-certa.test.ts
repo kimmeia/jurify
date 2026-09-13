@@ -302,9 +302,14 @@ describe("a tela diz de onde veio", () => {
     expect(tela).toContain("grátis");
   });
 
-  it("o que a consulta paga trouxe fica gravado", () => {
-    expect(tela).toContain("Detalhes carregados e guardados no card");
+  it("o que a consulta paga trouxe fica gravado, e a tela diz de ONDE veio", () => {
+    expect(tela).toContain("Guardado no card: a próxima abertura não paga outra consulta.");
     expect(tela).toMatch(/carregarDetalhesMut\.mutate\(\{ cnj, credencialId: credIdMon \?\? undefined, acaoId \}\)/);
+    // as três procedências têm texto próprio — "carregado" sem dizer de onde
+    // foi o que deixou capa da tabela de resultados passar por capa de verdade
+    expect(tela).toContain("Detalhes lidos na lista do tribunal");
+    expect(tela).toContain("Natureza preenchida pela base pública do CNJ");
+    expect(tela).toContain("A página do processo não abriu");
   });
 
   it("o rótulo do botão fala em consulta, não em crédito", () => {
@@ -315,10 +320,26 @@ describe("a tela diz de onde veio", () => {
 describe("as procedures", () => {
   const router = ler("server/routers/processos.ts");
 
+  it("página do processo que não abre cai na lista do tribunal e depois no DataJud — não vira erro", () => {
+    const src = ler("server/routers/processos.ts");
+    const i = src.indexOf("consultarCNJSincrono");
+    const trecho = src.slice(i, i + 9000);
+    // a ordem importa: a lista é de graça e tem as partes; o DataJud não tem
+    expect(trecho).toMatch(/detalhe_nao_abriu[\s\S]{0,400}linhaDoCnj\(resultado\.linhasDaBusca/);
+    expect(trecho).toMatch(/capaBrutaDaLinha[\s\S]{0,600}capaPorCnjNoDataJud/);
+    // e o erro só sobe quando NENHUMA reserva serviu
+    expect(trecho).toMatch(/if \(!resultado\.ok && !capaDeReserva\)/);
+    // a procedência sobe junto: quem mostra na tela precisa saber de onde veio
+    expect(trecho).toMatch(/return \{ lawsuit, fonte: fonteDaCapa \}/);
+  });
+
   it("consultarCNJSincrono aceita o card e grava a capa nele", () => {
     expect(router).toContain("acaoId: z.number().int().positive().optional()");
-    expect(router).toMatch(/if \(input\.acaoId && resultado\.capa\) \{[\s\S]{0,200}gravarCapaNoCard/);
-    expect(router).toContain('fonte: "processo",');
+    expect(router).toMatch(/if \(input\.acaoId && capaEfetiva\) \{[\s\S]{0,200}gravarCapaNoCard/);
+    // A procedência deixou de ser cravada: a capa pode vir da página, da
+    // lista do tribunal ou do DataJud, e o card precisa dizer qual foi.
+    expect(router).toContain("fonte: fonteDaCapa,");
+    expect(router).toMatch(/fonteDaCapa: "processo" \| "lista" \| "datajud" = "processo"/);
   });
 
   it("completarCapaPeloDataJud é escopada e não custa consulta", () => {

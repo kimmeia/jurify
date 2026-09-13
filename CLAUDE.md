@@ -1543,6 +1543,14 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   segue o app (marinho, Inter). Amarras: `central-de-ajuda`,
   `primeiros-passos`, `saude-semaforos` — 146 mutações vermelhas.
 
+- **Entregue 13/09, "a página do processo não abriu"**: o clique da grade do
+  PJe escolhia o primeiro link do HTML (podia ser o botão «Ações») e dependia
+  de ids do JSF que mudam quando o tribunal republica o portal. Agora o link é
+  escolhido pelo NÚMERO do processo, e quando a página não abre a consulta
+  responde com a linha da lista do tribunal (ou com a base pública do CNJ) em
+  vez de erro — dizendo na tela de onde veio. Detalhe na seção 20 do documento
+  de estado. Amarra `abrir-pagina-do-processo.test.ts`, 9 mutações vermelhas.
+
 ## Fila combinada com o dono (31/08/2026)
 
 Ordem que ele pediu. Não pular sem ele mandar. Estado conferido em 03/09:

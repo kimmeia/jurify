@@ -2564,3 +2564,58 @@ da logo e o marinho como cor de ação do conteúdo.
   para o CONTEÚDO e deixou de ser para o menu; o texto foi corrigido junto.
 - As opções A (só a marca) e C (meio-termo) ficaram no comparador
   `mockup-cor-do-menu.html`, caso ele queira voltar atrás.
+
+
+## 20. "A página do processo não abriu" — causa e conserto (13/09)
+
+Relato do dono, duas vezes no mesmo dia: consulta de processo no TJCE
+devolvendo *"O processo apareceu na busca, mas a página dele não abriu"*, com
+a pergunta certa junto — *"os processos funcionavam, houve alguma alteração"*.
+
+### 20.1 O que mudou, e quando
+
+Mudou em 11/09, no commit `17372b73`. Antes dele, quando a página do processo
+não abria o robô extraía o que tivesse sobrado na tela — que é a TABELA DE
+RESULTADOS — e "Classe judicial", "Polo ativo" e "Polo passivo" são títulos de
+coluna: o card nascia com "Polo ativo" na natureza da ação. Foi exatamente o
+defeito que ele reportou naquele dia. A correção fez o robô conferir se está
+mesmo na página do processo e, não estando, falar em vez de inventar.
+
+Ou seja: o clique que não abre a página já falhava antes; o que mudou foi a
+honestidade da resposta.
+
+### 20.2 Por que o clique falha
+
+Duas causas no mesmo trecho, as duas conferidas no código:
+
+1. `page.locator("a, b, c").first()` devolve o primeiro do HTML, **não** o
+   primeiro da lista de preferências. O comentário dizia "preferimos o link do
+   CNJ", e o código clicava no que viesse antes na linha — se fosse o botão
+   "Ações", abria um menu e a página nunca vinha.
+2. Os ids do seletor (`j_id492`, `j_id487`) são gerados pelo JSF do PJe e
+   mudam quando o tribunal republica o portal. É o "funcionava e parou de
+   funcionar" sem ninguém ter tocado no nosso código.
+
+### 20.3 O conserto
+
+- **O link é escolhido pelo NÚMERO** escrito nele (`marcarLinkDoProcesso`),
+  com o botão "Ações" fora da escolha; a marcação é refeita a cada tentativa
+  porque o RichFaces redesenha a grade. Sem link marcado, o seletor antigo
+  continua valendo — nada regride.
+- **A consulta deixou de morrer no erro**: quando a página não abre,
+  `consultarCNJSincrono` responde com a linha da lista do tribunal (classe,
+  vara, data e os nomes dos dois polos, que o robô já tinha lido) e, sem ela,
+  com a reserva pública do CNJ. `capaDaListaComoCapa` deixa em branco o que a
+  lista não tem — juiz, comarca, valor, CPF e advogado — em vez de chutar.
+- **A tela diz de onde veio**: "Detalhes lidos na lista do tribunal" ou
+  "Natureza preenchida pela base pública do CNJ", com o aviso do que falta.
+  A procedência já era gravada no card desde 11/09; agora sobe também na
+  resposta da consulta.
+
+Amarras: `abrir-pagina-do-processo.test.ts` (4) e o caso novo em
+`capa-da-pagina-certa.test.ts` — 9 mutações, todas vermelhas
+(`scratchpad/mutar-abrir-processo.py`).
+
+**O que só o dono pode conferir**: este ambiente não alcança o portal do TJCE
+(o proxy bloqueia). O desenho saiu do código e dos testes; quem diz se o
+clique agora abre é ele, abrindo a aba.

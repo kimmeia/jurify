@@ -11,7 +11,7 @@
  * navegador nem banco.
  */
 
-import type { LinhaDaBusca } from "../../scripts/spike-motor-proprio/lib/types-spike";
+import type { LinhaDaBusca, ProcessoCapa } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { parseDataBR, normalizarCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import { ehRotuloDeTabela } from "../../shared/nova-acao-capa";
 
@@ -67,5 +67,39 @@ export function capaBrutaDaLinha(linha: LinhaDaBusca): CapaBrutaDaLista {
     valorCausaCentavos: null,
     dataDistribuicao: parseDataBR(linha.autuadoEm),
     partes,
+  };
+}
+
+/**
+ * O resumo da lista vestido de capa, pra quem espera uma `ProcessoCapa`.
+ *
+ * O que a lista não tem fica NULO, nunca chutado: juiz, comarca, valor da
+ * causa, documento e advogado das partes. Quem consome sabe pela procedência
+ * («lida na lista do tribunal») que ali não cabe conferir CPF nem valor.
+ */
+export function capaDaListaComoCapa(
+  bruta: CapaBrutaDaLista,
+  cnj: string,
+  uf: string | null,
+): ProcessoCapa {
+  return {
+    cnj,
+    classe: bruta.classe,
+    assuntos: bruta.assuntos,
+    orgaoJulgador: bruta.orgaoJulgador,
+    juiz: null,
+    comarca: null,
+    uf: uf ? uf.toUpperCase() : null,
+    valorCausaCentavos: bruta.valorCausaCentavos,
+    dataDistribuicao: bruta.dataDistribuicao,
+    status: null,
+    partes: bruta.partes.map((p) => ({
+      nome: p.nome,
+      polo: p.polo,
+      tipo: "desconhecido" as const,
+      documento: p.documento,
+      advogados: [],
+    })),
+    segredoJustica: false,
   };
 }

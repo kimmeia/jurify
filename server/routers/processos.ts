@@ -39,6 +39,8 @@ import { parsearPartes, resumirPartes } from "../processos/partes-processo";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
 import { lerCapaNovaAcao, lerFalhaDeCapa } from "../../shared/nova-acao-capa";
 import { capaPorCnjNoDataJud } from "../processos/capa-datajud";
+import { capaBrutaDaLinha, capaDaListaComoCapa, linhaDoCnj } from "../processos/capa-da-lista";
+import type { ProcessoCapa } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { gravarCapaNoCard } from "../processos/gravar-capa-no-card";
 import { POLOS_DA_GAVETA, gavetaDoPolo, type GavetaPolo } from "../../shared/nova-acao-polo";
 import { ambienteSuportaTeste } from "../_core/ambiente";
@@ -920,7 +922,44 @@ export const processosRouter = router({
         });
       }
 
-      if (!resultado.ok) {
+      // A página do processo não abrir não é o fim da consulta: a grade de
+      // resultados que o robô já leu tem classe, órgão, data e os dois polos,
+      // e o CNJ tem a reserva pública do DataJud. Devolver erro aqui era
+      // jogar fora dado que já estava na mão — e a consulta já foi cobrada.
+      let capaDeReserva: ProcessoCapa | null = null;
+      let fonteDaCapa: "processo" | "lista" | "datajud" = "processo";
+      if (!resultado.ok && resultado.categoriaErro === "detalhe_nao_abriu") {
+        const linha = linhaDoCnj(resultado.linhasDaBusca, input.cnj);
+        if (linha) {
+          capaDeReserva = capaDaListaComoCapa(capaBrutaDaLinha(linha), input.cnj, resultado.tribunal);
+          fonteDaCapa = "lista";
+        } else {
+          const doCnj = await capaPorCnjNoDataJud(input.cnj);
+          if (doCnj) {
+            capaDeReserva = capaDaListaComoCapa(
+              {
+                classe: doCnj.classe,
+                assuntos: doCnj.assuntos,
+                orgaoJulgador: doCnj.orgaoJulgador,
+                valorCausaCentavos: null,
+                dataDistribuicao: doCnj.dataAjuizamento,
+                partes: [],
+              },
+              input.cnj,
+              resultado.tribunal,
+            );
+            fonteDaCapa = "datajud";
+          }
+        }
+        if (capaDeReserva) {
+          log.warn(
+            { cnj: input.cnj, fonte: fonteDaCapa },
+            "[consultarCNJSincrono] página do processo não abriu — respondendo com a reserva",
+          );
+        }
+      }
+
+      if (!resultado.ok && !capaDeReserva) {
         // Erro de domínio (captcha, processo sigiloso, etc) — devolve o
         // motivo pro frontend mostrar mensagem específica, mas mantém
         // crédito debitado (caller já pagou pela tentativa).
@@ -933,13 +972,15 @@ export const processosRouter = router({
 
       // A consulta já foi cobrada: vindo capa com conteúdo, ela fica GRAVADA
       // no card em vez de viver só na tela que o usuário tem aberta.
-      if (input.acaoId && resultado.capa) {
+      const capaEfetiva = resultado.ok ? resultado.capa : capaDeReserva;
+      const movimentacoes = resultado.ok ? resultado.movimentacoes : [];
+      if (input.acaoId && capaEfetiva) {
         await gravarCapaNoCard({
           db,
           escritorioId: esc.escritorio.id,
           acaoId: input.acaoId,
-          bruta: resultado.capa,
-          fonte: "processo",
+          bruta: capaEfetiva,
+          fonte: fonteDaCapa,
         });
       }
 
@@ -947,7 +988,7 @@ export const processosRouter = router({
       // que `obterResultadoMotorProprio` produz pro frontend (JuditLawsuit).
       // Sem reuso direto pq aquela função usa o cache do runner — aqui
       // já temos `resultado` em mãos.
-      const capa = resultado.capa;
+      const capa = capaEfetiva;
       const lawsuit = capa
         ? {
             code: capa.cnj,
@@ -963,12 +1004,12 @@ export const processosRouter = router({
             amount: capa.valorCausaCentavos != null
               ? capa.valorCausaCentavos / 100
               : undefined,
-            last_step: resultado.movimentacoes[0]
+            last_step: movimentacoes[0]
               ? {
-                  step_id: `motor:${resultado.movimentacoes[0].data}`,
-                  step_date: resultado.movimentacoes[0].data,
-                  content: resultado.movimentacoes[0].texto,
-                  steps_count: resultado.movimentacoes.length,
+                  step_id: `motor:${movimentacoes[0].data}`,
+                  step_date: movimentacoes[0].data,
+                  content: movimentacoes[0].texto,
+                  steps_count: movimentacoes.length,
                 }
               : undefined,
             subjects: capa.assuntos.map((a, idx) => ({
@@ -994,7 +1035,7 @@ export const processosRouter = router({
                 main_document: a.oab ?? undefined,
               })),
             })),
-            steps: resultado.movimentacoes.map((m) => ({
+            steps: movimentacoes.map((m) => ({
               step_id: `motor:${m.data}:${m.texto.slice(0, 16)}`,
               step_date: m.data,
               content: m.texto,
@@ -1004,11 +1045,11 @@ export const processosRouter = router({
         : null;
 
       log.info(
-        { cnj: input.cnj, tribunal: tribunal.codigoTribunal, capaPresente: !!capa, movsCount: resultado.movimentacoes.length },
+        { cnj: input.cnj, tribunal: tribunal.codigoTribunal, capaPresente: !!capa, fonte: fonteDaCapa, movsCount: movimentacoes.length },
         "[consultarCNJSincrono] ok",
       );
 
-      return { lawsuit };
+      return { lawsuit, fonte: fonteDaCapa };
     }),
 
   /** Verifica status de uma consulta em andamento */
