@@ -60,7 +60,7 @@ import {
   Search,
   CircleHelp,
 } from "lucide-react";
-import { CSSProperties, useEffect, useRef, useState } from "react";
+import { CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
@@ -70,6 +70,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
 import { PaletaComandos } from "@/components/PaletaComandos";
+import { AbrirPaletaContexto } from "@/components/paleta-comandos-contexto";
 import { dispararInstalacao, pwaInstalado } from "@/lib/pwa-install";
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -483,6 +484,9 @@ function AppSidebarContent({
   // Paleta de comandos (⌘K / Ctrl+K). É caminho ADICIONAL: o menu continua
   // inteiro, e quem nunca apertar o atalho não perde nada.
   const [paletaAberta, setPaletaAberta] = useState(false);
+  // Estável entre renders: vai no value de um contexto, e recriar a função a
+  // cada render re-renderizaria toda tela que consome a busca do cabeçalho.
+  const abrirPaleta = useCallback(() => setPaletaAberta(true), []);
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
@@ -907,7 +911,9 @@ function AppSidebarContent({
           </div>
         )}
         <main className={"flex-1 " + (modoFocadoMobile ? "p-0" : "p-6")}>
-          <ChamadaWhatsappProvider>{children}</ChamadaWhatsappProvider>
+          <AbrirPaletaContexto.Provider value={abrirPaleta}>
+            <ChamadaWhatsappProvider>{children}</ChamadaWhatsappProvider>
+          </AbrirPaletaContexto.Provider>
         </main>
       </SidebarInset>
       <InstalarAppDialog open={instalarOpen} onOpenChange={setInstalarOpen} />
