@@ -1476,6 +1476,78 @@ saudação, precisa de mockup próprio); tabela do Financeiro virar cartão no
 celular (hoje rola dentro da moldura — virar cartão é redesenho); contraste
 do valor verde-escuro no hero verde (decisão de cor).
 
+### A cor do menu — DUAS decisões colidiram em 13/09; o dono desempatou:
+### fundo `#07060f`, resto da família violeta
+
+Duas sessões receberam pedidos diferentes sobre o MESMO token no mesmo dia, e
+os dois foram aprovados por ele:
+
+- **Tarde** (mergeada em `develop` e `main`): o menu veste a cor da LOGO —
+  fundo roxo-quase-preto `#191229`, «Jurid» em branco puro, «Flow», item
+  aberto e anel em violeta. Pedido: *"Vamos deixar a cor desse menu mais
+  alinhado com a logo real?"*. Seção 19 do `docs/ESTADO-DO-SISTEMA.md`.
+- **Noite** (esta): `--sidebar: #07060f`, a cor do header do Devular, *"para
+  o menu de juridflow e também para o menu de devular"* — aprovada no
+  `mockup-cor-do-menu-devular.html` (variante B; renomeado porque a outra
+  sessão usou o mesmo nome de arquivo).
+
+**Como ficou.** Segurei a troca e mostrei as duas juntas
+(`mockup-menu-duas-decisoes.html`, fotografadas na mesma tela, `#191229` ×
+`#07060f`), porque o mockup aprovado aqui fotografou o "hoje" ainda no
+azul-ardósia — ele nunca tinha comparado as duas propostas entre si. Ele
+desempatou: *"eu quero a cor do menu que aprovei"*, e disse com todas as
+letras que segurar custou tempo dele. **Lição registrada: com duas aprovações
+válidas, aplicar a mais recente e mostrar o conflito DEPOIS — o custo de
+segurar recaiu nele.**
+
+Entregue: **só o FUNDO** virou `#07060f` (`:root` e `.dark`, sólido). Nada da
+entrega da tarde foi desfeito — `--sidebar-accent`, `--sidebar-primary`,
+`--sidebar-ring`, `--marca-em-escuro` e o «Jurid» branco do `MarcaJ` seguem
+violeta, e sobre o quase-preto o item aberto ganha contraste em vez de
+perder. Sonda de pixel no app rodando: `#07060f`.
+Amarras: `cor-do-menu.test.ts` (5 testes, 6 mutações vermelhas em
+`scratchpad/mutar-cor-do-menu.py`) trava a cor exata e proíbe a transparência
+voltar; `menu-cor-da-logo.test.ts` teve **só o primeiro `it` reescrito** (o
+fundo saiu dela e virou "escuro e igual nos dois temas") — os outros cinco,
+que guardam violeta no realce/anel/marca e marinho como cor de ação do
+conteúdo, ficaram intactos.
+
+**O achado que sobrevive à escolha, e que vale pros dois produtos:** "a mesma
+transparência" NÃO dá a mesma cor em lugares diferentes, porque o que está
+atrás muda. Medido com canvas (não no olho): o header sobre o hero escuro do
+Devular rende `#080710`; os MESMOS 80% num menu lateral, que tem a PÁGINA
+CLARA atrás, rendem `#37363e` — grafite. Copiar a linha `bg-[#07060f]/80` de
+um pro outro parece certo e entrega cinza. Por isso, onde a cor do Devular for
+usada num menu, ela vai **sólida**.
+
+- **Devular (`crm-saas`, branch `claude/cor-do-menu-13-09`, NÃO mergeada e NÃO
+  conferida visualmente):** lá o menu era quase branco com texto escuro, então
+  os cinco tokens mudam juntos (texto, item ativo, contraste do item, borda em
+  branco 10%, acento) — trocar só o fundo deixaria texto preto sobre preto.
+  Entrou também `color-scheme: dark` na barra, que o JuridFlow já pagou para
+  aprender (sem isso o navegador pinta a rolagem nativa em cinza claro cortando
+  o menu). **Não foi possível subir aquele app aqui**: o proxy bloqueia
+  `codeload.github.com` (403) e uma dependência vem de lá, então `pnpm install`
+  falha — sem foto e sem `pnpm check`/`pnpm test`, os pré-requisitos de merge
+  da casa não podem nem ser avaliados. A amarra de lá (6 testes, 6 mutações
+  vermelhas) foi rodada com o vitest do jurify, porque o teste só lê o CSS.
+  **Esta branch também depende da escolha acima**: se o JuridFlow fica no roxo
+  da logo e o Devular vai pro `#07060f`, cada produto veste a própria marca —
+  que é o que eu recomendo, e não é o que o pedido dele dizia ("nos dois").
+
+### Raio-X do design em produção (13/09)
+
+`docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o
+que foi REALMENTE pintado dentro do `<main>`. Base factual para a conversa de
+estética que ele abriu ("insatisfeito com o layout"): **22 tamanhos de texto**
+no sistema (o menor 9px, abaixo do piso de 11px da Fatia 1), **14 raios de
+canto** distintos onde o tema declara 4/5/6/8/10, até **17 cores de fundo**
+numa tela só, e **UMA sombra** no sistema inteiro — nada tem elevação, é tudo
+borda de 1px sobre fundo quase branco. Ferramentas: `raio-x-design.mjs` e
+`fotos-producao.mjs` (esconde a faixa "STAGING", que não existe em produção e
+pintaria de âmbar o topo de toda foto — achado falso num estudo de estética).
+O estudo com as propostas segue aberto.
+
 Só o dono pode fazer (fora do código): variáveis do Railway — App Secret
 da Meta **no painel admin** (Integrações → WhatsApp Cloud) ou em
 `META_APP_SECRET_EXTRA` (é isso que alimenta o HMAC do webhook;
