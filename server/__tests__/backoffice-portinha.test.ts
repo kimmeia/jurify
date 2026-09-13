@@ -100,6 +100,14 @@ describe("resposta", () => {
     expect(r.produto).toBe("juridflow");
     expect(r.geradoEm).toBe("2026-09-13T12:00:00.000Z");
     expect(r.contas).toEqual({ pagantes: 38, emTeste: 9, inadimplentes: 3, cortesias: 2, total: 50 });
+  });
+
+  it("produto que não conta cortesias manda null, nunca 0", () => {
+    const { cortesiasAtivas, ...semCortesias } = entrada.stats;
+    void cortesiasAtivas;
+    const r = montarResumoBackoffice({ ...entrada, stats: semCortesias });
+    // 0 diria "conferi e não há nenhuma"; null diz "ninguém contou"
+    expect(r.contas.cortesias).toBeNull();
     expect(r.receita).toEqual({ mrrCentavos: 1_421_200, moeda: "BRL" });
   });
 

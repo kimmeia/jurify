@@ -82,8 +82,13 @@ MUTACOES = [
 
     ("cortesia entra como pagante",
      CONTRATO,
-     'cortesias: entrada.stats.cortesiasAtivas ?? 0,',
+     'cortesias: entrada.stats.cortesiasAtivas ?? null,',
      'cortesias: entrada.stats.activeSubscriptions,'),
+
+    ("produto sem contagem de cortesia passa a mentir 0 em vez de null",
+     CONTRATO,
+     'cortesias: entrada.stats.cortesiasAtivas ?? null,',
+     'cortesias: entrada.stats.cortesiasAtivas ?? 0,'),
 
     ("segredo passa a ser copiado pra resposta",
      CONTRATO,

@@ -159,7 +159,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.761 verdes, 391 arquivos** (13/09, depois da portinha do backoffice; eram 5.746 em 390 em 12/09, e 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.762 verdes, 391 arquivos** (13/09, depois da portinha do backoffice; eram 5.746 em 390 em 12/09, e 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -939,16 +939,24 @@ Quatro decisões de desenho que valem mais que o código:
    `select()` sem lista vazaria as três.
 4. **Integração nunca testada é "desconhecido", não "falha"** —
    `desconectado` é o default da coluna e pintaria de vermelho um painel são.
+5. **`cortesias` é `number | null`.** O `getAdminStats` do Devular não conta
+   cortesias; responder 0 afirmaria "conferi e não há nenhuma". Ausente vira
+   null e o painel mostra "—".
 
 **O isolamento depende de um detalhe:** `getSessionCookieOptions` não define
 `domain`, então o cookie de sessão é host-only e `devular.com.br` não
 compartilha sessão com `backoffice.devular.com.br`. Escrever um `domain` ali
 junta os três apps numa sessão só, em silêncio — há teste travando.
 
-Amarra: `backoffice-portinha.test.ts` (15 testes) — 19 mutações vermelhas em
+Amarra: `backoffice-portinha.test.ts` (16 testes) — 20 mutações vermelhas em
 `scratchpad/mutar-backoffice.py`.
 
-**Ainda não feito:** a portinha gêmea no Devular, o painel em si, e o segundo
+**Estado das outras pontas (13/09):** a portinha gêmea do Devular está
+escrita e commitada na branch de lá, mas **NÃO conferida** — `pnpm install`
+falha naquele repo neste ambiente (403 do proxy no codeload, dependência do
+Baileys), então `pnpm check` e `pnpm test` precisam rodar antes de qualquer
+merge. O painel (`kimmeia/backoffice`, `backoffice.devular.com.br`) tem a
+fundação e a tela Visão geral rodando, com 22 testes verdes. Falta o segundo
 fator no login. Decisão do dono: 2FA **depois**; por isso vale a regra de que
 o painel fica só leitura até o código de 6 dígitos existir — nenhuma ação que
 muda dado de cliente é ligada antes disso.

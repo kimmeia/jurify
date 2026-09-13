@@ -30,7 +30,8 @@ export interface ResumoBackoffice {
     pagantes: number;
     emTeste: number;
     inadimplentes: number;
-    cortesias: number;
+    /** null = este produto não sabe contar cortesias; o painel mostra "—". */
+    cortesias: number | null;
     /** Donos de conta cadastrados, pagando ou não. */
     total: number;
   };
@@ -51,9 +52,10 @@ export interface EntradaResumo {
     trialingSubscriptions: number;
     pastDueSubscriptions: number;
     /**
-     * Opcional porque o caminho de banco-fora de `getAdminStats` não devolve
-     * este campo. Na prática a rota nem chega aqui sem banco (503 antes), e
-     * quem chamar direto recebe 0 em vez de `undefined` na tela.
+     * Opcional porque nem todo produto conta cortesias — o Devular ainda não
+     * conta, e o caminho de banco-fora do JuridFlow também não devolve o
+     * campo. Ausente vira `null` na resposta ("não sei"), nunca 0: dizer
+     * "zero cortesias" quando ninguém contou é número inventado.
      */
     cortesiasAtivas?: number;
     mrr: number;
@@ -100,7 +102,7 @@ export function montarResumoBackoffice(entrada: EntradaResumo): ResumoBackoffice
       pagantes: entrada.stats.activeSubscriptions,
       emTeste: entrada.stats.trialingSubscriptions,
       inadimplentes: entrada.stats.pastDueSubscriptions,
-      cortesias: entrada.stats.cortesiasAtivas ?? 0,
+      cortesias: entrada.stats.cortesiasAtivas ?? null,
       total: entrada.stats.totalClients,
     },
     receita: {
