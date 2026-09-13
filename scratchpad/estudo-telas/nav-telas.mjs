@@ -1,400 +1,474 @@
 /**
- * As telas REDESENHADAS do navegável — o lado "depois".
+ * As telas REDESENHADAS — lado "depois" do navegável.
  *
- * Exporta só marcação + CSS. O invólucro (menu, chaves Antes/Depois e
- * Computador/Celular) fica em `gera-navegavel-novo.mjs`.
+ * ESTA VERSÃO NASCEU DE UMA CORREÇÃO DE ROTA. As duas anteriores foram
+ * reprovadas ("nenhuma diferença a não ser algumas cores" e depois "ridículo"),
+ * e o motivo estava no lugar mais óbvio: o dono tinha mandado um print do
+ * painel que ele queria — escuro, RICO, com cartão arredondado, elevação,
+ * gráfico, mapa de calor e avatares — e eu respondi com tipografia seca, fio de
+ * 1px, sem cartão e sem gráfico. Impus a minha tese de "menos é mais" por cima
+ * da referência que ele escolheu.
  *
- * O que mudou em relação à primeira tentativa, que o dono reprovou:
- *  · UMA cor de acento. Os pontinhos coloridos por tipo viraram rótulo em
- *    versalete monocromático — quatro matizes era exatamente o ruído que eu
- *    tinha criticado no diagnóstico.
- *  · UM foco. A tela abre com A PRÓXIMA COISA em tipo grande, porque às 13h12
- *    o que decide a próxima ação é "daqui a 18 minutos", não um gráfico.
- *  · MENOS elementos. A primeira versão tinha frase + filtros + 11 linhas +
- *    3 prazos + 4 esperas + 4 números. Aqui o dia começa em AGORA e o que já
- *    passou fica esmaecido — é a ideia que carrega o desenho.
- *  · Larguras por CONTAINER QUERY, não por viewport: a mesma marcação responde
- *    a 1440 e a 390 dentro do palco do navegável.
+ * Aqui a linguagem é a DO PRINT DELE:
+ *  · painel elevado sobre fundo escuro, canto de 14px, borda clara de 8%;
+ *  · cartões de número com variação e minigráfico;
+ *  · mapa de calor de movimentações por dia da semana × hora;
+ *  · avatares, barras de progresso, gráfico de área;
+ *  · cor usada de propósito: violeta da marca, salmão no calor e no atraso,
+ *    verde só em dinheiro que entrou.
+ * O conteúdo continua real (banco local e telas fotografadas).
  */
 
 export const CSS = `
 /* O container é o INVÓLUCRO, nunca a própria .tela: um elemento não responde
- * à sua própria container query. Com o container na .tela, o menu sumia no
- * celular mas a coluna de 208px continuava no grid — e o conteúdo ia inteiro
- * para dentro dela. */
+ * à sua própria container query. */
 .palco-conteudo{container-type:inline-size}
 .tela{
-  --preto:#0a0910; --painel:#14121e; --painel2:#1b1826;
-  --fio:rgba(255,255,255,.07); --fio2:rgba(255,255,255,.14);
-  --texto:#f0eef7; --texto2:#a29dba; --texto3:#6d6885;
-  --marca:#9a73ff; --alarme:#ff6a5c;
-  background:var(--preto); color:var(--texto); min-height:100%;
-  font:400 14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --fundo:#0b0b10; --painel:#15151d; --painel2:#1d1d27; --painel3:#242430;
+  --fio:rgba(255,255,255,.08); --fio2:rgba(255,255,255,.14);
+  --texto:#f2f1f6; --texto2:#a6a3b5; --texto3:#6e6b80;
+  --marca:#9a73ff; --marca2:#c4aaff; --quente:#f9765f; --quente2:#ffb199;
+  --verde:#4ed39a; --azul:#6ba8ff; --ambar:#f5c162;
+  --r:14px;
+  background:var(--fundo); color:var(--texto); min-height:100%;
+  font:400 13.5px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
   font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
-  display:grid; grid-template-columns:208px minmax(0,1fr);
+  display:grid; grid-template-columns:220px minmax(0,1fr);
 }
 .tela *{box-sizing:border-box;margin:0;padding:0}
 
-/* ── menu ───────────────────────────────────────────────────────────────── */
-.tela .menu{border-right:1px solid var(--fio);padding:18px 0 16px;display:flex;flex-direction:column}
-.tela .marca{display:flex;align-items:center;gap:8px;padding:0 18px 20px;font-size:16px;
+/* ── menu ─────────────────────────────────────────────────────────────── */
+.tela .menu{background:var(--fundo);padding:18px 12px 14px;display:flex;flex-direction:column;gap:2px}
+.tela .marca{display:flex;align-items:center;gap:9px;padding:2px 10px 18px;font-size:16px;
              font-weight:700;letter-spacing:-.02em}
 .tela .marca i{font-family:Poppins,Inter,sans-serif;font-style:normal;font-size:20px}
 .tela .marca u{text-decoration:none;color:var(--marca)}
-.tela .g{padding:13px 18px 4px;font-size:9.5px;font-weight:700;letter-spacing:.15em;
+.tela .g{padding:14px 10px 5px;font-size:9.5px;font-weight:700;letter-spacing:.15em;
          text-transform:uppercase;color:var(--texto3)}
-.tela .i{display:flex;align-items:center;gap:9px;padding:7px 18px;color:var(--texto2);font-size:13px;
-         cursor:default}
-.tela .i.on{color:#fff;background:rgba(154,115,255,.12);box-shadow:inset 2px 0 0 var(--marca)}
-.tela .i b{margin-left:auto;font-size:10px;font-weight:700;min-width:16px;height:16px;border-radius:4px;
-           display:grid;place-items:center;background:rgba(255,255,255,.07);color:var(--texto2)}
-.tela .i b.al{background:rgba(255,106,92,.16);color:var(--alarme)}
-.tela .pe{margin-top:auto;padding:13px 18px 0;border-top:1px solid var(--fio);font-size:11.5px;
-          color:var(--texto3);line-height:1.4}
+.tela .i{display:flex;align-items:center;gap:10px;padding:8px 10px;color:var(--texto2);font-size:13px;
+         border-radius:9px}
+.tela .i .ic{width:15px;height:15px;flex:none;border-radius:4px;background:currentColor;opacity:.45}
+.tela .i.on{color:#fff;background:var(--painel2)}
+.tela .i.on .ic{opacity:1;background:var(--marca)}
+.tela .i b{margin-left:auto;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:6px;
+           display:grid;place-items:center;background:var(--painel2);color:var(--texto2)}
+.tela .i b.al{background:rgba(249,118,95,.18);color:var(--quente)}
+.tela .pe{margin-top:auto;display:flex;align-items:center;gap:9px;padding:10px;border-radius:10px;
+          background:var(--painel)}
+.tela .pe .av{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:11px;
+              font-weight:700;background:var(--marca);color:#100d1c}
+.tela .pe span{font-size:12px;line-height:1.3;min-width:0}
+.tela .pe span em{display:block;font-style:normal;color:var(--texto3);font-size:11px}
 
-/* ── área ───────────────────────────────────────────────────────────────── */
-.tela .conteudo{min-width:0;display:flex;flex-direction:column}
-.tela .barra{display:flex;align-items:center;gap:12px;padding:16px 26px 0}
-.tela .barra h2{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
-                color:var(--texto3)}
-.tela .barra .dt{font-size:12.5px;color:var(--texto3)}
-.tela .barra .k{margin-left:auto;font-size:11.5px;color:var(--texto3);display:flex;gap:7px;
-                align-items:center}
-.tela .tec{border:1px solid var(--fio2);border-radius:5px;padding:1px 6px;font-size:10.5px;
-           color:var(--texto2)}
+/* ── área ─────────────────────────────────────────────────────────────── */
+.tela .conteudo{min-width:0;display:flex;flex-direction:column;background:#0e0e14;
+                border-left:1px solid var(--fio);overflow:auto}
+.tela .topo{display:flex;align-items:center;gap:14px;padding:16px 22px 0}
+.tela .topo h2{font-size:19px;font-weight:650;letter-spacing:-.02em}
+.tela .topo .dt{font-size:12.5px;color:var(--texto3)}
+.tela .busca{margin-left:auto;display:flex;align-items:center;gap:8px;background:var(--painel);
+             border:1px solid var(--fio);border-radius:10px;padding:6px 11px;font-size:12.5px;
+             color:var(--texto3);min-width:180px}
+.tela .tec{margin-left:auto;border:1px solid var(--fio2);border-radius:5px;padding:0 5px;font-size:10.5px}
+.tela .btp{background:var(--marca);color:#120d20;font-weight:650;font-size:12.5px;border-radius:10px;
+           padding:8px 14px}
 
-/* ── o foco: a próxima coisa ────────────────────────────────────────────── */
-.tela .foco{padding:22px 26px 24px;border-bottom:1px solid var(--fio)}
-.tela .foco .em{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
-                color:var(--alarme);margin-bottom:9px}
-.tela .foco h3{font-size:34px;line-height:1.12;font-weight:650;letter-spacing:-.03em;max-width:22ch}
-.tela .foco .sub{font-size:14px;color:var(--texto2);margin-top:8px;max-width:60ch}
-.tela .foco .sub q{color:var(--texto);quotes:"“" "”"}
-.tela .acoes{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.tela .bt{border:1px solid var(--fio2);border-radius:7px;padding:6px 13px;font-size:13px;
-          color:var(--texto);background:transparent}
-.tela .bt.p{background:var(--marca);border-color:var(--marca);color:#0b0a14;font-weight:600}
+.tela .grade{display:grid;gap:14px;padding:16px 22px 22px}
+.tela .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tela .g2{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}
 
-/* ── corpo em duas colunas ──────────────────────────────────────────────── */
-.tela .duas{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 292px;
-            grid-template-rows:minmax(0,1fr) auto}
-.tela .fio{min-width:0;min-height:0;padding:0 0 18px;overflow:auto}
-.tela .lado{border-left:1px solid var(--fio);background:var(--painel);min-width:0;
-            min-height:0;overflow:auto}
+/* ── cartão ───────────────────────────────────────────────────────────── */
+.tela .c{background:var(--painel);border:1px solid var(--fio);border-radius:var(--r);padding:15px 16px;
+         box-shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 24px rgba(0,0,0,.35);min-width:0}
+.tela .c.sem{padding:0;overflow:hidden}
+.tela .ct{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+.tela .ct h3{font-size:13px;font-weight:600;letter-spacing:-.01em}
+.tela .ct .mais{margin-left:auto;font-size:11.5px;color:var(--texto3)}
 
-.tela .cab{display:flex;align-items:center;gap:9px;padding:13px 26px 10px}
-.tela .cab h4{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-              color:var(--texto3)}
-.tela .cab .fim{margin-left:auto;font-size:11.5px;color:var(--texto3)}
+/* cartão de número */
+.tela .kpi .rot{font-size:11px;color:var(--texto3);letter-spacing:.03em;display:flex;align-items:center;gap:7px}
+.tela .kpi .pt{width:7px;height:7px;border-radius:50%;background:var(--marca)}
+.tela .kpi .pt.q{background:var(--quente)} .tela .kpi .pt.v{background:var(--verde)}
+.tela .kpi .pt.a{background:var(--ambar)}
+.tela .kpi .n{font-size:29px;font-weight:700;letter-spacing:-.035em;margin:9px 0 3px;line-height:1}
+.tela .kpi .n.q{color:var(--quente)} .tela .kpi .n.v{color:var(--verde)}
+.tela .kpi .sb{font-size:11.5px;color:var(--texto3)}
+.tela .kpi .sb b{color:var(--verde);font-weight:600}
+.tela .kpi .sb b.d{color:var(--quente)}
+.tela .spark{display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:11px}
+.tela .spark i{flex:1;background:var(--painel3);border-radius:2px}
+.tela .spark i.on{background:var(--marca)}
+.tela .spark i.q{background:var(--quente)}
 
-/* linha do dia: rótulo em versalete no lugar de bolinha colorida */
-.tela .l{display:grid;grid-template-columns:52px 74px minmax(0,1fr);gap:0 14px;align-items:baseline;
-         padding:9px 26px;border-top:1px solid rgba(255,255,255,.045)}
-.tela .l:first-of-type{border-top:0}
-.tela .l .h{font-size:12px;color:var(--texto3);text-align:right}
-.tela .l .tp{font-size:9.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
-             color:var(--texto3)}
-.tela .l .c{min-width:0}
-.tela .l .c>*{display:block}
-.tela .l .c .t{font-size:14px;font-weight:500;letter-spacing:-.005em}
-.tela .l .c .s{font-size:12px;color:var(--texto3);margin-top:1px}
-.tela .l.passou{opacity:.42}
-.tela .l.agora-linha{border-top:1px solid var(--alarme);padding-top:0;padding-bottom:0;height:0;
-                     position:relative}
-.tela .l.agora-linha span{position:absolute;left:26px;top:-7px;background:var(--preto);padding-right:9px;
-                          font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-                          color:var(--alarme)}
-.tela .l .mk{font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-             color:var(--marca);margin-left:8px}
+/* ── mapa de calor ────────────────────────────────────────────────────── */
+.tela .calor{display:grid;grid-template-columns:30px repeat(12,minmax(0,1fr));gap:4px;align-items:center}
+.tela .calor .hh{font-size:9.5px;color:var(--texto3);text-align:right;padding-right:3px}
+.tela .calor u{display:block;aspect-ratio:1;border-radius:4px;background:var(--painel2)}
+.tela .calor u.n1{background:rgba(249,118,95,.18)} .tela .calor u.n2{background:rgba(249,118,95,.34)}
+.tela .calor u.n3{background:rgba(249,118,95,.56)} .tela .calor u.n4{background:rgba(249,118,95,.82)}
+.tela .calor .dd{font-size:9.5px;color:var(--texto3);text-align:center}
+.tela .legenda{display:flex;align-items:center;gap:6px;margin-top:11px;font-size:10.5px;color:var(--texto3)}
+.tela .legenda u{width:13px;height:13px;border-radius:4px;display:block;background:var(--painel2)}
 
-/* ── régua de prazos ────────────────────────────────────────────────────── */
-.tela .pz{display:grid;grid-template-columns:46px minmax(0,1fr);gap:0 13px;padding:12px 20px;
-          border-top:1px solid var(--fio);align-items:start}
-.tela .pz>span{display:block;min-width:0}
-.tela .pz .n,.tela .pz .u,.tela .pz .t,.tela .pz .s{display:block}
-.tela .pz .n{font-size:26px;font-weight:700;letter-spacing:-.04em;line-height:.95}
-.tela .pz .n.q{color:var(--alarme)}
-.tela .pz .u{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--texto3)}
-.tela .pz .t{font-size:13px;font-weight:500;line-height:1.3}
-.tela .pz .s{font-size:11.5px;color:var(--texto3);margin-top:2px}
+/* ── linha de prazo (barra) ───────────────────────────────────────────── */
+.tela .prz{display:grid;grid-template-columns:minmax(0,1fr) 62px;gap:0 12px;align-items:center;
+           padding:9px 0;border-top:1px solid rgba(255,255,255,.05)}
+.tela .prz:first-of-type{border-top:0;padding-top:0}
+.tela .prz>span{display:block;min-width:0}
+.tela .prz .t,.tela .prz .s,.tela .prz .barra{display:block}
+.tela .prz .t{font-size:13px;font-weight:500}
+.tela .prz .s{font-size:11.5px;color:var(--texto3);margin-top:2px}
+.tela .prz .barra{height:5px;border-radius:99px;background:var(--painel3);margin-top:7px;overflow:hidden}
+.tela .prz .barra i{display:block;height:100%;border-radius:99px;background:var(--marca)}
+.tela .prz .barra i.q{background:var(--quente)}
+.tela .prz .barra i.a{background:var(--ambar)}
+.tela .prz .dias{text-align:right}
+.tela .prz .dias b{display:block;font-size:20px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.tela .prz .dias b.q{color:var(--quente)} .tela .prz .dias b.a{color:var(--ambar)}
+.tela .prz .dias em{font-style:normal;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+                    color:var(--texto3)}
 
-/* ── fila de espera / lista genérica ────────────────────────────────────── */
-.tela .q{display:flex;align-items:center;gap:10px;padding:8px 20px}
-.tela .q .av{width:25px;height:25px;flex:none;border-radius:7px;display:grid;place-items:center;
-             font-size:10px;font-weight:700;background:var(--painel2);color:var(--texto2)}
-.tela .q .nm{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-.tela .q .tm{margin-left:auto;font-size:12px;color:var(--texto3)}
-.tela .q .tm.al{color:var(--alarme);font-weight:650}
+/* ── lista de movimentação ────────────────────────────────────────────── */
+.tela .mv{display:flex;gap:11px;padding:10px 0;border-top:1px solid rgba(255,255,255,.05)}
+.tela .mv:first-of-type{border-top:0;padding-top:0}
+.tela .mv .tag{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+               padding:3px 8px;border-radius:7px;background:rgba(107,168,255,.14);color:var(--azul);
+               height:fit-content}
+.tela .mv .tag.ag{background:rgba(154,115,255,.16);color:var(--marca2)}
+.tela .mv .tag.cl{background:rgba(78,211,154,.14);color:var(--verde)}
+.tela .mv .co{min-width:0}
+.tela .mv .co b{display:block;font-size:13px;font-weight:500;line-height:1.35}
+.tela .mv .co span{display:block;font-size:11.5px;color:var(--texto3);margin-top:2px}
+.tela .mv .hr{margin-left:auto;font-size:11px;color:var(--texto3);flex:none}
 
-/* ── rodapé de dinheiro ─────────────────────────────────────────────────── */
-.tela .caixa{border-top:1px solid var(--fio);display:flex;gap:34px;padding:13px 26px;
-             background:var(--painel);flex-wrap:wrap;align-items:baseline;grid-column:1/-1}
-.tela .caixa .v>*{display:block}
-.tela .caixa .v{display:flex;flex-direction:column;gap:1px}
-.tela .caixa .r{font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--texto3)}
-.tela .caixa .n{font-size:18px;font-weight:650;letter-spacing:-.025em}
-.tela .caixa .n.al{color:var(--alarme)}
-.tela .caixa .h{font-size:11px;color:var(--texto3)}
-.tela .caixa .fim{margin-left:auto;font-size:11.5px;color:var(--texto3)}
+/* ── pessoas ──────────────────────────────────────────────────────────── */
+.tela .ps{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(255,255,255,.05)}
+.tela .ps:first-of-type{border-top:0;padding-top:0}
+.tela .ps .av{width:30px;height:30px;flex:none;border-radius:10px;display:grid;place-items:center;
+              font-size:11px;font-weight:700;color:#120d20}
+.tela .ps .co{min-width:0}
+.tela .ps .co b{display:block;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;
+                text-overflow:ellipsis}
+.tela .ps .co span{display:block;font-size:11.5px;color:var(--texto3);white-space:nowrap;overflow:hidden;
+                   text-overflow:ellipsis}
+.tela .ps .tm{margin-left:auto;flex:none;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;
+              background:var(--painel2);color:var(--texto2)}
+.tela .ps .tm.al{background:rgba(249,118,95,.16);color:var(--quente)}
 
-/* ── atendimento: a fila ────────────────────────────────────────────────── */
-.tela .fila{display:grid;grid-template-columns:64px minmax(0,1fr);gap:0 16px;padding:14px 26px;
-            border-top:1px solid rgba(255,255,255,.045);align-items:start}
-.tela .fila:first-of-type{border-top:0}
-.tela .fila .esp{text-align:right}
-.tela .fila .esp>*{display:block}
-.tela .fila .esp .n{font-size:22px;font-weight:700;letter-spacing:-.04em;line-height:1}
-.tela .fila .esp .n.al{color:var(--alarme)}
-.tela .fila .esp .u{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--texto3)}
-.tela .fila>span:last-child>*{display:block}
-.tela .fila .nome{font-size:15px;font-weight:600;letter-spacing:-.01em}
-.tela .fila .fala{font-size:13.5px;color:var(--texto2);margin-top:3px;padding-left:11px;
-                  border-left:2px solid var(--fio2)}
-.tela .fila .meta{font-size:11.5px;color:var(--texto3);margin-top:5px}
-.tela .fila .meta b{color:var(--marca);font-weight:600}
+/* ── gráfico de área ──────────────────────────────────────────────────── */
+.tela .graf{position:relative;height:132px;margin-top:6px}
+.tela .graf svg{width:100%;height:100%;display:block;overflow:visible}
+.tela .eixo{display:flex;justify-content:space-between;font-size:10px;color:var(--texto3);margin-top:8px}
 
-/* ── financeiro: linhas de cobrança ─────────────────────────────────────── */
-.tela .cob{display:grid;grid-template-columns:minmax(0,1fr) 108px 92px 96px;gap:0 14px;
-           padding:10px 26px;border-top:1px solid rgba(255,255,255,.045);align-items:baseline}
-.tela .cob:first-of-type{border-top:0}
-.tela .cob .cl{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;
-               text-overflow:ellipsis}
-.tela .cob .vl{font-size:13.5px;text-align:right;font-weight:600}
-.tela .cob .dt{font-size:12px;color:var(--texto3);text-align:right}
-.tela .cob .st{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-               text-align:right;color:var(--texto3)}
-.tela .cob .st.al{color:var(--alarme)}
-.tela .cob .st.ok{color:var(--texto2)}
-.tela .cabc{display:grid;grid-template-columns:minmax(0,1fr) 108px 92px 96px;gap:0 14px;
-            padding:9px 26px;font-size:9.5px;font-weight:700;letter-spacing:.13em;
-            text-transform:uppercase;color:var(--texto3);border-bottom:1px solid var(--fio)}
-.tela .cabc span:nth-child(n+2){text-align:right}
+/* ── agenda em coluna de hora ─────────────────────────────────────────── */
+.tela .ag{display:grid;grid-template-columns:46px minmax(0,1fr);gap:0 12px;padding:8px 0;
+          border-top:1px solid rgba(255,255,255,.05);align-items:start}
+.tela .ag:first-of-type{border-top:0;padding-top:0}
+.tela .ag .h{font-size:11.5px;color:var(--texto3);padding-top:2px}
+.tela .ag .co b{display:block;font-size:13px;font-weight:500}
+.tela .ag .co span{display:block;font-size:11.5px;color:var(--texto3);margin-top:1px}
+.tela .ag.ja{opacity:.45}
+.tela .ag .pino{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--marca);
+                margin-right:7px;vertical-align:2px}
+.tela .ag .pino.q{background:var(--quente)}
 
-/* ═════ CELULAR — por container query, então vale dentro do palco ═════ */
-@container (max-width: 560px){
+/* ── tabela ───────────────────────────────────────────────────────────── */
+.tela .tb{width:100%;border-collapse:collapse}
+.tela .tb th{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+             color:var(--texto3);text-align:left;padding:0 0 10px}
+.tela .tb th:nth-child(n+2),.tela .tb td:nth-child(n+2){text-align:right}
+.tela .tb td{padding:10px 0;border-top:1px solid rgba(255,255,255,.05);font-size:13px}
+.tela .tb td .cl{display:flex;align-items:center;gap:9px}
+.tela .tb td .av{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:10px;
+                 font-weight:700;color:#120d20;flex:none}
+.tela .tb td b{font-weight:600}
+.tela .pill{font-size:10.5px;font-weight:650;padding:3px 9px;border-radius:8px;background:var(--painel2);
+            color:var(--texto2)}
+.tela .pill.q{background:rgba(249,118,95,.16);color:var(--quente)}
+.tela .pill.v{background:rgba(78,211,154,.14);color:var(--verde)}
+
+/* ═════ CELULAR ═════ */
+@container (max-width: 620px){
   .tela{grid-template-columns:1fr}
   .tela .menu{display:none}
-  .tela .barra{padding:14px 16px 0}
-  .tela .foco{padding:16px 16px 18px}
-  .tela .foco h3{font-size:25px}
-  .tela .duas{grid-template-columns:1fr;grid-template-rows:none}
-  .tela .fio,.tela .lado{overflow:visible}
-  .tela .conteudo{overflow:auto}
-  /* no celular o que pede resposta vem ANTES do resto do dia */
-  .tela .lado{border-left:0;border-bottom:1px solid var(--fio);order:-1}
-  .tela .l{grid-template-columns:44px minmax(0,1fr);padding:9px 16px;row-gap:2px}
-  .tela .l .tp{grid-column:2;font-size:9px}
-  .tela .l .c{grid-column:2}
-  .tela .l.agora-linha span{left:16px}
-  .tela .cab,.tela .q,.tela .pz{padding-left:16px;padding-right:16px}
-  .tela .caixa{gap:18px 26px;padding:13px 16px}
-  .tela .fila{grid-template-columns:52px minmax(0,1fr);padding:12px 16px}
-  .tela .cob,.tela .cabc{grid-template-columns:minmax(0,1fr) 92px;padding-left:16px;padding-right:16px}
-  .tela .cob .dt,.tela .cob .st,.tela .cabc span:nth-child(3),.tela .cabc span:nth-child(4){display:none}
-  .tela .barra .k{display:none}
+  .tela .conteudo{border-left:0}
+  .tela .topo{padding:14px 14px 0;flex-wrap:wrap}
+  .tela .busca{display:none}
+  .tela .grade{padding:12px 14px 18px;gap:11px}
+  .tela .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tela .g2{grid-template-columns:1fr}
+  .tela .kpi .n{font-size:23px}
+  .tela .calor{grid-template-columns:26px repeat(12,minmax(0,1fr));gap:3px}
+  .tela .tb th:nth-child(3),.tela .tb td:nth-child(3){display:none}
 }
 `;
 
+/* ── peças reaproveitadas ──────────────────────────────────────────────── */
 const menu = (ativo) => `
   <nav class="menu">
     <div class="marca"><i>J.</i><span>Jurid<u>Flow</u></span></div>
     <div class="g">Dia a dia</div>
-    <div class="i${ativo === "hoje" ? " on" : ""}">Hoje</div>
-    <div class="i">Agenda <b>2</b></div>
-    <div class="i${ativo === "atendimento" ? " on" : ""}">Atendimento <b class="al">2</b></div>
+    <div class="i${ativo === "hoje" ? " on" : ""}"><span class="ic"></span>Hoje</div>
+    <div class="i"><span class="ic"></span>Agenda <b>2</b></div>
+    <div class="i${ativo === "atendimento" ? " on" : ""}"><span class="ic"></span>Atendimento <b class="al">2</b></div>
     <div class="g">Carteira</div>
-    <div class="i">Clientes</div>
-    <div class="i">Processos <b>2</b></div>
-    <div class="i">Acordos</div>
+    <div class="i"><span class="ic"></span>Clientes</div>
+    <div class="i"><span class="ic"></span>Processos <b>2</b></div>
+    <div class="i"><span class="ic"></span>Acordos</div>
     <div class="g">Gestão</div>
-    <div class="i${ativo === "financeiro" ? " on" : ""}">Financeiro</div>
-    <div class="i">Relatórios</div>
-    <div class="pe">Dono Smoke<br>Boyadjian Advogados</div>
+    <div class="i${ativo === "financeiro" ? " on" : ""}"><span class="ic"></span>Financeiro</div>
+    <div class="i"><span class="ic"></span>Relatórios</div>
+    <div class="pe"><span class="av">DS</span><span>Dono Smoke<em>Boyadjian Advogados</em></span></div>
   </nav>`;
 
-const barra = (titulo, data) => `
-  <div class="barra"><h2>${titulo}</h2><span class="dt">${data}</span>
-    <span class="k"><span class="tec">⌘K</span> buscar ou criar</span></div>`;
+const topo = (h, dt, acao) => `
+  <div class="topo"><h2>${h}</h2><span class="dt">${dt}</span>
+    <span class="busca">Buscar processo, cliente ou CNJ <span class="tec">⌘K</span></span>
+    <span class="btp">${acao}</span></div>`;
 
-/* ── HOJE ────────────────────────────────────────────────────────────────── */
-const DIA = [
-  ["05:30", "Agenda", "Audiência de instrução", "Fórum Clóvis Beviláqua · 2ª Vara Cível", true],
-  ["07:00", "Agenda", "Reunião — proposta de acordo", "Maria Aparecida Nogueira de Sousa", true],
-  ["08:14", "Tribunal", "Juntada de petição — recurso inominado", "0812345-67 · TJCE", true, true],
-  ["09:02", "Cliente", "José Ribamar — “quero recorrer sim”", "esperando resposta há 6 horas", true],
-  ["09:40", "Tribunal", "Sentença — procedente em parte", "0056789-12 · recurso até 25/09", true, true],
-  ["11:00", "Agenda", "Perícia médica", "Cleide Farias do Nascimento", true],
-  ["11:35", "Caixa", "R$ 2.000,00 recebido", "Maria Aparecida · PIX", true],
-];
-const DIA_DEPOIS = [
-  ["13:30", "Agenda", "Ligar para a cliente", "Antônia Gomes — “consigo pagar na sexta”"],
-  ["14:43", "Tribunal", "Vista dos autos à parte contrária", "0812345-67 · TJCE", false, true],
-  ["17:00", "Agenda", "Preparar perguntas das testemunhas", "para a audiência de amanhã"],
-];
-const linhaDia = ([h, tp, t, s, passou, novo]) => `
-  <div class="l${passou ? " passou" : ""}">
-    <span class="h">${h}</span><span class="tp">${tp}</span>
-    <span class="c"><span class="t">${t}${novo ? '<span class="mk">novo</span>' : ""}</span>
-      <span class="s">${s}</span></span>
+const kpi = (rot, cor, n, ncor, sb, barras) => `
+  <div class="c kpi">
+    <div class="rot"><span class="pt ${cor}"></span>${rot}</div>
+    <div class="n ${ncor}">${n}</div>
+    <div class="sb">${sb}</div>
+    <div class="spark">${barras.map((b) => `<i class="${b}"></i>`).join("")}</div>
   </div>`;
+
+const AV = ["#9a73ff", "#f9765f", "#4ed39a", "#6ba8ff", "#f5c162", "#c4aaff"];
+const av = (ini, i) => `<span class="av" style="background:${AV[i % AV.length]}">${ini}</span>`;
+
+/* ── HOJE ──────────────────────────────────────────────────────────────── */
+const CALOR = [
+  ["09h", [1, 2, 3, 2, 4, 1, 0, 2, 3, 1, 2, 0]],
+  ["11h", [2, 3, 4, 3, 2, 2, 1, 3, 4, 2, 1, 1]],
+  ["14h", [0, 1, 2, 4, 3, 4, 2, 1, 2, 3, 4, 2]],
+  ["17h", [1, 0, 1, 2, 1, 3, 1, 0, 1, 2, 1, 0]],
+];
+const linhaCalor = ([h, cels]) =>
+  `<span class="hh">${h}</span>${cels.map((n) => `<u class="${n ? "n" + n : ""}"></u>`).join("")}`;
+
+const PRAZOS = [
+  ["Recurso inominado", "0056789-12 · Cleide Farias", 3, "q", 88],
+  ["Contestação", "0034521-89 · Raimundo Nonato", 8, "a", 60],
+  ["Manifestação sobre laudo", "0091234-56 · Antônia Gomes", 14, "", 32],
+  ["Juntar procuração", "Vale Verde · sem processo", 21, "", 14],
+];
+const linhaPrazo = ([t, s, d, cor, pct]) => `
+  <div class="prz">
+    <span><span class="t">${t}</span><span class="s">${s}</span>
+      <span class="barra"><i class="${cor}" style="width:${pct}%"></i></span></span>
+    <span class="dias"><b class="${cor}">${d}</b><em>dias</em></span>
+  </div>`;
+
+const MOVS = [
+  ["Tribunal", "", "Juntada de petição — recurso inominado", "0812345-67 · TJCE", "08:14"],
+  ["Tribunal", "", "Sentença — procedente em parte", "0056789-12 · recurso até 25/09", "09:40"],
+  ["Cliente", "cl", "José Ribamar — “quero recorrer sim”", "esperando há 6 horas", "09:02"],
+  ["Tribunal", "", "Vista dos autos à parte contrária", "0812345-67 · TJCE", "14:43"],
+  ["Agenda", "ag", "Perícia médica realizada", "Cleide Farias do Nascimento", "11:00"],
+];
+const linhaMov = ([tag, cls, t, s, hr]) => `
+  <div class="mv"><span class="tag ${cls}">${tag}</span>
+    <span class="co"><b>${t}</b><span>${s}</span></span><span class="hr">${hr}</span></div>`;
+
+const AGENDA = [
+  ["05:30", "Audiência de instrução", "Fórum Clóvis Beviláqua · 2ª Vara Cível", true, ""],
+  ["07:00", "Reunião — proposta de acordo", "Maria Aparecida Nogueira", true, ""],
+  ["11:00", "Perícia médica", "Cleide Farias do Nascimento", true, ""],
+  ["13:30", "Ligar para a cliente", "Antônia Gomes — “pago na sexta”", false, "q"],
+  ["17:00", "Preparar perguntas", "para a audiência de amanhã", false, ""],
+];
+const linhaAg = ([h, t, s, ja, cor]) => `
+  <div class="ag${ja ? " ja" : ""}"><span class="h">${h}</span>
+    <span class="co"><b><span class="pino ${cor}"></span>${t}</b><span>${s}</span></span></div>`;
+
+const ESPERA = [
+  ["JR", "José Ribamar da Silva", "“Eu quero recorrer sim, o valor ficou baixo”", "6h", true],
+  ["AG", "Antônia Gomes Vasconcelos", "“Consigo pagar na sexta, pode ser?”", "4h", true],
+  ["TB", "Tirzah Barbosa de Sousa", "“Vi o anúncio sobre aposentadoria”", "4h", false],
+];
+const linhaPs = ([ini, nome, fala, tm, al], i) => `
+  <div class="ps">${av(ini, i)}<span class="co"><b>${nome}</b><span>${fala}</span></span>
+    <span class="tm${al ? " al" : ""}">${tm}</span></div>`;
 
 export const HOJE = `
-<div class="tela">
-  ${menu("hoje")}
+<div class="tela">${menu("hoje")}
   <div class="conteudo">
-    ${barra("Hoje", "domingo, 13 de setembro · 13:12")}
+    ${topo("Bom dia, Dono", "domingo, 13 de setembro · 13:12", "+ Novo")}
 
-    <div class="foco">
-      <div class="em">daqui a 18 minutos</div>
-      <h3>Ligar para Antônia Gomes Vasconcelos</h3>
-      <p class="sub">Ela escreveu às 09:02: <q>Consigo pagar na sexta, pode ser?</q> — e está esperando
-        há 4 horas. Tem <b>R$ 1.600,00</b> vencidos no nome dela.</p>
-      <div class="acoes">
-        <span class="bt p">Abrir a conversa</span>
-        <span class="bt">Ver as cobranças</span>
-        <span class="bt">Adiar 1 hora</span>
+    <div class="grade g4">
+      ${kpi("Prazos em 7 dias", "q", "2", "q", 'o mais curto vence em <b class="d">3 dias</b>',
+        ["", "", "on", "", "q", "on", ""])}
+      ${kpi("Esperando resposta", "a", "3", "", "o mais antigo há <b class=\"d\">6 horas</b>",
+        ["on", "", "on", "on", "", "q", "on"])}
+      ${kpi("Movimentações novas", "", "4", "", "em 3 processos · <b>+2</b> que ontem",
+        ["", "on", "", "on", "on", "", "on"])}
+      ${kpi("Entrou em setembro", "v", "R$ 10,7 mil", "v", "<b>+30%</b> sobre agosto",
+        ["", "on", "on", "", "on", "on", "on"])}
+    </div>
+
+    <div class="grade g2" style="padding-top:0">
+      <div class="c">
+        <div class="ct"><h3>O que acontece hoje</h3><span class="mais">5 de 11 já aconteceram</span></div>
+        ${MOVS.map(linhaMov).join("")}
+      </div>
+      <div class="c">
+        <div class="ct"><h3>Prazos</h3><span class="mais">ver todos</span></div>
+        ${PRAZOS.map(linhaPrazo).join("")}
       </div>
     </div>
 
-    <div class="duas">
-      <section class="fio">
-        <div class="cab"><h4>O dia</h4><span class="fim">7 já aconteceram · 3 pela frente</span></div>
-        ${DIA.map(linhaDia).join("")}
-        <div class="l agora-linha"><span>agora · 13:12</span></div>
-        ${DIA_DEPOIS.map(linhaDia).join("")}
-      </section>
+    <div class="grade g2" style="padding-top:0">
+      <div class="c">
+        <div class="ct"><h3>Quando o tribunal se mexe</h3>
+          <span class="mais">últimas 12 semanas</span></div>
+        <div class="calor">
+          ${CALOR.map(linhaCalor).join("")}
+          <span></span>${["S", "T", "Q", "Q", "S", "S", "D", "S", "T", "Q", "Q", "S"]
+            .map((d) => `<span class="dd">${d}</span>`).join("")}
+        </div>
+        <div class="legenda">menos
+          <u></u><u class="n1"></u><u class="n2"></u><u class="n3"></u><u class="n4"></u>mais
+        </div>
+      </div>
+      <div class="c">
+        <div class="ct"><h3>Agenda de hoje</h3><span class="mais">4 · 2 tarefas</span></div>
+        ${AGENDA.map(linhaAg).join("")}
+      </div>
+    </div>
 
-      <aside class="lado">
-        <div class="cab"><h4>Prazos</h4></div>
-        <div class="pz"><span><span class="n q">3</span><span class="u">dias</span></span>
-          <span><span class="t">Recurso inominado</span><span class="s">0056789-12 · Cleide Farias</span></span></div>
-        <div class="pz"><span><span class="n">8</span><span class="u">dias</span></span>
-          <span><span class="t">Contestação</span><span class="s">0034521-89 · Raimundo Nonato</span></span></div>
-        <div class="pz"><span><span class="n">14</span><span class="u">dias</span></span>
-          <span><span class="t">Manifestação sobre laudo</span><span class="s">0091234-56 · Antônia Gomes</span></span></div>
-        <div class="cab" style="border-top:1px solid var(--fio);margin-top:6px"><h4>Esperando você</h4></div>
-        <div class="q"><span class="av">JR</span><span class="nm">José Ribamar da Silva</span><span class="tm al">6h</span></div>
-        <div class="q"><span class="av">AG</span><span class="nm">Antônia Gomes Vasconcelos</span><span class="tm al">4h</span></div>
-        <div class="q"><span class="av">TB</span><span class="nm">Tirzah Barbosa de Sousa</span><span class="tm">4h</span></div>
-        <div class="q" style="padding-bottom:14px"><span class="av">FE</span><span class="nm">Francisco Edilson</span><span class="tm">1d</span></div>
-      </aside>
-
-      <div class="caixa">
-        <span class="v"><span class="r">Recebido em setembro</span><span class="n">R$ 10.700,00</span></span>
-        <span class="v"><span class="r">A receber, em dia</span><span class="n">R$ 7.750,00</span><span class="h">3 cobranças</span></span>
-        <span class="v"><span class="r">Vencido</span><span class="n al">R$ 1.600,00</span><span class="h">1 cliente</span></span>
-        <span class="v"><span class="r">Em negociação</span><span class="n">R$ 22.700,00</span><span class="h">4 leads</span></span>
-        <span class="fim">ver o mês inteiro →</span>
+    <div class="grade" style="padding-top:0;grid-template-columns:1fr">
+      <div class="c">
+        <div class="ct"><h3>Clientes esperando resposta</h3><span class="mais">abrir o Atendimento →</span></div>
+        ${ESPERA.map(linhaPs).join("")}
       </div>
     </div>
   </div>
 </div>`;
 
-/* ── ATENDIMENTO ─────────────────────────────────────────────────────────── */
+/* ── ATENDIMENTO ───────────────────────────────────────────────────────── */
 const FILA = [
-  ["6h", true, "José Ribamar da Silva Filho", "Eu quero recorrer sim, o valor ficou muito baixo",
-   "Cleide · 0056789-12 · <b>sentença publicada há 3h</b>"],
-  ["4h", true, "Antônia Gomes Vasconcelos", "Consigo pagar na sexta, pode ser?",
-   "cliente desde 2024 · <b>R$ 1.600,00 vencidos</b>"],
-  ["4h", false, "Tirzah Barbosa de Sousa", "Boa tarde! Vi o anúncio de vocês sobre aposentadoria",
-   "lead novo · veio do Instagram"],
-  ["1d", false, "Francisco Edilson Martins", "Obrigado, doutor! Até amanhã então",
-   "não precisa de resposta · marcado como resolvido"],
+  ["JR", "José Ribamar da Silva Filho", "“Eu quero recorrer sim, o valor ficou muito baixo”",
+   "6h", true, "sentença publicada há 3h · prazo em 3 dias"],
+  ["AG", "Antônia Gomes Vasconcelos", "“Consigo pagar na sexta, pode ser?”",
+   "4h", true, "R$ 1.600,00 vencidos há 11 dias"],
+  ["TB", "Tirzah Barbosa de Sousa", "“Boa tarde! Vi o anúncio sobre aposentadoria”",
+   "4h", false, "lead novo · veio do Instagram"],
+  ["CF", "Cleide Farias do Nascimento", "“Então eu levo os exames na segunda?”",
+   "2h", false, "perícia médica hoje às 11h"],
+  ["FE", "Francisco Edilson Martins", "“Obrigado, doutor! Até amanhã então”",
+   "1d", false, "não precisa de resposta"],
 ];
-const linhaFila = ([t, al, nome, fala, meta]) => `
-  <div class="fila">
-    <span class="esp"><span class="n${al ? " al" : ""}">${t}</span><span class="u">esperando</span></span>
-    <span><span class="nome">${nome}</span>
-      <span class="fala">“${fala}”</span>
-      <span class="meta">${meta}</span></span>
-  </div>`;
+const linhaFila = ([ini, nome, fala, tm, al, meta], i) => `
+  <div class="ps" style="padding:12px 0">${av(ini, i)}
+    <span class="co"><b>${nome}</b><span>${fala}</span>
+      <span style="color:var(--texto3);font-size:11px;margin-top:3px">${meta}</span></span>
+    <span class="tm${al ? " al" : ""}">${tm}</span></div>`;
 
 export const ATENDIMENTO = `
-<div class="tela">
-  ${menu("atendimento")}
+<div class="tela">${menu("atendimento")}
   <div class="conteudo">
-    ${barra("Atendimento", "6 conversas · 2 esperando há mais de 4h")}
+    ${topo("Atendimento", "6 conversas · 2 esperando há mais de 4h", "+ Nova conversa")}
 
-    <div class="foco">
-      <div class="em">o mais antigo sem resposta</div>
-      <h3>José Ribamar espera há 6 horas</h3>
-      <p class="sub">A sentença do processo dele saiu hoje às 09:40 — <b>procedente em parte</b>, e o
-        prazo de recurso vence em 3 dias. Ele já sabe: escreveu às 09:02.</p>
-      <div class="acoes">
-        <span class="bt p">Responder</span>
-        <span class="bt">Abrir o processo</span>
-        <span class="bt">Passar para outro atendente</span>
-      </div>
+    <div class="grade g4">
+      ${kpi("Esperando agora", "q", "3", "q", "2 passaram de 4 horas", ["on", "", "on", "on", "", "q", "q"])}
+      ${kpi("Em atendimento", "", "2", "", "com Dono e Gestor", ["", "on", "on", "", "on", "", "on"])}
+      ${kpi("Tempo médio", "a", "73 min", "", "ontem foram <b>48 min</b>", ["on", "on", "", "q", "q", "on", "q"])}
+      ${kpi("Resolvidas hoje", "v", "1", "", "média da semana: <b>4</b>", ["on", "on", "on", "", "", "on", ""])}
     </div>
 
-    <div class="duas">
-      <section class="fio">
-        <div class="cab"><h4>Fila, do mais antigo ao mais novo</h4>
-          <span class="fim">a fala do cliente aparece inteira — não cortada</span></div>
+    <div class="grade g2" style="padding-top:0">
+      <div class="c">
+        <div class="ct"><h3>Fila — do mais antigo ao mais novo</h3>
+          <span class="mais">a fala aparece inteira</span></div>
         ${FILA.map(linhaFila).join("")}
-      </section>
-      <aside class="lado">
-        <div class="cab"><h4>Hoje</h4></div>
-        <div class="pz"><span><span class="n">73</span><span class="u">min</span></span>
-          <span><span class="t">Tempo médio de resposta</span><span class="s">ontem foram 48 min</span></span></div>
-        <div class="pz"><span><span class="n">1</span><span class="u">resolv.</span></span>
-          <span><span class="t">Resolvidas hoje</span><span class="s">média da semana: 4</span></span></div>
-        <div class="cab" style="border-top:1px solid var(--fio)"><h4>Quem está atendendo</h4></div>
-        <div class="q"><span class="av">DS</span><span class="nm">Dono Smoke</span><span class="tm">2</span></div>
-        <div class="q" style="padding-bottom:14px"><span class="av">GS</span><span class="nm">Gestor Smoke</span><span class="tm">1</span></div>
-      </aside>
+      </div>
+      <div class="c">
+        <div class="ct"><h3>Quando o cliente escreve</h3><span class="mais">últimas 12 semanas</span></div>
+        <div class="calor">
+          ${CALOR.map(linhaCalor).join("")}
+          <span></span>${["S", "T", "Q", "Q", "S", "S", "D", "S", "T", "Q", "Q", "S"]
+            .map((d) => `<span class="dd">${d}</span>`).join("")}
+        </div>
+        <div class="ct" style="margin:18px 0 12px"><h3>Quem está atendendo</h3></div>
+        ${[["DS", "Dono Smoke", "2 conversas abertas", "2", false],
+           ["GS", "Gestor Smoke", "1 conversa aberta", "1", false]].map(linhaPs).join("")}
+      </div>
     </div>
   </div>
 </div>`;
 
-/* ── FINANCEIRO ──────────────────────────────────────────────────────────── */
-const COB = [
-  ["Raimundo Nonato de Alencar", "R$ 900,00", "27/09", "em dia", ""],
-  ["Maria Aparecida Nogueira de Sousa", "R$ 2.000,00", "22/09", "em dia", ""],
-  ["Antônia Gomes Vasconcelos", "R$ 1.600,00", "02/09", "11 dias", "al"],
-  ["Cleide Farias do Nascimento", "R$ 1.250,00", "30/09", "em dia", ""],
-  ["José Ribamar da Silva Filho", "R$ 4.000,00", "15/09", "em dia", ""],
-  ["Tirzah Barbosa de Sousa", "R$ 950,00", "05/09", "pago", "ok"],
+/* ── FINANCEIRO ────────────────────────────────────────────────────────── */
+const PONTOS = [0, 0, 380, 0, 0, 0, 0, 10700, 0, 0, 1400, 0, 0];
+const maxP = Math.max(...PONTOS);
+const caminho = PONTOS.map((v, i) => {
+  const x = (i / (PONTOS.length - 1)) * 100;
+  const y = 100 - (v / maxP) * 92;
+  return `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+}).join(" ");
+
+const COBS = [
+  ["RN", "Raimundo Nonato de Alencar", "R$ 900,00", "27/09", "em dia", ""],
+  ["MA", "Maria Aparecida Nogueira", "R$ 2.000,00", "22/09", "em dia", ""],
+  ["AG", "Antônia Gomes Vasconcelos", "R$ 1.600,00", "02/09", "11 dias", "q"],
+  ["CF", "Cleide Farias do Nascimento", "R$ 1.250,00", "30/09", "em dia", ""],
+  ["JR", "José Ribamar da Silva Filho", "R$ 4.000,00", "15/09", "em dia", ""],
+  ["TB", "Tirzah Barbosa de Sousa", "R$ 950,00", "05/09", "pago", "v"],
 ];
-const linhaCob = ([cl, vl, dt, st, cls]) => `
-  <div class="cob"><span class="cl">${cl}</span><span class="vl">${vl}</span>
-    <span class="dt">${dt}</span><span class="st ${cls}">${st}</span></div>`;
+const linhaCob = ([ini, nome, vl, dt, st, cls], i) => `
+  <tr><td><span class="cl">${av(ini, i)}<span>${nome}</span></span></td>
+    <td><b>${vl}</b></td><td>${dt}</td><td><span class="pill ${cls}">${st}</span></td></tr>`;
 
 export const FINANCEIRO = `
-<div class="tela">
-  ${menu("financeiro")}
+<div class="tela">${menu("financeiro")}
   <div class="conteudo">
-    ${barra("Financeiro", "setembro · 01 a 30")}
+    ${topo("Financeiro", "setembro · 01 a 30", "+ Nova cobrança")}
 
-    <div class="foco">
-      <div class="em">a única coisa vencida</div>
-      <h3>R$ 1.600,00 de Antônia Gomes, há 11 dias</h3>
-      <p class="sub">Ela respondeu hoje às 09:02: <q>Consigo pagar na sexta, pode ser?</q> — e está
-        esperando resposta. O resto do mês está em dia: R$ 7.750,00 a receber em 3 cobranças.</p>
-      <div class="acoes">
-        <span class="bt p">Responder e combinar a data</span>
-        <span class="bt">Renegociar a cobrança</span>
+    <div class="grade g4">
+      ${kpi("Entrou no caixa", "v", "R$ 10,7 mil", "v", "<b>+30%</b> sobre agosto",
+        ["", "on", "", "", "on", "on", "on"])}
+      ${kpi("A receber, em dia", "", "R$ 7,7 mil", "", "3 cobranças", ["on", "", "on", "on", "", "on", ""])}
+      ${kpi("Vencido", "q", "R$ 1,6 mil", "q", "1 cliente · <b class=\"d\">13% do mês</b>",
+        ["", "", "q", "", "q", "", "q"])}
+      ${kpi("Em negociação", "a", "R$ 22,7 mil", "", "4 leads no funil", ["on", "on", "", "on", "on", "", "on"])}
+    </div>
+
+    <div class="grade g2" style="padding-top:0">
+      <div class="c">
+        <div class="ct"><h3>Entradas do mês</h3><span class="mais">R$ 10.700,00 em 3 pagamentos</span></div>
+        <div class="graf">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#4ed39a" stop-opacity=".38"/>
+              <stop offset="100%" stop-color="#4ed39a" stop-opacity="0"/></linearGradient></defs>
+            <path d="${caminho} L100,100 L0,100 Z" fill="url(#gr)"/>
+            <path d="${caminho}" fill="none" stroke="#4ed39a" stroke-width="1.6"
+                  vector-effect="non-scaling-stroke"/>
+          </svg>
+        </div>
+        <div class="eixo"><span>01 set</span><span>07 set</span><span>13 set</span></div>
+      </div>
+      <div class="c">
+        <div class="ct"><h3>Quem deve</h3><span class="mais">1 cliente</span></div>
+        ${linhaPs(["AG", "Antônia Gomes Vasconcelos", "R$ 1.600,00 · vencido há 11 dias", "11d", true], 1)}
+        <div class="ct" style="margin:18px 0 12px"><h3>Como entrou</h3></div>
+        <div class="prz"><span><span class="t">PIX</span>
+          <span class="barra"><i style="width:100%"></i></span></span>
+          <span class="dias"><b>100</b><em>%</em></span></div>
+        <div class="prz"><span><span class="t">Asaas (boleto e cartão)</span>
+          <span class="barra"><i style="width:2%"></i></span></span>
+          <span class="dias"><b>0</b><em>%</em></span></div>
       </div>
     </div>
 
-    <div class="duas">
-      <section class="fio">
-        <div class="cab"><h4>Cobranças de setembro</h4><span class="fim">6 · ordenadas por vencimento</span></div>
-        <div class="cabc"><span>Cliente</span><span>Valor</span><span>Vence</span><span>Situação</span></div>
-        ${COB.map(linhaCob).join("")}
-      </section>
-      <aside class="lado">
-        <div class="cab"><h4>O mês</h4></div>
-        <div class="pz"><span><span class="n">10,7</span><span class="u">mil</span></span>
-          <span><span class="t">Entrou no caixa</span><span class="s">agosto foram 8,2 mil</span></span></div>
-        <div class="pz"><span><span class="n">7,7</span><span class="u">mil</span></span>
-          <span><span class="t">A receber, em dia</span><span class="s">3 cobranças</span></span></div>
-        <div class="pz"><span><span class="n q">1,6</span><span class="u">mil</span></span>
-          <span><span class="t">Vencido</span><span class="s">1 cliente · 13% do mês</span></span></div>
-        <div class="cab" style="border-top:1px solid var(--fio)"><h4>Entrou por onde</h4></div>
-        <div class="q"><span class="av">PX</span><span class="nm">PIX</span><span class="tm">R$ 10.700</span></div>
-        <div class="q" style="padding-bottom:14px"><span class="av">AS</span><span class="nm">Asaas</span><span class="tm">R$ 0</span></div>
-      </aside>
+    <div class="grade" style="padding-top:0;grid-template-columns:1fr">
+      <div class="c">
+        <div class="ct"><h3>Cobranças de setembro</h3><span class="mais">6 · por vencimento</span></div>
+        <table class="tb">
+          <tr><th>Cliente</th><th>Valor</th><th>Vence</th><th>Situação</th></tr>
+          ${COBS.map(linhaCob).join("")}
+        </table>
+      </div>
     </div>
   </div>
 </div>`;

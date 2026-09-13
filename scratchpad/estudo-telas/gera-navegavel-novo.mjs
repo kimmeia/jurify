@@ -109,14 +109,14 @@ const html = `<!doctype html>
 <script>
 (function(){
   var LARG = { comp: 1440, cel: 390 };
-  var ALT  = { comp: 900,  cel: 844 };
+  var ALT  = { comp: 980,  cel: 844 };
   var palco = document.getElementById("palco");
   var moldura = document.getElementById("moldura");
   var rodape = document.getElementById("rodape");
   var NOTAS = {
-    hoje: "Hoje: a fileira de cartões virou uma frase, o dia virou linha do tempo com a marca AGORA, e o prazo virou contagem regressiva fixa.",
-    atendimento: "Atendimento: a fila é ordenada por tempo de espera e a fala do cliente aparece inteira — hoje ela vem cortada em uma linha.",
-    financeiro: "Financeiro: o hero verde deu lugar à única coisa vencida, com o nome, o valor e há quantos dias."
+    hoje: "Hoje: painéis elevados, cartões de número com minigráfico, prazos como barra de contagem e um mapa de calor de quando o tribunal se mexe.",
+    atendimento: "Atendimento: fila por tempo de espera com a fala do cliente inteira e o motivo ao lado — hoje a fala vem cortada em uma linha.",
+    financeiro: "Financeiro: gráfico de entradas, quem deve com há quantos dias, e a tabela com avatar e situação em pílula."
   };
 
   function mostra(){
