@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.044 verdes, 405 arquivos** (13/09, com o retorno do teste de uso da seção 22; 6.038 em 404 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.070 verdes, 407 arquivos** (13/09, com as seções 22 e 23; 6.044 em 405 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -215,7 +215,7 @@ A coluna **estado** significa:
 | Modelos de Contrato / assinatura | parcial | assinatura eletrônica **sem nenhum controle de permissão** (**D-5**) | sim |
 | Relatórios | não auditado | card "Recebido" tem regra que não soma quinzenas (decisão do dono pendente) | sim |
 | Backup do escritório | parcial | 20 tabelas do escritório ficam fora do backup (**D-2**) | sim |
-| Ponto | não auditado | dados de ponto e RH estão entre as tabelas fora do backup (**D-2**) | sim |
+| Ponto | não auditado | **fora de produção desde 13/09** por decisão do dono — em staging com selo "beta" (seção 23.1); dados de ponto e RH estão entre as tabelas fora do backup (**D-2**) | está na cesta do plano Escala, mas não aparece em produção |
 
 **Módulo que existe só como desenho de banco:** Diário da Justiça Eletrônico.
 As tabelas `dje_documentos` e `dje_publicacoes` estão no schema, completas e bem
@@ -2977,3 +2977,125 @@ Amarras: `dialogo-credencial-cabe-na-tela` (5 testes) e `primeiros-passos`
 (`scratchpad/mutar-dialogo-e-dashboard.py`). Uma delas apaga o resumo de
 `/ajuda`: remover da tela de trabalho é diferente de apagar, e o teste separa as
 duas coisas.
+
+---
+
+## 23. Ponto fora de produção e a limpeza da tela de Processos (13/09)
+
+Duas decisões que o dono deu em sequência, no mesmo teste de uso da seção 22.
+Nenhuma das duas é mockup pendente: ele nomeou item por item o que queria fora,
+e remoção de elemento nomeado não tem desenho novo pra aprovar.
+
+### 23.1 O módulo Ponto sai de produção e fica em staging com selo "beta"
+
+Palavras dele: *"esse modulo ponto vamos remover por enquanto de produção e em
+stating vamos deixar com a etiqueta beta"*.
+
+**Não é remoção de código.** Nada do módulo foi apagado — nem tela, nem
+procedure, nem tabela, nem a linha do plano. O que muda é ONDE ele é oferecido.
+
+Uma lista só, em `shared/modulos-por-ambiente.ts` (`MODULOS_BETA`), lida pelas
+**três** portas que decidem se um módulo existe. Três listas divergindo dariam o
+pior resultado possível: item escondido no menu com a API aberta, ou o contrário.
+
+| porta | onde | o que faz |
+|---|---|---|
+| menu | `AppLayout` (`itemVisivelNoMenu`) | o item some em produção; em staging aparece com selo |
+| rota | `ModuloGuard` | tela `ModuloEmTestes` em vez de renderizar o módulo |
+| procedures | `conferirModuloDoPath` (`gate-modulos.ts`) | FORBIDDEN `modulo_em_beta` |
+
+Três decisões de desenho que valem registro, porque cada uma é uma armadilha
+evitada:
+
+1. **Ambiente desconhecido conta como produção.** `moduloRemovidoNoAmbiente`
+   trata `null`/`undefined` como produção: na dúvida sobre onde estamos, mostrar
+   por engano em produção é exatamente o erro que a decisão existe pra evitar.
+2. **No porteiro, a recusa vem ANTES do atalho de admin e ANTES da conta de
+   contrato.** É a única exceção consciente ao fail-open do gate: "tudo liberado
+   por erro nosso" (cesta indeterminada) não pode abrir um módulo que o dono
+   tirou do ar. Mesma ordem na rota, pelo mesmo motivo.
+3. **Cesta `null` continua `null`.** `filtrarModulosDoAmbiente` não transforma o
+   indeterminado em lista vazia — quem decide o bloqueio nesse caso é a porta.
+   Mexer aqui trocaria o fail-open do gate inteiro por efeito colateral da lista.
+
+A resposta de `subscription.modulosContratados` passou a levar o `ambiente`
+junto, inclusive no ramo de admin/impersonação (que recebe `modulos: null`):
+sem ele o client trataria tudo como produção e esconderia o Ponto em staging.
+
+**O que o dono precisa saber, e que não estava no pedido:** o plano **Escala**
+(migration 0217) tem `'ponto'` na cesta, e a lista de vantagens dele vende
+*"Comissões automáticas por colaborador e ponto da equipe"*. A migration não foi
+tocada — quem assina o Escala segue com o módulo na cesta e volta a vê-lo quando
+o beta sair —, mas **em produção o cartão do plano anuncia uma coisa que a conta
+não mostra**. Tirar o texto do cartão é outra remoção e depende dele.
+
+Pra devolver o Ponto a produção: apagar `"ponto"` de `MODULOS_BETA`. Nada mais.
+
+Amarra: `modulo-ponto-fora-de-producao` (16 testes) — inclui o par oposto
+(aparece em staging **e** não aparece em produção), porque esconder nos dois
+seria a remoção que ele não pediu.
+
+### 23.2 Cinco remoções na tela de Processos
+
+Palavras dele, em duas mensagens: *"podemos remover essa aba alertas pq ja pega
+em monitoramento, os creditos pq não usamos mais, resumo diarío também pode
+remover pq construiremos essa função em smartflow e consulta cnj desnecessário"*
+e *"e os cards monitorados, nova ação e parados tambem desnecessário"*.
+
+**A conferência que precedeu a remoção da aba Alertas.** A aba era o painel de
+aprovar prazo sugerido pela IA (`prazosSugeridos.listar/aprovar/descartar`), e no
+client inteiro **só `Processos.tsx`** toca esse namespace. Se a aba fosse o único
+caminho de aprovar, tirá-la deixaria o cron enchendo uma tabela que ninguém lê —
+uma remoção silenciosa de função, que é justamente o que a regra da casa proíbe.
+**Não é**: a timeline do Monitoramento tem o selo «Requer prazo» e o botão
+«＋ Criar prazo» chamando a MESMA `prazosSugeridos.aprovar`. O dono estava certo
+ao dizer "já pega em monitoramento". É esse par que a amarra trava.
+
+**O que ficou sem tela**: `prazosSugeridos.descartar`. O botão «Descartar» era só
+da aba; hoje a sugestão que ninguém aprova fica pendente e mantém o selo na
+movimentação. Não inventei substituto — está anotado aqui pro dono decidir.
+
+As três pastilhas de contagem (monitorados · parados · nova ação) saíram porque
+repetiam o número que já estava logo abaixo: `MonitoramentosCount` mostra
+parados/total no badge da aba Monitoramento e `NovasAcoesBadge` mostra as não
+lidas no badge de Novas Ações. As duas queries que alimentavam as pastilhas eram
+cópia das que os badges já fazem — o cabeçalho fazia 2 chamadas para mostrar de
+novo o que a barra de abas mostrava. `CabecalhoProcessos` ficou sem props e sem
+query: só título e a linha do que a tela faz.
+
+**Link antigo não quebra**: `?tab=alertas` existe solto em e-mail e histórico de
+navegador. Ele cai na Central de Movimentações em vez de abrir uma aba que não
+existe mais.
+
+**O que NÃO foi removido, de propósito:**
+
+- **`ConsultarTab`** — a busca avulsa por CNJ/CPF/CNPJ continua no arquivo, sem
+  porta, com o motivo escrito no topo da função. Ele autorizou tirar o BOTÃO;
+  apagar a consulta é outra decisão. Pra devolver, é montar o componente num
+  Dialog outra vez.
+- **`ConfigResumoDiario`** — vive em `Movimentacoes.tsx`, exportado. Só o mount
+  em Processos saiu. Ele disse que a função será refeita no SmartFlow.
+- **O aviso «Saldo baixo»** (aparece com saldo < 5) e os textos de custo em
+  crédito dentro dos diálogos de monitoramento («2 créditos/mês», «15
+  créditos/mês», «3 créditos base»). São crédito, como a pastilha — mas ele
+  apontou a pastilha, e no print dele o saldo era 5.816, então o aviso nem
+  estava na tela. **Pergunta aberta pro dono**: tiro esses também?
+
+Amarra: `processos-cabecalho-enxuto` (10 testes). Duas amarras existentes foram
+atualizadas para a verdade nova em vez de apagadas: `movimentacoes-na-carteira`
+(a consulta avulsa não tem aba **nem** botão — conferido pelo MECANISMO, estado
+e montagem, porque o rótulo «Consultar CNJ» segue escrito no comentário que
+explica a decisão) e `telas-cabem-no-celular` (a fileira de 425px que vazava no
+celular de 390px não existe mais; quem segura a largura agora é o `flex-wrap` da
+tira de abas). `fuso-telas-usam-helper` perdeu a metade que exigia a pill da aba
+e manteve a que protege: nenhuma data de prazo sugerido volta a ser formatada à
+mão.
+
+**31 mutações, todas vermelhas** (`scratchpad/mutar-ponto-e-processos.py`). Uma
+sobreviveu na 1ª volta pelo motivo de sempre: a amarra do porteiro conferia a
+POSIÇÃO da recusa de ambiente, e dava pra deixar a chamada onde está e desarmar a
+condição (`args.role !== "admin" &&` na frente). Agora ela confere que o `if` é
+incondicional.
+
+Baseline depois destas duas entregas: **6.070 testes verdes em 407 arquivos**
+(`pnpm test`), `pnpm check` limpo, `pnpm vite build` passando.

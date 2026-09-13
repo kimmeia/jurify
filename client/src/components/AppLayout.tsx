@@ -66,6 +66,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { contratoLibera } from "@shared/modulos-contratacao";
+import { moduloMostraSeloBeta, moduloRemovidoNoAmbiente } from "@shared/modulos-por-ambiente";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
@@ -350,6 +351,10 @@ function AppSidebarContent({
     staleTime: 60_000,
   });
   const modulosContratados: string[] | null = modulosData?.modulos ?? null;
+  // Onde o app está rodando. Admin e impersonação recebem `modulos: null`
+  // ("tudo liberado"), então sem isto eles veriam no menu um módulo que não
+  // existe em produção e o clique bateria no porteiro.
+  const ambiente = modulosData?.ambiente ?? null;
 
   const canSeeEstrito = (modulo: string) => {
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
@@ -472,6 +477,7 @@ function AppSidebarContent({
    */
   const itemVisivelNoMenu = (i: ItemMenu) =>
     !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+    !(i.modulo ?? []).some((m) => moduloRemovidoNoAmbiente(m, ambiente)) &&
     (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
     (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
     (i.ver ? i.ver(canSee, canSeeEstrito) : true);
@@ -634,11 +640,21 @@ function AppSidebarContent({
                             <span className={`flex-1 rotulo-item ${CLASSES_ROTULO_RAIL}`}>
                               {item.rotulo}
                             </span>
-                            {item.selo && contagem === 0 && (
-                              <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
-                                {item.selo}
-                              </span>
-                            )}
+                            {(() => {
+                              // Módulo que só existe fora de produção carrega a
+                              // etiqueta sem precisar de `selo` fixo: quem decide
+                              // é a MESMA lista que esconde o item lá.
+                              const seloDoItem =
+                                item.selo ??
+                                ((item.modulo ?? []).some((m) => moduloMostraSeloBeta(m, ambiente))
+                                  ? "beta"
+                                  : undefined);
+                              return seloDoItem && contagem === 0 ? (
+                                <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
+                                  {seloDoItem}
+                                </span>
+                              ) : null;
+                            })()}
                             {contagem > 0 && (
                               <>
                                 <span

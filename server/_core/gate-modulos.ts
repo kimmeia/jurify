@@ -18,6 +18,8 @@ import { TRPCError } from "@trpc/server";
 import { contratoLibera, moduloDoPath } from "@shared/modulos-contratacao";
 import { MODULOS_APP } from "@shared/modulos-app";
 import { unirModulosContratados } from "@shared/fatura-modulos";
+import { filtrarModulosDoAmbiente, moduloRemovidoNoAmbiente } from "@shared/modulos-por-ambiente";
+import { resolverAmbiente } from "./ambiente";
 
 interface AcessoCacheado {
   expiraEm: number;
@@ -71,6 +73,10 @@ export async function modulosContratadosDoUsuario(userId: number): Promise<strin
     modulos = null; // indeterminado → tudo liberado; o porteiro não derruba ninguém por erro nosso
   }
 
+  // Módulo em beta não entra na cesta do ambiente onde não existe: é o que faz
+  // o menu e a rota se fecharem sozinhos, sem cada tela precisar saber da lista.
+  modulos = filtrarModulosDoAmbiente(modulos, resolverAmbiente());
+
   // Cache até de null: a resposta "tudo liberado" também não pode custar
   // 2 queries por chamada.
   if (cache.size > 5_000) cache.clear();
@@ -94,6 +100,19 @@ export async function conferirModuloDoPath(args: {
 }): Promise<void> {
   const modulo = moduloDoPath(args.path);
   if (!modulo) return;
+
+  // Módulo que não existe NESTE ambiente é barrado antes de qualquer outra
+  // conta — inclusive pro admin e inclusive quando a cesta sai indeterminada.
+  // É a única exceção consciente ao fail-open do porteiro: "tudo liberado por
+  // erro nosso" não pode abrir um módulo que o dono tirou do ar.
+  if (moduloRemovidoNoAmbiente(modulo, resolverAmbiente())) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: `O módulo "${nomeDoModulo(modulo)}" está em testes e ainda não foi liberado.`,
+      cause: { motivo: "modulo_em_beta", modulo },
+    });
+  }
+
   if (args.role === "admin") return;
 
   const contratados = await modulosContratadosDoUsuario(args.userId);

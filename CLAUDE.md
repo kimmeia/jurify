@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.044 verdes em 13/09/2026 (405 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.070 verdes em 13/09/2026 (407 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1642,6 +1642,58 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   manual da Central de ajuda mudou no MESMO commit (regra do «»).
   Amarras: `dialogo-credencial-cabe-na-tela` (5) + `primeiros-passos` reescrita —
   8 mutações vermelhas.
+
+- **Entregue 13/09, módulo Ponto fora de produção + 5 remoções na tela de
+  Processos (seção 23 do documento de estado).** Dois pedidos dele em sequência,
+  no mesmo teste de uso. Remoção de elemento NOMEADO não passou por mockup: não
+  há desenho novo pra aprovar, e ele listou item por item.
+  - **Ponto** ("remover por enquanto de produção e em stating deixar com a
+    etiqueta beta"): **nada de código foi apagado**. `MODULOS_BETA` em
+    `shared/modulos-por-ambiente.ts` é lida pelas TRÊS portas que decidem se um
+    módulo existe — menu (`itemVisivelNoMenu` no AppLayout), rota
+    (`ModuloGuard`, tela nova `ModuloEmTestes`) e procedures
+    (`conferirModuloDoPath` → FORBIDDEN `modulo_em_beta`). Três listas divergindo
+    daria item escondido no menu com a API aberta. Três decisões que valem
+    lembrar: ambiente DESCONHECIDO conta como produção (na dúvida, não mostrar);
+    a recusa vem ANTES do atalho de admin e da conta de contrato nas duas portas
+    de acesso, **única exceção consciente ao fail-open do gate** (cesta
+    indeterminada não pode abrir módulo tirado do ar); e cesta `null` continua
+    `null` (transformar em lista vazia trocaria o fail-open inteiro por efeito
+    colateral da lista). `subscription.modulosContratados` passou a devolver
+    `ambiente` nos DOIS ramos — sem ele o client trata tudo como produção e
+    esconde o Ponto em staging. Pra devolver: apagar `"ponto"` da lista, nada
+    mais. **Pendência que o pedido não cobria**: o plano **Escala** (0217) tem
+    `'ponto'` na cesta e o cartão vende "ponto da equipe" — a migration NÃO foi
+    tocada, então em produção o cartão anuncia o que a conta não mostra; mudar o
+    texto é outra remoção e depende dele. Amarra:
+    `modulo-ponto-fora-de-producao` (16), com o par oposto (aparece em staging E
+    não aparece em produção — esconder nos dois seria remoção não pedida).
+  - **Processos**: saíram a aba Alertas, a pastilha de créditos, os botões
+    «Resumo diário» e «Consultar CNJ» e as três pastilhas de contagem
+    (monitorados · parados · nova ação). **A conferência antes de tirar a aba
+    Alertas**: ela era o painel de aprovar prazo sugerido e só `Processos.tsx`
+    toca `prazosSugeridos` no client — se fosse o único caminho, tirá-la deixaria
+    o cron enchendo tabela que ninguém lê. Não é: a timeline do Monitoramento tem
+    «Requer prazo» + «＋ Criar prazo» chamando a MESMA `prazosSugeridos.aprovar`.
+    **Ficou sem tela**: `descartar` (era só da aba); sugestão não aprovada fica
+    pendente com o selo. As pastilhas repetiam o número do badge da aba logo
+    abaixo (`MonitoramentosCount`, `NovasAcoesBadge`) e as 2 queries eram cópia
+    das deles — `CabecalhoProcessos` ficou sem props e sem query. `?tab=alertas`
+    cai na Central em vez de abrir aba inexistente.
+    **NÃO removidos de propósito** (ele autorizou o BOTÃO, não o código):
+    `ConsultarTab` fica no arquivo sem porta, com o motivo escrito no topo;
+    `ConfigResumoDiario` segue exportado em `Movimentacoes.tsx`; e o aviso
+    «Saldo baixo» + os textos de custo em crédito dos diálogos continuam —
+    **pergunta aberta pro dono**. Amarra: `processos-cabecalho-enxuto` (10);
+    `movimentacoes-na-carteira` e `telas-cabem-no-celular` ATUALIZADAS pra
+    verdade nova (a 1ª confere o MECANISMO — estado e montagem —, porque o rótulo
+    «Consultar CNJ» segue escrito no comentário que explica a decisão; a 2ª trava
+    o `flex-wrap` da tira de abas, que virou quem segura os 390px);
+    `fuso-telas-usam-helper` perdeu a metade que exigia a pill da aba e manteve a
+    que protege. **31 mutações vermelhas**
+    (`scratchpad/mutar-ponto-e-processos.py`; 1 sobreviveu na 1ª volta — a amarra
+    conferia a POSIÇÃO da recusa de ambiente e dava pra desarmar a condição no
+    lugar; agora confere que o `if` é incondicional).
 
 ## Fila combinada com o dono (31/08/2026)
 
