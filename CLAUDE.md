@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.119 verdes em 13/09/2026 (411 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.136 verdes em 13/09/2026 (412 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1885,6 +1885,43 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   limites` manteve `limitesDoPlano`; `admin-excluir-conta-alvo` manteve o
   caminho de EXCLUIR CONTA (bloqueador P0-D); `superlancamento-planos` passou a
   travar a VAGA.
+
+- **Entregue 13/09, o uso só libera depois de escolher plano ou teste — "resolva
+  logo isso" do dono (seção 27 do documento de estado).** Ele descreveu o fluxo
+  ("cadastra > confirma e-mail > aceita termos > escolhe plano ou teste > libera
+  uso") e perguntou como garantir. A conferência achou **dois degraus que eram
+  só desenho**: termos e plano viviam no navegador, e a API respondia sem
+  nenhum dos dois. O do plano era o pior, por um motivo que não se vê na tela —
+  o porteiro de módulos é fail-open e lê "sem assinatura" como "não sei",
+  liberando a cesta inteira.
+  - `shared/acesso-sem-plano.ts` + `server/_core/gate-assinatura.ts` +
+    `requirePlanoEscolhido` na corrente do `protectedProcedure` (entre
+    `requireUser` e `requireModuloContratado`). **A régua NÃO mudou**: é a mesma
+    `getActiveSubscriptionComHeranca` do `SubscriptionGuard` — cortesia > paga >
+    teste > cancelada em carência, colaborador herdando do dono. Mudou o lugar
+    onde ela é conferida, então ninguém que entra hoje passa a ser barrado.
+  - **Deny-by-default**, ao contrário do porteiro de módulos: namespace não
+    declarado EXIGE plano (lá o fail-open protege pagante; aqui daria o produto
+    de graça a cada router novo). O teste confere a lista contra o `appRouter`.
+  - **O caminho de escolher o plano fica aberto** (`auth`, `termos`,
+    `subscription`, `configuracoes`, `permissoes`, `notificacoes`, `push`,
+    `ajuda`): o «Meu plano» mora DENTRO de Configurações, que pede escritório e
+    cargos ao montar — sem isso a pessoa fica trancada fora da tela de pagamento.
+  - **O cache guarda o SIM e nunca o NÃO** — com o "não" em cache, quem clica em
+    «Testar grátis» levaria recusa nos 30s seguintes. Conferido no app rodando:
+    depois do clique o produto responde 200 na hora.
+  - Fail-open na indeterminação (banco fora passa); admin e impersonação sempre
+    passam. As 3 contagens de badge do menu pararam de perguntar sem plano.
+  - **Termos continua só na tela** — não foi o que ele pediu; fica anotado.
+  - Consequência pra quem escrever teste: procedure chamada por caller com banco
+    falso precisa de `vi.mock("../_core/gate-assinatura", …)` — 5 arquivos já
+    ajustados com o comentário. E caller de router SOLTO (cron de relatórios
+    programados) tem path sem namespace, então cai no deny-by-default.
+  Amarra: `uso-so-com-plano` (17) — **32 mutações vermelhas**
+  (`scratchpad/mutar-uso-so-com-plano.py`; 4 sobreviveram na 1ª volta, três pelo
+  literal de pé em outro lugar e uma por falta de relógio — a validade do cache
+  só morre com `vi.useFakeTimers`). `modulos-contratacao` teve só o `expect` da
+  corrente atualizado.
 
 ## Fila combinada com o dono (31/08/2026)
 

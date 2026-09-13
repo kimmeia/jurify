@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.119 verdes, 411 arquivos** (13/09, com a seção 26; 6.106 em 410 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 27; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3359,4 +3359,118 @@ de pé em 13/09 porque ele pediu só a PASTILHA — na mensagem seguinte veio a
 moeda inteira).
 
 Baseline: **6.119 testes verdes em 411 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.
+
+---
+
+## 27. O uso só libera depois de escolher plano ou teste (13/09)
+
+**Pedido do dono**, depois de ele descrever o fluxo que quer — *"cadastra >
+confirma e-mail > aceita termos > escolhe plano ou teste > libera uso do
+sistema"* — e perguntar como garantir: *"quero que só libere o uso após
+escolha do plano/teste. resolva logo isso"*.
+
+### 27.1 O que estava garantido e o que era só desenho
+
+Conferido degrau a degrau no código antes de mexer:
+
+| degrau | quem segurava | valia fora da tela? |
+|---|---|---|
+| cadastra | `auth.signup` (exige WhatsApp e aceite, grava `aceites_termos`) | sim |
+| confirma e-mail | o cadastro **não cria sessão**; `login` recusa com `email_nao_confirmado` | sim — sem confirmar não existe cookie, e sem cookie não existe API |
+| aceita termos | `TermosGate` | **não** — diálogo no navegador; nenhum porteiro confere `termosVersaoAceita` |
+| escolhe plano ou teste | `SubscriptionGuard` | **não** — a API respondia tudo |
+| libera uso | consequência do anterior | **não** |
+
+O quarto degrau era o mais frouxo, e por um motivo que não se vê olhando a
+tela: o porteiro de módulos (`gate-modulos.ts`) é **fail-open de propósito** e
+lê "sem assinatura" como "não sei" — então liberava a cesta inteira. Quem
+fechasse a tela e chamasse o servidor direto usava o produto sem plano nenhum.
+
+O terceiro degrau (termos) **continua só na tela** — não foi o que ele pediu, e
+fica registrado aqui como pendência conhecida.
+
+### 27.2 O que entrou
+
+`shared/acesso-sem-plano.ts` (regra pura) + `server/_core/gate-assinatura.ts`
+(o porteiro) + `requirePlanoEscolhido` na corrente do `protectedProcedure`,
+entre `requireUser` e `requireModuloContratado`.
+
+**A régua de quem tem acesso NÃO mudou.** É a mesma
+`getActiveSubscriptionComHeranca` que o `SubscriptionGuard` já consultava —
+cortesia > paga > teste > cancelada dentro do período pago, colaborador
+herdando a do dono. O que mudou é o lugar onde ela é conferida. Por isso a
+mudança é invisível pra quem segue o fluxo: ninguém que entra hoje passa a ser
+barrado, e ninguém que era barrado na tela passa a entrar.
+
+Quatro decisões que valem lembrar:
+
+1. **Deny-by-default, o oposto do porteiro de módulos.** Namespace que ninguém
+   declarou EXIGE plano. Lá o fail-open protege contra derrubar escritório
+   pagante; aqui o mesmo desenho entregaria o produto de graça toda vez que um
+   router novo nascesse sem porteiro. O teste confere a lista contra o
+   `appRouter`, então "desconhecido" só acontece com chamada inventada.
+2. **O caminho de escolher o plano fica aberto** — `auth`, `termos`,
+   `subscription`, `configuracoes`, `permissoes`, `notificacoes`, `push`,
+   `ajuda`. Não é generosidade: o «Meu plano» mora DENTRO de Configurações, que
+   pede escritório e cargos ao montar. Sem esses dois, a pessoa ficaria
+   trancada fora da própria tela de pagamento — exatamente o defeito que ele
+   relatou hoje de manhã ("clico em adicionar pagamento e não acontece nada").
+   Os `admin*` estão na lista por honestidade do teste: passam por
+   `adminProcedure`, que não é `protectedProcedure` e não chega no porteiro.
+3. **O cache guarda o SIM e nunca o NÃO.** Guardar o "não" por 30s faria quem
+   acabou de clicar em «Testar grátis» levar recusa na cara nos segundos
+   seguintes. Quem tem plano custa uma consulta por 30s; quem não tem é
+   re-consultado a cada chamada, e são poucas — a tela dele é uma só.
+4. **Fail-open na indeterminação.** Banco fora, exceção na consulta: passa. Só
+   um "não tem assinatura" explícito bloqueia. Admin da plataforma e
+   impersonação passam sempre — a impersonação é justamente o dono olhando a
+   conta SEM plano.
+
+No client, as três contagens de badge do menu (`movimentacoes.contador`,
+`agenda.contadores`, `crm.contarConversas`) pararam de perguntar sem plano: o
+servidor recusa, o menu já está trancado, e seriam três 403 a cada 2 minutos na
+tela onde a pessoa está escolhendo o plano.
+
+### 27.3 Conferido no app rodando (não deduzido)
+
+Conta com a assinatura apagada do banco, navegador de verdade:
+
+- login cai em `/configuracoes?tab=meu-plano` e **a tela renderiza inteira** —
+  três planos, toggle Mensal/Anual, 4 botões «Testar grátis»;
+- `agenda.contadores` e `movimentacoes.contador` respondem **403** com
+  "Escolha um plano ou comece o teste grátis para usar o JuridFlow.";
+- `subscription.plans`, `configuracoes.meuEscritorio`, `termos.status` e
+  `ajuda.primeirosPassos` respondem **200**;
+- `/clientes` devolve pra Meu plano, como antes;
+- clicar em «Testar grátis» leva ao Dashboard e o produto responde **200 na
+  hora** — sem esperar os 30s do cache. É a decisão 3 valendo na prática.
+
+### 27.4 Efeitos colaterais conscientes
+
+- **Teste vencido e assinatura cancelada fora da carência** param de responder
+  pela API, não só pela tela. É a mesma régua de sempre; a diferença é que
+  agora ela vale nos dois lugares.
+- **Caller de servidor tem path sem namespace.** O cron de relatórios
+  programados (`createCallerFactory` de um router solto) chama
+  `comercialDashboard`, não `relatorios.comercialDashboard` — cai no
+  deny-by-default. Para escritório com plano nada muda; sem plano, o envio
+  grava `ultimoErro` com a frase do porteiro e o cron segue, sem quebrar.
+- **Teste que chama procedure por caller precisa desligar o porteiro**
+  (`vi.mock("../_core/gate-assinatura", …)`): o banco falso desses testes não
+  tem assinatura nenhuma. Cinco arquivos já foram ajustados com o comentário
+  explicando; quem escrever o sexto vai encontrar o mesmo 403.
+
+### 27.5 Amarra
+
+`uso-so-com-plano.test.ts` (17 testes) — **32 mutações vermelhas**
+(`scratchpad/mutar-uso-so-com-plano.py`). Quatro sobreviveram na 1ª volta, três
+pelo motivo de sempre (o literal de pé em outro lugar: o import × a chamada; o
+comentário × o código; a linha que aparece 3× em `subscription.ts`) e uma por
+falta de relógio — a validade do cache só morre com `vi.useFakeTimers` e 31s de
+avanço, senão "plano vencido segue passando pra sempre" passa despercebido.
+`modulos-contratacao` teve só o `expect` da corrente atualizado (a de módulo
+continua sendo o último elo, e é isso que ele guarda).
+
+Baseline: **6.136 testes verdes em 412 arquivos**, `pnpm check` limpo,
 `pnpm vite build` passando.
