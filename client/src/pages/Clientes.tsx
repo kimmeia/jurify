@@ -421,7 +421,11 @@ export default function Clientes() {
     const n = Number(idParam);
     return Number.isInteger(n) && n > 0 ? n : null;
   });
-  const [showNovo, setShowNovo] = useState(false);
+  // Deep-link dos Primeiros passos (?novo=1): abre o cadastro direto — o
+  // mesmo contrato que o ClientesEssencial já honra.
+  const [showNovo, setShowNovo] = useState(
+    () => new URLSearchParams(window.location.search).get("novo") === "1",
+  );
   // Aba Clientes (fecharam contrato) × Leads (em atendimento). Default
   // 'cliente' — a tela Clientes mostra clientes de verdade; leads ficam
   // a um clique de distância sem poluir a lista.
