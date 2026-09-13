@@ -217,6 +217,10 @@ async function startServer() {
   );
   // Webhooks públicos também precisam de limite
   app.use("/api/webhooks/asaas-billing", rateLimit({ name: "webhook-asaas-billing", max: 120 }));
+  // Portinha de leitura do backoffice: um painel bem-comportado consulta de
+  // minuto em minuto, então o teto baixo aqui é folgado pra ele e apertado
+  // pra quem estiver tentando chave por tentativa.
+  app.use("/api/backoffice", rateLimit({ name: "backoffice", max: 60 }));
   // PDF export route
   registerPDFExportRoute(app);
   // PDF export — chat interno de agentes IA
@@ -230,6 +234,9 @@ async function startServer() {
   // WhatsApp Cloud API (CoEx) webhook
   const { registerWhatsAppCloudWebhook } = await import("../integracoes/whatsapp-cloud-webhook");
   registerWhatsAppCloudWebhook(app);
+  // Portinha de leitura consumida pelo backoffice (backoffice.devular.com.br)
+  const { registerBackofficeRoutes } = await import("../backoffice/rota-resumo");
+  registerBackofficeRoutes(app);
 
   // Resolução de ambiente — centralizada em ./ambiente.ts. Ordem:
   //   1. JURIFY_AMBIENTE  (override manual)
