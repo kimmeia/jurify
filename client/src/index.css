@@ -119,7 +119,7 @@
   --primary-foreground: oklch(0.98 0 0);
   /* Mais claro que `--primary` do tema claro: o acento agora vive sobre
    * fundo escuro, e o tom original sumiria. */
-  --sidebar-primary: oklch(0.707 0.100 250);
+  --sidebar-primary: oklch(0.70 0.185 293);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   --chart-1: oklch(0.413 0.112 255);
   --chart-2: oklch(0.520 0.100 250);
@@ -171,14 +171,16 @@
    * No tema escuro estes valores são sobrescritos em `.dark` (um pouco mais
    * claros que o fundo, senão o menu some no plano de fundo).
    *
-   * Ardósia, não quase-preto: o contraste com o conteúdo branco continua
-   * fazendo o trabalho, e a barra para de pesar na tela. */
-  --sidebar: oklch(0.240 0.027 253);
-  --sidebar-foreground: oklch(0.847 0.018 248);
-  --sidebar-accent: oklch(0.335 0.048 253);
+   * O escuro é o da LOGO (roxo-quase-preto), não um azul-ardósia: o menu é
+   * onde a marca aparece, e com o azul ele e a logo liam como marcas
+   * diferentes. Por isso o destaque do item aberto também é violeta aqui
+   * dentro — no conteúdo, à direita, a cor de ação continua sendo o marinho. */
+  --sidebar: oklch(0.205 0.045 296);
+  --sidebar-foreground: oklch(0.855 0.020 290);
+  --sidebar-accent: oklch(0.305 0.062 296);
   --sidebar-accent-foreground: oklch(0.99 0 0);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.707 0.100 250);
+  --sidebar-ring: oklch(0.70 0.185 293);
   /* Paleta semântica — light. OKLCH consistente com o restante do tema. */
   --info: oklch(0.413 0.112 255);
   --info-bg: oklch(0.955 0.012 248);
@@ -214,7 +216,7 @@
    * logo não vai de arrasto. `em-escuro` é a versão pra superfície que é escura
    * sempre (menu lateral), onde o violeta do tema claro não se lê. */
   --marca: oklch(0.541 0.281 293);
-  --marca-em-escuro: oklch(0.702 0.183 293);
+  --marca-em-escuro: oklch(0.66 0.20 293);
 }
 
 .dark {
@@ -222,7 +224,7 @@
    * claro, senão o acento sumiria no fundo. */
   --primary: oklch(0.700 0.103 250);
   --primary-foreground: oklch(0.198 0.014 253);
-  --sidebar-primary: oklch(0.707 0.100 250);
+  --sidebar-primary: oklch(0.70 0.185 293);
   --sidebar-primary-foreground: oklch(0.98 0 0);
   /* Mesmas cinco matizes, re-escalonadas pra superfície escura — não é o
      inverso automático das claras. */
@@ -255,12 +257,12 @@
   --chart-3: oklch(0.600 0.100 250);
   --chart-4: oklch(0.500 0.095 252);
   --chart-5: oklch(0.400 0.080 254);
-  --sidebar: oklch(0.180 0.015 253);
-  --sidebar-foreground: oklch(0.843 0.017 245);
-  --sidebar-accent: oklch(0.268 0.042 252);
+  --sidebar: oklch(0.165 0.038 296);
+  --sidebar-foreground: oklch(0.850 0.020 290);
+  --sidebar-accent: oklch(0.255 0.055 296);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.707 0.100 250);
+  --sidebar-ring: oklch(0.70 0.185 293);
   /* Paleta semântica — dark. Mesmo hue do light, lightness ajustada. */
   --info: oklch(0.700 0.103 250);
   --info-bg: oklch(0.268 0.042 252);

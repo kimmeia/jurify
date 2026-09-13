@@ -61,8 +61,11 @@ selecionado, dia de hoje, o que é novo. Se dois elementos disputam o
 marinho na mesma tela, um dos dois não é ação primária — deixe neutro.
 Estado ativo de chip/filtro usa tinta sólida `#0f172a`, não marinho.
 ⚠ O violeta `#7c3aed` que aparece em mockups antigos e no `assets/base.html`
-**não é o app**: o violeta foi rejeitado pelo dono ("doía na vista") e
-trocado por marinho. Mockup em violeta não retrata o produto.
+**não é o conteúdo do app**: ali o violeta foi rejeitado pelo dono ("doía na
+vista") e trocado por marinho. Mockup com conteúdo violeta não retrata o
+produto. **O MENU é a exceção, aprovada por ele em 13/09**: fundo
+roxo-quase-preto da logo, «Jurid» em branco, «Flow» e o item aberto em
+violeta (detalhe na seção 19 do `docs/ESTADO-DO-SISTEMA.md`).
 
 **Hierarquia por peso e cor, não por tamanho.** Os tamanhos saem da escala
 de `client/src/index.css` (`--text-micro` 11px · `--text-apoio` 11.5px ·
