@@ -1590,6 +1590,32 @@ escolheu. A quarta versão, já na linguagem do print dele, está em
 **Regra que fica: quando o dono manda uma referência visual, ela é o briefing
 — não o ponto de partida de um debate.**
 
+### Entregue 13/09 — o cartão do Cofre media 2.566px de altura
+
+Print dele: *"esse card das credenciais está muito comprido, quero que redesenhe
+para ficar mais bonito."* Aprovado no comparador
+`mockup-cofre-cartao-credenciais.html` (*"pode fazer"*).
+
+**Causa, medida antes de mexer:** a grade dos tribunais mora DENTRO do cartão da
+credencial, e o cartão é item de uma lista `lg:grid-cols-3` — feita pra três
+lado a lado. A grade ficava com **335px de largura útil e 800px vazios ao
+lado**, e cada estado era uma caixa com DUAS caixas dentro (uma por grau): 78
+blocos empilhados, 2.143px de altura. Agora cada estado é **uma linha** (sigla à
+esquerda, selos de grau à direita, o selo É o botão de testar) e a credencial
+nacional ocupa a **fileira inteira**. Cartão: 2.566 → **612px** no computador,
+5.069 → **1.831px** no celular.
+
+Regra que fica: **grade de N itens dentro de um cartão de lista herda a largura
+do cartão, não a da tela** — se a lista é `grid-cols-3`, a grade tem um terço,
+e o custo aparece em altura, não em erro.
+
+Nada removido: os dois graus, os três estados, a contagem de processos, o selo
+sem portal, o texto cru do erro e o aviso do "não testado" continuam. Os blocos
+de erro repetidos viraram a dobra "Por que N falharam" (o número fica sempre à
+vista). Detalhe na seção 28 do documento de estado. Amarras: teste novo em
+`telas-cabem-no-celular.test.ts` + `cofre-erros.test.ts` atualizado, 6 mutações
+vermelhas.
+
 ### Raio-X do design em produção (13/09)
 
 `docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o

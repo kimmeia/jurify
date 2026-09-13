@@ -2647,3 +2647,67 @@ Amarra: o teste do módulo foi apagado junto com ele; o que sobrou guardando a
 decisão é o de "as telas cabem num celular", que trava a régua de abas, e o
 `modulos-contratacao.test.ts`, que quebraria se um router `ajuda` voltasse sem
 se declarar.
+
+## 28. Cofre: o cartão da credencial media 2.566px de altura (13/09)
+
+Print do dono: *"esse card das credenciais está muito comprido, quero que
+redesenhe para ficar mais bonito."* Aprovado com o comparador
+`mockup-cofre-cartao-credenciais.html` (*"pode fazer"*).
+
+### 28.1 A causa, medida antes de mexer
+
+A grade de tribunais (`GradeTribunais.tsx`) mora DENTRO do cartão da
+credencial, e esse cartão é item de uma lista `md:grid-cols-2
+lg:grid-cols-3` — feita para três cartões lado a lado. Resultado numa janela
+de 1440: a grade tinha **335px de largura útil**, com **800px vazios** ao lado,
+e **2.143px de altura**; o cartão inteiro, **2.566px**; a página do Cofre,
+3.211px — 3,6 telas de rolagem.
+
+O desenho antigo gastava altura em moldura: cada estado era uma caixa com DUAS
+caixas dentro (uma por grau), cada uma com rótulo, ponto, texto e botão de
+testar — 78 blocos empilhados numa coluna de 106px. E o texto do Keycloak era
+repetido inteiro embaixo de cada estado que falhou.
+
+### 28.2 O que mudou (nada de informação saiu)
+
+- **Uma linha por estado**: sigla à esquerda, os graus como selos à direita, no
+  mesmo eixo (`grid-cols-[repeat(auto-fill,minmax(186px,1fr))]` +
+  `[&>*]:min-w-0`). O selo **é** o botão de testar aquele grau.
+- **A credencial nacional ocupa a fileira inteira** (`lg:col-span-3` quando
+  `sistema === SISTEMA_NACIONAL`). A credencial de um tribunal só continua no
+  cartão de 1/3.
+- **A contagem subiu** para o lado do "Testar tudo": validados · falharam ·
+  nunca usados, com os mesmos pontos coloridos de antes.
+- **Os erros viraram uma dobra** "Por que N falharam", com um parágrafo por
+  estado e o «detalhe técnico» de sempre dentro. Fechada por padrão; o número
+  de falhas fica sempre à vista, em vermelho, na linha do botão.
+- `2º sem endereço` virou `2º s/ portal`: por extenso vazava 31px da coluna e
+  invadia a vizinha (medido no navegador, não deduzido).
+
+Continuam na tela: os dois graus separados, os três estados possíveis, a
+contagem de processos de quem validou, o selo do grau sem portal, o texto cru
+do erro, o aviso do "não testado" e a barra de progresso da fila.
+
+### 28.3 Medido depois
+
+| medida | antes | depois |
+|---|---|---|
+| altura do cartão, computador | 2.566 px | 612 px |
+| altura do cartão, celular | 5.069 px | 1.831 px |
+| largura útil da grade | 335 px | 1.098 px |
+| altura só da grade | 2.143 px | 248 px |
+| altura da página do Cofre | 3.211 px | 1.257 px |
+
+Fotos do app rodando com uma credencial nacional de 40 tribunais × 2 graus
+(78 combinações). Amarras: teste novo em `telas-cabem-no-celular.test.ts` e
+`cofre-erros.test.ts` atualizado — 6 mutações vermelhas em
+`scratchpad/mutar-cofre-grade.py` (a do resumo do erro só morreu depois de a
+amarra olhar a CHAMADA em vez do import).
+
+### 28.4 Anotado e NÃO corrigido
+
+No celular a página do Cofre rola **1px** de lado: é o `animate-ping` do selo
+"Ativa", que escala ao dobro e escapa do cartão. **Já era assim antes desta
+mudança** (medido nas duas versões: 400px antes, 399px depois). Consertar
+significa cortar o pulso ou trocar a animação — mudança visível que o dono não
+pediu. Fica aqui até ele decidir.
