@@ -135,6 +135,11 @@ docs/lp-mockups/out-*.png
 scratchpad/mockup-navegavel-*.html
 scratchpad/comparador-antes-depois*.html
 
+# Fotos de tela geradas pelos scripts de scratchpad/estudo-telas — o app
+# rodando as reproduz a qualquer momento, e elas só entram aqui de passagem,
+# para serem enviadas ao dono.
+scratchpad/*.png
+
 # Sondagem de fontes públicas (respostas brutas dos tribunais)
 scripts/.sondagem/
 
