@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.003 verdes, 402 arquivos** (13/09, com o conserto do monitoramento da seção 20; 5.975 em 400 antes dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.016 verdes, 403 arquivos** (13/09, com o conserto do monitoramento da seção 20 e os dois resíduos da 20.7; 5.975 em 400 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2705,23 +2705,61 @@ constante pro `evaluate` e procurar um seletor cravado lá dentro.
 `cofre-grau.test.ts` teve um `expect` atualizado: a conta de quem entra na
 bateria mudou de lugar (virou `alvosDaBateria`), a regra não.
 
-### 20.7 O que ficou anotado e NÃO foi mexido
+### 20.7 Os dois resíduos — FECHADOS no mesmo dia ("pode fazer" do dono)
 
-- **`consultarCNJSincrono` não tem o desvio de consulta pública** que o
-  `consultarCNJ` ganhou em 12/09. Efeito: TRT2 e TRT15 — que a aba Consultar
-  atende SEM credencial — caem no caminho da credencial nessa procedure e tentam
-  o login do PJe-JT, que não responde. TRF5 já era assim antes. Consertar é
-  aditivo (repetir a bifurcação), mas é decisão de escopo do dono.
+**Consulta pública no `consultarCNJSincrono`.** O `consultarCNJ` ganhou o desvio
+em 12/09 e esta procedure não: ela pedia credencial do Cofre para tribunal que
+não tem login. Ficou pior em 13/09, quando `sistemaCofrePorTribunal` passou a
+devolver a credencial nacional para os 24 TRTs — TRT2 e TRT15, que funcionam
+pela consulta aberta, passaram a tentar o login do PJe-JT, que não responde.
+
+Agora os dois caminhos nascem do MESMO despachante: `consultaPublica =
+!tribunalRequerCredencial(...)`, tudo que é do Cofre (sistema, credencial,
+sessão) vive dentro do ramo que exige credencial, e o scrape é
+`consultarProcesso(codigo, cnj, storageState)` com `storageState` nulo na
+consulta aberta. Cobra igual — o que o tribunal dispensa é o login, não o custo
+de rodar o robô — e cobra **depois** de todas as guardas, inclusive a do
+tribunal candidato. Tribunal do registro sem endereço mapeado continua recusado
+sem cobrar: não é tentativa que falhou, é cobertura que não existe.
+
+**A foto do erro sobrevive ao deploy.** `tirarScreenshotErro` já fotografava a
+tela do tribunal na falha e gravava em
+`scripts/spike-motor-proprio/samples/screenshots/` — disco efêmero do container,
+fora do volume, e nenhuma tela lia o caminho. O robô tirava a prova do que viu e
+a jogava fora; foi exatamente o que faltou no diagnóstico da 20.1, que saiu de
+leitura de código em vez de evidência.
+
+`server/processos/print-do-erro.ts` move o arquivo para
+`./uploads/monitor-erros/escritorio_<id>/` (servido com sessão + checagem de
+escritório, como o resto de `/uploads`) e devolve a URL; a migration 0228 guarda
+ela em `motor_monitoramentos.ultimo_erro_print_url`. A divisão é de propósito: o
+adapter é código de spike e não sabe de tenancy, então quem CONHECE o dono do
+monitoramento é que coloca o arquivo na pasta do escritório — a origem continua
+sendo escrita onde sempre foi, nada mudou lá. Copia e apaga em vez de renomear
+(o volume é outro mount, e `rename` falha entre dispositivos), nunca lança
+(problema de disco não derruba o ciclo do cron) e o nome do arquivo é saneado
+porque entra numa URL e num caminho de disco.
+
+**Sucesso limpa a foto nos quatro caminhos** que limpam o erro — foto de erro
+antigo ao lado de monitoramento saudável manda procurar problema na tela errada.
+É o item 3 do padrão de observabilidade da casa (persistir → mostrar → auto-cura).
+
+Na tela, o único pixel novo: um link «ver a tela do tribunal» ao lado do motivo
+da parada no card do monitoramento, que só aparece quando há erro **e** foto.
+
+Amarra: `consulta-publica-e-print-do-erro.test.ts` (13 testes) — **18 mutações,
+todas vermelhas** (`scratchpad/mutar-publica-e-print.py`).
+
+### 20.8 O que segue anotado e NÃO mexido
+
 - **`sistemaCofrePorTribunal` devolve `pje_*` para trt2 e trt15**, que são
   consulta pública — o comentário logo abaixo do mapa afirma o contrário
-  ("TRF-5 e demais tribunais de consulta pública NÃO entram aqui"). É o que faz
-  os dois caírem no caminho da credencial no item acima.
-- **A foto que o robô tira do erro se perde.** `tirarScreenshotErro` grava em
-  `scripts/spike-motor-proprio/samples/screenshots/`, que é disco efêmero do
-  container (não é o volume do Railway) e não é servido em tela nenhuma. O robô
-  fotografa exatamente o que deu errado e joga fora. Levar isso pro volume e
-  mostrar no card do monitoramento é a diferença entre adivinhar e ver — precisa
-  de mockup.
+  ("TRF-5 e demais tribunais de consulta pública NÃO entram aqui"). Com o desvio
+  da 20.7 isso deixou de causar dano no caminho da consulta, mas o mapa continua
+  discordando do próprio comentário.
 - A falha de um TJ comprovado que esteja fora do ar (TJMG, digamos) continua
   marcando a credencial inteira. É pré-existente e não foi autorizado: a régua
   entregue trata só o portal candidato.
+- A foto só é guardada no **poll de movimentações**. O laço de novas ações grava
+  as falhas por tribunal em `varreduraJson` e não tem campo para foto — cabe o
+  mesmo tratamento, não foi pedido.

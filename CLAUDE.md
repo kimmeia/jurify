@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.003 verdes em 13/09/2026 (402 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.016 verdes em 13/09/2026 (403 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1567,9 +1567,22 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   Amarras: `tribunal-candidato-nao-derruba` (18) e `detalhe-no-lugar-nao-e-falha`
   (10) — 27 mutações vermelhas; 4 sobreviveram na 1ª volta pelo mesmo motivo de
   sempre, o literal de pé em outro lugar do arquivo.
-  **Anotado e não mexido**: `consultarCNJSincrono` não tem o desvio de consulta
-  pública do `consultarCNJ` (TRT2/TRT15 caem na credencial lá), e a foto que
-  `tirarScreenshotErro` tira se perde em disco efêmero sem aparecer em tela.
+  **Os dois resíduos foram fechados no mesmo dia (novo "pode fazer" dele),
+  seção 20.7 do documento de estado**: (a) `consultarCNJSincrono` ganhou o desvio
+  de consulta pública — tudo que é do Cofre foi para dentro do ramo que exige
+  credencial e o scrape virou `consultarProcesso(codigo, cnj, storageState)`, com
+  sessão nula no tribunal aberto; cobra igual e só depois das guardas. (b) A foto
+  do erro sobrevive: `print-do-erro.ts` move para
+  `./uploads/monitor-erros/escritorio_<id>/` (o adapter não sabe de tenancy, quem
+  conhece o dono é que coloca na pasta), migration 0228 guarda a URL em
+  `ultimo_erro_print_url`, sucesso limpa nos 4 caminhos, e o card ganhou o link
+  «ver a tela do tribunal» quando há erro e foto. Copia e apaga em vez de
+  renomear (o volume é outro mount) e nunca lança. Amarra:
+  `consulta-publica-e-print-do-erro` (13) — 18 mutações vermelhas.
+  **Segue anotado**: `sistemaCofrePorTribunal` devolve `pje_*` pra trt2/trt15
+  contra o próprio comentário; falha de TJ comprovado fora do ar ainda derruba a
+  credencial inteira (pré-existente); e o laço de novas ações não guarda foto
+  (grava falha por tribunal em `varreduraJson`, sem campo pra isso).
 
 ## Fila combinada com o dono (31/08/2026)
 

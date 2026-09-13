@@ -50,6 +50,7 @@ import {
   type FonteCapa,
 } from "../../shared/nova-acao-capa";
 import { capaBrutaDaLinha, capaDoScraperTemConteudo, linhaDoCnj } from "./capa-da-lista";
+import { guardarPrintDoErro } from "./print-do-erro";
 import { capaPorCnjNoDataJud } from "./capa-datajud";
 import type { LinhaDaBusca } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { lerDocumentoNoRotulo } from "../../shared/documento-no-rotulo";
@@ -355,11 +356,20 @@ export async function pollarUmMonitoramentoMovs(
     }
 
     if (!resultado.ok) {
+      // A foto que o adapter tirou vai pro volume, na pasta do escritório: é a
+      // única prova do que o portal mostrou, e ela morria no disco efêmero.
+      const printUrl = await guardarPrintDoErro(
+        mon.escritorioId,
+        (resultado as { screenshotPath?: string | null }).screenshotPath,
+      );
       await db
         .update(motorMonitoramentos)
         .set({
           ultimaConsultaEm: new Date(),
           ultimoErro: resultado.mensagemErro ?? "Erro na consulta",
+          // Sem foto nova, a anterior sai: foto de erro antigo ao lado de erro
+          // novo faz procurar problema na tela errada.
+          ultimoErroPrintUrl: printUrl,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
       return { ok: false, detectadas: 0, erro: resultado.mensagemErro ?? "Erro na consulta" };
@@ -481,6 +491,7 @@ export async function pollarUmMonitoramentoMovs(
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
+          ultimoErroPrintUrl: null,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
       log.info({ monId: mon.id, baseline: resultado.movimentacoes.length }, "[motor-cron] baseline silencioso registrado");
@@ -589,6 +600,7 @@ export async function pollarUmMonitoramentoMovs(
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
+            ultimoErroPrintUrl: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
@@ -665,6 +677,7 @@ export async function pollarUmMonitoramentoMovs(
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
+            ultimoErroPrintUrl: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
       }
@@ -676,6 +689,7 @@ export async function pollarUmMonitoramentoMovs(
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
+          ultimoErroPrintUrl: null,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
     }

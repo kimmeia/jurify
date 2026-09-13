@@ -1343,6 +1343,20 @@ function MonitoramentoCard({
                   Sem movimentação registrada ainda
                 </span>
               )}
+              {/* A foto que o robô tirou da tela do tribunal no instante da
+                  falha. Quando o portal muda de layout, é a única prova do que
+                  ele viu — antes ela era gravada em disco efêmero e sumia. */}
+              {mon.diagnostico && mon.ultimoErroPrintUrl && (
+                <a
+                  href={mon.ultimoErroPrintUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-micro text-muted-foreground underline shrink-0 hover:text-info-fg"
+                  title="Abre a imagem que o robô capturou da tela do tribunal quando a consulta falhou"
+                >
+                  ver a tela do tribunal
+                </a>
+              )}
             </div>
           </div>
 
