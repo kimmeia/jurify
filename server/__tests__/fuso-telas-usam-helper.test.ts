@@ -44,7 +44,7 @@ describe("processos-1 · central de movimentações", () => {
   });
 });
 
-describe("processos-1 · timeline do processo e aba Alertas", () => {
+describe("processos-1 · timeline do processo", () => {
   const fonte = ler("pages/Processos.tsx");
 
   it("'vence dd/mm/aaaa' na timeline usa o helper", () => {
@@ -53,9 +53,12 @@ describe("processos-1 · timeline do processo e aba Alertas", () => {
     expect(fonte).not.toContain("new Date(prazo.dataSugerida).toLocaleDateString");
   });
 
-  it("a pill da aba Alertas mostra a data de calendário, não '09/09 21:00'", () => {
-    expect(fonte).toContain("{formatarDataCalendario(sug.dataSugerida)}");
+  it("nenhuma data de prazo sugerido volta a ser formatada à mão", () => {
+    // A pill da aba Alertas era o outro lugar que mostrava `sug.dataSugerida`;
+    // a aba saiu em 13/09 e a timeline ficou como único ponto. A metade que
+    // protege — não formatar à mão — vale pros dois nomes do mesmo dado.
     expect(fonte).not.toContain("new Date(sug.dataSugerida).toLocaleString(");
+    expect(fonte).not.toContain("new Date(prazo.dataSugerida).toLocaleString(");
   });
 });
 

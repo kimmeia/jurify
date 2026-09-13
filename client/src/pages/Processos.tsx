@@ -22,8 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
-import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle } from "lucide-react";
+import { MovimentacoesCentral } from "./Movimentacoes";
 import { EstadosPicker } from "@/components/EstadosPicker";
 import {
   TRIBUNAL_SEDE,
@@ -446,9 +446,17 @@ function ProcessoCard({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ABA: CONSULTAR PROCESSOS
+// ABA: CONSULTAR PROCESSOS — SEM ENTRADA NA TELA DESDE 13/09
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * A busca avulsa (CNJ/CPF/CNPJ sem colocar em monitoramento) ficou SEM porta:
+ * o dono tirou o botão "Consultar CNJ" do cabeçalho em 13/09 ("desnecessário").
+ *
+ * O código continua aqui de propósito — ele autorizou remover o BOTÃO, não
+ * apagar a consulta. Se alguém for deletar isto, pergunte antes; e se for
+ * devolver a entrada, é só montar este componente num Dialog outra vez.
+ */
 function ConsultarTab() {
   const [tipo, setTipo] = useState("lawsuit_cnj");
   const [valor, setValor] = useState("");
@@ -2312,32 +2320,16 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
  * Cabeçalho do módulo.
  *
  * Era um banner roxo em degradê que comemorava "419 monitorados" enquanto
- * 418 deles estavam quebrados. O número que manda passou a ser pastilha, no
- * mesmo padrão da Agenda e da central de movimentações.
+ * 418 deles estavam quebrados. Depois virou pastilha + controles; hoje é só
+ * título e uma linha do que a tela faz.
+ *
+ * As três pastilhas (monitorados, parados, nova ação) saíram por decisão do
+ * dono em 13/09: os MESMOS números já aparecem no badge de cada aba
+ * (`MonitoramentosCount` mostra parados/total, `NovasAcoesBadge` mostra as não
+ * lidas), então o cabeçalho repetia a conta logo acima de onde ela já estava —
+ * e as duas queries que a alimentavam eram cópia das que os badges já fazem.
  */
-function CabecalhoProcessos({
-  saldo,
-  onConsultar,
-  onResumo,
-}: {
-  saldo: number;
-  onConsultar: () => void;
-  onResumo: () => void;
-}) {
-  const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
-    { tipoMonitoramento: "movimentacoes" },
-    { retry: false, refetchOnWindowFocus: false },
-  );
-  const { data: novasAcoesData } = trpc.processos.listarNovasAcoes.useQuery(
-    { apenasNaoLidas: true, limite: 1 },
-    { retry: false, refetchInterval: 60000 },
-  );
-
-  const mons = monsData || [];
-  const totalMons = mons.length;
-  const parados = mons.filter((m: any) => !!m.diagnostico).length;
-  const totalNovas = novasAcoesData?.totalNaoLidas ?? 0;
-
+function CabecalhoProcessos() {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -2348,71 +2340,7 @@ function CabecalhoProcessos({
         <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
         </p>
-        <div className="flex flex-wrap gap-2 mt-3">
-          <PastilhaProc valor={totalMons} rotulo={totalMons === 1 ? "monitorado" : "monitorados"} />
-          {parados > 0 && (
-            <PastilhaProc valor={parados} rotulo={parados === 1 ? "parado" : "parados"} tom="alerta" />
-          )}
-          {totalNovas > 0 && (
-            <PastilhaProc
-              valor={totalNovas}
-              rotulo={totalNovas === 1 ? "nova ação" : "novas ações"}
-            />
-          )}
-        </div>
       </div>
-      {/* Sem `flex-wrap`, os três controles (créditos, Consultar CNJ,
-          Resumo diário) somavam 425px e vazavam da tela de 390px. */}
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
-          <Coins className="h-4 w-4 text-warning" />
-          <span className="text-corpo font-bold tabular-nums">{saldo}</span>
-          <span className="text-apoio text-muted-foreground">créditos</span>
-        </div>
-        <Button size="sm" variant="outline" onClick={onConsultar}>
-          <Search className="h-4 w-4 mr-1.5" />
-          Consultar CNJ
-        </Button>
-        <Button size="sm" variant="outline" onClick={onResumo}>
-          <Mail className="h-4 w-4 mr-1.5" />
-          Resumo diário
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PastilhaProc({
-  valor,
-  rotulo,
-  tom = "neutro",
-}: {
-  valor: number;
-  rotulo: string;
-  tom?: "neutro" | "alerta";
-}) {
-  return (
-    <div
-      className={`rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 ${
-        tom === "alerta"
-          ? "bg-danger-bg border-danger/30 dark:border-danger/30"
-          : "bg-card border-border"
-      }`}
-    >
-      <b
-        className={`text-secao font-bold tabular-nums ${
-          tom === "alerta" ? "text-danger-fg" : ""
-        }`}
-      >
-        {valor}
-      </b>
-      <span
-        className={`text-apoio ${
-          tom === "alerta" ? "text-danger-fg" : "text-muted-foreground"
-        }`}
-      >
-        {rotulo}
-      </span>
     </div>
   );
 }
@@ -2426,14 +2354,16 @@ export default function Processos() {
   const tabInicial = (() => {
     if (typeof window === "undefined") return "central";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre" || t === "central"
+    // `alertas` continua na lista de propósito: o link antigo existe solto em
+    // e-mail e histórico de navegador, e a aba saiu em 13/09 — cair na Central
+    // é melhor que a tela abrir numa aba que não existe mais.
+    if (t === "alertas") return "central";
+    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre" || t === "central"
       ? t
       : "central";
   })();
   const [tab, setTab] = useState(tabInicial);
   const utils = trpc.useUtils();
-  const [consultarAberto, setConsultarAberto] = useState(false);
-  const [resumoAberto, setResumoAberto] = useState(false);
   // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
   // ir pra movimentacoes pra que o MonitorarTab abra o modal.
   useEffect(() => {
@@ -2477,11 +2407,7 @@ export default function Processos() {
 
   return (
     <div className="space-y-5">
-      <CabecalhoProcessos
-        saldo={saldo}
-        onConsultar={() => setConsultarAberto(true)}
-        onResumo={() => setResumoAberto(true)}
-      />
+      <CabecalhoProcessos />
 
       {saldo < 5 && (
         <div className="flex items-center gap-2 rounded-xl bg-warning-bg border border-warning/30 px-4 py-2.5">
@@ -2513,13 +2439,6 @@ export default function Processos() {
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
           </TabsTrigger>
-          <TabsTrigger
-            value="alertas"
-            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
-          >
-            <Bell className="h-3.5 w-3.5" />Alertas
-            <AlertasBadge />
-          </TabsTrigger>
           {podeCofre && (
             <TabsTrigger
               value="cofre"
@@ -2535,24 +2454,8 @@ export default function Processos() {
           <MonitorarTab onIrAoCofre={podeCofre ? () => setTab("cofre") : undefined} />
         </TabsContent>
         <TabsContent value="novas-acoes" className="mt-5"><NovasAcoesTab /></TabsContent>
-        <TabsContent value="alertas" className="mt-5"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-5"><CofreTab /></TabsContent>}
       </Tabs>
-
-      {/* A consulta avulsa saiu da barra de abas: é tarefa ocasional, não
-          lugar onde se fica. Vira modal aberto pelo botão do cabeçalho. */}
-      <Dialog open={consultarAberto} onOpenChange={(v) => !v && setConsultarAberto(false)}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Consultar processo</DialogTitle>
-            <DialogDescription>
-              Busca avulsa por CNJ, CPF ou CNPJ — sem colocar em monitoramento.
-            </DialogDescription>
-          </DialogHeader>
-          <ConsultarTab />
-        </DialogContent>
-      </Dialog>
-      <ConfigResumoDiario open={resumoAberto} onClose={() => setResumoAberto(false)} />
     </div>
   );
 }
@@ -2575,255 +2478,6 @@ function CentralBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // BADGE DE NOVAS AÇÕES NÃO LIDAS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB: ALERTAS — Prazos sugeridos detectados em movimentações
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function AlertasTab() {
-  const [aprovarTarget, setAprovarTarget] = useState<any | null>(null);
-  const [ajusteTitulo, setAjusteTitulo] = useState("");
-  const [ajusteData, setAjusteData] = useState("");
-  const utils = trpc.useUtils();
-
-  const { data: sugestoes, refetch, isLoading } = trpc.prazosSugeridos?.listar?.useQuery?.(
-    { status: "pendente", limite: 100 },
-    { retry: false, refetchInterval: 30000 },
-  ) ?? { data: undefined, refetch: () => {}, isLoading: false };
-
-  const aprovarMut = trpc.prazosSugeridos?.aprovar?.useMutation?.({
-    onSuccess: () => {
-      toast.success("Prazo criado na agenda!");
-      setAprovarTarget(null);
-      refetch();
-      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
-    },
-    onError: (e: any) => toast.error("Erro ao criar prazo", { description: e.message }),
-  });
-
-  const descartarMut = trpc.prazosSugeridos?.descartar?.useMutation?.({
-    onSuccess: () => {
-      toast.success("Sugestão descartada");
-      refetch();
-      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
-    },
-    onError: (e: any) => toast.error("Erro", { description: e.message }),
-  });
-
-  const abrirAprovar = (sug: any) => {
-    setAprovarTarget(sug);
-    setAjusteTitulo(sug.titulo);
-    const dataLocal = sug.dataSugerida
-      ? new Date(sug.dataSugerida).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setAjusteData(dataLocal);
-  };
-
-  const confirmarAprovar = () => {
-    if (!aprovarTarget) return;
-    aprovarMut.mutate({
-      id: aprovarTarget.id,
-      ajustes: {
-        titulo: ajusteTitulo,
-        dataInicio: new Date(ajusteData).toISOString(),
-      },
-    });
-  };
-
-  const lista = sugestoes ?? [];
-
-  return (
-    <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-warning/30 bg-gradient-to-br from-warning-bg via-warning-bg/40 to-warning-bg/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-warning-bg/40 blur-3xl" />
-        <div className="relative flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-warning flex items-center justify-center shrink-0 shadow-sm">
-            <Bell className="h-5 w-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-sm tracking-tight">Alertas detectados nas movimentações</p>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning text-warning-on text-micro font-bold uppercase tracking-wider">
-                <Sparkles className="h-2.5 w-2.5" />
-                IA
-              </span>
-            </div>
-            <p className="text-apoio text-warning-fg/75 mt-1 max-w-2xl leading-relaxed">
-              Sistema detecta automaticamente <strong>audiências, intimações, réplica, contestação e recursos</strong>.
-              Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <Skeleton className="h-32 w-full" />
-      ) : lista.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-warning-bg/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto mb-1">
-            <Bell className="h-7 w-7 text-warning/70" />
-          </div>
-          <p className="font-semibold text-foreground">Nenhum alerta pendente</p>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-            Quando o cron detectar prazos ou audiências em movimentações dos seus processos monitorados,
-            vão aparecer aqui pra você aprovar ou descartar com 1 click.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {lista.map((sug: any) => {
-            const isAudiencia = sug.tipo === "audiencia";
-            const isUrgente = sug.prazoDias != null && sug.prazoDias <= 5;
-            // Pala lateral (borda esquerda) + cores baseadas no tipo
-            const palette = isAudiencia
-              ? {
-                  borda: "border-l-info border border-info/30",
-                  iconBg: "bg-info",
-                  badgeBg: "bg-info/15 text-info-fg border-info/30",
-                  tipoLabel: "Audiência",
-                  Icon: Gavel,
-                }
-              : isUrgente
-                ? {
-                    borda: "border-l-danger border border-danger/30",
-                    iconBg: "bg-danger",
-                    badgeBg: "bg-danger/15 text-danger-fg border-danger/30",
-                    tipoLabel: "Prazo urgente",
-                    Icon: AlertTriangle,
-                  }
-                : {
-                    borda: "border-l-warning border border-warning/30",
-                    iconBg: "bg-warning",
-                    badgeBg: "bg-warning/15 text-warning-fg border-warning/30",
-                    tipoLabel: "Prazo",
-                    Icon: Clock,
-                  };
-            const Icon = palette.Icon;
-            return (
-              <div
-                key={sug.id}
-                className={`rounded-xl bg-card p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`h-9 w-9 rounded-lg ${palette.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
-                    <Icon className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold tracking-tight">{sug.titulo}</p>
-                      <Badge className={`${palette.badgeBg} text-micro`}>{palette.tipoLabel}</Badge>
-                      {sug.tribunal && <Badge variant="outline" className="text-micro">{sug.tribunal}</Badge>}
-                    </div>
-                    <p className="text-micro text-muted-foreground mt-1">
-                      <span className="font-medium text-foreground">{sug.apelidoProcesso}</span>
-                      {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5 text-apoio flex-wrap">
-                      {sug.dataSugerida && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg font-medium tabular-nums">
-                          <Clock className="h-3 w-3" />
-                          {formatarDataCalendario(sug.dataSugerida)}
-                        </span>
-                      )}
-                      {sug.prazoDias != null && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-medium border ${
-                          isUrgente
-                            ? "bg-danger-bg border-danger/30 text-danger-fg"
-                            : "bg-muted border-border text-muted-foreground"
-                        }`}>
-                          {sug.prazoDias} {sug.prazoDias === 1 ? "dia" : "dias"}{sug.prazoUteis ? " úteis" : ""}
-                        </span>
-                      )}
-                    </div>
-                    {sug.motivo && (
-                      <p className="text-micro text-muted-foreground mt-1.5 italic">"{sug.motivo}"</p>
-                    )}
-                    {sug.trechoOrigem && (
-                      <details className="mt-1.5 group">
-                        <summary className="text-micro text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1 list-none">
-                          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
-                          Ver trecho original
-                        </summary>
-                        <p className="text-micro text-muted-foreground mt-1.5 bg-muted border border-border/70 rounded-lg p-2.5 leading-relaxed">
-                          {sug.trechoOrigem}
-                        </p>
-                      </details>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <Button
-                      size="sm"
-                      className="h-7 text-micro rounded-lg bg-success shadow-sm"
-                      onClick={() => abrirAprovar(sug)}
-                      disabled={aprovarMut.isPending || descartarMut.isPending}
-                    >
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Aprovar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-micro rounded-lg border-border hover:border-border hover:bg-muted"
-                      onClick={() => descartarMut.mutate({ id: sug.id })}
-                      disabled={aprovarMut.isPending || descartarMut.isPending}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Descartar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Modal de aprovação com ajustes */}
-      <Dialog open={!!aprovarTarget} onOpenChange={(open) => !open && setAprovarTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Criar prazo na agenda</DialogTitle>
-            <DialogDescription>
-              Confirme os dados antes de criar o agendamento.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="alerta-titulo">Título</Label>
-              <Input
-                id="alerta-titulo"
-                value={ajusteTitulo}
-                onChange={(e) => setAjusteTitulo(e.target.value)}
-                maxLength={255}
-              />
-            </div>
-            <div>
-              <Label htmlFor="alerta-data">Data e hora</Label>
-              <Input
-                id="alerta-data"
-                type="datetime-local"
-                value={ajusteData}
-                onChange={(e) => setAjusteData(e.target.value)}
-              />
-            </div>
-            {aprovarTarget?.motivo && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium">Detectado:</span> {aprovarTarget.motivo}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAprovarTarget(null)}>Cancelar</Button>
-            <Button onClick={confirmarAprovar} disabled={aprovarMut.isPending}>
-              {aprovarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-              Criar agendamento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
 
 function MonitoramentosCount() {
   const { data } = trpc.processos.meusMonitoramentos.useQuery(
@@ -2858,20 +2512,6 @@ function NovasAcoesBadge() {
   if (count === 0) return null;
   return (
     <span className="ml-1 text-micro bg-danger-bg text-danger-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
-      {count}
-    </span>
-  );
-}
-
-function AlertasBadge() {
-  const { data } = trpc.prazosSugeridos?.contador?.useQuery?.(undefined, {
-    retry: false,
-    refetchInterval: 60000,
-  }) ?? { data: undefined };
-  const count = data?.pendentes ?? 0;
-  if (count === 0) return null;
-  return (
-    <span className="ml-1 text-micro bg-warning-bg text-warning-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -4839,7 +4479,11 @@ function CofreTab() {
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        {/* `max-h` + rolagem é o padrão da casa (41 diálogos usam), e este era
+            a exceção: o conteúdo é alto — apelido, as duas opções de alcance, o
+            seletor de tribunal, CPF, senha e o 2FA — e num notebook a caixa
+            passava da tela, cortando o TÍTULO em cima e os botões embaixo. */}
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cadastrar credencial</DialogTitle>
             <DialogDescription>
@@ -4931,9 +4575,9 @@ function CofreTab() {
               </button>
             </div>
             <div>
-              <Label>CPF ou OAB *</Label>
+              <Label>CPF *</Label>
               <Input
-                placeholder="12345678900 ou SP123456"
+                placeholder="12345678900"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
               />

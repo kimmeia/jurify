@@ -11,6 +11,7 @@ import { getDb } from "../db";
 import { escritorioAddons } from "../../drizzle/schema";
 import {
   MODULO_JURISIA,
+  addonVigente,
   resolverAcessoJurisIA,
   type AcessoJurisIA,
   type AddonParaAcesso,
@@ -79,8 +80,32 @@ export async function acessoJurisIA(args: {
     }
   }
 
-  const addon = await buscarAddon(args.escritorioId, MODULO_JURISIA);
+  const addon = await addonJurisiaPorQualquerCaminho(args.escritorioId, args.agora ?? new Date());
   return resolverAcessoJurisIA({ plano, addon, agora: args.agora ?? new Date() });
+}
+
+/**
+ * O add-on do JurisIA, concedido por qualquer um dos dois caminhos do painel.
+ *
+ * O cartão do JurisIA grava o produto `jurisia` seco; o diálogo de módulos
+ * avulsos grava `modulo:jurisia`. Esta leitura só olhava o primeiro, então
+ * conceder pelo segundo COBRAVA e não liberava — o cliente pagava e batia na
+ * tela de bloqueio. Agora os dois valem, e entre os dois ganha o que está
+ * vigente (com preferência pelo cartão, que é o caminho mais antigo e o que a
+ * ficha do cliente mostra).
+ */
+async function addonJurisiaPorQualquerCaminho(
+  escritorioId: number,
+  agora: Date,
+): Promise<AddonRegistro | null> {
+  const { moduloParaProduto } = await import("@shared/fatura-modulos");
+  const doCartao = await buscarAddon(escritorioId, MODULO_JURISIA);
+  if (doCartao && addonVigente(doCartao, agora)) return doCartao;
+  const comoModulo = await buscarAddon(escritorioId, moduloParaProduto(MODULO_JURISIA));
+  if (comoModulo && addonVigente(comoModulo, agora)) return comoModulo;
+  // Nenhum dos dois vale agora: devolve o que existe, pra a decisão pura
+  // explicar o motivo certo (suspenso, vencido) em vez de "nunca contratou".
+  return doCartao ?? comoModulo;
 }
 
 /**
