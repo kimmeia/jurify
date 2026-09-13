@@ -13,6 +13,9 @@ LAYOUT = C / "components/AppLayout.tsx"
 APP = C / "App.tsx"
 PAG = C / "pages/ajuda/AjudaTarefa.tsx"
 HOME = C / "pages/Ajuda.tsx"
+CONF = C / "pages/Configuracoes.tsx"
+PROC = C / "pages/Processos.tsx"
+SEED = RAIZ / "scratchpad/estudo-telas/povoar.sql"
 
 MUTACOES = [
     ("rota de «Abrir a tela» que não existe no App.tsx", T,
@@ -51,11 +54,23 @@ MUTACOES = [
      '                    <span>Ajuda</span>\n'
      '                  </DropdownMenuItem>\n', ''),
     ("/ajuda atrás do porteiro de módulo e da guarda de assinatura", APP,
-     '<Route path="/ajuda">\n        <ClientAreaNoGuard>\n          <Ajuda />\n        </ClientAreaNoGuard>',
+     '<Route path="/ajuda">\n        <ClientAreaSoTermos>\n          <Ajuda />\n        </ClientAreaSoTermos>',
      '<Route path="/ajuda">\n        <ClientArea>\n          <Ajuda />\n        </ClientArea>'),
     ("/ajuda/:tarefa atrás do porteiro", APP,
-     '<Route path="/ajuda/:tarefa">\n        <ClientAreaNoGuard>',
+     '<Route path="/ajuda/:tarefa">\n        <ClientAreaSoTermos>',
      '<Route path="/ajuda/:tarefa">\n        <ClientArea>'),
+    ("/ajuda volta pro ClientAreaNoGuard (sem o gate dos Termos)", APP,
+     '<Route path="/ajuda">\n        <ClientAreaSoTermos>\n          <Ajuda />\n        </ClientAreaSoTermos>',
+     '<Route path="/ajuda">\n        <ClientAreaNoGuard>\n          <Ajuda />\n        </ClientAreaNoGuard>'),
+    ("/ajuda/:tarefa volta pro ClientAreaNoGuard", APP,
+     '<Route path="/ajuda/:tarefa">\n        <ClientAreaSoTermos>\n          <AjudaTarefa />\n        </ClientAreaSoTermos>',
+     '<Route path="/ajuda/:tarefa">\n        <ClientAreaNoGuard>\n          <AjudaTarefa />\n        </ClientAreaNoGuard>'),
+    ("ClientAreaSoTermos sem o TermosGate", APP,
+     "    <AppLayout>\n      <TermosGate />\n      {children}\n    </AppLayout>",
+     "    <AppLayout>\n      {children}\n    </AppLayout>"),
+    ("ClientAreaSoTermos ganha a guarda de assinatura", APP,
+     "      <TermosGate />\n      {children}\n    </AppLayout>",
+     "      <TermosGate />\n      <SubscriptionGuard>{children}</SubscriptionGuard>\n    </AppLayout>"),
     ("«?» de Processos aponta pra tarefa «em breve»", C / "pages/Processos.tsx",
      'tarefa="vigiar-processo"', 'tarefa="mover-caso-kanban"'),
     ("«?» sumiu do Financeiro", C / "pages/Financeiro.tsx",
@@ -91,6 +106,46 @@ MUTACOES = [
      'modulo: "clientes",', 'modulo: "financeiro",'),
     ("`modulo` da tarefa de rota sem regra trocado (conectar-whatsapp → financeiro)", T,
      'modulo: "atendimento",', 'modulo: "financeiro",'),
+    # ── o que a revisão pegou ──
+    ("link da home leva ao GRUPO (todas caem em «Esta tarefa não existe»)", HOME,
+     "href={`/ajuda/${tarefa.id}`}", "href={`/ajuda/${tarefa.grupo}`}"),
+    ("link de «Tarefas ligadas» leva ao grupo", PAG,
+     "href={`/ajuda/${t.id}`}", "href={`/ajuda/${t.grupo}`}"),
+    ("?tab= com valor que a tela não tem (Processos cai em «central» em silêncio)", T,
+     'rota: "/processos?tab=movimentacoes"', 'rota: "/processos?tab=movimentacoess"'),
+    ("«Ver meu plano» aponta pra aba que não existe", PAG,
+     'setLocation("/configuracoes?tab=meu-plano")', 'setLocation("/configuracoes?tab=plano")'),
+    ("«Ver meu plano» aponta pra rota que não existe", PAG,
+     'setLocation("/configuracoes?tab=meu-plano")', 'setLocation("/configuracao?tab=meu-plano")'),
+    ("print nunca renderizado (os PNG viram peso morto)", PAG,
+     "{(passo.print || i === 0) && <Print src={passo.print} alt={`Tela real: ${passo.titulo}`} />}",
+     "{false && <Print src={passo.print} alt={`Tela real: ${passo.titulo}`} />}"),
+    ("<img> do print sem o src", PAG,
+     "      src={src}\n      alt={alt}", "      src={alt}\n      alt={alt}"),
+    ("chip «vídeo: em breve» removido do cabeçalho", PAG,
+     '              <span className="inline-flex items-center gap-1.5">\n'
+     '                <Clapperboard className="h-3.5 w-3.5" />\n'
+     '                vídeo:\n'
+     '                <Badge variant="secondary" className="text-micro font-semibold uppercase tracking-wider text-muted-foreground">em breve</Badge>\n'
+     '              </span>\n', ''),
+    ("chip de vídeo vira link", PAG,
+     '                vídeo:\n                <Badge', '                <Link href="/ajuda">vídeo:</Link>\n                <Badge'),
+    ("«?» de Canais volta pro banner", CONF,
+     '          <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">\n'
+     '            Canais de comunicação\n'
+     '            <AjudaDaTela tarefa="conectar-whatsapp" />\n'
+     '          </h3>',
+     '          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>'),
+    ("manual volta a prometer «sem risco de banimento»", T,
+     "com 1 clique — sem copiar tokens. Respeite", "com 1 clique — sem copiar tokens e sem risco de banimento. Respeite"),
+    ("passo 2 de «Vigiar» cita rótulo que o diálogo de CNJ não tem", T,
+     "oferece o botão de avisar quando o tribunal chegar", "oferece «Avisar quando chegar»"),
+    ("botão do diálogo de CNJ perde a sigla (e o manual fica falando de outro botão)", PROC,
+     "Avisar quando o {tribunalForaDaCobertura.sigla} chegar", "Avisar quando chegar"),
+    ("rótulo citado que só existe em comentário", PROC,
+     '"Cadastrar e testar login"', '"Cadastrar e testar" /* Cadastrar e testar login */'),
+    ("seed dos prints com o número real de volta", SEED,
+     "telefoneContato='(85) 99999-0001'", "telefoneContato='(85) 99796-5706'"),
 ]
 
 

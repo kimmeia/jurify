@@ -98,6 +98,20 @@ function ClientAreaNoGuard({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Central de ajuda: sem porteiro de módulo nem guarda de assinatura (quem
+ * não tem o módulo é justamente quem precisa ler), mas COM o gate dos
+ * Termos — o aceite é governança do dono e vale em toda rota do app.
+ */
+function ClientAreaSoTermos({ children }: { children: React.ReactNode }) {
+  return (
+    <AppLayout>
+      <TermosGate />
+      {children}
+    </AppLayout>
+  );
+}
+
+/**
  * Fase 2 da modularização: /clientes decide entre o CRM completo e o
  * cadastro essencial olhando o CONTRATO (não o cargo). Quem não tem nenhum
  * dos dois nem chega aqui — o ModuloGuard barra antes.
@@ -243,16 +257,17 @@ function Router() {
         </AdminArea>
       </Route>
       {/* Central de ajuda: dentro do app, sem porteiro de módulo nem guarda
-          de assinatura — quem não tem o módulo ainda lê como funciona. */}
+          de assinatura — quem não tem o módulo ainda lê como funciona —,
+          mas com o gate dos Termos, como toda rota do app. */}
       <Route path="/ajuda/:tarefa">
-        <ClientAreaNoGuard>
+        <ClientAreaSoTermos>
           <AjudaTarefa />
-        </ClientAreaNoGuard>
+        </ClientAreaSoTermos>
       </Route>
       <Route path="/ajuda">
-        <ClientAreaNoGuard>
+        <ClientAreaSoTermos>
           <Ajuda />
-        </ClientAreaNoGuard>
+        </ClientAreaSoTermos>
       </Route>
       <Route path="/admin/settings">
         <AdminArea>

@@ -75,7 +75,7 @@ export const TAREFAS_AJUDA = [
     modulo: "atendimento",
     palavrasChave: ["whatsapp", "canal", "facebook", "meta", "conectar", "número", "atendimento", "inbox", "mensagem"],
     antesDeComecar:
-      "Um número de WhatsApp Business e acesso à conta do Facebook que administra a empresa. A conexão é pela API oficial da Meta, com 1 clique — sem copiar tokens e sem risco de banimento. Durante a conexão a Meta confirma o número por SMS ou ligação, então deixe o celular por perto.",
+      "Um número de WhatsApp Business e acesso à conta do Facebook que administra a empresa. A conexão é pela API oficial da Meta (número não clonado), com 1 clique — sem copiar tokens. Respeite quem pediu pra sair e mande só o que a pessoa espera — é isso que mantém a qualidade do número. Durante a conexão a Meta confirma o número por SMS ou ligação, então deixe o celular por perto.",
     passos: [
       {
         titulo: "Abrir «Canais» em Configurações",
@@ -214,7 +214,7 @@ export const TAREFAS_AJUDA = [
       {
         titulo: "Colar o número do processo",
         texto:
-          "Aba «Monitoramento» → botão «Novo». Em «Número do processo (CNJ)» cole os 20 dígitos (com ou sem pontos) e escolha a «Credencial OAB» do passo 1. Se o tribunal do número ainda não estiver na cobertura, a tela avisa antes de cobrar e oferece «Avisar quando chegar».",
+          "Aba «Monitoramento» → botão «Novo». Em «Número do processo (CNJ)» cole os 20 dígitos (com ou sem pontos) e escolha a «Credencial OAB» do passo 1. Se o tribunal do número ainda não estiver na cobertura, a tela avisa antes de cobrar e oferece o botão de avisar quando o tribunal chegar — ele leva a sigla do tribunal e abre o Cofre com o pedido já preenchido.",
         print: "/ajuda/vigiar-processo-2.png",
       },
       {
@@ -246,7 +246,7 @@ export const TAREFAS_AJUDA = [
       {
         titulo: "Tribunal fora da cobertura",
         texto:
-          "O robô entra nos tribunais que aparecem no seletor da credencial (comprovado em campo no TJCE). Clique em «Avisar quando chegar» — você recebe um e-mail quando o tribunal ligar.",
+          "O robô entra nos tribunais que aparecem no seletor da credencial (comprovado em campo no TJCE). No Cofre, embaixo do seletor de tribunal, clique em «Avisar quando chegar» — você recebe um e-mail quando o tribunal ligar.",
       },
       {
         titulo: "Limite do plano",

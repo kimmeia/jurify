@@ -1,5 +1,5 @@
 import { Link, useLocation, useParams } from "wouter";
-import { ArrowRight, ChevronRight, Clock, ExternalLink, ImageOff, Lock, UserRound } from "lucide-react";
+import { ArrowRight, ChevronRight, Clapperboard, Clock, ExternalLink, ImageOff, Lock, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useModulosContratados } from "@/components/ModuloGuard";
@@ -134,6 +134,11 @@ export default function AjudaTarefa() {
               <span className="inline-flex items-center gap-1.5">
                 <UserRound className="h-3.5 w-3.5" />
                 {tarefa.quemPode}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clapperboard className="h-3.5 w-3.5" />
+                vídeo:
+                <Badge variant="secondary" className="text-micro font-semibold uppercase tracking-wider text-muted-foreground">em breve</Badge>
               </span>
             </div>
           </div>

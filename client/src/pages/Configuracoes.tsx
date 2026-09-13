@@ -1876,7 +1876,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       {/* Header da aba */}
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
+          <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+            Canais de comunicação
+            <AjudaDaTela tarefa="conectar-whatsapp" />
+          </h3>
           <p className="text-[11px] text-muted-foreground">
             {canaisPrincipais.length} canais disponíveis ·
             <b className="text-success-fg ml-1">{totalCanaisConectados} conectados</b>
@@ -1894,9 +1897,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
             </svg>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-info-fg flex items-center gap-1.5">
+            <p className="text-sm font-semibold text-info-fg">
               Conexão simplificada via Facebook
-              <AjudaDaTela tarefa="conectar-whatsapp" />
             </p>
             <p className="text-xs text-info-fg mt-1">
               O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar
