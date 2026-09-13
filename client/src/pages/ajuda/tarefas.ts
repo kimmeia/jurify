@@ -208,7 +208,7 @@ export const TAREFAS_AJUDA = [
       {
         titulo: "Guardar o acesso ao tribunal no Cofre",
         texto:
-          "Em Processos, abra a aba «Cofre» e clique em «Nova credencial». Dê um «Apelido da credencial», escolha em «Onde essa credencial vale» o tribunal (e o grau, quando o PJe separa 1º e 2º), informe «CPF ou OAB» e «Senha» e clique em «Cadastrar e testar login». O sistema entra no tribunal na hora e mostra se deu certo.",
+          "Em Processos, abra a aba «Cofre» e clique em «Nova credencial». Dê um «Apelido da credencial», escolha em «Onde essa credencial vale» o tribunal (e o grau, quando o PJe separa 1º e 2º), informe «CPF» e «Senha» e clique em «Cadastrar e testar login». O sistema entra no tribunal na hora e mostra se deu certo.",
         print: "/ajuda/vigiar-processo-1.png",
       },
       {

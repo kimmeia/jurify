@@ -4839,7 +4839,11 @@ function CofreTab() {
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        {/* `max-h` + rolagem é o padrão da casa (41 diálogos usam), e este era
+            a exceção: o conteúdo é alto — apelido, as duas opções de alcance, o
+            seletor de tribunal, CPF, senha e o 2FA — e num notebook a caixa
+            passava da tela, cortando o TÍTULO em cima e os botões embaixo. */}
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cadastrar credencial</DialogTitle>
             <DialogDescription>
@@ -4931,9 +4935,9 @@ function CofreTab() {
               </button>
             </div>
             <div>
-              <Label>CPF ou OAB *</Label>
+              <Label>CPF *</Label>
               <Input
-                placeholder="12345678900 ou SP123456"
+                placeholder="12345678900"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
               />

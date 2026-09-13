@@ -411,19 +411,20 @@ describe("ajuda.primeirosPassos — toda consulta amarra o escritório da sessã
 describe("client — onde o bloco mora", () => {
   const dash = ler("client/src/pages/Dashboard.tsx");
 
-  it("o Dashboard do dono monta <PrimeirosPassos /> DEPOIS da saída da variante processual", () => {
-    expect(dash).toContain('import PrimeirosPassos from "./dashboards/PrimeirosPassos"');
-    const mount = dash.indexOf("<PrimeirosPassos");
-    expect(mount).toBeGreaterThan(-1);
-    const ini = dash.indexOf("if (processualPuro) {");
-    expect(ini).toBeGreaterThan(-1);
-    const fim = dash.indexOf("\n  }", ini);
-    const blocoProcessual = dash.slice(ini, fim);
-    expect(blocoProcessual, "a variante processual não pode montar o bloco — o GuiaProcessual já cobre").not.toContain("PrimeirosPassos");
-    expect(blocoProcessual).toContain("<DashboardProcessual />");
-    expect(mount).toBeGreaterThan(fim);
-    // Só o dono — o servidor decide, mas o client nem pergunta pra quem não é.
-    expect(dash).toContain("{isDono && <PrimeirosPassos />}");
+  it("o Dashboard NÃO ensina a usar — o bloco saiu a pedido do dono (13/09)", () => {
+    // O Dashboard é a tela de trabalho de quem já sabe usar. Ensinar ali cobrava
+    // espaço do dono todos os dias, e ele pediu a remoção. Repor por engano numa
+    // refatoração é o que este teste impede.
+    expect(dash).not.toContain("PrimeirosPassos from");
+    expect(dash).not.toContain("<PrimeirosPassos");
+  });
+
+  it("o conteúdo não morreu: ele vive na Central de ajuda", () => {
+    // Remover da tela de trabalho é diferente de apagar. Quem tem dúvida vai em
+    // /ajuda, e é lá que o resumo continua.
+    const ajuda = ler("client/src/pages/Ajuda.tsx");
+    expect(ajuda).toContain('import { PrimeirosPassosResumo } from "@/pages/dashboards/PrimeirosPassos"');
+    expect(ajuda).toContain("<PrimeirosPassosResumo />");
   });
 
   it("a variante processual não monta o bloco (nem importa)", () => {

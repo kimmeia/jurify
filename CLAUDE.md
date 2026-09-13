@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.038 verdes em 13/09/2026 (404 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.044 verdes em 13/09/2026 (405 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1615,6 +1615,33 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   **Anotado**: `getUserCreditsInfo`, `health.plansCount` e os dois getters de
   `db.ts` seguem no `PLANS`; o extra não aparece pro cliente (mostrar pede
   mockup); JurisIA segue sem Sentry e sem tela de consumo (resto do A.6).
+
+- **Entregue 13/09, retorno do teste de uso do dono (seção 22 do documento de
+  estado).** Ele entrou como cliente e trouxe quatro coisas; **duas não eram
+  defeito**, e isso fica registrado pra ninguém "consertar" o que está certo:
+  (a) **Termos não aparecem** quando o cadastro foi pelo SITE (`auth.signup` já
+  grava o aceite — a caixa de marcar está no próprio formulário) nem em
+  IMPERSONAÇÃO (`termos.status` devolve false com `impersonatedBy`, de
+  propósito). **Consequência**: testar a experiência impersonando não mostra a
+  experiência real.
+  (b) **"Meta API não configurada"**: `getMetaAppConfig` devolve null em QUATRO
+  situações (env sem os DOIS; banco sem appId+appSecret; decrypt falhando;
+  sem banco) e as quatro viram a mesma frase. `META_APP_SECRET_EXTRA` é do HMAC
+  do webhook e NÃO serve pro Embedded Signup. Gap achado e **não corrigido**: o
+  formulário do painel não tem campo pro `config_id` da Meta (só
+  `META_CONFIG_ID` de env), então `config.configId` do banco é caminho morto —
+  sem ele o popup abre Facebook Login genérico, não o onboarding do WhatsApp.
+  (c) **`PrimeirosPassos` saiu do Dashboard** a pedido expresso dele. NÃO foi
+  apagado: vive em `/ajuda` (`PrimeirosPassosResumo`), e a amarra
+  `primeiros-passos` inverteu — trava que não volta e que o conteúdo continua lá.
+  O `GuiaProcessual` (variante processual) ficou, aguardando a palavra dele.
+  (d) **Diálogo "Cadastrar credencial"**: não tinha teto de altura nem rolagem e
+  passava da tela num notebook (título cortado em cima, botões embaixo) — 41
+  diálogos do client usam `overflow-y-auto` e 19 usam `max-h-[90vh]`; este era a
+  exceção. E o campo pedia «CPF ou OAB»: o login do PJe é CPF, virou «CPF». O
+  manual da Central de ajuda mudou no MESMO commit (regra do «»).
+  Amarras: `dialogo-credencial-cabe-na-tela` (5) + `primeiros-passos` reescrita —
+  8 mutações vermelhas.
 
 ## Fila combinada com o dono (31/08/2026)
 

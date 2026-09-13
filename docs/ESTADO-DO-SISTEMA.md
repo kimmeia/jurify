@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.038 verdes, 404 arquivos** (13/09, com o bloco comercial da seção 21; 6.016 em 403 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.044 verdes, 405 arquivos** (13/09, com o retorno do teste de uso da seção 22; 6.038 em 404 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2878,3 +2878,102 @@ conferir o prefixo devolveria `usuarios` pra um produto que não é extra.
   adapter (é e-SAJ, motor diferente), e é o maior mercado de advocacia do país.
   Ou o motor cresce para lá, ou a venda se concentra nos estados que funcionam e
   o site diz isso com clareza. Decisão do dono.
+
+---
+
+## 22. Retorno do teste de uso do dono (13/09)
+
+Ele entrou como cliente pra sentir a experiência e trouxe quatro coisas. Duas
+**não eram defeito** — e explicar isso vale mais que "consertar" o que está
+certo. Duas eram, e foram feitas.
+
+### 22.1 "Os termos para aceite não apareceram" — não é defeito
+
+O modal de termos (`TermosGate`) não aparece em dois casos legítimos, e o teste
+dele caiu num deles:
+
+- **Cadastro pelo site**: `auth.signup` já grava `termosVersaoAceita` porque o
+  aceite acontece NO formulário (caixa de marcar + botão travado). O aceite já
+  foi dado; pedir de novo no primeiro login seria pedir duas vezes.
+- **Impersonação**: `termos.status` devolve `precisaAceitar: false` quando
+  `ctx.user.impersonatedBy` existe. É de propósito — admin entrando na conta de
+  alguém não pode aceitar contrato no lugar do cliente.
+
+Onde o modal É o caminho: conta criada pelo painel (`admin.criarCliente`, que
+**não forja** o aceite) e conta antiga, de antes da v2 dos termos.
+
+**Consequência de produto, que é o que importa aqui**: testar a experiência
+impersonando NÃO mostra a experiência real. O modal de termos some, e qualquer
+coisa que dependa de `impersonatedBy` muda de comportamento. Pra sentir o que o
+cliente sente, tem que entrar pela tela de login com a conta dele.
+
+### 22.2 "Meta API não configurada" ao clicar em Conectar — falta config, e o diagnóstico é mudo
+
+A tela diz "o administrador precisa cadastrar o App Meta". Ela está certa no
+fato e ruim no diagnóstico: `getMetaAppConfig` devolve `null` em QUATRO situações
+diferentes e as quatro viram a mesma frase.
+
+1. `META_APP_ID` e `META_APP_SECRET` no ambiente — exige **os dois**; só um, cai
+   pro banco;
+2. banco: a linha `whatsapp_cloud` de `admin_integracoes`, cujo JSON precisa ter
+   **appId E appSecret**;
+3. decriptação falhando (a `ENCRYPTION_KEY` mudou) — vira `log.warn` e `null`;
+4. sem banco.
+
+O formulário do painel (Admin → Integrações → WhatsApp Cloud) pede os três
+campos e só salva com os três, então quem preencheu por ali está coberto. O que
+**não** cobre: `META_APP_SECRET_EXTRA`, que alimenta o HMAC do webhook, não
+serve pro Embedded Signup — são coisas diferentes, e o registro de 03/09 no
+CLAUDE.md fala do App Secret sem dizer que o **App ID** também precisa estar
+salvo pra o botão Conectar funcionar.
+
+**Gap de produto encontrado de passagem, NÃO corrigido**: o Embedded Signup do
+WhatsApp precisa de um `config_id` da Meta, e o formulário do painel **não tem
+esse campo** — ele só chega por `META_CONFIG_ID` no ambiente. `getMetaAppConfig`
+até lê `config.configId` do banco, mas nada nunca escreve lá: caminho morto. Sem
+ele, o popup abre um Facebook Login genérico em vez do fluxo de onboarding do
+WhatsApp. Proposta (aguardando "pode fazer"): campo Config ID no formulário +
+um diagnóstico no painel dizendo QUAL peça falta, em vez do silêncio de hoje.
+
+### 22.3 Os cards que ensinam a usar saíram do Dashboard — a pedido dele
+
+`PrimeirosPassos` saiu de `Dashboard.tsx`. O Dashboard é a tela de trabalho de
+quem já sabe usar, e o bloco cobrava espaço do dono todo dia.
+
+**Não foi apagado**: o conteúdo vive na Central de ajuda (`/ajuda`, via
+`PrimeirosPassosResumo`), que é onde alguém vai quando tem dúvida. A amarra
+`primeiros-passos` inverteu de lado — antes travava o bloco NO Dashboard, agora
+trava que ele **não volta** e que o conteúdo **continua** em `/ajuda`. Repor é
+uma linha.
+
+**Ficou de fora, esperando a palavra dele**: o `GuiaProcessual`, o outro bloco
+que ensina a usar, na variante processual do Dashboard (plano só-Processos).
+Ele disse "os cards", no plural, mas os dois vivem em painéis mutuamente
+exclusivos e ele só vê o primeiro — tirar o segundo sem confirmar seria remover
+o que ele não olhou.
+
+### 22.4 O diálogo "Cadastrar credencial" não cabia na tela, e pedia OAB
+
+Duas coisas no mesmo diálogo, as duas do print dele.
+
+**Não cabia**: o `DialogContent` não tinha teto de altura nem rolagem, e o
+formulário é alto — apelido, as duas opções de alcance, o seletor de tribunal,
+CPF, senha e o 2FA com dois modos. Num notebook a caixa passava da tela: o
+TÍTULO cortado em cima e os botões «Cancelar» e «Cadastrar e testar login»
+cortados embaixo. "Fora de padrão" tem número: **41 diálogos do client usam
+`overflow-y-auto` e 19 usam `max-h-[90vh]`** — este era a exceção. Agora segue a
+convenção da casa.
+
+**Pedia «CPF ou OAB»**: o login do PJe/PDPJ é o CPF. Oferecer OAB convidava a
+digitar o que o tribunal não aceita, e o erro só apareceria no "testar login",
+depois da senha já preenchida. Virou «CPF», com o exemplo só de CPF.
+
+O manual da Central de ajuda citava «CPF ou OAB» e mudou no MESMO commit — é a
+regra que nasceu em 13/09 (rótulo citado entre «» tem que existir no arquivo da
+tela), e o teste `central-de-ajuda` teria quebrado se eu tivesse esquecido.
+
+Amarras: `dialogo-credencial-cabe-na-tela` (5 testes) e `primeiros-passos`
+(reescrita a seção do client) — **8 mutações, todas vermelhas**
+(`scratchpad/mutar-dialogo-e-dashboard.py`). Uma delas apaga o resumo de
+`/ajuda`: remover da tela de trabalho é diferente de apagar, e o teste separa as
+duas coisas.
