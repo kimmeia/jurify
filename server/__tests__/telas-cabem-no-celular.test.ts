@@ -132,4 +132,34 @@ describe("as telas cabem num celular de 390px", () => {
     expect(t, "220px fixos truncavam o nome com mil pixels vazios à direita")
       .toMatch(/w-\[220px\] lg:w-\[300px\] xl:w-\[380px\]/);
   });
+
+  it("Editar plano: o destaque quebra em linhas em vez de exigir a largura dele", () => {
+    // A causa medida: `truncate` é `white-space: nowrap`, e um ITEM DE FLEX
+    // nasce com `min-width: auto` — junto, o texto exigia 1467px e empurrava
+    // cartão, coluna, grid e página (2110px numa janela de 1440). `min-w-0`
+    // é o que deixa o item encolher; sem ele, trocar truncate por break-words
+    // não resolveria sozinho.
+    const t = trecho(tela("admin/AdminPlanoEditor.tsx"), "Destaques do cartão", "novaFeature");
+    const linha = t.match(/<span className="([^"]*)">\{f\}<\/span>/);
+    expect(linha, "a linha do destaque sumiu").toBeTruthy();
+    expect(linha![1], "sem min-w-0 o item de flex exige a largura do texto inteiro")
+      .toContain("min-w-0");
+    expect(linha![1], "nowrap volta a empurrar a página de lado").not.toContain("truncate");
+  });
+
+  it("Editar plano: a coluna do meio pode encolher e as laterais têm largura própria", () => {
+    const src = tela("admin/AdminPlanoEditor.tsx");
+    const grid = src.match(/className="mx-auto grid max-w-\[1500px\][^"]*"/);
+    expect(grid, "o grid de três colunas do editor sumiu").toBeTruthy();
+    expect(grid![0], "só minmax(0,1fr) impede um filho largo de esticar a linha")
+      .toContain("minmax(0,1fr)");
+  });
+
+  it("Editar plano: a grade de limites começa em uma coluna", () => {
+    const t = trecho(tela("admin/AdminPlanoEditor.tsx"), "Limites", "Módulos inclusos");
+    expect(t, "duas colunas fixas espremem rótulo e campo num celular de 390px")
+      .toContain("grid-cols-1");
+    expect(t, "célula de grid nasce com min-width:auto e cresce até o rótulo mais longo")
+      .toContain("[&>*]:min-w-0");
+  });
 });
