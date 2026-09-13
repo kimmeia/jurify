@@ -195,7 +195,17 @@ describe("bateria de teste roda em fila", () => {
   });
 
   it("o que não tem endereço mapeado fica fora da fila", () => {
+    // A conta mudou de lugar em 13/09: virou `alvosDaBateria` na grade, pra a
+    // barra de progresso e a fila não fazerem contas separadas (e pra os
+    // tribunais candidatos saírem da bateria). O que não muda é a regra.
     const bloco = tela.slice(tela.indexOf("async function rodarLote"));
-    expect(bloco.slice(0, 400)).toMatch(/filter\(\(t\) => !t\.semCobertura\)/);
+    expect(bloco.slice(0, 400)).toMatch(/alvosDaBateria\(/);
+    const grade = fs.readFileSync(
+      path.resolve(__dirname, "../../client/src/components/GradeTribunais.tsx"),
+      "utf-8",
+    );
+    expect(grade).toMatch(
+      /export function alvosDaBateria[\s\S]{0,200}?filter\(\(t\) => !t\.semCobertura/,
+    );
   });
 });

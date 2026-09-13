@@ -2228,6 +2228,15 @@ export const motorMonitoramentos = mysqlTable(
     ultimaCobrancaEm: timestamp("ultima_cobranca_em"),
     ultimoErro: text("ultimo_erro"),
     /**
+     * Foto da tela do tribunal no instante do último erro, como `/uploads/...`.
+     *
+     * O robô já tirava essa foto e a jogava fora: ela era gravada no disco
+     * efêmero do container, fora do volume, e nenhuma tela a mostrava. Quando o
+     * portal muda de layout é a única prova do que ele viu — sem ela a
+     * investigação vira adivinhação. Sucesso limpa.
+     */
+    ultimoErroPrintUrl: varchar("ultimo_erro_print_url", { length: 500 }),
+    /**
      * Monitoramento por CPF em vários estados: JSON array dos tribunais
      * vigiados (["tjce","tjpe",...]). NULL = só o legado `tribunal`.
      */

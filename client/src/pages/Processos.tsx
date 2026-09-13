@@ -113,7 +113,7 @@ import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
 import LeitorQr from "@/components/LeitorQr";
-import GradeTribunais from "@/components/GradeTribunais";
+import GradeTribunais, { alvosDaBateria } from "@/components/GradeTribunais";
 
 /** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
 const SISTEMA_NACIONAL = "pje_*";
@@ -1342,6 +1342,20 @@ function MonitoramentoCard({
                 <span className="text-corpo text-muted-foreground truncate">
                   Sem movimentação registrada ainda
                 </span>
+              )}
+              {/* A foto que o robô tirou da tela do tribunal no instante da
+                  falha. Quando o portal muda de layout, é a única prova do que
+                  ele viu — antes ela era gravada em disco efêmero e sumia. */}
+              {mon.diagnostico && mon.ultimoErroPrintUrl && (
+                <a
+                  href={mon.ultimoErroPrintUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-micro text-muted-foreground underline shrink-0 hover:text-info-fg"
+                  title="Abre a imagem que o robô capturou da tela do tribunal quando a consulta falhou"
+                >
+                  ver a tela do tribunal
+                </a>
               )}
             </div>
           </div>
@@ -4317,7 +4331,10 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
   }) ?? { mutate: () => {} };
 
   async function rodarLote() {
-    const alvos = ((q.data?.tribunais ?? []) as any[]).filter((t) => !t.semCobertura);
+    // A MESMA regra que a grade usa pra decidir o que entra na bateria — duas
+    // contas separadas fariam a barra de progresso prometer um total e a fila
+    // rodar outro.
+    const alvos = alvosDaBateria((q.data?.tribunais ?? []) as any[]);
     if (alvos.length === 0 || !validarAsync) return;
     pararRef.current = false;
     setLote({ feitos: 0, total: alvos.length, atual: null });
@@ -4364,7 +4381,7 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
       lote={{
         rodando: lote != null,
         feitos: lote?.feitos ?? 0,
-        total: lote?.total ?? ((q.data.tribunais ?? []) as any[]).filter((t: any) => !t.semCobertura).length,
+        total: lote?.total ?? alvosDaBateria((q.data.tribunais ?? []) as any[]).length,
         atual: lote?.atual ?? null,
         onIniciar: () => { void rodarLote(); },
         onParar: () => { pararRef.current = true; },

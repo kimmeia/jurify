@@ -63,6 +63,43 @@ export interface TribunalPdpjConfig {
   urlBusca: string;
 }
 
+/**
+ * Marcadores da página do processo, fonte única.
+ *
+ * Usado em dois lugares que precisam concordar: a espera depois do clique (o
+ * detalhe pode ser montado na MESMA aba, por AJAX) e a conferência de qual
+ * página estamos. Duas listas divergindo faria a espera desistir de uma página
+ * que a conferência aceitaria — e o contrário.
+ */
+const SELETOR_DETALHE_PROCESSO =
+  "#panelDetalhesProcesso, #divTimeLine, [id*='timeLine' i], [id*='panelDetalhes' i]";
+
+/** Teto de espera pelo detalhe depois do clique, por tentativa. */
+const ESPERA_DETALHE_MS = 15_000;
+
+const MESMA_ABA = "mesma-aba" as const;
+
+/**
+ * O primeiro sinal POSITIVO entre várias esperas, ou null no teto de tempo.
+ *
+ * `Promise.race` cru não serve: a espera que falha primeiro resolve `null` e
+ * ganha a corrida, matando a que ainda ia dar certo.
+ */
+async function primeiroSinal<T>(
+  esperas: Array<Promise<T | null>>,
+  msTeto: number,
+): Promise<T | null> {
+  const soSeVier = (p: Promise<T | null>): Promise<T> =>
+    p.then((v) => (v == null ? new Promise<T>(() => {}) : v));
+  const teto = new Promise<null>((resolve) => {
+    const t = setTimeout(() => resolve(null), msTeto);
+    // Um timer pendurado não pode segurar o processo depois que a consulta
+    // terminou (o cron roda em fila e encerra).
+    (t as unknown as { unref?: () => void }).unref?.();
+  });
+  return Promise.race<T | null>([...esperas.map(soSeVier), teto]);
+}
+
 export const TJCE_1G: TribunalPdpjConfig = {
   tribunal: "tjce",
   grau: 1,
@@ -491,6 +528,11 @@ export class PjeTjceScraper {
     let page = await context.newPage();
     page.setDefaultTimeout(TIMEOUT_NAV_MS);
     let linhasDaBusca: LinhaDaBusca[] = [];
+    // O clique não levou pra página do processo por nenhum caminho que este
+    // adapter reconhece. Não é veredito: a extração abaixo é que decide, porque
+    // o PJe também monta o detalhe NO LUGAR e o marcador pode ter outro id.
+    let detalheNaoAbriu = false;
+    let screenshotDetalheNaoAbriu: string | null = null;
 
     try {
       // PJe TJCE 1º grau usa JSF/Seam. URL inicial confirmada via teste real:
@@ -641,7 +683,7 @@ export class PjeTjceScraper {
         // Duas tentativas: o clique no RichFaces falha sozinho quando um
         // overlay de AJAX ainda está no ar, e a segunda costuma pegar.
         for (let tentativa = 1; tentativa <= 2 && !abriuDetalhe; tentativa++) {
-          const newPagePromise = context.waitForEvent("page", { timeout: 15_000 });
+          const newPagePromise = context.waitForEvent("page", { timeout: ESPERA_DETALHE_MS });
 
           // Dispara click natural com force:true (ignora overlays).
           // Se PJe usa target="_blank" ou window.open, nova page é criada.
@@ -651,7 +693,22 @@ export class PjeTjceScraper {
             .click({ force: true, timeout: 5000 })
             .catch(() => {});
 
-          const newPage = await newPagePromise.catch(() => null);
+          // Nem todo PJe abre aba: quando o detalhe é montado NO LUGAR, por
+          // AJAX, evento de página nunca vem — e esperar o timeout inteiro por
+          // ele custava a espera cheia DUAS vezes em cada processo resolvido
+          // assim. Vigiar a própria aba em paralelo devolve esse tempo.
+          const marcadorNaMesmaAba = pageBusca
+            .locator(SELETOR_DETALHE_PROCESSO)
+            .first()
+            .waitFor({ state: "attached", timeout: ESPERA_DETALHE_MS })
+            .then(() => MESMA_ABA)
+            .catch(() => null);
+
+          const sinal = await primeiroSinal<Page | typeof MESMA_ABA>(
+            [newPagePromise.catch(() => null), marcadorNaMesmaAba],
+            ESPERA_DETALHE_MS,
+          );
+          const newPage = sinal === MESMA_ABA ? null : sinal;
           if (newPage) {
             await newPage.waitForLoadState("domcontentloaded", { timeout: 12_000 }).catch(() => {});
             await newPage.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => {});
@@ -674,27 +731,28 @@ export class PjeTjceScraper {
         (globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag =
           `clickAbriuNovaAba=${!!pageDetalhe} | urlNova=${urlNova} | abriuDetalhe=${abriuDetalhe}`;
 
-        // A página do processo não abriu. Extrair daqui seria ler a TABELA DE
-        // RESULTADOS: "Classe judicial", "Polo ativo" e "Polo passivo" estão
-        // lá como TÍTULOS DE COLUNA, e o scraper devolvia o título vizinho
-        // como se fosse o valor do campo. Melhor falhar dizendo o que houve —
-        // quem chama tem a grade em mãos pra se virar.
+        // Nenhum dos caminhos conhecidos confirmou a página do processo.
+        //
+        // Aqui havia um `return` — e ele era um falso-negativo caro. O PJe
+        // também monta o detalhe NO LUGAR (RichFaces): não abre aba, a URL
+        // continua `listView.seam` e a grade de resultados fica no DOM. Nesse
+        // caso `estaNaPaginaDoProcesso` vê "tem grade e nenhum marcador que eu
+        // conheça" e diz não — sobre uma página que TEM o processo aberto. Era
+        // por isso que monitoramento que funcionava passou a devolver
+        // "a página dele não abriu".
+        //
+        // Quem protege contra ler a TABELA DE RESULTADOS ("Classe judicial" e
+        // "Polo ativo" estão lá como TÍTULOS DE COLUNA, e o scraper devolvia o
+        // título vizinho como valor) não é este teste de página: é a recusa de
+        // rótulo dentro da extração, que devolve campo nulo, mais a conferência
+        // de conteúdo logo abaixo. Então segue, tenta extrair, e só falha se
+        // não vier nada — com a foto e a grade já em mãos pra explicar.
         if (!abriuDetalhe) {
-          const screenshotPath = await this.tirarScreenshotErro(
+          detalheNaoAbriu = true;
+          screenshotDetalheNaoAbriu = await this.tirarScreenshotErro(
             pageBusca,
             `pje-tjce-detalhe-nao-abriu-${cnjLimpo}`,
           );
-          return {
-            ...baseResultado,
-            latenciaMs: Date.now() - inicio,
-            categoriaErro: "detalhe_nao_abriu",
-            mensagemErro:
-              "O processo apareceu na busca, mas a página dele não abriu. " +
-              `URL: ${pageBusca.url()}`,
-            linhasDaBusca,
-            screenshotPath,
-            finalizadoEm: new Date().toISOString(),
-          };
         }
       }
       // tentando extrair da página atual.
@@ -722,9 +780,15 @@ export class PjeTjceScraper {
       const movimentacoes = await this.extrairMovimentacoes(page);
       await this.baixarTeores(context, movimentacoes, opts?.teorMaximo ?? 0, page);
 
-      // Validação básica: se não pegou nada, é provável que extração
-      // falhou (selectors errados ou página não é a de detalhe)
-      const conseguiuExtrair = capa.classe || capa.partes.length > 0 || movimentacoes.length > 0;
+      // Esta é a conferência que decide de fato. Ela vale mais que qualquer
+      // teste de "estou na página certa" porque olha o RESULTADO: veio dado do
+      // processo ou não veio. E os valores já passaram pela recusa de rótulo, de
+      // modo que título de coluna da tabela de resultados não conta como campo
+      // preenchido — era isso que fazia "Polo ativo" virar natureza da ação.
+      // `orgaoJulgador` entra na conta junto com a classe: detalhe que trouxe só
+      // a vara é página do processo do mesmo jeito.
+      const conseguiuExtrair =
+        capa.classe || capa.orgaoJulgador || capa.partes.length > 0 || movimentacoes.length > 0;
       if (!conseguiuExtrair) {
         const screenshotPath = await this.tirarScreenshotErro(
           page,
@@ -780,6 +844,26 @@ export class PjeTjceScraper {
             forms,
           };
         }).catch(() => null);
+
+        // Agora sim: não abriu E não veio dado. A categoria distingue as duas
+        // causas pra quem lê o diagnóstico — clique que não levou a lugar nenhum
+        // (o caller tem `linhasDaBusca` pra montar a capa) versus página aberta
+        // cujos seletores não casaram.
+        if (detalheNaoAbriu) {
+          return {
+            ...baseResultado,
+            latenciaMs: Date.now() - inicio,
+            categoriaErro: "detalhe_nao_abriu",
+            mensagemErro:
+              "O processo apareceu na busca, mas a página dele não abriu. " +
+              `URL: ${page.url()} | ` +
+              `postDiag=${(globalThis as { __pjeTjcePostDiag?: string }).__pjeTjcePostDiag ?? "n/a"} | ` +
+              `tables=${JSON.stringify(debug?.tables ?? [])} | msgs=${JSON.stringify(debug?.msgs ?? [])}`,
+            linhasDaBusca,
+            screenshotPath: screenshotDetalheNaoAbriu ?? screenshotPath,
+            finalizadoEm: new Date().toISOString(),
+          };
+        }
 
         return {
           ...baseResultado,
@@ -1128,18 +1212,16 @@ export class PjeTjceScraper {
     // O marcador do detalhe chega por AJAX; sem esta espera a conferência
     // acontece antes da página terminar de se montar.
     await page
-      .locator("#panelDetalhesProcesso, #divTimeLine, [id*='timeLine' i]")
+      .locator(SELETOR_DETALHE_PROCESSO)
       .first()
       .waitFor({ state: "attached", timeout: 8_000 })
       .catch(() => {});
     return page
-      .evaluate(() => {
-        const temDetalhe = !!document.querySelector(
-          "#panelDetalhesProcesso, #divTimeLine, [id*='timeLine' i], [id*='panelDetalhes' i]",
-        );
+      .evaluate((seletorDetalhe) => {
+        const temDetalhe = !!document.querySelector(seletorDetalhe);
         const temGrade = !!document.querySelector("[id*='processosTable']");
         return temDetalhe || !temGrade;
-      })
+      }, SELETOR_DETALHE_PROCESSO)
       .catch(() => true);
   }
 

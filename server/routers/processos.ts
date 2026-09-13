@@ -46,6 +46,7 @@ import { classificarMovimentacao, modeloParaEscritorio } from "../processos/resu
 import { createLogger } from "../_core/logger";
 import { parseCnjTribunal, sistemaCofrePorTribunal } from "../processos/cnj-parser";
 import { SISTEMA_PJE_NACIONAL, sistemasQueAtendem, tribunalRequerCredencial } from "../processos/tribunais-pdpj";
+import { exigirTribunalComprovado } from "../processos/tribunal-comprovado";
 import {
   TRIBUNAL_SEDE,
   mensagemTribunalSemMotor,
@@ -61,6 +62,7 @@ import {
   obterResultadoMotorProprio,
 } from "../processos/motor-proprio-runner";
 import { consultarTjce } from "../processos/adapters/pje-tjce";
+import { consultarProcesso } from "../processos/adapters";
 import { getConfigTribunal } from "../processos/tribunais-pdpj";
 import { resolverDedupMovimentacao } from "../processos/cron-monitoramento";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
@@ -339,6 +341,11 @@ export const processosRouter = router({
 
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+
+      // Tribunal candidato (PJe-JT) só responde depois de um login real ter
+      // passado nele. Antes de cobrar: consulta que já nasce condenada a falhar
+      // não pode consumir consulta do plano.
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
 
       // Cofre é compartilhado pelo escritório: qualquer membro
       // (dono ou colaborador) usa as credenciais cadastradas no escritório.
@@ -853,64 +860,84 @@ export const processosRouter = router({
         });
       }
 
-      const sistemaCofre = sistemaCofrePorTribunal(tribunal.codigoTribunal);
-      if (!sistemaCofre) {
-        throw new TRPCError({
-          code: "NOT_IMPLEMENTED",
-          message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
-        });
-      }
-
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
 
-      // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
-      // cópia com a nota dizendo que é igual.
-      const escolhido = await escolherCredencial(db, esc.escritorio.id, {
-        sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
-        credencialId: input.credencialId,
-      });
-      let credencial: typeof cofreCredenciais.$inferSelect[] = escolhido.cred
-        ? [escolhido.cred]
-        : [];
-      // Id informado que não serve não impede: cai pra escolha automática, que
-      // é o que o usuário espera de um campo opcional.
-      if (credencial.length === 0 && input.credencialId) {
-        const auto = await escolherCredencial(db, esc.escritorio.id, {
-          sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
-        });
-        if (auto.cred) credencial = [auto.cred];
-      }
-      if (credencial.length === 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `Cadastre uma credencial OAB-${tribunal.uf ?? ""} no Cofre.`,
-        });
-      }
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
 
-      const credId = credencial[0].id;
-      const storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
-        tentarRelogin: true,
-      });
-      if (!storageState) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: `Sessão expirou. Vá no Cofre → Validar.`,
+      // Tribunal de consulta pública (TRF5, TRT2, TRT15): o robô entra sem
+      // credencial e sem sessão, e o despachante escolhe o adapter aberto.
+      //
+      // O `consultarCNJ` ganhou esse desvio em 12/09 e esta procedure não —
+      // então ela pedia credencial pra tribunal que não tem login. Ficou pior
+      // em 13/09, quando `sistemaCofrePorTribunal` passou a devolver a
+      // credencial nacional pros 24 TRTs: TRT2 e TRT15, que funcionam pela
+      // consulta aberta, passaram a tentar o login do PJe-JT, que não responde.
+      //
+      // Cobra igual (`contarUso`): o que o tribunal dispensa é o login, não o
+      // custo de rodar o robô.
+      const consultaPublica = !tribunalRequerCredencial(tribunal.codigoTribunal);
+      let storageState: string | null = null;
+
+      if (!consultaPublica) {
+        const sistemaCofre = sistemaCofrePorTribunal(tribunal.codigoTribunal);
+        if (!sistemaCofre) {
+          throw new TRPCError({
+            code: "NOT_IMPLEMENTED",
+            message: mensagemTribunalSemMotor(tribunal.siglaTribunal),
+          });
+        }
+
+        // Mesmo seletor do `consultarCNJ` — de fato o mesmo, agora, e não uma
+        // cópia com a nota dizendo que é igual.
+        const escolhido = await escolherCredencial(db, esc.escritorio.id, {
+          sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
+          credencialId: input.credencialId,
         });
+        let credencial: typeof cofreCredenciais.$inferSelect[] = escolhido.cred
+          ? [escolhido.cred]
+          : [];
+        // Id informado que não serve não impede: cai pra escolha automática, que
+        // é o que o usuário espera de um campo opcional.
+        if (credencial.length === 0 && input.credencialId) {
+          const auto = await escolherCredencial(db, esc.escritorio.id, {
+            sistemas: sistemasQueAtendem(tribunal.codigoTribunal),
+          });
+          if (auto.cred) credencial = [auto.cred];
+        }
+        if (credencial.length === 0) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Cadastre uma credencial OAB-${tribunal.uf ?? ""} no Cofre.`,
+          });
+        }
+
+        const credId = credencial[0].id;
+        storageState = await recuperarSessao(credId, tribunal.codigoTribunal, {
+          tentarRelogin: true,
+        });
+        if (!storageState) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: `Sessão expirou. Vá no Cofre → Validar.`,
+          });
+        }
+
+        // Tribunal do registro sem endereço mapeado não chega a cobrar: não é
+        // tentativa que falhou, é cobertura que não existe.
+        if (!getConfigTribunal(tribunal.codigoTribunal)) {
+          throw new TRPCError({
+            code: "NOT_IMPLEMENTED",
+            message: `Consulta automática ainda não disponível para ${tribunal.siglaTribunal}.`,
+          });
+        }
       }
 
       await contarUso(esc.escritorio.id, "consulta_processo");
 
-      const cfgTribunal = getConfigTribunal(tribunal.codigoTribunal);
-      if (!cfgTribunal) {
-        throw new TRPCError({
-          code: "NOT_IMPLEMENTED",
-          message: `Consulta automática ainda não disponível para ${tribunal.siglaTribunal}.`,
-        });
-      }
       let resultado;
       try {
-        resultado = await consultarTjce(input.cnj, storageState, cfgTribunal);
+        resultado = await consultarProcesso(tribunal.codigoTribunal, input.cnj, storageState);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         log.error({ cnj: input.cnj, err: msg }, "[consultarCNJSincrono] scraper crashed");
@@ -1289,6 +1316,10 @@ export const processosRouter = router({
 
       // Tribunais PDPJ-cloud precisam de credencial; consulta pública (TRF-5)
       // não. Bifurcação cedo pra erro claro sem mexer no caminho TJCE.
+      // Vigiar processo de tribunal candidato sem prova de login cria um monitor
+      // que só sabe errar, e cada ciclo dele tenta o portal derivado de novo.
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunal.codigoTribunal);
+
       const requerCred = tribunalRequerCredencial(tribunal.codigoTribunal);
       let credencialIdParaSalvar: number | null = null;
       if (requerCred) {
@@ -2036,6 +2067,7 @@ export const processosRouter = router({
           message: `Monitoramento de novas ações ainda não funciona no ${siglaBase}.`,
         });
       }
+      await exigirTribunalComprovado(db, esc.escritorio.id, tribunalDaCred);
 
       const { cred, sistemasNoCofre } = await escolherCredencial(db, esc.escritorio.id, {
         sistemas: sistemasParaDocumento(tribunalDaCred),

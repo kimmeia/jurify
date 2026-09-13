@@ -25,6 +25,11 @@ import { checkPermission } from "./check-permission";
 import { verificarLimite } from "../billing/plan-limits";
 import { parseAdvboxXlsx, type LinhaAdvbox } from "../processos/parser-advbox";
 import { sistemaCofrePorTribunal } from "../processos/cnj-parser";
+import {
+  tribunaisProvadosDoEscritorio,
+  tribunalPrecisaDeProva,
+} from "../processos/tribunal-comprovado";
+import { mensagemTribunalEmTeste, siglaDoTribunal } from "../../shared/tribunais-pje";
 import { mascararCnj } from "../../scripts/spike-motor-proprio/lib/parser-utils";
 import { createLogger } from "../_core/logger";
 
@@ -391,6 +396,13 @@ export const importarProcessosRouter = router({
           limiteMon.maximo == null ? null : Math.max(0, limiteMon.maximo - limiteMon.atual);
       }
 
+      // Tribunais candidatos (PJe-JT) só entram com prova de login. Lido UMA vez
+      // pro lote: a planilha decide linha por linha, e uma consulta por linha
+      // transformaria 500 processos em 500 idas ao banco.
+      const tribunaisProvados = input.monitorar
+        ? await tribunaisProvadosDoEscritorio(db, perm.escritorioId)
+        : new Set<string>();
+
       // Mapas atualizados a cada inserção pra evitar duplicatas DENTRO do mesmo lote
       // (planilha pode ter o mesmo cliente em 5 linhas — só cria 1x).
       const { porDoc, porNome } = await carregarMapaContatos(db, perm.escritorioId);
@@ -525,6 +537,18 @@ export const importarProcessosRouter = router({
                   // Precisa de credencial mas a escolhida não bate (ou não foi
                   // escolhida).
                   resultado.monitoramentosNaoElegiveis++;
+                } else if (
+                  tribunalPrecisaDeProva(linha.codigoTribunal) &&
+                  !tribunaisProvados.has(linha.codigoTribunal)
+                ) {
+                  // Tribunal candidato sem login comprovado: o processo entra no
+                  // cadastro (o vínculo já foi criado acima), só o monitor não —
+                  // ele nasceria vermelho e bateria no portal derivado a cada ciclo.
+                  resultado.monitoramentosNaoElegiveis++;
+                  resultado.erros.push({
+                    linhaNum: linha.linhaNum,
+                    motivo: mensagemTribunalEmTeste(siglaDoTribunal(linha.codigoTribunal)),
+                  });
                 } else if (cnjsJaMonitorados.has(linha.cnj)) {
                   resultado.monitoramentosJaExistiam++;
                 } else if (
