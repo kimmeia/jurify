@@ -470,7 +470,9 @@ function ConsultarTab() {
     onSuccess: (d: any, vars: { cnj: string }) => {
       if (d?.lawsuit) {
         setDetalhesPorCnj((prev) => ({ ...prev, [vars.cnj]: d.lawsuit }));
-        toast.success("Detalhes carregados (1 cred)");
+        toast.success(TITULO_POR_FONTE[d?.fonte as FonteDaCapa] ?? TITULO_POR_FONTE.processo, {
+          description: AVISO_POR_FONTE[d?.fonte as FonteDaCapa],
+        });
       }
       setCarregandoCnj(null);
     },
@@ -2403,6 +2405,24 @@ function PastilhaProc({
   );
 }
 
+/**
+ * De onde veio a capa que a consulta devolveu. A página do processo nem
+ * sempre abre — e quando não abre o robô responde com a lista do tribunal ou
+ * com a reserva pública do CNJ. Quem lê na tela tem que saber qual foi, senão
+ * confere CPF num dado que a lista não traz.
+ */
+type FonteDaCapa = "processo" | "lista" | "datajud";
+const TITULO_POR_FONTE: Record<FonteDaCapa, string> = {
+  processo: "Detalhes carregados (1 consulta)",
+  lista: "Detalhes lidos na lista do tribunal",
+  datajud: "Natureza preenchida pela base pública do CNJ",
+};
+const AVISO_POR_FONTE: Record<FonteDaCapa, string | undefined> = {
+  processo: undefined,
+  lista: "A página do processo não abriu. Vieram classe, vara, data e os nomes das partes — sem CPF, advogado nem valor da causa.",
+  datajud: "A página do processo não abriu e ele não estava na lista. A base pública não publica as partes.",
+};
+
 export default function Processos() {
   // Lê ?tab= da URL pra suportar deep-links (ex: vínculo de processo do
   // cliente redireciona pra /processos?tab=movimentacoes&cnj=...&abrirMonitor=1).
@@ -3143,7 +3163,11 @@ function NovasAcoesTab() {
     onSuccess: (d: any, vars: { cnj: string; acaoId: number }) => {
       if (d?.lawsuit) {
         setDetalhesPorAcaoId((prev) => ({ ...prev, [vars.acaoId]: d.lawsuit }));
-        toast.success("Detalhes carregados e guardados no card");
+        toast.success(TITULO_POR_FONTE[d?.fonte as FonteDaCapa] ?? TITULO_POR_FONTE.processo, {
+          description:
+            AVISO_POR_FONTE[d?.fonte as FonteDaCapa] ??
+            "Guardado no card: a próxima abertura não paga outra consulta.",
+        });
         // O servidor gravou a capa no evento: recarregar traz o card já com
         // ela, e a próxima pessoa não paga outra consulta pelo mesmo dado.
         refetch();
