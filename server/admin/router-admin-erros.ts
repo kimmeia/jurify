@@ -14,6 +14,7 @@ import { getDb } from "../db";
 import { adminIntegracoes } from "../../drizzle/schema";
 import { decrypt } from "../escritorio/crypto-utils";
 import { createLogger } from "../_core/logger";
+import { capturaSentryConfigurada } from "../../shared/saude-semaforos";
 
 const log = createLogger("admin-router-erros");
 
@@ -115,9 +116,12 @@ export const adminErrosRouter = router({
       pagina: z.number().int().min(1).default(1),
     }))
     .query(async ({ input }) => {
+      // `configurado` é o token da API de LEITURA; `capturaConfigurada` é a
+      // DSN que faz o servidor ENVIAR. Sem a segunda, "0 erros" não prova nada.
+      const capturaConfigurada = capturaSentryConfigurada(process.env);
       const cfg = await carregarConfigSentry();
       if (!cfg) {
-        return { configurado: false as const, issues: [], total: 0, motivo: "sentry_nao_configurado" };
+        return { configurado: false as const, capturaConfigurada, issues: [], total: 0, motivo: "sentry_nao_configurado" };
       }
 
       const params = new URLSearchParams();
@@ -143,13 +147,14 @@ export const adminErrosRouter = router({
           // mostrar status correto, não o congelado do teste inicial.
           const corpo = await resp.text().catch(() => "");
           await persistirErroSentry(resp.status, corpo.slice(0, 200) || resp.statusText);
-          return { configurado: true as const, issues: [], total: 0, motivo: `sentry_http_${resp.status}` };
+          return { configurado: true as const, capturaConfigurada, issues: [], total: 0, motivo: `sentry_http_${resp.status}` };
         }
         const data = (await resp.json()) as SentryIssue[];
         // Sucesso real → marca como conectado (cura status "erro" anterior)
         await persistirSucessoSentry();
         return {
           configurado: true as const,
+          capturaConfigurada,
           issues: data.map((i) => ({
             id: i.id,
             shortId: i.shortId,
@@ -168,7 +173,7 @@ export const adminErrosRouter = router({
       } catch (err: any) {
         clearTimeout(t);
         log.error({ err: err.message }, "Erro chamando Sentry API");
-        return { configurado: true as const, issues: [], total: 0, motivo: err.name === "AbortError" ? "timeout" : "erro_rede" };
+        return { configurado: true as const, capturaConfigurada, issues: [], total: 0, motivo: err.name === "AbortError" ? "timeout" : "erro_rede" };
       }
     }),
 

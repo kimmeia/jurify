@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { jornadaNaoConfiavel } from "@shared/saude-semaforos";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -159,6 +160,15 @@ export default function AdminRoboJornada() {
               <p className="text-[11px] text-muted-foreground">
                 {ultima.origem === "cron" ? "automática" : "manual"} · {duracao(ultima.duracaoMs)}
               </p>
+              {jornadaNaoConfiavel(ultima) && (
+                <Badge
+                  variant="outline"
+                  className="mt-1.5 text-[10px] font-bold bg-danger-bg text-danger-fg border-danger/30 dark:text-danger"
+                  title="Menos de 2 s por tela: o robô não esperou as telas montarem. Rode de novo."
+                >
+                  NÃO CONFIÁVEL · rápido demais
+                </Badge>
+              )}
             </CardContent>
           </Card>
           <Card>

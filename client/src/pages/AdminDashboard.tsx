@@ -15,6 +15,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { achadosRepetidos } from "@shared/saude-semaforos";
 import {
   HeroCard,
   KPICard,
@@ -196,18 +197,27 @@ function PrecisaDeVoce() {
     { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false },
   );
 
+  // Mesma query (mesmo cache) da Visão rápida de Saúde do sistema. O auditor
+  // funciona; o que ninguém via era o MESMO achado repetindo dia após dia.
+  const auditor = trpc.adminRoboAuditor.historico.useQuery(
+    { limite: 4 },
+    { staleTime: 60_000, refetchOnWindowFocus: false, retry: false },
+  );
+
   const carregando = pendencias.isLoading || inadimplentes.isLoading || erros.isLoading;
   const trials = pendencias.data?.trialsVencendo ?? [];
   const inad = inadimplentes.data ?? [];
   const errosAbertos = erros.data?.configurado ? (erros.data?.total ?? 0) : 0;
   const nivelEmails = limiteEmails.data?.nivel ?? "ok";
   const semAtivacao = funil.data?.nuncaAtivou ?? { total: 0, nomes: [] };
+  const repeticaoAuditor = achadosRepetidos(auditor.data?.varreduras ?? []);
   const totalPendencias =
     (trials.length > 0 ? 1 : 0) +
     (inad.length > 0 ? 1 : 0) +
     (errosAbertos > 0 ? 1 : 0) +
     (nivelEmails !== "ok" ? 1 : 0) +
-    (semAtivacao.total > 0 ? 1 : 0);
+    (semAtivacao.total > 0 ? 1 : 0) +
+    (repeticaoAuditor.repetido ? 1 : 0);
 
   if (carregando) return <Skeleton className="h-28 w-full rounded-xl" />;
 
@@ -218,8 +228,8 @@ function PrecisaDeVoce() {
           <CheckCircle2 className="h-5 w-5 text-success-fg" />
           <p className="text-sm text-success-fg">
             <span className="font-semibold">Tudo em dia.</span> Nenhum teste grátis vencendo,
-            nenhum cadastro esperando contato, sem inadimplência, sem erros abertos e
-            e-mails dentro do limite.
+            nenhum cadastro esperando contato, sem inadimplência, sem erros abertos,
+            e-mails dentro do limite e nenhum achado do robô auditor parado.
           </p>
         </CardContent>
       </Card>
@@ -298,6 +308,30 @@ function PrecisaDeVoce() {
             linhas={(erros.data?.issues ?? []).slice(0, 3).map((i: any) => ({
               texto: <span className="truncate">{i.titulo}</span>,
             }))}
+          />
+        )}
+        {repeticaoAuditor.repetido && (
+          <AlertaCard
+            tom="ambar"
+            selo="ROBÔ AUDITOR"
+            titulo={`Robô auditor: ${repeticaoAuditor.achados} ${
+              repeticaoAuditor.achados === 1 ? "achado parado" : "achados parados"
+            }${
+              repeticaoAuditor.desde
+                ? ` desde ${new Date(repeticaoAuditor.desde).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`
+                : ""
+            }`}
+            acaoLabel="ver e resolver"
+            onAcao={() => setLocation("/admin/saude?aba=robo-auditor")}
+            linhas={[
+              {
+                texto: (
+                  <span className="text-muted-foreground/70">
+                    os mesmos nas 3 últimas varreduras — o robô funciona, ninguém resolveu
+                  </span>
+                ),
+              },
+            ]}
           />
         )}
       </div>
