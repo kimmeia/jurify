@@ -9,9 +9,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import {
-  semaforoAuditor,
-  semaforoErros,
-  semaforoJornada,
+  montarSemaforosDaVisaoRapida,
   type CorSemaforo,
   type Semaforo,
   type TipoAcaoSemaforo,
@@ -242,25 +240,14 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
 
   const agora = new Date();
   const issues = erros.data?.issues ?? [];
-  const ultimoErroEm =
-    issues
-      .map((i: any) => i.ultimoVisto as string | undefined)
-      .filter((v): v is string => Boolean(v))
-      .sort()
-      .at(-1) ?? null;
-  const semaforos = {
-    erros: semaforoErros(
-      {
-        capturaConfigurada: erros.data?.capturaConfigurada === true,
-        abertos: erros.data?.total ?? 0,
-        ultimoErroEm,
-        leituraFalhou: erros.data?.motivo ?? (erros.isError ? "erro_rede" : null),
-      },
-      agora,
-    ),
-    auditor: semaforoAuditor(auditor.data?.varreduras ?? [], agora),
-    jornada: semaforoJornada(jornada.data?.varreduras ?? [], agora),
-  };
+  // Do payload das procedures às três frases: tudo na shared, testado com o
+  // formato real. Aqui só se entrega o que cada query devolveu.
+  const semaforos = montarSemaforosDaVisaoRapida({
+    erros: { data: erros.data, isError: erros.isError },
+    auditor: { data: auditor.data },
+    jornada: { data: jornada.data },
+    agora,
+  });
   const executarAcao = (tipo: TipoAcaoSemaforo) => {
     if (tipo === "aba_erros") irParaAba("erros");
     else if (tipo === "aba_auditor") irParaAba("robo-auditor");

@@ -204,7 +204,9 @@ function PrecisaDeVoce() {
     { staleTime: 60_000, refetchOnWindowFocus: false, retry: false },
   );
 
-  const carregando = pendencias.isLoading || inadimplentes.isLoading || erros.isLoading;
+  // O auditor entra no esqueleto: sem ele, o card verde afirmava "nenhum
+  // achado parado" antes de o histórico responder.
+  const carregando = pendencias.isLoading || inadimplentes.isLoading || erros.isLoading || auditor.isLoading;
   const trials = pendencias.data?.trialsVencendo ?? [];
   const inad = inadimplentes.data ?? [];
   const errosAbertos = erros.data?.configurado ? (erros.data?.total ?? 0) : 0;
@@ -302,7 +304,7 @@ function PrecisaDeVoce() {
           <AlertaCard
             tom="rosa"
             selo="SISTEMA"
-            titulo={`${errosAbertos} ${errosAbertos === 1 ? "erro aberto" : "erros abertos"}`}
+            titulo={`${errosAbertos}${erros.data?.totalMinimo ? "+" : ""} ${errosAbertos === 1 ? "erro aberto" : "erros abertos"}`}
             acaoLabel="abrir Saúde"
             onAcao={() => setLocation("/admin/saude?aba=erros")}
             linhas={(erros.data?.issues ?? []).slice(0, 3).map((i: any) => ({

@@ -23,11 +23,14 @@ import {
   achadosRepetidos,
   capturaSentryConfigurada,
   jornadaNaoConfiavel,
+  montarSemaforosDaVisaoRapida,
   motivoLeituraLegivel,
   quandoRodou,
   semaforoAuditor,
   semaforoErros,
   semaforoJornada,
+  ultimoErroVisto,
+  type LeituraErrosVisaoRapida,
   type VarreduraAuditorSemaforo,
   type VarreduraJornadaSemaforo,
 } from "../../shared/saude-semaforos";
@@ -49,13 +52,28 @@ function antes(ms: number): string {
 // ---------------------------------------------------------------------------
 
 describe("semaforoErros", () => {
-  it("captura não configurada + 0 abertos = âmbar 'não dá pra afirmar', com a variável na frase", () => {
+  it("captura não configurada + 0 abertos = âmbar 'não dá pra afirmar', com as DUAS variáveis na frase", () => {
     const s = semaforoErros({ capturaConfigurada: false, abertos: 0, ultimoErroEm: null }, AGORA);
     expect(s.cor).toBe("ambar");
     expect(s.titulo).toBe("Erros no sistema — não dá pra afirmar");
     expect(s.frase).toContain("Nenhum erro chegou");
+    // `initSentry` liga com qualquer uma das duas; a frase mandava criar só a
+    // primeira — e nunca ficava verde com a genérica. `\b` separa
+    // "SENTRY_DSN" de "SENTRY_DSN_BACKEND" (uma é prefixo da outra).
     expect(s.frase).toContain("SENTRY_DSN_BACKEND");
+    expect(s.frase).toMatch(/\bSENTRY_DSN\b/);
     expect(s.acao).toEqual({ rotulo: "Como confirmar", tipo: "aba_erros" });
+  });
+
+  it("página cheia (totalMinimo) = '25+ erros abertos' — a procedure devolve UMA página, não o total", () => {
+    const s = semaforoErros({ capturaConfigurada: true, abertos: 25, ultimoErroEm: null, totalMinimo: true }, AGORA);
+    expect(s.cor).toBe("vermelho");
+    expect(s.titulo).toBe("Erros no sistema — 25+ erros abertos");
+    expect(s.frase).toBe("Pelo menos 25 erros não resolvidos no Sentry.");
+    // página que NÃO veio cheia continua afirmando a contagem exata
+    const exato = semaforoErros({ capturaConfigurada: true, abertos: 25, ultimoErroEm: null, totalMinimo: false }, AGORA);
+    expect(exato.titulo).toBe("Erros no sistema — 25 erros abertos");
+    expect(exato.frase).toBe("25 erros não resolvidos no Sentry.");
   });
 
   it("captura configurada + 0 abertos = verde", () => {
@@ -97,12 +115,22 @@ describe("semaforoErros", () => {
 });
 
 describe("capturaSentryConfigurada", () => {
-  it("só a SENTRY_DSN_BACKEND preenchida conta", () => {
+  it("é a MESMA régua de initSentry: SENTRY_DSN_BACKEND ou, na falta dela, SENTRY_DSN", () => {
     expect(capturaSentryConfigurada({})).toBe(false);
     expect(capturaSentryConfigurada({ SENTRY_DSN_BACKEND: "" })).toBe(false);
     expect(capturaSentryConfigurada({ SENTRY_DSN_BACKEND: "   " })).toBe(false);
-    expect(capturaSentryConfigurada({ SENTRY_DSN: "https://x@sentry.io/1" })).toBe(false);
+    expect(capturaSentryConfigurada({ SENTRY_DSN: "" })).toBe(false);
+    expect(capturaSentryConfigurada({ SENTRY_DSN: "   " })).toBe(false);
     expect(capturaSentryConfigurada({ SENTRY_DSN_BACKEND: "https://x@sentry.io/1" })).toBe(true);
+    // Só a genérica no Railway: o servidor sobe com "Sentry ativo" — a tela
+    // dizia que a captura não estava confirmada e mandava criar outra variável.
+    expect(capturaSentryConfigurada({ SENTRY_DSN: "https://x@sentry.io/1" })).toBe(true);
+    expect(capturaSentryConfigurada({ SENTRY_DSN_BACKEND: "", SENTRY_DSN: "https://x@sentry.io/1" })).toBe(true);
+  });
+
+  it("initSentry continua com o mesmo fallback — se ele mudar, a régua daqui muda junto", () => {
+    const sentry = ler("server/_core/sentry.ts");
+    expect(sentry).toContain("process.env.SENTRY_DSN_BACKEND || process.env.SENTRY_DSN");
   });
 });
 
@@ -356,28 +384,46 @@ describe("quandoRodou", () => {
 describe("Visão rápida em três linhas (AdminSaude.tsx)", () => {
   const saude = ler("client/src/pages/admin/AdminSaude.tsx");
 
-  it("importa as três regras da shared e as CHAMA — não carrega cópia", () => {
+  it("monta as três linhas pela shared, entregando o que as TRÊS queries devolveram — não carrega cópia", () => {
     const importacao = saude.match(/import \{[^}]*\} from "@shared\/saude-semaforos"/);
     expect(importacao, "a tela não importa shared/saude-semaforos").toBeTruthy();
-    for (const fn of ["semaforoErros", "semaforoAuditor", "semaforoJornada"]) {
-      expect(importacao![0], `${fn} não vem da shared`).toContain(fn);
-      expect(saude, `${fn} importada mas nunca chamada`).toMatch(new RegExp(`${fn}\\(`));
-    }
+    expect(importacao![0]).toContain("montarSemaforosDaVisaoRapida");
+    // O cabo procedure → regra é pinado inteiro: `abertos: 0`, `isError: false`
+    // e `data: undefined` passavam no typecheck e na suíte inteira quando a
+    // montagem morava aqui.
+    expect(saude).toContain(
+      [
+        "  const semaforos = montarSemaforosDaVisaoRapida({",
+        "    erros: { data: erros.data, isError: erros.isError },",
+        "    auditor: { data: auditor.data },",
+        "    jornada: { data: jornada.data },",
+        "    agora,",
+        "  });",
+      ].join("\n"),
+    );
     expect(saude, "há uma função semaforo* local — a regra tem que morar na shared").not.toMatch(
       /function semaforo/,
     );
+    for (const fn of ["semaforoErros", "semaforoAuditor", "semaforoJornada"]) {
+      expect(saude, `${fn} chamada direto na tela — a montagem é da shared`).not.toMatch(new RegExp(`${fn}\\(`));
+    }
+    // as três queries que alimentam a montagem são as reais
+    expect(saude).toContain('trpc.adminErros.listar.useQuery(\n    { status: "unresolved", limite: 25, pagina: 1 }');
+    expect(saude).toContain("trpc.adminRoboAuditor.historico.useQuery(\n    { limite: 4 }");
+    expect(saude).toContain("trpc.adminJornada.historico.useQuery(\n    { limite: 4 }");
   });
 
-  it("lê capturaConfigurada da procedure e liga os botões às ações reais", () => {
-    expect(saude).toContain("erros.data?.capturaConfigurada");
+  it("liga os botões às ações reais — cada tipo abre a SUA aba", () => {
     expect(saude).toContain("trpc.adminJornada.rodar.useMutation");
     expect(saude).toContain("trpc.adminRoboAuditor.varrer.useMutation");
     // "Rodar" tem que RODAR — a mutation existir não prova que o botão a chama.
     expect(saude).toContain('tipo === "rodar_auditor") varrerAuditor.mutate({})');
     expect(saude).toContain('tipo === "rodar_jornada") rodarJornada.mutate()');
-    expect(saude).toContain('irParaAba("robo-auditor")');
-    expect(saude).toContain('irParaAba("robo-jornada")');
-    expect(saude).toContain('irParaAba("erros")');
+    // A linha inteira: `irParaAba("erros")` solto também existe no card
+    // "Últimos erros" da dobra, e "Ver os erros" abrindo E-mails passava.
+    expect(saude).toContain('if (tipo === "aba_erros") irParaAba("erros");');
+    expect(saude).toContain('else if (tipo === "aba_auditor") irParaAba("robo-auditor");');
+    expect(saude).toContain('else if (tipo === "aba_jornada") irParaAba("robo-jornada");');
   });
 
   it("as três linhas vêm ANTES dos detalhes, e os detalhes nascem fechados", () => {
@@ -440,17 +486,172 @@ describe("a captura do Sentry é afirmada pelo servidor, não presumida", () => 
     expect(saidas).toBeGreaterThanOrEqual(4);
     expect((listar.match(/\bcapturaConfigurada,/g) || []).length).toBe(saidas);
     expect(listar).not.toMatch(/capturaConfigurada:\s*(true|false)\b/);
+    // `total` é o tamanho da página pedida ao Sentry (`limit=25`): página
+    // cheia devolve `totalMinimo` pra tela escrever "25+", e as saídas sem
+    // leitura levam o campo também (a tela lê a união dos quatro `return`).
+    expect(listar).toContain('params.set("limit", String(input.limite))');
+    expect(listar).toContain("totalMinimo: data.length >= input.limite,");
+    expect((listar.match(/\btotalMinimo:/g) || []).length).toBe(saidas);
   });
 
-  it("a aba Erros explica a variável quando a captura não está confirmada", () => {
+  it("a aba Erros explica as DUAS variáveis quando a captura não está confirmada", () => {
     const erros = ler("client/src/pages/admin/AdminErros.tsx");
     expect(erros).toContain("capturaConfigurada === false");
-    expect(erros).toContain("SENTRY_DSN_BACKEND");
+    expect(erros).toContain("<code>SENTRY_DSN_BACKEND</code>");
+    expect(erros).toContain("<code>SENTRY_DSN</code>");
     expect(erros).toContain("Railway");
   });
 });
 
+// ---------------------------------------------------------------------------
+// 5. A montagem da Visão rápida, com os payloads no formato das procedures
+// ---------------------------------------------------------------------------
+
+describe("montarSemaforosDaVisaoRapida", () => {
+  /** Uma issue como `adminErros.listar` a devolve. */
+  function issue(ultimoVisto: string) {
+    return {
+      id: "1",
+      shortId: "JF-1",
+      titulo: "TypeError",
+      local: "router",
+      ocorrencias: 3,
+      usuariosAfetados: 1,
+      primeiroVisto: antes(5 * HORA),
+      ultimoVisto,
+      nivel: "error",
+      status: "unresolved",
+      link: "https://sentry.io/x",
+    };
+  }
+  /** `adminErros.listar` com o Sentry lido de verdade (sem `motivo`). */
+  function lido(issues: ReturnType<typeof issue>[], extra: Partial<LeituraErrosVisaoRapida> = {}): LeituraErrosVisaoRapida {
+    return {
+      configurado: true,
+      capturaConfigurada: true,
+      issues,
+      total: issues.length,
+      totalMinimo: false,
+      ...extra,
+    } as LeituraErrosVisaoRapida;
+  }
+  const semHistorico = { auditor: { data: undefined }, jornada: { data: undefined } };
+
+  it("issues abertas → vermelho com a contagem e o último visto — `abertos` vem de `total`", () => {
+    const r = montarSemaforosDaVisaoRapida({
+      erros: { data: lido([issue(antes(2 * HORA)), issue(antes(30 * HORA)), issue(antes(6 * HORA))]), isError: false },
+      ...semHistorico,
+      agora: AGORA,
+    });
+    expect(r.erros.cor).toBe("vermelho");
+    expect(r.erros.titulo).toBe("Erros no sistema — 3 erros abertos");
+    expect(r.erros.frase).toBe("3 erros não resolvidos no Sentry, o último visto há 2h.");
+  });
+
+  it("página cheia → '25+' (é `totalMinimo` da procedure, não a tela contando)", () => {
+    const pagina = Array.from({ length: 25 }, () => issue(antes(HORA)));
+    const r = montarSemaforosDaVisaoRapida({
+      erros: { data: lido(pagina, { totalMinimo: true }), isError: false },
+      ...semHistorico,
+      agora: AGORA,
+    });
+    expect(r.erros.titulo).toBe("Erros no sistema — 25+ erros abertos");
+  });
+
+  it("`motivo` da procedure (sem token, HTTP, timeout) → âmbar, nunca verde", () => {
+    const semToken: LeituraErrosVisaoRapida = {
+      configurado: false,
+      capturaConfigurada: true,
+      issues: [],
+      total: 0,
+      totalMinimo: false,
+      motivo: "sentry_nao_configurado",
+    } as LeituraErrosVisaoRapida;
+    const r = montarSemaforosDaVisaoRapida({ erros: { data: semToken, isError: false }, ...semHistorico, agora: AGORA });
+    expect(r.erros.cor).toBe("ambar");
+    expect(r.erros.frase).toContain("token da API");
+
+    const http = montarSemaforosDaVisaoRapida({
+      erros: { data: { ...semToken, configurado: true, motivo: "sentry_http_401" } as LeituraErrosVisaoRapida, isError: false },
+      ...semHistorico,
+      agora: AGORA,
+    });
+    expect(http.erros.cor).toBe("ambar");
+    expect(http.erros.frase).toContain("HTTP 401");
+  });
+
+  it("a query em erro (sem `data`) → âmbar 'erro de rede' — o `isError` do tRPC conta", () => {
+    const r = montarSemaforosDaVisaoRapida({ erros: { data: undefined, isError: true }, ...semHistorico, agora: AGORA });
+    expect(r.erros.cor).toBe("ambar");
+    expect(r.erros.frase).toContain("erro de rede");
+  });
+
+  it("0 issues, captura confirmada, sem motivo → verde; sem captura → âmbar", () => {
+    const verde = montarSemaforosDaVisaoRapida({ erros: { data: lido([]), isError: false }, ...semHistorico, agora: AGORA });
+    expect(verde.erros.cor).toBe("verde");
+    const ambar = montarSemaforosDaVisaoRapida({
+      erros: { data: lido([], { capturaConfigurada: false }), isError: false },
+      ...semHistorico,
+      agora: AGORA,
+    });
+    expect(ambar.erros.cor).toBe("ambar");
+    expect(ambar.erros.frase).toContain("não está confirmada");
+  });
+
+  it("auditor e jornada recebem as `varreduras` dos históricos — não uma lista vazia", () => {
+    const regras = [{ id: "LEA-01", total: 5 }];
+    const r = montarSemaforosDaVisaoRapida({
+      erros: { data: lido([]), isError: false },
+      auditor: {
+        data: {
+          varreduras: [
+            varredura(HOJE_3H, 5, { regras }),
+            varredura(ONTEM_3H, 5, { regras }),
+            varredura(ANTEONTEM_3H, 5, { regras }),
+          ],
+        },
+      },
+      jornada: {
+        data: {
+          // a linha `rodando` de agora vem primeiro no histórico; a que conta é a última que TERMINOU
+          varreduras: [jornada({ status: "rodando", duracaoMs: null, iniciadoEm: antes(60_000) }), jornada({ rotasComAchado: 2 })],
+          emAndamento: true,
+        },
+      },
+      agora: AGORA,
+      fuso: FUSO,
+    });
+    expect(r.auditor.titulo).toBe("Robô auditor — funciona, mas ninguém olha");
+    expect(r.jornada.titulo).toBe("Robô de jornada — 2 telas com problema");
+    expect(r.jornada.frase).toContain("Rodou hoje às 03:00");
+  });
+
+  it("históricos ainda sem resposta → cinza 'ainda não rodou' (a tela mostra esqueleto enquanto carrega)", () => {
+    const r = montarSemaforosDaVisaoRapida({ erros: { data: lido([]), isError: false }, ...semHistorico, agora: AGORA });
+    expect(r.auditor.titulo).toBe("Robô auditor — ainda não rodou");
+    expect(r.jornada.titulo).toBe("Robô de jornada — ainda não rodou");
+  });
+
+  it("ultimoErroVisto pega o `ultimoVisto` mais recente e ignora vazio", () => {
+    expect(ultimoErroVisto([])).toBeNull();
+    expect(ultimoErroVisto([{ ultimoVisto: null }, { ultimoVisto: undefined }])).toBeNull();
+    const a = antes(3 * HORA);
+    const b = antes(HORA);
+    expect(ultimoErroVisto([{ ultimoVisto: a }, { ultimoVisto: b }, { ultimoVisto: a }])).toBe(b);
+  });
+});
+
 describe("card 'Precisa de você' do robô auditor (AdminDashboard.tsx)", () => {
+  it("o esqueleto espera o histórico do auditor — senão o verde 'nenhum achado parado' sai antes da resposta", () => {
+    const dash = ler("client/src/pages/AdminDashboard.tsx");
+    expect(dash).toMatch(/const carregando =[^;]*auditor\.isLoading/);
+  });
+
+  it("o card de erros escreve '25+' quando a página do Sentry veio cheia", () => {
+    const dash = ler("client/src/pages/AdminDashboard.tsx");
+    expect(dash).toContain('titulo={`${errosAbertos}${erros.data?.totalMinimo ? "+" : ""} ${errosAbertos === 1 ? "erro aberto" : "erros abertos"}`}');
+  });
+
   it("usa achadosRepetidos da shared e aponta pra uma aba que existe em AdminSaude", () => {
     const dash = ler("client/src/pages/AdminDashboard.tsx");
     expect(dash).toMatch(/import \{[^}]*achadosRepetidos[^}]*\} from "@shared\/saude-semaforos"/);

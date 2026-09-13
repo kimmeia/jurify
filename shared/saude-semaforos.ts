@@ -51,9 +51,12 @@ const MS_POR_HORA = 60 * 60 * 1000;
  * (`initSentry` desliga sem ela). O painel dizia "conectado" olhando o token
  * da API de leitura — que é outra coisa: com ele dá pra LER issues, mas sem a
  * DSN nenhum erro do backend chega lá pra ser lido.
+ *
+ * A régua é a MESMA de `initSentry` (`SENTRY_DSN_BACKEND || SENTRY_DSN`): só a
+ * genérica no Railway liga a captura, e a tela dizia que não.
  */
 export function capturaSentryConfigurada(env: Record<string, string | undefined>): boolean {
-  return Boolean(env.SENTRY_DSN_BACKEND?.trim());
+  return Boolean((env.SENTRY_DSN_BACKEND || env.SENTRY_DSN)?.trim());
 }
 
 function plural(n: number, um: string, varios: string): string {
@@ -110,6 +113,12 @@ export interface EntradaErros {
    * timeout, HTTP). Sem isto, "0 abertos" ficaria verde com o Sentry fora do ar.
    */
   leituraFalhou?: string | null;
+  /**
+   * `adminErros.listar` devolve UMA página: `abertos` é o tamanho dela, não o
+   * total do Sentry. Página cheia = "25+", senão a frase afirma uma contagem
+   * que não mediu.
+   */
+  totalMinimo?: boolean;
 }
 
 export function motivoLeituraLegivel(motivo: string): string {
@@ -123,10 +132,16 @@ export function motivoLeituraLegivel(motivo: string): string {
 export function semaforoErros(e: EntradaErros, agora: Date): Semaforo {
   if (e.abertos > 0) {
     const ultimo = e.ultimoErroEm ? `, o último visto ${tempoRelativoSemaforo(e.ultimoErroEm, agora)}` : "";
+    const abertos = e.totalMinimo
+      ? `${e.abertos}+ erros abertos`
+      : plural(e.abertos, "erro aberto", "erros abertos");
+    const naoResolvidos = e.totalMinimo
+      ? `Pelo menos ${e.abertos} erros não resolvidos`
+      : plural(e.abertos, "erro não resolvido", "erros não resolvidos");
     return {
       cor: "vermelho",
-      titulo: `Erros no sistema — ${plural(e.abertos, "erro aberto", "erros abertos")}`,
-      frase: `${plural(e.abertos, "erro não resolvido", "erros não resolvidos")} no Sentry${ultimo}.`,
+      titulo: `Erros no sistema — ${abertos}`,
+      frase: `${naoResolvidos} no Sentry${ultimo}.`,
       acao: { rotulo: "Ver os erros", tipo: "aba_erros" },
     };
   }
@@ -143,7 +158,7 @@ export function semaforoErros(e: EntradaErros, agora: Date): Semaforo {
       cor: "ambar",
       titulo: "Erros no sistema — não dá pra afirmar",
       frase:
-        "Nenhum erro chegou, mas a captura do servidor (Sentry) não está confirmada: a variável SENTRY_DSN_BACKEND não está no Railway. Enquanto isso, \"zero\" não prova nada.",
+        "Nenhum erro chegou, mas a captura do servidor (Sentry) não está confirmada: nem SENTRY_DSN_BACKEND nem SENTRY_DSN estão no Railway. Enquanto isso, \"zero\" não prova nada.",
       acao: { rotulo: "Como confirmar", tipo: "aba_erros" },
     };
   }
@@ -381,5 +396,72 @@ export function semaforoJornada(
     titulo: `Robô de jornada — rodou ${quandoRodou(ultima.iniciadoEm, agora, fuso)}, nada quebrou`,
     frase: `Passou por ${plural(ultima.rotasVisitadas, "tela", "telas")} em ${Math.round((ultima.duracaoMs ?? 0) / 1000)} s e todas abriram.`,
     acao: { rotulo: "Ver a varredura", tipo: "aba_jornada" },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 4. A montagem da Visão rápida: do que as procedures devolvem às três regras
+// ---------------------------------------------------------------------------
+
+/** O que a Visão rápida lê de `adminErros.listar` (a página de 25 unresolved). */
+export interface LeituraErrosVisaoRapida {
+  capturaConfigurada: boolean;
+  total: number;
+  totalMinimo?: boolean;
+  motivo?: string;
+  issues: ReadonlyArray<{ ultimoVisto?: string | null }>;
+}
+
+export interface EntradaVisaoRapida {
+  /** `isError` cobre a falha de REDE do tRPC — aí `data` nem chega. */
+  erros: { data?: LeituraErrosVisaoRapida; isError: boolean };
+  /** `adminRoboAuditor.historico`. */
+  auditor: { data?: { varreduras: VarreduraAuditorSemaforo[] } };
+  /** `adminJornada.historico`. */
+  jornada: { data?: { varreduras: VarreduraJornadaSemaforo[] } };
+  agora: Date;
+  fuso?: string;
+}
+
+export interface SemaforosVisaoRapida {
+  erros: Semaforo;
+  auditor: Semaforo;
+  jornada: Semaforo;
+}
+
+/** O `lastSeen` mais recente da página — "o último visto há 2h". */
+export function ultimoErroVisto(issues: ReadonlyArray<{ ultimoVisto?: string | null }>): string | null {
+  return (
+    issues
+      .map((i) => i.ultimoVisto)
+      .filter((v): v is string => Boolean(v))
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
+/**
+ * O cabo entre as três procedures e as três regras. Mora aqui, e não na tela,
+ * porque foi aqui que três mutações sobreviveram à suíte inteira: `abertos: 0`
+ * deixava a linha verde com issues abertas, `leituraFalhou: null` deixava
+ * verde com o Sentry fora do ar, e `[]` no lugar do histórico dizia "ainda não
+ * rodou" pra sempre. A tela só chama.
+ */
+export function montarSemaforosDaVisaoRapida(entrada: EntradaVisaoRapida): SemaforosVisaoRapida {
+  const { erros, auditor, jornada, agora, fuso } = entrada;
+  const lidos = erros.data;
+  return {
+    erros: semaforoErros(
+      {
+        capturaConfigurada: lidos?.capturaConfigurada === true,
+        abertos: lidos?.total ?? 0,
+        totalMinimo: lidos?.totalMinimo === true,
+        ultimoErroEm: ultimoErroVisto(lidos?.issues ?? []),
+        leituraFalhou: lidos?.motivo ?? (erros.isError ? "erro_rede" : null),
+      },
+      agora,
+    ),
+    auditor: semaforoAuditor(auditor.data?.varreduras ?? [], agora, fuso),
+    jornada: semaforoJornada(jornada.data?.varreduras ?? [], agora, fuso),
   };
 }

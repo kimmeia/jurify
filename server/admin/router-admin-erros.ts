@@ -121,7 +121,7 @@ export const adminErrosRouter = router({
       const capturaConfigurada = capturaSentryConfigurada(process.env);
       const cfg = await carregarConfigSentry();
       if (!cfg) {
-        return { configurado: false as const, capturaConfigurada, issues: [], total: 0, motivo: "sentry_nao_configurado" };
+        return { configurado: false as const, capturaConfigurada, issues: [], total: 0, totalMinimo: false, motivo: "sentry_nao_configurado" };
       }
 
       const params = new URLSearchParams();
@@ -147,7 +147,7 @@ export const adminErrosRouter = router({
           // mostrar status correto, não o congelado do teste inicial.
           const corpo = await resp.text().catch(() => "");
           await persistirErroSentry(resp.status, corpo.slice(0, 200) || resp.statusText);
-          return { configurado: true as const, capturaConfigurada, issues: [], total: 0, motivo: `sentry_http_${resp.status}` };
+          return { configurado: true as const, capturaConfigurada, issues: [], total: 0, totalMinimo: false, motivo: `sentry_http_${resp.status}` };
         }
         const data = (await resp.json()) as SentryIssue[];
         // Sucesso real → marca como conectado (cura status "erro" anterior)
@@ -169,11 +169,14 @@ export const adminErrosRouter = router({
             link: i.permalink,
           })),
           total: data.length,
+          // A API do Sentry devolve UMA página: com ela cheia, "25" é piso,
+          // não contagem — a tela escreve "25+".
+          totalMinimo: data.length >= input.limite,
         };
       } catch (err: any) {
         clearTimeout(t);
         log.error({ err: err.message }, "Erro chamando Sentry API");
-        return { configurado: true as const, capturaConfigurada, issues: [], total: 0, motivo: err.name === "AbortError" ? "timeout" : "erro_rede" };
+        return { configurado: true as const, capturaConfigurada, issues: [], total: 0, totalMinimo: false, motivo: err.name === "AbortError" ? "timeout" : "erro_rede" };
       }
     }),
 
