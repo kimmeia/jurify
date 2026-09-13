@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.070 verdes, 407 arquivos** (13/09, com as seções 22 e 23; 6.044 em 405 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.075 verdes, 408 arquivos** (13/09, na ponta do merge da cor do menu + seções 22 e 23; 6.070 em 407 antes do merge; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3098,4 +3098,6 @@ condição (`args.role !== "admin" &&` na frente). Agora ela confere que o `if` 
 incondicional.
 
 Baseline depois destas duas entregas: **6.070 testes verdes em 407 arquivos**
+(**6.075 em 408** na ponta final, depois de trazer `develop` — a cor do menu
+chegou com um arquivo de teste a mais)
 (`pnpm test`), `pnpm check` limpo, `pnpm vite build` passando.
