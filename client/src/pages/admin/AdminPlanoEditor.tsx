@@ -335,7 +335,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
           <Skeleton className="h-96 w-full" />
         </div>
       ) : (
-        <div className="mx-auto grid max-w-[1500px] gap-4 p-6 lg:grid-cols-[1fr_1.15fr_0.95fr]">
+        <div className="mx-auto grid max-w-[1500px] gap-4 p-6 lg:grid-cols-[300px_minmax(0,1fr)_330px]">
           {/* ── Coluna 1: Geral + Preço + Assentos ── */}
           <div className="space-y-4">
             <Card>
@@ -347,12 +347,12 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Código interno</Label>
-                  <div className="flex h-9 items-center justify-between rounded-md border bg-muted px-3 text-sm text-muted-foreground">
-                    <code className="text-xs">{plano.slug}</code>
-                    <span className="flex items-center gap-1 text-[10px] font-semibold">
-                      <Lock className="h-3 w-3" /> não muda depois de criado
-                    </span>
+                  <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground">
+                    <code className="truncate text-xs">{plano.slug}</code>
                   </div>
+                  <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <Lock className="h-3 w-3 shrink-0" /> não muda depois de criado
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Frase do cartão (site)</Label>
@@ -438,7 +438,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 <CardTitle className="text-sm">Limites</CardTitle>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">vazio = sem limite</span>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <CardContent className="grid grid-cols-1 gap-3 [&>*]:min-w-0 sm:grid-cols-2 lg:grid-cols-3">
                 <CampoNumero label="Usuários" valor={maxUsuarios} setValor={setMaxUsuarios} />
                 <CampoNumero label="Armazenamento (MB)" valor={maxArmazenamentoMb} setValor={setMaxArmazenamentoMb} />
                 <CampoNumero label="Clientes ativos" valor={maxClientes} setValor={setMaxClientes} placeholder="vazio = ∞" />
@@ -512,7 +512,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                     onDrop={() => { if (featArrastando != null) moverFeature(featArrastando, i); setFeatArrastando(null); }}
                   >
                     <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground/50" />
-                    <span className="flex-1 truncate">{f}</span>
+                    <span className="min-w-0 flex-1 break-words">{f}</span>
                     <Button size="sm" variant="ghost" className="h-6 w-6 p-0"
                       onClick={() => setFeatures(features.filter((_, idx) => idx !== i))}>
                       <X className="h-3 w-3 text-muted-foreground" />
