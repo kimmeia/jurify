@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock, RotateCcw } from "lucide-react";
+import { Check, Loader2, ArrowRight, XCircle, AlertCircle, Clock, RotateCcw, CreditCard } from "lucide-react";
 import { StatusPlanoBadge } from "@/components/StatusPlanoBadge";
 import { resolverStatusVisual } from "@/lib/subscription-status";
 import { emCarenciaDeCancelamento } from "@shared/assinatura-carencia";
@@ -418,6 +418,37 @@ export default function Plans() {
 
             {/* Ações */}
             <div className="flex flex-col gap-2">
+              {/* Quem está testando um plano de preço fechado não tinha por
+                  onde pagar: aqui só havia botão pra plano sob consulta e pra
+                  carência, e no cartão do plano o botão fica travado com
+                  "Você está aqui" (texto de quem JÁ paga). O resultado era a
+                  faixa "Adicionar pagamento" levando a uma tela sem nenhum
+                  jeito de pagar o plano em teste — só de trocar por outro. */}
+              {emTeste && !sobConsultaAtual && !emCarencia && (
+                <>
+                  <Button
+                    id="adicionar-pagamento"
+                    size="sm"
+                    onClick={() => currentPlanId && handleSelectPlan(currentPlanId)}
+                    disabled={loadingPlan !== null || billingOk === false}
+                    className="bg-white text-primary hover:bg-white/90 font-bold shadow-sm"
+                  >
+                    {loadingPlan === currentPlanId ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-1.5" />
+                    )}
+                    {(currentSub as any).pagamentoEmAndamento
+                      ? "Ver o pagamento"
+                      : "Adicionar pagamento"}
+                  </Button>
+                  <p className="text-[10px] text-white/70 text-center">
+                    {(currentSub as any).pagamentoEmAndamento
+                      ? "Já existe uma cobrança aberta — o plano entra assim que o Asaas confirmar."
+                      : `Continua no ${currentPlanName} quando o teste acabar. Você escolhe PIX, boleto ou cartão.`}
+                  </p>
+                </>
+              )}
               {sobConsultaAtual && !valorFechado && (
                 <Button
                   size="sm"
@@ -635,6 +666,13 @@ export default function Plans() {
           if (sobConsulta && !isCurrentPlan) buttonLabel = demonstracao ? "💬 Agendar demonstração" : "💬 Falar com a gente";
           const podeFecharValor = sobConsulta && isCurrentPlan && isTrial && !valorFechado;
           if (podeFecharValor) buttonLabel = "💬 Fechar valor com a gente";
+          // Plano atual EM TESTE é o único caso em que o cartão do próprio
+          // plano ainda tem o que fazer: pagar e continuar nele. O rótulo
+          // "Continuar com este plano" existia desde sempre e nunca chegava à
+          // tela, porque o travamento de "Você está aqui" — que é de quem já
+          // paga — pegava o teste junto.
+          const podePagarOTeste = isCurrentPlan && isTrial && !sobConsulta;
+          const travadoPorSerOAtual = isCurrentPlan && !podeFecharValor && !podePagarOTeste;
 
           return (
             <div
@@ -726,7 +764,7 @@ export default function Plans() {
               <Button
                 className={`w-full ${!currentSub && trialOk?.disponivel && ((plan as any).trialDias ?? 0) > 0 ? "mt-2" : "mt-5"} ${
                   isCurrentPlan
-                    ? "bg-info-bg text-info-fg hover:bg-info-bg cursor-default"
+                    ? `bg-info-bg text-info-fg hover:bg-info-bg ${travadoPorSerOAtual ? "cursor-default" : ""}`
                     : isPopular
                       ? "bg-warning text-warning-on shadow-sm"
                       : ""
@@ -735,7 +773,7 @@ export default function Plans() {
                 size="sm"
                 disabled={
                   loadingPlan !== null ||
-                  (isCurrentPlan && !podeFecharValor) ||
+                  travadoPorSerOAtual ||
                   (!sobConsulta && billingOk === false)
                 }
                 onClick={() =>
@@ -750,7 +788,7 @@ export default function Plans() {
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando…
                   </>
-                ) : isCurrentPlan && !podeFecharValor ? (
+                ) : travadoPorSerOAtual ? (
                   <>✓ Você está aqui</>
                 ) : (
                   <>

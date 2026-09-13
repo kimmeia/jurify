@@ -183,9 +183,12 @@ export function MovimentacoesCentral() {
   // Lista vazia tem quatro causas distintas, e o "Nada por aqui" genérico
   // servia igual pras quatro — inclusive pro dia em que tudo foi resolvido,
   // que é o único caso em que a tela vazia é boa notícia.
+  // "Nada por aqui" (nada no período) × "tudo resolvido" se decidem pelo que
+  // existe no BANCO, não pelo que coube na página: com o teto batendo, `total`
+  // nunca é 0 e o motivo certo se perdia.
   const vazio: MotivoVazio = busca
     ? "busca"
-    : (data?.total ?? 0) === 0
+    : (data?.janela.noPeriodo ?? 0) === 0
       ? "periodo"
       : estado === "a_resolver"
         ? "tudo_resolvido"
@@ -195,6 +198,31 @@ export function MovimentacoesCentral() {
     7: contadorMenu?.naoLidasSemana,
     30: contadorMenu?.naoLidas,
   };
+
+  // Quantas existem no período (contadas no banco) contra quantas couberam na
+  // página. Com filtro de tipo ligado a comparação não vale — `itens` já veio
+  // encolhido por ele —, então o aviso fica só no recorte em que é verdade.
+  const jan = data?.janela;
+  const noEstadoAtual =
+    estado === "resolvidas"
+      ? (jan?.resolvidas ?? 0)
+      : estado === "todas"
+        ? (jan?.noPeriodo ?? 0)
+        : (jan?.aResolver ?? 0);
+  const faltamNaLista =
+    isLoading || tipo !== "todos" || busca ? 0 : Math.max(0, noEstadoAtual - itens.length);
+
+  // O número da aba Resolvidas é o do PERÍODO, não o da página: era ele que
+  // dizia "(80)" — o tamanho da página — quando havia 80 resolvidas e mais 11
+  // pendentes fora dela. Com filtro de tipo ligado ele volta a descrever o
+  // recorte da tela, que é o que o seletor de tipo promete.
+  const resolvidasRotulo = tipo === "todos" ? (jan?.resolvidas ?? 0) : contagem.resolvidas;
+
+  // "As N movimentações do período já foram resolvidas" tem que dizer o
+  // número do PERÍODO. Com filtro de tipo ligado, o período não sabe do tipo:
+  // aí vale o da página, que é o recorte que o texto está descrevendo.
+  const totalParaTextoVazio =
+    tipo === "todos" && !busca ? (jan?.noPeriodo ?? 0) : (data?.total ?? 0);
 
   return (
     <div className="space-y-4">
@@ -263,9 +291,21 @@ export function MovimentacoesCentral() {
           onClick={() => setEstado(estado === "resolvidas" ? "a_resolver" : "resolvidas")}
         >
           <Check className="h-3.5 w-3.5 mr-1.5" />
-          Resolvidas{isLoading ? "" : ` (${contagem.resolvidas})`}
+          Resolvidas{isLoading ? "" : ` (${resolvidasRotulo})`}
         </Button>
       </div>
+
+      {/* A lista tem teto, e enquanto ela não dizia isso a tela apresentava a
+          página como se fosse o período inteiro — era esse silêncio que fazia
+          "nada pendente" aparecer com o badge marcando 11. O servidor manda
+          pendente primeiro, então o que sobra de fora é sempre já resolvido. */}
+      {faltamNaLista > 0 && (
+        <p className="text-apoio text-muted-foreground">
+          Mostrando {itens.length} de {noEstadoAtual} {estado === "resolvidas" ? "resolvidas" : "movimentações"}{" "}
+          {janela} — as mais recentes. As pendentes vêm sempre primeiro, então nada que precise
+          de você ficou de fora. Para chegar numa específica, use a busca.
+        </p>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -274,7 +314,7 @@ export function MovimentacoesCentral() {
           ))}
         </div>
       ) : itens.length === 0 ? (
-        <Vazio motivo={vazio} janela={janela} total={data?.total ?? 0} />
+        <Vazio motivo={vazio} janela={janela} total={totalParaTextoVazio} />
       ) : (
         <div className="space-y-5">
           {porGrupo.exigem_acao.length > 0 && (
