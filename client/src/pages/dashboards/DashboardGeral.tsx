@@ -1,9 +1,10 @@
 /**
  * Dashboard GERAL — visão consolidada pra dono/admin.
  *
- * Organizado por pergunta, não por módulo: o que precisa de mim agora (faixa
- * de ações), quanto entrou (bloco do dinheiro), o que tem no dia (calendário) e
- * de onde vêm os fechamentos.
+ * Organizado por pergunta, não por módulo: quanto entrou (bloco do dinheiro),
+ * o que tem no dia (calendário) e de onde vêm os fechamentos. A faixa de ações
+ * que abria a tela saiu a pedido do dono — era informação demais logo abaixo
+ * da saudação, e cada número dela tem tela própria.
  *
  * Cada número aparece UMA vez, no lugar onde se age sobre ele, e sempre no
  * mesmo recorte do rótulo que o acompanha — foi a mistura de recortes (valor do
@@ -16,7 +17,7 @@ import { trpc } from "@/lib/trpc";
 import { Progress } from "@/components/ui/progress";
 import { UsoDoMes } from "@/components/UsoDoMes";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, MessageCircle, Gavel, AlertTriangle, TrendingUp, CalendarDays } from "lucide-react";
+import { ArrowRight, AlertTriangle, TrendingUp } from "lucide-react";
 import { useLocation } from "wouter";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import {
@@ -29,10 +30,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import {
-  AcaoCard,
   BlocoPrincipal,
   COR_SERIE,
-  FaixaAcoes,
   FaixaSemana,
   LinhaLista,
   ListaCard,
@@ -171,47 +170,12 @@ export default function DashboardGeral() {
         }
       />
 
-      {/* ═══════════ O QUE PRECISA DE VOCÊ ═══════════
-          Cada número aparece UMA vez, aqui, onde dá pra agir sobre ele. Antes
-          eles se repetiam nos chips coloridos E nos cards de contexto E nos
-          KPIs, em cinco cores de mesmo peso. */}
-      {ok && (
-        <FaixaAcoes>
-          {r.agenda.atrasados > 0 && (
-            <AcaoCard
-              icone={AlertTriangle}
-              valor={r.agenda.atrasados}
-              label="compromissos atrasados"
-              critico
-              onClick={() => nav("/agenda")}
-            />
-          )}
-          {r.crm.conversasAguardando > 0 && (
-            <AcaoCard
-              icone={MessageCircle}
-              valor={r.crm.conversasAguardando}
-              label="conversas aguardando"
-              onClick={() => nav(rotaSegura("/atendimento", "/clientes"))}
-            />
-          )}
-          {r.processos.movimentacoesNaoLidas > 0 && (
-            <AcaoCard
-              icone={Gavel}
-              valor={r.processos.movimentacoesNaoLidas}
-              label="movimentações novas"
-              onClick={() => nav("/processos?tab=movimentacoes")}
-            />
-          )}
-          {/* "compromissos hoje" mentia: o número soma compromissos E tarefas,
-              e o card ao lado listava só cinco deles. */}
-          <AcaoCard
-            icone={CalendarDays}
-            valor={totalHoje}
-            label={totalHoje === 1 ? "item na agenda de hoje" : "itens na agenda de hoje"}
-            onClick={() => nav("/agenda")}
-          />
-        </FaixaAcoes>
-      )}
+      {/* A faixa "o que precisa de você" (compromissos atrasados, conversas
+          aguardando, movimentações novas, itens na agenda de hoje) saiu daqui
+          a pedido do dono — informação demais logo abaixo da saudação. Os
+          números continuam existindo e com caminho próprio: atrasados e agenda
+          em /agenda e no Dashboard Operacional, conversas em /atendimento,
+          movimentações em /processos. */}
 
       {/* Grid de duas linhas em vez de duas COLUNAS empilhadas: assim o card
           da agenda tem a altura da linha — a mesma do card do gráfico — em vez
