@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.944 verdes em 13/09/2026 (398 arquivos, ~1min30)
+pnpm test               # vitest (server/**/*.test.ts) — 5.950 verdes em 13/09/2026 (399 arquivos, ~1min30; develop/main: 5.944 em 398)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1521,6 +1521,15 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   ficaram: consulta pública vence a credencial quando existe; busca por CPF só
   onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
   Só o dono valida nos portais (ordem em ESTADO 15.1.1).
+- **Na branch, aprovado pelo dono em 13/09 ("menu aprovado")**: o menu lateral
+  veste a cor da logo — fundo roxo-quase-preto, «Jurid» em branco puro, «Flow»
+  e o item aberto em violeta; o marinho segue sendo a cor de ação do CONTEÚDO.
+  O violeta exato da logo não passa de contraste sobre o menu (2,89:1 antes,
+  3,18:1 depois, mínimo 4,5); o tom entregue é a clareada mínima, 5,41:1.
+  Comparador `mockup-cor-do-menu.html` (opções A e C ficaram lá). Amarra
+  `menu-cor-da-logo.test.ts`, 11 mutações vermelhas. Detalhe na seção 19 do
+  documento de estado; a skill `mockup-juridflow` foi corrigida junto, porque
+  dizia que violeta não é o app.
 - **Mergeado em develop e main (13/09, "pode mergear")**: Central de ajuda (`mockup-central-de-
   ajuda.html`, "pode fazer" com as recomendações; ESTADO seção 18) — `/ajuda`
   e `/ajuda/:tarefa` (`ClientAreaSoTermos`), 5 tarefas com prints reais + 16
