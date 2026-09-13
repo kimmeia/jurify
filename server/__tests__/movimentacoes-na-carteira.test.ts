@@ -38,10 +38,14 @@ describe("página Processos", () => {
     expect(processos).toContain('return "central";');
   });
 
-  it("a aba Consultar saiu; a consulta avulsa virou modal do cabeçalho", () => {
+  it("a consulta avulsa não tem aba nem botão (dono, 13/09)", () => {
+    // Primeiro ela saiu da barra de abas (virou modal do cabeçalho); em 13/09
+    // o dono tirou o botão também. O código de `ConsultarTab` fica, sem porta —
+    // por isso a conferência é do MECANISMO (estado + montagem), não do rótulo:
+    // "Consultar CNJ" segue escrito no comentário que explica a decisão.
     expect(processos).not.toContain('value="consultar"');
-    expect(processos).toContain("Consultar CNJ");
-    expect(processos).toContain("<ConsultarTab />");
+    expect(processos).not.toContain("setConsultarAberto");
+    expect(processos).not.toContain("<ConsultarTab />");
   });
 
   it("deep-links antigos continuam válidos", () => {

@@ -70,10 +70,19 @@ export async function verificarLimiteMonitoramentos(
     const plano = await getPlanoBySlug(sub.planId);
     if (!plano) return semLimite;
 
-    const maximo =
+    const doPlano =
       tipo === "movimentacoes"
         ? plano.limites.maxMonitoramentosProcessos
         : plano.limites.maxMonitoramentosCpf;
+
+    // Extra avulso comprado por ESTE escritório soma ao que o plano dá. Sem
+    // isso, "+200 processos" era uma linha na fatura sem efeito nenhum.
+    const { tetoComExtra } = await import("../billing/extras-avulsos");
+    const maximo = await tetoComExtra(
+      escritorioId,
+      tipo === "movimentacoes" ? "processos" : "cpfs",
+      doPlano,
+    );
     if (maximo == null) return semLimite;
 
     const [contagem] = await db

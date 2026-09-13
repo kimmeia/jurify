@@ -107,6 +107,25 @@ export function validarConfigCanalPorTipo(
   }
 }
 
+/**
+ * Teto de conexões de WhatsApp: o do plano MAIS os números extras comprados.
+ *
+ * Três caminhos consultavam `plano.limites.maxConexoesWhatsapp` cada um por si
+ * (a leitura da tela e os dois que criam canal). O extra tem que valer nos três,
+ * senão comprar um número a mais funciona ou não dependendo de por onde o
+ * cliente entrou — e aqui `0` significa NENHUMA conexão, não "sem teto", então
+ * quem vende um número pra plano sem WhatsApp precisa que a soma aconteça.
+ */
+async function limiteConexoesWhatsapp(
+  escritorioId: number,
+  doPlano: number,
+  cortesia: boolean,
+): Promise<number> {
+  if (cortesia) return 999999;
+  const { tetoComExtra } = await import("../billing/extras-avulsos");
+  return (await tetoComExtra(escritorioId, "numeros", doPlano)) ?? doPlano;
+}
+
 export const configuracoesRouter = router({
   /** Busca o escritório do usuário logado (ou null se não tem).
    *
@@ -691,7 +710,11 @@ export const configuracoesRouter = router({
     const { getPlanoBySlug } = await import("../billing/planos-repo");
     const sub = await getActiveSubscriptionComHeranca(ctx.user.id);
     const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
-    const limiteWhatsapp = sub?.cortesia ? 999999 : (plano?.limites.maxConexoesWhatsapp ?? 0);
+    const limiteWhatsapp = await limiteConexoesWhatsapp(
+      esc.escritorio.id,
+      plano?.limites.maxConexoesWhatsapp ?? 0,
+      !!sub?.cortesia,
+    );
 
     return {
       canais,
@@ -742,7 +765,11 @@ export const configuracoesRouter = router({
         const cortesiaAtiva = !!sub?.cortesia;
         if (!cortesiaAtiva) {
           const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
-          const limite = plano?.limites.maxConexoesWhatsapp ?? 0;
+          const limite = await limiteConexoesWhatsapp(
+            esc.escritorio.id,
+            plano?.limites.maxConexoesWhatsapp ?? 0,
+            false,
+          );
           if (limite < 999999) {
             const contagem = await contarCanaisPorTipo(esc.escritorio.id);
             const whatsappAtual = contagem["whatsapp"] || 0;
@@ -813,7 +840,11 @@ export const configuracoesRouter = router({
       const cortesiaAtiva = !!sub?.cortesia;
       if (!cortesiaAtiva) {
         const plano = sub?.planId ? await getPlanoBySlug(sub.planId) : null;
-        const limite = plano?.limites.maxConexoesWhatsapp ?? 0;
+        const limite = await limiteConexoesWhatsapp(
+          esc.escritorio.id,
+          plano?.limites.maxConexoesWhatsapp ?? 0,
+          false,
+        );
         if (limite < 999999) {
           const contagem = await contarCanaisPorTipo(esc.escritorio.id);
           const whatsappAtual = contagem["whatsapp"] || 0;

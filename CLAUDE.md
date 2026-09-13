@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.016 verdes em 13/09/2026 (403 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.075 verdes em 13/09/2026 (408 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1655,6 +1655,117 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   contra o próprio comentário; falha de TJ comprovado fora do ar ainda derruba a
   credencial inteira (pré-existente); e o laço de novas ações não guarda foto
   (grava falha por tribunal em `varreduraJson`, sem campo pra isso).
+
+- **Entregue 13/09, bloco comercial ("pode fazer" do dono, com os extras SOMANDO
+  ao teto do plano — recomendação dele aceitada). Detalhe na seção 21 do
+  documento de estado.** Origem: ele perguntou o que melhorar no serviço; a
+  resposta que virou código foram três coisas que custavam venda.
+  (1) **Cupom**: `criarCupom` conferia `planosIds` contra a lista fixa de
+  `products.ts`, mas a tela lista o CATÁLOGO por slug — a tela oferecia o que o
+  servidor recusava, e nenhum dos três planos vendidos podia entrar em promoção.
+  Agora confere catálogo ∪ lista fixa (a fixa fica como reserva).
+  (2) **Extras avulsos** (usuário, processos, CPFs, número de WhatsApp): sem
+  migration, moram em `escritorio_addons` com produto `extra:<chave>`,
+  `limiteMensal` = quantidade e `precoCentavos` = total mensal congelado (é
+  PACOTE, não unidade — "200 por R$ 49" tem que caber). Regra pura em
+  `shared/extras-avulsos.ts`. **A sutileza que decide**: os tetos discordam sobre
+  o que é zero — em monitoramento `0` é SEM TETO, em conexões de WhatsApp `0` é
+  NENHUMA; por isso cada extra declara `zeroEIlimitado` e `somarAoTeto` exige a
+  opção explícita. Enforcement em 4 tetos; nas conexões de WhatsApp a conta
+  estava copiada em 3 lugares e virou `limiteConexoesWhatsapp`. Fatura ganhou
+  `ItemFatura.tipo = "extra"` e `extras` opcional (caller antigo = fatura de
+  antes). Painel: botão «Extra» no cartão Módulos & cobrança, auditado como
+  `extra.avulso`.
+  (3) **JurisIA cobrava OU liberava, nunca os dois**: o cartão grava produto
+  `jurisia` seco (a fatura varre `modulo:%` e não o via → guardava o preço e não
+  cobrava); o diálogo de avulsos grava `modulo:jurisia` (a leitura de acesso
+  buscava só o seco → cobrava e não liberava). Fechados os dois lados,
+  aditivamente, sem cobrar dobrado quando as duas concessões existem.
+  Amarra: `bloco-comercial-extras-cupom-jurisia` (22) — 24 mutações vermelhas;
+  2 sobreviveram na 1ª volta (a do botão conferia o `onClick` e não o rótulo; a
+  do prefixo só morreu com `"modulousuarios"`, o caso que discrimina).
+  **Anotado**: `getUserCreditsInfo`, `health.plansCount` e os dois getters de
+  `db.ts` seguem no `PLANS`; o extra não aparece pro cliente (mostrar pede
+  mockup); JurisIA segue sem Sentry e sem tela de consumo (resto do A.6).
+
+- **Entregue 13/09, retorno do teste de uso do dono (seção 22 do documento de
+  estado).** Ele entrou como cliente e trouxe quatro coisas; **duas não eram
+  defeito**, e isso fica registrado pra ninguém "consertar" o que está certo:
+  (a) **Termos não aparecem** quando o cadastro foi pelo SITE (`auth.signup` já
+  grava o aceite — a caixa de marcar está no próprio formulário) nem em
+  IMPERSONAÇÃO (`termos.status` devolve false com `impersonatedBy`, de
+  propósito). **Consequência**: testar a experiência impersonando não mostra a
+  experiência real.
+  (b) **"Meta API não configurada"**: `getMetaAppConfig` devolve null em QUATRO
+  situações (env sem os DOIS; banco sem appId+appSecret; decrypt falhando;
+  sem banco) e as quatro viram a mesma frase. `META_APP_SECRET_EXTRA` é do HMAC
+  do webhook e NÃO serve pro Embedded Signup. Gap achado e **não corrigido**: o
+  formulário do painel não tem campo pro `config_id` da Meta (só
+  `META_CONFIG_ID` de env), então `config.configId` do banco é caminho morto —
+  sem ele o popup abre Facebook Login genérico, não o onboarding do WhatsApp.
+  (c) **`PrimeirosPassos` saiu do Dashboard** a pedido expresso dele. NÃO foi
+  apagado: vive em `/ajuda` (`PrimeirosPassosResumo`), e a amarra
+  `primeiros-passos` inverteu — trava que não volta e que o conteúdo continua lá.
+  O `GuiaProcessual` (variante processual) ficou, aguardando a palavra dele.
+  (d) **Diálogo "Cadastrar credencial"**: não tinha teto de altura nem rolagem e
+  passava da tela num notebook (título cortado em cima, botões embaixo) — 41
+  diálogos do client usam `overflow-y-auto` e 19 usam `max-h-[90vh]`; este era a
+  exceção. E o campo pedia «CPF ou OAB»: o login do PJe é CPF, virou «CPF». O
+  manual da Central de ajuda mudou no MESMO commit (regra do «»).
+  Amarras: `dialogo-credencial-cabe-na-tela` (5) + `primeiros-passos` reescrita —
+  8 mutações vermelhas.
+
+- **Entregue 13/09, módulo Ponto fora de produção + 5 remoções na tela de
+  Processos (seção 23 do documento de estado).** Dois pedidos dele em sequência,
+  no mesmo teste de uso. Remoção de elemento NOMEADO não passou por mockup: não
+  há desenho novo pra aprovar, e ele listou item por item.
+  - **Ponto** ("remover por enquanto de produção e em stating deixar com a
+    etiqueta beta"): **nada de código foi apagado**. `MODULOS_BETA` em
+    `shared/modulos-por-ambiente.ts` é lida pelas TRÊS portas que decidem se um
+    módulo existe — menu (`itemVisivelNoMenu` no AppLayout), rota
+    (`ModuloGuard`, tela nova `ModuloEmTestes`) e procedures
+    (`conferirModuloDoPath` → FORBIDDEN `modulo_em_beta`). Três listas divergindo
+    daria item escondido no menu com a API aberta. Três decisões que valem
+    lembrar: ambiente DESCONHECIDO conta como produção (na dúvida, não mostrar);
+    a recusa vem ANTES do atalho de admin e da conta de contrato nas duas portas
+    de acesso, **única exceção consciente ao fail-open do gate** (cesta
+    indeterminada não pode abrir módulo tirado do ar); e cesta `null` continua
+    `null` (transformar em lista vazia trocaria o fail-open inteiro por efeito
+    colateral da lista). `subscription.modulosContratados` passou a devolver
+    `ambiente` nos DOIS ramos — sem ele o client trata tudo como produção e
+    esconde o Ponto em staging. Pra devolver: apagar `"ponto"` da lista, nada
+    mais. **Pendência que o pedido não cobria**: o plano **Escala** (0217) tem
+    `'ponto'` na cesta e o cartão vende "ponto da equipe" — a migration NÃO foi
+    tocada, então em produção o cartão anuncia o que a conta não mostra; mudar o
+    texto é outra remoção e depende dele. Amarra:
+    `modulo-ponto-fora-de-producao` (16), com o par oposto (aparece em staging E
+    não aparece em produção — esconder nos dois seria remoção não pedida).
+  - **Processos**: saíram a aba Alertas, a pastilha de créditos, os botões
+    «Resumo diário» e «Consultar CNJ» e as três pastilhas de contagem
+    (monitorados · parados · nova ação). **A conferência antes de tirar a aba
+    Alertas**: ela era o painel de aprovar prazo sugerido e só `Processos.tsx`
+    toca `prazosSugeridos` no client — se fosse o único caminho, tirá-la deixaria
+    o cron enchendo tabela que ninguém lê. Não é: a timeline do Monitoramento tem
+    «Requer prazo» + «＋ Criar prazo» chamando a MESMA `prazosSugeridos.aprovar`.
+    **Ficou sem tela**: `descartar` (era só da aba); sugestão não aprovada fica
+    pendente com o selo. As pastilhas repetiam o número do badge da aba logo
+    abaixo (`MonitoramentosCount`, `NovasAcoesBadge`) e as 2 queries eram cópia
+    das deles — `CabecalhoProcessos` ficou sem props e sem query. `?tab=alertas`
+    cai na Central em vez de abrir aba inexistente.
+    **NÃO removidos de propósito** (ele autorizou o BOTÃO, não o código):
+    `ConsultarTab` fica no arquivo sem porta, com o motivo escrito no topo;
+    `ConfigResumoDiario` segue exportado em `Movimentacoes.tsx`; e o aviso
+    «Saldo baixo» + os textos de custo em crédito dos diálogos continuam —
+    **pergunta aberta pro dono**. Amarra: `processos-cabecalho-enxuto` (10);
+    `movimentacoes-na-carteira` e `telas-cabem-no-celular` ATUALIZADAS pra
+    verdade nova (a 1ª confere o MECANISMO — estado e montagem —, porque o rótulo
+    «Consultar CNJ» segue escrito no comentário que explica a decisão; a 2ª trava
+    o `flex-wrap` da tira de abas, que virou quem segura os 390px);
+    `fuso-telas-usam-helper` perdeu a metade que exigia a pill da aba e manteve a
+    que protege. **31 mutações vermelhas**
+    (`scratchpad/mutar-ponto-e-processos.py`; 1 sobreviveu na 1ª volta — a amarra
+    conferia a POSIÇÃO da recusa de ambiente e dava pra desarmar a condição no
+    lugar; agora confere que o `if` é incondicional).
 
 ## Fila combinada com o dono (31/08/2026)
 

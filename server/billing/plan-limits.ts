@@ -199,7 +199,11 @@ export async function verificarLimite(
     case "colaboradores": {
       const [r] = await db.select({ count: sql<number>`COUNT(*)` }).from(colaboradores).where(and(eq(colaboradores.escritorioId, escritorioId), eq(colaboradores.ativo, true)));
       atual = Number((r as { count: number } | undefined)?.count || 0);
-      maximo = limites.maxColaboradores;
+      // Usuário extra comprado por fora soma ao que o plano dá. `SEM_TETO` é um
+      // número grande, não null, então somar é seguro aqui.
+      const { tetoComExtra } = await import("./extras-avulsos");
+      maximo = (await tetoComExtra(escritorioId, "usuarios", limites.maxColaboradores))
+        ?? limites.maxColaboradores;
       label = "colaboradores";
       break;
     }

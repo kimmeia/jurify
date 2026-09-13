@@ -2185,7 +2185,56 @@ export const adminRouter = router({
         // Asaas fora do ar não pode derrubar o painel — a fatura calculada já apareceu.
       }
 
-      return { fatura, avulsos, assinatura };
+      const { listarExtrasDoEscritorio } = await import("../billing/extras-avulsos");
+      const extras = await listarExtrasDoEscritorio(input.escritorioId).catch(() => []);
+
+      return { fatura, avulsos, extras, assinatura };
+    }),
+
+  /**
+   * Concede/edita/remove um extra avulso do escritório: mais usuários, mais
+   * processos vigiados, mais CPFs, mais números de WhatsApp.
+   *
+   * A quantidade SOMA ao que o plano dá (decisão do dono) e o preço mensal fica
+   * congelado na linha, como nos módulos avulsos — negociar "200 processos por
+   * R$ 49" tem que caber. `quantidade: 0` ou status "cancelado" desliga.
+   */
+  salvarExtraAvulso: adminProcedure
+    .input(z.object({
+      escritorioId: z.number().int().positive(),
+      chave: z.string().min(1).max(32),
+      quantidade: z.number().int().min(0).max(1_000_000),
+      precoCentavos: z.number().int().min(0).max(100_000_000),
+      status: z.enum(["ativo", "suspenso", "cancelado"]),
+      expiraEm: z.string().datetime().nullable().default(null),
+      observacao: z.string().max(500).nullable().default(null),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { salvarExtraAvulso } = await import("../billing/extras-avulsos");
+      await salvarExtraAvulso({
+        escritorioId: input.escritorioId,
+        chave: input.chave,
+        quantidade: input.quantidade,
+        precoCentavos: input.precoCentavos,
+        status: input.status,
+        expiraEm: input.expiraEm ? new Date(input.expiraEm) : null,
+        observacao: input.observacao,
+        concedidoPor: ctx.user.id,
+      });
+      await registrarAuditoria({
+        ctx,
+        acao: "extra.avulso",
+        alvoTipo: "escritorio",
+        alvoId: input.escritorioId,
+        detalhes: {
+          chave: input.chave,
+          quantidade: input.quantidade,
+          status: input.status,
+          precoCentavos: input.precoCentavos,
+          expiraEm: input.expiraEm,
+        },
+      });
+      return { ok: true };
     }),
 
   /**
@@ -2357,10 +2406,24 @@ export const adminRouter = router({
         throw new Error("Desconto percentual não pode passar de 100%");
       }
 
-      // Validar planos existem
+      // Validar planos existem, PELO CATÁLOGO — a tela do cupom lista os planos
+      // de `listarPlanosEditaveis` (a tabela `planos`, por slug), e aqui a
+      // conferência era contra a lista fixa do código, que só tem
+      // free/basico/intermediario/completo. Resultado: o admin marcava
+      // "Escritório" no diálogo e o servidor respondia que o plano não existe —
+      // a tela oferecia exatamente o que o servidor recusava, então nenhum dos
+      // três planos vendidos hoje podia entrar numa promoção.
+      // `PLANS` continua como reserva pra base sem catálogo (mesmo padrão do
+      // `planosAtuais`).
       if (input.planosIds && input.planosIds.length > 0) {
+        const { getAllPlanos } = await import("../billing/planos-repo");
+        const doCatalogo = await getAllPlanos().catch(() => []);
+        const conhecidos = new Set<string>([
+          ...doCatalogo.map((p) => p.slug),
+          ...PLANS.map((p) => p.id),
+        ]);
         for (const pid of input.planosIds) {
-          if (!PLANS.find((p) => p.id === pid)) {
+          if (!conhecidos.has(pid)) {
             throw new Error(`Plano "${pid}" não existe`);
           }
         }
