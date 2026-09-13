@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GRUPOS_AJUDA, buscarTarefas, tarefaCompleta, type TarefaAjuda } from "@/pages/ajuda/tarefas";
+import { PrimeirosPassosResumo } from "@/pages/dashboards/PrimeirosPassos";
 
 /**
  * Link "Falar com a gente" da Central: o MESMO WhatsApp comercial que a LP e
@@ -84,6 +85,11 @@ export default function Ajuda() {
           className="h-11 pl-9 text-corpo"
         />
       </div>
+
+      {/* Aba 2 do mockup: a faixa dos Primeiros passos fica entre a busca e
+          "Por tarefa". O componente só desenha quando o servidor devolve
+          souDono=true e total > 0 — quem não é o dono nem vê o espaço. */}
+      <PrimeirosPassosResumo />
 
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-2">

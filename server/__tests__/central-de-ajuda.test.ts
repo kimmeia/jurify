@@ -267,6 +267,22 @@ describe("Central de ajuda — rotas e navegação", () => {
     expect(src).toContain("<CircleHelp");
   });
 
+  it("a home monta a faixa dos Primeiros passos entre a busca e «Por tarefa» (aba 2 do mockup)", () => {
+    const home = ler("client/src/pages/Ajuda.tsx");
+    expect(home).toContain('import { PrimeirosPassosResumo } from "@/pages/dashboards/PrimeirosPassos"');
+    const busca = home.indexOf('aria-label="Buscar tarefa"');
+    const faixa = home.indexOf("<PrimeirosPassosResumo />");
+    // O cabeçalho renderizado, não o literal (que também aparece em comentário).
+    const porTarefa = home.indexOf('"Por tarefa"}');
+    expect(busca).toBeGreaterThan(-1);
+    expect(faixa, "a faixa sumiu da Central").toBeGreaterThan(busca);
+    expect(porTarefa).toBeGreaterThan(faixa);
+    // O portão (souDono && total > 0) mora no componente, não na home.
+    const comp = ler("client/src/pages/dashboards/PrimeirosPassos.tsx");
+    const resumo = comp.slice(comp.indexOf("export function PrimeirosPassosResumo()"));
+    expect(resumo).toContain("if (!data || !data.souDono || data.total === 0) return null;");
+  });
+
   it("a Central lê o WhatsApp comercial da MESMA procedure da LP — nunca um número escrito", () => {
     const home = ler("client/src/pages/Ajuda.tsx");
     expect(home).toContain("trpc.subscription.contatoComercial.useQuery");
