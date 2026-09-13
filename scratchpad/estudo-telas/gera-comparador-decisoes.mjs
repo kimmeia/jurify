@@ -577,7 +577,7 @@ function lado(classe, rotulo){
     '<div class="aviso-lente"></div></div>';
 }
 
-function barra(rotulo, valor, tela, pior, teto, comLimite){
+function barra(rotulo, valor, tela, pior, teto, comLimite, unidade){
   const cabe = Math.min(valor, tela) / teto * 100;
   const sobra = Math.max(0, valor - tela) / teto * 100;
   const marco = tela / teto * 100;
@@ -585,7 +585,7 @@ function barra(rotulo, valor, tela, pior, teto, comLimite){
     '<div class="cabe" style="width:' + (comLimite ? cabe : valor / teto * 100).toFixed(2) + '%"></div>' +
     (comLimite && sobra > 0 ? '<div class="sobra" style="left:' + marco.toFixed(2) + '%;width:' + sobra.toFixed(2) + '%"></div>' : '') +
     (comLimite ? '<div class="marco" style="left:' + marco.toFixed(2) + '%"></div>' : '') +
-    '</div><i class="' + (pior ? "mal" : "bem") + '">' + valor + 'px</i></div>';
+    '</div><i class="' + (pior ? "mal" : "bem") + '">' + valor + (unidade === undefined ? "px" : unidade) + '</i></div>';
 }
 
 const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -739,7 +739,9 @@ async function pintar(){
   const y0 = Math.max(0, Math.min(rA.top, rD.top) - PAD);
   const y1 = Math.max(rA.top + rA.height, rD.top + rD.height) + PAD;
   const necW = Math.max(x1 - x0, cel ? 424 : 520);
-  const necH = Math.max(y1 - y0, 170);
+  // Bloco muito alto (uma coluna inteira) jogava o zoom pra 0.5× e a
+  // diferença sumia. recorteAlto corta a altura mostrada sem mexer no anel.
+  const necH = Math.max(Math.min(y1 - y0, it.recorteAlto || Infinity), 170);
   // Teto de 1.8×: zoom demais corta o contexto e o dono perde a referência.
   const k = Math.max(0.45, Math.min(1.8, Math.min(BW/necW, BH/necH)));
   aplicar(fa, lentes[0], ra, k, x0, y0, it);
@@ -757,11 +759,11 @@ async function pintar(){
 
   if (it.medida){
     const r = it.medida;
-    const comLimite = r.antes > r.tela;
-    const teto = Math.max(r.antes, r.depois, r.tela) * 1.06;
+    const comLimite = r.tela !== undefined && r.antes > r.tela;
+    const teto = Math.max(r.antes, r.depois, r.tela || 0) * 1.06;
     regua.innerHTML = '<div class="regua"><h4>' + esc(r.rotulo || "largura do conteúdo · a tela do celular tem 390px") + '</h4>' +
-      barra("antes", r.antes, r.tela, comLimite, teto, comLimite) +
-      barra("depois", r.depois, r.tela, r.depois > r.tela, teto, comLimite) +
+      barra("antes", r.antes, r.tela, comLimite, teto, comLimite, r.unidade) +
+      barra("depois", r.depois, r.tela, r.depois > r.tela, teto, comLimite, r.unidade) +
       '<small>' + (comLimite
         ? "A linha tracejada é a borda da tela. A barra vermelha é o quanto o conteúdo passava dela."
         : "Medido no navegador, nos dois estados.") +
@@ -863,9 +865,15 @@ window.__comparador = {
       if (!el) return null;
       const r = el.getBoundingClientRect();
       const se = doc.scrollingElement;
+      const cs = doc.defaultView.getComputedStyle(el);
+      const cv = doc.createElement("canvas"); cv.width = cv.height = 1;
+      const cx = cv.getContext("2d", { willReadFrequently: true });
+      const hex = (c) => { try { cx.fillStyle = "#000"; cx.fillStyle = c; cx.fillRect(0,0,1,1);
+        const px = cx.getImageData(0,0,1,1).data; return "#" + [px[0],px[1],px[2]].map((v) => v.toString(16).padStart(2,"0")).join(""); } catch { return String(c); } };
       return { left: Math.round(r.left), top: Math.round(r.top + se.scrollTop), width: Math.round(r.width), height: Math.round(r.height),
         dir: Math.round(r.right), texto: (el.textContent || "").trim().slice(0, 120), tag: el.tagName.toLowerCase(),
-        cls: (typeof el.className === "string" ? el.className : "").slice(0, 50) };
+        cls: (typeof el.className === "string" ? el.className : "").slice(0, 50),
+        fundo: hex(cs.backgroundColor), tinta: hex(cs.color) };
     };
     return {
       id: it.id, vista: it.vista, esperaAntes: alvoDoLado(it, "antes") !== null, esperaDepois: alvoDoLado(it, "depois") !== null,

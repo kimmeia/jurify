@@ -182,6 +182,22 @@ const TELAS = [
       console.log(`  banco (${viewport}): ${n} contato(s) "${NOME_TESTE}" criado(s) pelo clique, ${apagados} apagado(s); restam ${contatosDeTeste(escritorioId)}`);
     },
   },
+  // O menu lateral aparece em qualquer tela do app; o Dashboard é a que o
+  // dono abre primeiro, então é onde a cor da marca se julga.
+  {
+    nome: "menu",
+    rota: "/dashboard",
+    preparar: async (p) => {
+      // No celular o menu mora numa gaveta: sem abrir, a foto não tem menu.
+      const gaveta = p.locator('[data-sidebar="trigger"], button[aria-label="Toggle Sidebar"]').first();
+      if (await gaveta.count()) {
+        const visivel = await gaveta.isVisible().catch(() => false);
+        if (visivel) { await gaveta.click(); await p.waitForTimeout(900); }
+      }
+      await p.waitForSelector('[data-sidebar="menu-button"]', { timeout: 20000 });
+      await p.waitForTimeout(1500);
+    },
+  },
   { nome: "ajuda", rota: "/ajuda", preparar: async (p) => { await p.waitForSelector('text="em breve"', { timeout: 20000 }); } },
   { nome: "ajuda-tarefa-nova", rota: "/ajuda/responder-cliente-atendimento" },
   { nome: "ajuda-cadastrar", rota: "/ajuda/cadastrar-cliente", preparar: async (p) => { await p.waitForSelector("img", { timeout: 20000 }); } },

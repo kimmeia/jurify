@@ -89,7 +89,10 @@ for (let i = 0; i < quantos; i++) {
     if (d.esperaDepois && !d.d) motivos.push("alvo não achado no depois");
     if (d.a && d.d) {
       const mesmoRet = d.a.left === d.d.left && d.a.top === d.d.top && d.a.width === d.d.width && d.a.height === d.d.height;
-      if (mesmoRet && d.a.texto === d.d.texto) motivos.push("MESMO retângulo e mesmo texto nos dois lados — o anel não conta história");
+      // Decisão de COR não mexe em geometria nem em texto: o que muda é a
+      // tinta. Sem olhar cor, a conferência reprovava a comparação certa.
+      const mudaCor = d.a.fundo !== d.d.fundo || d.a.tinta !== d.d.tinta;
+      if (mesmoRet && d.a.texto === d.d.texto && !mudaCor) motivos.push("MESMO retângulo, mesmo texto e MESMA cor nos dois lados — o anel não conta história");
     }
     if (d.zoom === "—" && (d.esperaAntes || d.esperaDepois) && (d.a || d.d)) motivos.push("caiu na tela inteira");
   }
@@ -98,7 +101,8 @@ for (let i = 0; i < quantos; i++) {
       ? (d.vista === "celular" && d.a.dir > 390 && d.d.dir <= 390 ? "cruza→cabe"
         : (d.a.width !== d.d.width || d.a.height !== d.d.height) ? "muda de tamanho"
         : (d.a.left !== d.d.left || d.a.top !== d.d.top) ? "muda de lugar"
-        : d.a.texto !== d.d.texto ? "texto muda" : "MESMO retângulo")
+        : d.a.texto !== d.d.texto ? "texto muda"
+        : (d.a.fundo !== d.d.fundo || d.a.tinta !== d.d.tinta) ? "muda de cor" : "MESMO retângulo")
       : d.a && !d.d ? (d.esperaDepois ? "sumiu?" : "some no depois")
       : !d.a && d.d ? (d.esperaAntes ? "faltou no antes?" : "aparece no depois")
       : "alvo não achado";
