@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.831 verdes em 13/09/2026 (395 arquivos, ~1min35; develop/main: 5.746 em 390)
+pnpm test               # vitest (server/**/*.test.ts) — 5.944 verdes em 13/09/2026 (398 arquivos, ~1min30; develop/main: 5.746 em 390)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1521,10 +1521,18 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   ficaram: consulta pública vence a credencial quando existe; busca por CPF só
   onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
   Só o dono valida nos portais (ordem em ESTADO 15.1.1).
-- **Aprovado ("pode fazer"), em implementação**: Central de ajuda
-  (`mockup-central-de-ajuda.html`, ESTADO seção 18) — decisões 1A, 2A, 3A, 4
-  como proposto, 5A. Atenção: o mockup foi desenhado na paleta antiga
-  (violeta/Poppins); a implementação segue o app (marinho `#194b86`, Inter).
+- **Na branch, NÃO mergeado (13/09)**: Central de ajuda (`mockup-central-de-
+  ajuda.html`, "pode fazer" com as recomendações; ESTADO seção 18) — `/ajuda`
+  e `/ajuda/:tarefa` (`ClientAreaSoTermos`), 5 tarefas com prints reais + 16
+  "em breve", botão Ajuda na barra lateral, `AjudaDaTela` nas 5 telas,
+  Primeiros passos no Dashboard do dono (`ajuda.primeirosPassos`,
+  `shared/primeiros-passos.ts`), Visão rápida de Saúde em 3 linhas
+  (`shared/saude-semaforos.ts`; `capturaConfigurada` = `SENTRY_DSN_BACKEND ||
+  SENTRY_DSN`). Regra que nasceu aqui: rótulo de tela citado no manual vai
+  entre «» e tem que existir no arquivo da tela (teste `central-de-ajuda`).
+  O mockup foi desenhado na paleta antiga (violeta/Poppins); a implementação
+  segue o app (marinho, Inter). Amarras: `central-de-ajuda`,
+  `primeiros-passos`, `saude-semaforos` — 146 mutações vermelhas.
 
 ## Fila combinada com o dono (31/08/2026)
 

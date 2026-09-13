@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.831 testes verdes** (13/09, com o motor próprio fase 1 integrado na branch; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.944 testes verdes** (13/09, na branch com o motor próprio fase 1 e a Central de ajuda; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.831 verdes, 395 arquivos** (13/09, na branch com o motor fase 1; em develop/main: 5.746 em 390, 12/09; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.944 verdes, 398 arquivos** (13/09, na branch com o motor fase 1 e a Central de ajuda; em develop/main: 5.746 em 390, 12/09; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -1461,6 +1461,11 @@ olhando um painel que mente para ele.**
    do servidor liga **exclusivamente** por variável de ambiente
    (`SENTRY_DSN_BACKEND`), e o painel exibe "Sentry conectado" com base em outra
    coisa. Ou seja: é possível — e provável — que o monitoramento de erro esteja
+   **13/09:** a Visão rápida de Saúde passou a AFIRMAR a captura: `adminErros.listar`
+   devolve `capturaConfigurada` = `capturaSentryConfigurada(process.env)`
+   (`SENTRY_DSN_BACKEND || SENTRY_DSN`, a mesma régua de `initSentry`) e a linha
+   "Erros no sistema" fica âmbar "não dá pra afirmar" enquanto nenhuma das duas
+   existir (seção 18).
    **desligado** enquanto a tela garante que está ligado. Isso fecha o círculo com
    o JurisIA, que não tem Sentry nenhum: o erro não aparece em lugar algum.
    *(crítico)*
@@ -2345,43 +2350,111 @@ certo:
 - **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
   laço, não a consulta.
 
-## 18. Manual de uso e painel dos robôs — proposta entregue (12/09), aguardando decisão
+## 18. Central de ajuda — ENTREGUE na branch (13/09), aguardando conferência visual e "pode mergear"
 
 Origem: o dono, olhando `/admin/saude`: *"esse robô funciona? está muito
 complexo. O princípio é ser fácil de usar. Precisamos criar um manual para
-ensinar a usar"* — e depois *"vamos fazer"*. Pela regra dele, nasceu como mockup
-navegável: **`mockup-central-de-ajuda.html`** (raiz do repo, 6 abas, fontes
-embutidas, sem referência externa; conferido em 1280px e 400px).
+ensinar a usar"* → *"vamos fazer"* → mockup `mockup-central-de-ajuda.html`
+(raiz do repo) → *"pode fazer"* (12/09), com as recomendações: página própria
+`/ajuda`; prints a partir do app real; "Primeiros passos" só pro dono; a ordem
+proposta dos 5 passos; Visão rápida em 3 linhas sem remover nada. **Está na
+branch `claude/code-audit-documentation-rkhvtu`, NÃO em develop/main.**
+Atenção: o mockup foi desenhado na paleta antiga (violeta/Poppins); a
+implementação segue o app (marinho, Inter, componentes de `components/ui`).
 
-Fatos conferidos no código que sustentam a proposta:
-- **Não existe botão de ajuda em lugar nenhum do app** — nem no `AppLayout`
-  (barra lateral tem Buscar ⌘K, avatar, Configurações, Sair), nem rota `/ajuda`.
-  A única orientação é o `GuiaProcessual` (só pra quem tem o pacote processual)
-  e dicas soltas em 6 telas, sem sistema.
-- **O robô de jornada não tira print de tela** (nenhum `screenshot(` em
-  `tests/e2e`). Prints do manual saem feitos à mão; ensinar o robô é trabalho a
-  mais (decisão 2).
-- `/admin/saude` tem **6 abas** (Visão rápida, Erros, Robô auditor, Robô de
-  jornada, E-mails, Auditoria), ~20 números e vocabulário de programador
-  (`runId`, latência em ms, "invariantes", "shadow mode"). Não responde
-  "funciona?" em lugar nenhum. O "0 erros abertos" não prova nada enquanto o
-  `SENTRY_DSN_BACKEND` não estiver confirmado (seção 11.1).
+### 18.1 O que existe agora
 
-A proposta, em três camadas: (1) **Central de ajuda por tarefa** em `/ajuda`
-(botão "Ajuda" na barra lateral + "?" no topo de cada tela; 20 tarefas escritas
-do jeito que o advogado pensa, com print da tela real, passo a passo, "se não deu
-certo" e botão "Abrir a tela"; fora do porteiro de módulos); (2) **Primeiros
-passos** no Dashboard do dono (5 passos com marcação automática, some ao
-completar — o `GuiaProcessual` esticado pra todos os planos); (3) vídeos curtos
-depois. E o painel dos robôs com a **Visão rápida em 3 linhas** (semáforo +
-frase + "o que fazer"), abas técnicas dobradas em "detalhes técnicos" — **nada
-removido**.
+- **Central `/ajuda` e `/ajuda/:tarefa`** (`client/src/pages/Ajuda.tsx`,
+  `client/src/pages/ajuda/`): busca por título e palavra-chave, tarefas
+  agrupadas nos MESMOS grupos do menu lateral (derivado de `GRUPOS_MENU`),
+  faixa "Primeiros passos" (só dono, fica mesmo depois de completo — é onde se
+  revê), rodapé "Falar com a gente" pelo `subscription.contatoComercial`
+  (nunca número cravado). Rotas dentro do app pelo wrapper `ClientAreaSoTermos` (AppLayout +
+  `TermosGate`, sem porteiro de módulo e sem guarda de assinatura); sem o módulo a página avisa e segue
+  legível (`contratoLibera`, a mesma régua do `ModuloGuard`, por
+  `modulosDaRota`). Botão **Ajuda** no rodapé da barra lateral (ao lado do
+  Buscar ⌘K), item "Ajuda" no menu do avatar do modo atendimento; `/ajuda`
+  liberada no modo focado do celular.
+- **Conteúdo** em `client/src/pages/ajuda/tarefas.ts` (fonte única, dados
+  tipados): 5 tarefas completas — Conectar o WhatsApp · Cadastrar um cliente ·
+  Vigiar um processo · Convidar alguém e dar permissões · Cobrar um cliente
+  (boleto ou Pix) — e 16 títulos "em breve" (sem link). Regra de escrita: todo
+  rótulo de tela vai entre «» e TEM que existir, letra por letra, no arquivo
+  da tela (`arquivoTela` + `arquivosApoio`) — o teste trava; foi isso que
+  corrigiu o mockup («Testar login» → «Validar», «Monitoramentos» →
+  «Monitoramento», o Novo Cliente exige qualificação e endereço).
+- **Prints reais** em `client/public/ajuda/*.png` (9, ≤ 250 KB, capturados
+  com Playwright do app rodando com escritório de demonstração fictício).
+  `serveStatic` ganhou `redirect: false` — com a pasta `dist/public/ajuda`
+  existindo, `GET /ajuda` devolvia 301 pra `/ajuda/`. Falta o print do
+  passo "Conectar com Facebook" (precisa de app Meta configurado).
+- **"?" ao lado do título** (`AjudaDaTela`) em Processos, Clientes,
+  Configurações → Equipe, Configurações → Canais e Financeiro, cada um
+  apontando pra tarefa da tela.
+- **Primeiros passos** (`server/escritorio/router-ajuda.ts`, procedure
+  `ajuda.primeirosPassos`; regras puras em `shared/primeiros-passos.ts`;
+  bloco `client/src/pages/dashboards/PrimeirosPassos.tsx`): 5 passos com
+  detecção por escritório — WhatsApp = canal `whatsapp_api` conectado com
+  telefone (régua da aba Canais); cliente = contato do escritório que NÃO
+  nasceu de mensagem de WhatsApp; Cofre = credencial ativa/validando;
+  processo = monitoramento de movimentações ativo; equipe = 2º colaborador
+  ativo ou convite enviado. Dono = `cargo === "dono"` do vínculo (mesma regra
+  do TermosGate); não-dono recebe lista vazia sem consulta nenhuma. Passo de
+  módulo não contratado sai da lista e do total. Cada passo abre o fluxo real
+  por deep-link (`?novo=1` — Clientes e Canais passaram a ler; Equipe rola e
+  foca o convite). Bloco some quando completo; a variante processual do
+  Dashboard NÃO monta o bloco (o `GuiaProcessual` segue lá).
+- **Saúde do sistema → Visão rápida em 3 linhas** (`shared/saude-semaforos.ts`:
+  `semaforoErros`, `semaforoAuditor`, `semaforoJornada`, `achadosRepetidos`,
+  `jornadaNaoConfiavel`; montagem query → semáforo também pura): semáforo +
+  frase + botão. Erros: o painel passou a AFIRMAR a captura do Sentry
+  (`capturaConfigurada` em `adminErros.listar`, lido do env do servidor —
+  fecha a observação da seção 11.1 "diz conectado sem conferir"); leitura do
+  Sentry falhando nunca vira verde. Auditor: sem rodar há mais de 36 h =
+  vermelho; achados repetidos (comparados pelas regras violadas, ou pelo
+  número quando o histórico não as traz) viram card "Precisa de você" na
+  Visão Geral. Jornada: menos de 2 s por tela = vermelho "resultado não
+  confiável" com "Rodar de novo" — e selo "NÃO CONFIÁVEL" no card da aba.
+  Tudo que existia (4 cards, Últimos erros, Últimas rondas, Fila de
+  tribunais) continua, dobrado em "Detalhes técnicos".
 
-Decisões pendentes do dono (recomendação entre parênteses): 1 · Central em
-página própria ou painel deslizante (página); 2 · prints à mão agora ou robô
-tirando (à mão pra lançar, robô na fatia 4); 3 · Primeiros passos só pro dono
-(sim); 4 · quais 5 passos e a ordem (WhatsApp → 1º cliente → Cofre → vigiar
-processo → convidar equipe); 5 · simplificar a Visão rápida (sim). Fatias:
-1 Central + botão + 5 tarefas · 2 Primeiros passos · 3 robôs em 3 linhas ·
-4 mais 15 tarefas + prints pelo robô + vídeos. **Nada implementado até o
-"pode fazer".**
+### 18.2 Como foi feito e conferido
+
+Três frentes em worktrees (commits 500ed7e, 1ddb8f4, 6952acb), integradas em
+1563b95; 26 achados de três revisores independentes (tenancy, fidelidade ao
+mockup, qualidade das amarras), cada um julgado por 3 céticos — 25
+confirmados, 1 refutado (o card "Precisa de você" não pisca: as seis queries
+saem num único lote do `httpBatchLink`) — e corrigidos por área (7992a28,
+d2e6e28, 1d3b3c4). Verificação final no worktree: `tsc` limpo, **5.944
+testes em 398 arquivos**, `vite build` ok, árvore limpa. Dois prints foram
+RECAPTURADOS porque o seed de demonstração carregava um telefone real
+(trocado por fictício em `scratchpad/estudo-telas/povoar.sql`; amarra
+confere). Amarras: `central-de-ajuda` (rotas derivadas do
+App.tsx, rótulos no arquivo da tela, prints existem e são renderizados, botão
+e «?» no lugar), `primeiros-passos` (WHERE renderizado com `escritorioId` em
+cada consulta, dono/não-dono, cadeado, módulo, rotas), `saude-semaforos`
+(regras e bordas) — mutações em `scratchpad/mutar-central-ajuda.py`,
+`mutar-primeiros-passos.py`, `mutar-saude-semaforos.py`.
+
+### 18.3 O que fica pra decisão do dono
+
+- O diálogo Novo Cliente exige CPF, qualificação e endereço; o manual diz a
+  verdade da tela. Se "nome e WhatsApp bastam" for a regra desejada, é
+  mudança no diálogo (mockup antes).
+- Lead que chega sozinho pelo WhatsApp não conta como "1º cliente cadastrado"
+  (decisão do integrador); convite expirado conta como "equipe convidada".
+- A promessa "sem risco de banimento" saiu do manual, mas continua no cartão
+  WhatsApp Business de Configurações e no diálogo da Meta — texto de produto,
+  mockup antes de mudar. Hoje o manual diz uma coisa e a tela outra.
+- **Dado real no repositório público**: o telefone de um cliente real ainda
+  aparece em `shared/telefone.ts`, testes, docs de auditoria e no CLAUDE.md
+  (caso Tirzah), além do histórico do git com os PNG antigos. Esta entrega
+  fechou só o print servido pelo app. Varrer o resto é decisão do dono.
+- Conferência visual no app rodando: feita pelo integrador em 13/09 (fotos
+  enviadas ao dono); o print do passo "Conectar com Facebook" continua
+  faltando (precisa de app Meta configurado).
+- Print de Canais mostra um número já conectado (ilustrativo).
+- Dentro da dobra "Detalhes técnicos", a lista antiga ainda usa a heurística
+  de 60 s pra jornada suspeita; as 3 linhas usam 2 s/tela. Unificar é
+  remoção da antiga.
+- Fatia 4 (mais 15 tarefas, prints pelo robô, vídeos) não começou.
