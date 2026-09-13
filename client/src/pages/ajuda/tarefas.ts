@@ -9,6 +9,7 @@
  */
 
 import type { ModuloAppId } from "@shared/modulos-app";
+import { modulosDaRota } from "@shared/modulos-contratacao";
 
 /** Os mesmos grupos do menu lateral (GRUPOS_MENU do AppLayout), na mesma ordem. */
 export const GRUPOS_AJUDA = ["Dia a dia", "Carteira", "Ferramentas", "Gestão"] as const;
@@ -43,7 +44,12 @@ export interface TarefaCompleta {
   readonly arquivoTela: string;
   /** Diálogos e sub-telas que os passos também citam. */
   readonly arquivosApoio?: readonly string[];
-  /** Módulo contratável que a tarefa exige: sem ele a página avisa, não bloqueia. */
+  /**
+   * Módulo contratável que a tarefa exige: sem ele a página avisa, não
+   * bloqueia. Quando a rota de «Abrir a tela» tem regra no ModuloGuard, é a
+   * regra da rota que decide (ver `modulosQueLiberam`); este campo vale
+   * sozinho só pra rota sem regra (Configurações esconde a aba por módulo).
+   */
   readonly modulo?: ModuloAppId;
   readonly emBreve?: false;
 }
@@ -400,6 +406,17 @@ export function tarefaCompleta(t: TarefaAjuda): t is TarefaCompleta {
 
 export function tarefaPorId(id: string): TarefaAjuda | undefined {
   return TAREFAS_AJUDA.find((t) => t.id === id);
+}
+
+/**
+ * Módulos que liberam a tela da tarefa (basta UM contratado) — a MESMA
+ * régua do ModuloGuard sobre a rota de «Abrir a tela». É o que faz
+ * "Cadastrar um cliente" abrir no pacote só-processos: /clientes vira a
+ * versão essencial lá, e o `modulo: "clientes"` sozinho dizia "bloqueada".
+ * Rota sem regra no guard (Configurações) cai no módulo declarado.
+ */
+export function modulosQueLiberam(t: TarefaCompleta): readonly string[] {
+  return modulosDaRota(t.abrirTela.rota) ?? (t.modulo ? [t.modulo] : []);
 }
 
 export function tarefasDoGrupo(grupo: GrupoAjuda): readonly TarefaAjuda[] {

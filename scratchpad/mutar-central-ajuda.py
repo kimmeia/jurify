@@ -73,11 +73,24 @@ MUTACOES = [
      '  const contratados = useModulosContratados();\n  const tarefa = tarefaPorId(params.tarefa ?? "");\n\n  if (!tarefa) return <TarefaNaoEncontrada />;',
      '  const tarefa = tarefaPorId(params.tarefa ?? "");\n\n  if (!tarefa) return <TarefaNaoEncontrada />;\n  const contratados = useModulosContratados();'),
     ("aviso de módulo definido mas não renderizado", PAG,
-     "{semModulo && tarefa.modulo && <AvisoModulo modulo={tarefa.modulo} />}", ""),
+     "{semModulo && <AvisoModulo modulos={modulosDaTela} />}", ""),
     ("aviso de módulo vira bloqueio (sai antes dos passos)", PAG,
-     "const semModulo = !!tarefa.modulo && !contratoLibera(contratados, [tarefa.modulo]);",
-     "const semModulo = !!tarefa.modulo && !contratoLibera(contratados, [tarefa.modulo]);\n"
-     "  if (semModulo) return <AvisoModulo modulo={tarefa.modulo!} />;"),
+     "const semModulo = modulosDaTela.length > 0 && !contratoLibera(contratados, modulosDaTela);",
+     "const semModulo = modulosDaTela.length > 0 && !contratoLibera(contratados, modulosDaTela);\n"
+     "  if (semModulo) return <AvisoModulo modulos={modulosDaTela} />;"),
+    ("gate da página ignora a régua da rota (volta ao `modulo` solto)", PAG,
+     "const modulosDaTela = modulosQueLiberam(tarefa);",
+     "const modulosDaTela = tarefa.modulo ? [tarefa.modulo] : [];"),
+    ("modulosQueLiberam ignora o ModuloGuard (cadastrar-cliente 'bloqueado' no só-processos)", T,
+     "return modulosDaRota(t.abrirTela.rota) ?? (t.modulo ? [t.modulo] : []);",
+     "return t.modulo ? [t.modulo] : [];"),
+    ("modulosQueLiberam ignora o módulo declarado (WhatsApp sem aviso em plano sem atendimento)", T,
+     "return modulosDaRota(t.abrirTela.rota) ?? (t.modulo ? [t.modulo] : []);",
+     "return modulosDaRota(t.abrirTela.rota) ?? [];"),
+    ("`modulo` da tarefa que não libera a rota dela (cadastrar-cliente → financeiro)", T,
+     'modulo: "clientes",', 'modulo: "financeiro",'),
+    ("`modulo` da tarefa de rota sem regra trocado (conectar-whatsapp → financeiro)", T,
+     'modulo: "atendimento",', 'modulo: "financeiro",'),
 ]
 
 

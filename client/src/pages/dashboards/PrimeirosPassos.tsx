@@ -28,6 +28,8 @@ import {
   Users,
 } from "lucide-react";
 import { numeroDoPasso, passoAtual, type PassoId } from "@shared/primeiros-passos";
+import { pacoteProcessualPuro } from "@shared/modulos-contratacao";
+import { useModulosContratados } from "@/components/ModuloGuard";
 
 const ICONE_DO_PASSO: Record<PassoId, typeof KeyRound> = {
   whatsapp: MessageCircle,
@@ -151,16 +153,25 @@ export default function PrimeirosPassos() {
 /**
  * A faixa compacta da Central de ajuda (aba 2 do mockup): um quadradinho
  * por passo e o link pro Dashboard. Ao contrário do bloco, NÃO some quando
- * termina — a Central é onde se revê o que foi feito.
+ * termina — a Central é onde se revê o que foi feito; completa, diz "tudo
+ * feito" no lugar do link.
  */
 export function PrimeirosPassosResumo() {
   const [, setLocation] = useLocation();
   const { data } = usePrimeirosPassos();
+  const contratados = useModulosContratados();
 
   if (!data || !data.souDono || data.total === 0) return null;
 
   const { passos, feitos, total } = data;
   const atual = passoAtual(passos);
+  const completo = feitos === total;
+  // O link só aponta pra onde o bloco está: o Dashboard não o monta quando
+  // completo (o bloco some) nem no contrato só-processos (lá o Dashboard
+  // sai pela variante processual, com o GuiaProcessual, antes do bloco) —
+  // a MESMA régua do Dashboard.tsx (`pacoteProcessualPuro` sobre o
+  // contrato do `useModulosContratados`).
+  const dashboardMontaOBloco = !completo && !pacoteProcessualPuro(contratados);
 
   return (
     <div>
@@ -168,13 +179,21 @@ export function PrimeirosPassosResumo() {
         <h4 className="text-micro font-extrabold uppercase tracking-wider text-muted-foreground">
           Primeiros passos · {feitos} de {total} feitos
         </h4>
-        <button
-          type="button"
-          className="ml-auto text-apoio font-bold text-primary underline-offset-2 hover:underline"
-          onClick={() => setLocation("/dashboard")}
-        >
-          ver no Dashboard
-        </button>
+        {completo && (
+          <span className="ml-auto inline-flex items-center gap-1 text-apoio font-bold text-success-fg">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+            tudo feito
+          </span>
+        )}
+        {dashboardMontaOBloco && (
+          <button
+            type="button"
+            className="ml-auto text-apoio font-bold text-primary underline-offset-2 hover:underline"
+            onClick={() => setLocation("/dashboard")}
+          >
+            ver no Dashboard
+          </button>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {passos.map((p, i) => {

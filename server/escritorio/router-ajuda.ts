@@ -9,7 +9,7 @@
  * confunde).
  */
 
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { getEscritorioPorUsuario } from "./db-escritorio";
@@ -59,11 +59,19 @@ const DETECTORES: Record<PassoId, (db: Db, escritorioId: number) => Promise<Date
       .limit(1);
     return row?.createdAt ?? null;
   },
+  // "Cadastrar" é ação de alguém do escritório: o cadastro manual, a
+  // importação e o Asaas contam; o lead que o Atendimento cria sozinho na
+  // primeira mensagem (`criarOuReutilizarContato`, origem whatsapp) não —
+  // senão o passo vira "feito" assim que um desconhecido diz "oi" no número
+  // conectado no passo 1, e ninguém cadastrou nada.
   cliente: async (db, escritorioId) => {
     const [row] = await db
       .select({ createdAt: contatos.createdAt })
       .from(contatos)
-      .where(eq(contatos.escritorioId, escritorioId))
+      .where(and(
+        eq(contatos.escritorioId, escritorioId),
+        ne(contatos.origem, "whatsapp"),
+      ))
       .orderBy(asc(contatos.createdAt))
       .limit(1);
     return row?.createdAt ?? null;
@@ -80,12 +88,16 @@ const DETECTORES: Record<PassoId, (db: Db, escritorioId: number) => Promise<Date
       .limit(1);
     return row?.createdAt ?? null;
   },
+  // O passo é o diálogo do CNJ ("Cole o CNJ"): só o monitor de
+  // movimentações satisfaz. Monitor de novas ações por CPF é outro fluxo e
+  // não prova que um processo está vigiado.
   processo: async (db, escritorioId) => {
     const [row] = await db
       .select({ createdAt: motorMonitoramentos.createdAt })
       .from(motorMonitoramentos)
       .where(and(
         eq(motorMonitoramentos.escritorioId, escritorioId),
+        eq(motorMonitoramentos.tipoMonitoramento, "movimentacoes"),
         eq(motorMonitoramentos.status, "ativo"),
       ))
       .orderBy(asc(motorMonitoramentos.createdAt))

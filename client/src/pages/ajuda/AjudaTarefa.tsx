@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useModulosContratados } from "@/components/ModuloGuard";
 import { contratoLibera } from "@shared/modulos-contratacao";
 import { MODULOS_APP } from "@shared/modulos-app";
-import { tarefaCompleta, tarefaPorId, type TarefaCompleta } from "@/pages/ajuda/tarefas";
+import { modulosQueLiberam, tarefaCompleta, tarefaPorId } from "@/pages/ajuda/tarefas";
 import { TextoComRotulos } from "@/pages/ajuda/TextoComRotulos";
 
 function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
@@ -76,9 +76,9 @@ function TarefaEmBreveTela({ titulo, grupo }: { titulo: string; grupo: string })
   );
 }
 
-function AvisoModulo({ modulo }: { modulo: NonNullable<TarefaCompleta["modulo"]> }) {
+function AvisoModulo({ modulos }: { modulos: readonly string[] }) {
   const [, setLocation] = useLocation();
-  const nome = MODULOS_APP.find((m) => m.id === modulo)?.nome ?? modulo;
+  const nome = modulos.map((id) => MODULOS_APP.find((m) => m.id === id)?.nome ?? id).join(" ou ");
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-info/30 bg-info-bg px-4 py-3">
       <Lock className="h-4 w-4 shrink-0 text-info-fg" />
@@ -102,7 +102,10 @@ export default function AjudaTarefa() {
   if (!tarefa) return <TarefaNaoEncontrada />;
   if (!tarefaCompleta(tarefa)) return <TarefaEmBreveTela titulo={tarefa.titulo} grupo={tarefa.grupo} />;
 
-  const semModulo = !!tarefa.modulo && !contratoLibera(contratados, [tarefa.modulo]);
+  // A régua do ModuloGuard sobre a rota de «Abrir a tela», não o `modulo`
+  // solto — é ela que decide se a tela abre.
+  const modulosDaTela = modulosQueLiberam(tarefa);
+  const semModulo = modulosDaTela.length > 0 && !contratoLibera(contratados, modulosDaTela);
   const ligadas = tarefa.tarefasLigadas
     .map((id) => tarefaPorId(id))
     .filter((t): t is NonNullable<typeof t> => !!t);
@@ -142,7 +145,7 @@ export default function AjudaTarefa() {
         </div>
       </header>
 
-      {semModulo && tarefa.modulo && <AvisoModulo modulo={tarefa.modulo} />}
+      {semModulo && <AvisoModulo modulos={modulosDaTela} />}
 
       <div className="rounded-[14px] border border-warning/30 bg-warning-bg px-4 py-3">
         <p className="text-micro font-bold uppercase tracking-wider text-warning-fg mb-1">Antes de começar</p>

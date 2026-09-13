@@ -7,12 +7,24 @@
  *    não consulta tabela nenhuma pra ele (não é "sem permissão", é "nada");
  *  - cada passo é detectado por consulta amarrada ao escritório da sessão
  *    (o WHERE é renderizado e tem que carregar o `escritorioId` — mutação
- *    que tira a amarra fica invisível pro banco falso, visível aqui);
+ *    que tira a amarra fica invisível pro banco falso, visível aqui) — e o
+ *    escritório é o do `ctx.user.id`, não de outro usuário (o mock devolve
+ *    escritório DIFERENTE por userId; "77 em todo WHERE" sozinho aceitava
+ *    `getEscritorioPorUsuario(1)`);
+ *  - todo detector lê o registro MAIS ANTIGO (ORDER BY createdAt ASC é
+ *    renderizado e conferido — `desc` trocava o "feito em" pelo último);
+ *  - a régua do "feito" é a do app: monitor de MOVIMENTAÇÕES (o passo é o
+ *    diálogo do CNJ, não o de CPF) e contato que alguém CADASTROU (origem
+ *    ≠ whatsapp — o lead que o Atendimento cria sozinho não conta);
+ *  - o texto do passo 2 diz o que a ficha exige de verdade;
  *  - o passo 4 (Vigiar) fica com cadeado até o 3 (Cofre) existir;
  *  - passo de módulo não contratado sai da lista, do total e das consultas;
  *  - o Dashboard do dono monta o bloco; a variante processual não (o
  *    GuiaProcessual já faz esse papel lá); as rotas dos passos existem no
- *    App.tsx e os deep-links `?novo=1` abrem o fluxo real.
+ *    App.tsx e os deep-links (`?novo=1`, `?abrirMonitor=1`) abrem o fluxo
+ *    real — Vigiar abre o diálogo do CNJ, não o de novas ações por CPF;
+ *  - a faixa da Central não some completa: diz "tudo feito" e só mostra
+ *    "ver no Dashboard" quando o Dashboard de fato monta o bloco.
  */
 
 import { readFileSync } from "fs";
@@ -28,7 +40,7 @@ import {
   passoAtual,
   passosDoContrato,
 } from "../../shared/primeiros-passos";
-import { MODULO_POR_NAMESPACE } from "../../shared/modulos-contratacao";
+import { MODULO_POR_NAMESPACE, pacoteProcessualPuro } from "../../shared/modulos-contratacao";
 
 const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
@@ -39,7 +51,7 @@ const D = (s: string) => new Date(`${s}T12:00:00.000Z`);
 const NOME = Symbol.for("drizzle:Name");
 function nomeTabela(t: any): string { return (t?.[NOME] as string) || ""; }
 const dialeto = new MySqlDialect();
-type WhereCapturado = { table: string; join: boolean; sql: string; params: unknown[] };
+type WhereCapturado = { table: string; join: boolean; sql: string; params: unknown[]; orderBy: string | null };
 const filas: Record<string, any[][]> = {};
 const wheres: WhereCapturado[] = [];
 const proxima = (t: string) => (filas[t]?.length ? filas[t].shift()! : []);
@@ -58,10 +70,16 @@ function makeDb() {
       innerJoin: () => { join = true; return b; },
       where: (w: SQL | undefined) => {
         const q = w ? dialeto.sqlToQuery(w) : { sql: "", params: [] };
-        wheres.push({ table, join, sql: q.sql, params: q.params });
+        wheres.push({ table, join, sql: q.sql, params: q.params, orderBy: null });
         return b;
       },
-      orderBy: () => b,
+      // Renderizado como o WHERE: a fila do teste não ordena nada, então o
+      // "mais antigo" do router só é conferível pelo SQL.
+      orderBy: (...ordens: SQL[]) => {
+        const ultimo = wheres[wheres.length - 1];
+        if (ultimo) ultimo.orderBy = ordens.map((o) => dialeto.sqlToQuery(o).sql).join(", ");
+        return b;
+      },
       limit: (n: number) => resolver(n),
       then: (res: any, rej?: any) => resolver().then(res, rej),
     };
@@ -333,8 +351,59 @@ describe("ajuda.primeirosPassos — toda consulta amarra o escritório da sessã
     expect(canal.params).toEqual(expect.arrayContaining(["whatsapp_api", "conectado"]));
     expect(canal.sql).toMatch(/telefoneCanal.*is not null/i);
     expect(de("cofre_credenciais").params).toEqual(expect.arrayContaining(["ativa", "validando"]));
-    expect(de("motor_monitoramentos").params).toContain("ativo");
+    // Vigiar = monitor de MOVIMENTAÇÕES ativo (o diálogo do CNJ); o de
+    // novas ações por CPF não marca o passo.
+    const mon = de("motor_monitoramentos");
+    expect(mon.params).toEqual(expect.arrayContaining(["movimentacoes", "ativo"]));
+    expect(mon.sql).toMatch(/tipo_monitoramento` = \?/);
     expect(de("colaboradores").params).toContain(true);
+  });
+
+  it("cadastrar = contato que NÃO veio sozinho pelo WhatsApp (origem <> whatsapp); manual, importação e Asaas contam", async () => {
+    tudoFeito();
+    await caller().ajuda.primeirosPassos();
+    const cli = wheresDoRouter().find((w) => w.table === "contatos")!;
+    expect(cli.sql).toMatch(/origemContato` <> \?/);
+    expect(cli.params).toContain("whatsapp");
+    // O lead nasce assim no handler: `criarOuReutilizarContato({ origem: "whatsapp" })`.
+    const handler = ler("server/integracoes/whatsapp-handler.ts");
+    expect(handler).toContain("criarOuReutilizarContato(");
+    expect(handler).toMatch(/origem:\s*"whatsapp"/);
+  });
+
+  it("cada detector lê o registro MAIS ANTIGO: ORDER BY createdAt ASC em toda consulta", async () => {
+    tudoFeito();
+    await caller().ajuda.primeirosPassos();
+    expect(wheresDoRouter().length).toBeGreaterThanOrEqual(6);
+    for (const w of wheresDoRouter()) {
+      expect(w.orderBy, `${w.table}: consulta sem ORDER BY`).toMatch(/created_?at\w*` asc$/i);
+    }
+  });
+
+  it("o escritório é o do usuário da SESSÃO (ctx.user.id): outro usuário, outro escritório", async () => {
+    const OUTRO = 999;
+    vinculoMock.mockImplementation(async (userId: number) => ({
+      escritorio: { id: userId === 100 ? ESCRITORIO_ID : OUTRO, nome: "Escritório" },
+      colaborador: { id: 10, cargo: "dono" },
+    }));
+    tudoFeito();
+    await caller().ajuda.primeirosPassos();
+    expect(vinculoMock).toHaveBeenCalledWith(100);
+    expect(wheresDoRouter().length).toBeGreaterThanOrEqual(6);
+    for (const w of wheresDoRouter()) {
+      expect(w.params, `${w.table}: escritório de OUTRO usuário`).toContain(ESCRITORIO_ID);
+      expect(w.params).not.toContain(OUTRO);
+    }
+
+    wheres.length = 0;
+    tudoFeito();
+    await caller({ id: 200 } as any).ajuda.primeirosPassos();
+    expect(vinculoMock).toHaveBeenCalledWith(200);
+    expect(wheresDoRouter().length).toBeGreaterThanOrEqual(6);
+    for (const w of wheresDoRouter()) {
+      expect(w.params, `${w.table}: sessão do 200 lendo o escritório do 100`).toContain(OUTRO);
+      expect(w.params).not.toContain(ESCRITORIO_ID);
+    }
   });
 });
 
@@ -375,11 +444,39 @@ describe("client — o componente", () => {
     expect(comp).toContain("ver no Dashboard");
   });
 
-  it("some sozinho quando os N estão feitos; o resumo da Central NÃO some", () => {
+  it("some sozinho quando os N estão feitos; o resumo da Central NÃO some — diz «tudo feito»", () => {
     const bloco = comp.slice(comp.indexOf("export default function PrimeirosPassos()"), comp.indexOf("export function PrimeirosPassosResumo()"));
     expect(bloco).toContain("data.feitos === data.total) return null");
     const resumo = comp.slice(comp.indexOf("export function PrimeirosPassosResumo()"));
     expect(resumo).not.toContain("data.feitos === data.total");
+    // Uma única saída, e é o portão do dono — completo não é motivo de sumir.
+    expect(resumo.match(/return null/g)?.length).toBe(1);
+    expect(resumo).toContain("if (!data || !data.souDono || data.total === 0) return null;");
+    expect(resumo).toContain("const completo = feitos === total;");
+    const selo = resumo.indexOf("tudo feito");
+    expect(selo, "sem o selo «tudo feito»").toBeGreaterThan(-1);
+    expect(resumo.slice(resumo.lastIndexOf("{completo && (", selo), selo)).toContain("<CheckCircle2");
+  });
+
+  it("«ver no Dashboard» só aparece quando o Dashboard monta o bloco: nem completo, nem no contrato só-processos", () => {
+    const resumo = comp.slice(comp.indexOf("export function PrimeirosPassosResumo()"));
+    expect(resumo).toContain("const dashboardMontaOBloco = !completo && !pacoteProcessualPuro(contratados);");
+    const link = resumo.indexOf("ver no Dashboard");
+    expect(link).toBeGreaterThan(-1);
+    const abertura = resumo.lastIndexOf("{dashboardMontaOBloco && (", link);
+    expect(abertura, "o link não está dentro de {dashboardMontaOBloco && (...)}").toBeGreaterThan(-1);
+    expect(resumo.slice(abertura, link)).toContain('setLocation("/dashboard")');
+    // A MESMA régua do Dashboard.tsx: pacoteProcessualPuro sobre o contrato do useModulosContratados.
+    expect(comp).toContain('import { pacoteProcessualPuro } from "@shared/modulos-contratacao"');
+    expect(comp).toContain('import { useModulosContratados } from "@/components/ModuloGuard"');
+    expect(resumo).toContain("const contratados = useModulosContratados();");
+    const dash = ler("client/src/pages/Dashboard.tsx");
+    expect(dash).toContain("const processualPuro = pacoteProcessualPuro(modulosContratados);");
+    expect(dash).toContain("const modulosContratados = useModulosContratados();");
+    // O caso existe de fato: contrato só-processos tem passos listados E cai na variante processual.
+    expect(passosDoContrato(["processos"]).length).toBeGreaterThan(0);
+    expect(pacoteProcessualPuro(["processos"])).toBe(true);
+    expect(pacoteProcessualPuro(null)).toBe(false);
   });
 
   it("desenho da aba 4: título, selo N de M, barra, feito em verde, atual com botão, travado com cadeado", () => {
@@ -425,16 +522,51 @@ describe("client — rotas e deep-links dos passos", () => {
     for (const p of PRIMEIROS_PASSOS) {
       const caminho = p.rota.split("?")[0];
       expect(rotas.has(caminho), `${p.id}: rota "${caminho}" não existe no App.tsx`).toBe(true);
-      expect(p.rota).toMatch(/novo=1$/);
+      expect(p.rota).toMatch(/(?:novo|abrirMonitor)=1$/);
     }
   });
 
-  it("cofre e vigiar reusam os deep-links do GuiaProcessual", () => {
+  it("cofre e cliente reusam os deep-links do GuiaProcessual; Vigiar NÃO — o passo 3 do guia abre o diálogo de CPF", () => {
     const guia = ler("client/src/pages/dashboards/GuiaProcessual.tsx");
-    for (const id of ["cofre", "processo", "cliente"] as const) {
+    for (const id of ["cofre", "cliente"] as const) {
       const rota = PRIMEIROS_PASSOS.find((p) => p.id === id)!.rota;
       expect(guia, `${id}: ${rota} não é o deep-link do guia`).toContain(`"${rota}"`);
     }
+    const vigiar = PRIMEIROS_PASSOS.find((p) => p.id === "processo")!;
+    expect(vigiar.descricao).toMatch(/CNJ/);
+    expect(vigiar.rota).toBe("/processos?tab=movimentacoes&abrirMonitor=1");
+    expect(vigiar.rota).not.toContain("novas-acoes");
+    // O guia continua com o dele (novas ações por CPF) — não foi mexido.
+    expect(guia).toContain('"/processos?tab=novas-acoes&novo=1"');
+  });
+
+  it("Vigiar abre o diálogo do CNJ: quem lê ?abrirMonitor=1 é o MonitorarTab (aba movimentacoes), com «Número do processo (CNJ)»", () => {
+    const proc = ler("client/src/pages/Processos.tsx");
+    const monitorar = proc.slice(proc.indexOf("function MonitorarTab("), proc.indexOf("export default function Processos()"));
+    expect(monitorar, "MonitorarTab não encontrado").not.toBe("");
+    const i = monitorar.indexOf('if (sp.get("abrirMonitor") === "1") {');
+    expect(i, "MonitorarTab não lê ?abrirMonitor=1").toBeGreaterThan(-1);
+    expect(monitorar.slice(i, monitorar.indexOf("}, []);", i))).toContain("setNovoOpen(true)");
+    expect(monitorar).toContain("<DialogTitle>Monitorar movimentações</DialogTitle>");
+    expect(monitorar).toContain("Número do processo (CNJ)");
+    // O diálogo de CPF mora no NovasAcoesTab e só ele lê ?novo=1 nessa aba.
+    const novasAcoes = proc.slice(proc.indexOf("function NovasAcoesTab()"), proc.indexOf("function CofreTab()"));
+    expect(novasAcoes).toContain("<DialogTitle>Monitorar novas ações</DialogTitle>");
+    expect(novasAcoes).toContain('get("novo") === "1"');
+    expect(monitorar).not.toContain('get("novo")');
+    // ?tab=movimentacoes é aba real: aceita na leitura do ?tab= e tem TabsContent.
+    expect(proc).toMatch(/t === "movimentacoes" \|\|/);
+    expect(proc).toContain('<TabsContent value="movimentacoes"');
+  });
+
+  it("o passo 2 diz o que a ficha exige de verdade (CPF e endereço) — e o NovoClienteDialog exige mesmo", () => {
+    const cliente = PRIMEIROS_PASSOS.find((p) => p.id === "cliente")!;
+    expect(cliente.descricao).toMatch(/CPF/);
+    expect(cliente.descricao).toMatch(/endereço/);
+    expect(cliente.descricao).not.toMatch(/bastam/i);
+    const dialog = ler("client/src/pages/clientes/detail-tabs.tsx");
+    expect(dialog).toContain('"CPF/CNPJ obrigatório"');
+    expect(dialog).toContain("validarQualificacaoCompleta(qualif)");
   });
 
   it("?novo=1 abre o fluxo real: Clientes completo, aba Canais (WhatsApp novo) e aba Equipe (convite)", () => {

@@ -24,10 +24,12 @@ import {
   GRUPOS_AJUDA,
   TAREFAS_AJUDA,
   buscarTarefas,
+  modulosQueLiberam,
   tarefaCompleta,
   tarefaPorId,
   type TarefaCompleta,
 } from "../../client/src/pages/ajuda/tarefas";
+import { contratoLibera, modulosDaRota } from "../../shared/modulos-contratacao";
 import { ler, semComentarios } from "./_paginas-publicas";
 
 const raiz = join(__dirname, "..", "..");
@@ -295,9 +297,12 @@ describe("Central de ajuda — rotas e navegação", () => {
     const src = ler("client/src/pages/ajuda/AjudaTarefa.tsx");
     expect(src).toContain('from "@/components/ModuloGuard"');
     expect(src).toContain("useModulosContratados()");
-    expect(src).toContain("contratoLibera(contratados, [tarefa.modulo])");
+    // A régua da ROTA (modulosQueLiberam), não o `modulo` solto da tarefa.
+    expect(src).toContain("const modulosDaTela = modulosQueLiberam(tarefa);");
+    expect(src).toContain("contratoLibera(contratados, modulosDaTela)");
+    expect(src).not.toContain("[tarefa.modulo]");
     expect(src).toContain("Este recurso depende do módulo");
-    expect(src, "o aviso precisa ser RENDERIZADO, não só definido").toContain("<AvisoModulo modulo={tarefa.modulo} />");
+    expect(src, "o aviso precisa ser RENDERIZADO, não só definido").toContain("{semModulo && <AvisoModulo modulos={modulosDaTela} />}");
     const corpo = src.slice(src.indexOf("export default function AjudaTarefa"));
     // avisa, não bloqueia: entre calcular `semModulo` e renderizar não pode
     // haver saída condicional — os passos continuam na tela sem o módulo.
@@ -308,6 +313,30 @@ describe("Central de ajuda — rotas e navegação", () => {
     // hooks ANTES da saída antecipada (React #310)
     expect(corpo.indexOf("useModulosContratados()")).toBeLessThan(corpo.indexOf("if (!tarefa) return"));
     expect(src).toContain("Esta tarefa não existe");
+  });
+
+  it("o gate da tarefa é a régua do ModuloGuard sobre a rota de «Abrir a tela»: cadastrar-cliente abre no pacote só-processos", () => {
+    const por = (id: string) => TAREFAS_AJUDA.find((t) => t.id === id) as TarefaCompleta;
+    for (const t of completas) {
+      const daRota = modulosDaRota(t.abrirTela.rota);
+      // Rota com regra → a regra; sem regra (Configurações) → o módulo declarado.
+      expect(modulosQueLiberam(t), t.id).toEqual(daRota ?? (t.modulo ? [t.modulo] : []));
+      if (daRota && t.modulo) {
+        expect(daRota, `${t.id}: modulo "${t.modulo}" não é o que libera ${t.abrirTela.rota}`).toContain(t.modulo);
+      }
+    }
+    // O caso real: cesta do monitoramento-essencial (migration 0203) — /clientes
+    // abre lá como versão essencial (lê ?novo=1), então o manual não pode dizer "bloqueada".
+    const soProcessos = ["dashboard", "configuracoes", "processos"];
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("cadastrar-cliente")))).toBe(true);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("vigiar-processo")))).toBe(true);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("cobrar-cliente")))).toBe(false);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("conectar-whatsapp")))).toBe(false);
+    expect(modulosQueLiberam(por("convidar-equipe"))).toEqual([]);
+    expect(ler("client/src/pages/ClientesEssencial.tsx")).toContain('get("novo") === "1"');
+    // Sem regra de rota, Configurações esconde a aba Canais pelo MESMO módulo que a tarefa declara.
+    expect(modulosQueLiberam(por("conectar-whatsapp"))).toEqual(["atendimento"]);
+    expect(ler("client/src/pages/Configuracoes.tsx")).toContain('const abaCanais = libera(["atendimento"]);');
   });
 });
 

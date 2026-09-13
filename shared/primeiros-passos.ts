@@ -7,7 +7,10 @@
  * mesmo desenho: o servidor decide o que está feito e o que o plano
  * contratou; a tela só desenha o que recebe. Cada passo abre o fluxo REAL
  * (deep-link `?novo=1`, o mesmo idioma do GuiaProcessual), não uma
- * explicação.
+ * explicação. A exceção é "Vigiar um processo": o passo é o diálogo do CNJ
+ * ("Monitorar movimentações"), que só abre por `?abrirMonitor=1` na aba
+ * Monitoramento — o `?novas-acoes&novo=1` do GuiaProcessual abre o diálogo
+ * de novas ações por CPF, outro fluxo.
  */
 
 import { contratoLibera } from "./modulos-contratacao";
@@ -46,7 +49,9 @@ export const PRIMEIROS_PASSOS: readonly PassoCatalogo[] = [
   {
     id: "cliente",
     titulo: "Cadastrar o 1º cliente",
-    descricao: "Nome e WhatsApp bastam pra começar.",
+    // O que a ficha (NovoClienteDialog) EXIGE de verdade: CPF/CNPJ,
+    // qualificação e endereço. Prometer menos aqui é mentir no 1º dia.
+    descricao: "Nome, WhatsApp, CPF e endereço: a ficha completa alimenta contratos e procurações.",
     rota: "/clientes?novo=1",
     rotulo: "Cadastrar cliente",
     modulos: ["clientes", "processos"],
@@ -65,7 +70,7 @@ export const PRIMEIROS_PASSOS: readonly PassoCatalogo[] = [
     id: "processo",
     titulo: "Vigiar um processo",
     descricao: "Cole o CNJ e o robô confere todo dia.",
-    rota: "/processos?tab=novas-acoes&novo=1",
+    rota: "/processos?tab=movimentacoes&abrirMonitor=1",
     rotulo: "Vigiar agora",
     modulos: ["processos"],
     dependeDe: "cofre",
