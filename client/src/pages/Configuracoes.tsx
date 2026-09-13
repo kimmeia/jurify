@@ -5,6 +5,7 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -197,6 +198,19 @@ export default function Configuracoes() {
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
   const { data: convites, refetch: refetchConvites } = trpc.configuracoes.listarConvites.useQuery(undefined, { enabled: !!data });
+  // Deep-link dos Primeiros passos (?tab=equipe&novo=1): leva ao formulário
+  // de convite — o mesmo caminho do botão "Convidar colaborador".
+  useEffect(() => {
+    if (!data || tabAtiva !== "equipe") return;
+    if (new URLSearchParams(window.location.search).get("novo") !== "1") return;
+    const t = setTimeout(() => {
+      const el = document.getElementById("convite-email-input");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement | null)?.focus();
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   // Cargos personalizados criados pelo admin em /configuracoes (aba
   // Permissões). O select de "Cargo" do convite mostra os 3 default +
   // todos os custom (excluindo "Dono", "Gestor", "Atendente", "Estagiário"
@@ -828,7 +842,10 @@ export default function Configuracoes() {
                 {/* Header: contagem + botão Convidar */}
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-base font-bold tracking-tight">Equipe</h3>
+                    <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+                      Equipe
+                      <AjudaDaTela tarefa="convidar-equipe" />
+                    </h3>
                     <p className="text-[11px] text-muted-foreground">
                       <b className="text-foreground">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
                       {(equipeData?.extras ?? 0) > 0 && (
@@ -1715,10 +1732,15 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   // Estado do dialog Meta: além do tipo de canal, guarda canalId opcional.
   // canalId definido → editando canal específico (entre os múltiplos).
   // canalId undefined → conectando NOVO canal (caso de "+ Adicionar outro").
+  // Deep-link dos Primeiros passos (?tab=canais&novo=1): abre o diálogo de
+  // conectar um WhatsApp novo, o mesmo do card "Conectar".
   const [metaDialog, setMetaDialog] = useState<{
     type: "whatsapp" | "instagram" | "messenger";
     canalId?: number;
-  } | null>(null);
+  } | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("tab") === "canais" && p.get("novo") === "1" ? { type: "whatsapp" } : null;
+  });
   // Dialog separado: cadastro manual de WhatsApp Cloud API. Bypassa o
   // Embedded Signup (usado quando OAuth tá bloqueado — App Review pendente,
   // BM dona do app coincide com a dos números, etc).
@@ -1854,7 +1876,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       {/* Header da aba */}
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
+          <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+            Canais de comunicação
+            <AjudaDaTela tarefa="conectar-whatsapp" />
+          </h3>
           <p className="text-[11px] text-muted-foreground">
             {canaisPrincipais.length} canais disponíveis ·
             <b className="text-success-fg ml-1">{totalCanaisConectados} conectados</b>

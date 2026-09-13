@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.746 testes verdes** (12/09, depois das entregas do dia, da correção da IA, das travas D-13/D-15 e do merge do develop; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.944 testes verdes** (13/09, em develop e main com o motor próprio fase 1 e a Central de ajuda; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -102,9 +102,11 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 12. **Backup em dois níveis, os dois furados:** o da plataforma **nunca termina**
     em banco de tamanho real (**D-14**), e no do escritório **20 tabelas ficam de
     fora** porque a trava que deveria impedir isso tem um ponto cego (**D-2**).
-13. **A venda promete o que o produto não entrega, e o pior é a cobertura de
-    tribunais: o motor conhece 16, e TJSP e todos os TRTs ficam de fora.** Um
-    escritório trabalhista ou paulista não vigia um único processo. Junto: Instagram
+13. **A venda promete o que o produto não entrega, e o pior era a cobertura de
+    tribunais: o motor conhecia 16, e TJSP e todos os TRTs ficavam de fora.**
+    **Em 12–13/09 a Justiça do Trabalho entrou** (TRT2 e TRT15 por consulta
+    pública, os outros 22 TRTs com credencial em teste — seção 15.1.1); TJSP
+    segue fora, e nada disso foi comprovado em portal real. Junto: Instagram
     vendido em três lugares sem receber uma mensagem, armazenamento e número de
     WhatsApp vendidos sem trava, e o plano "Sob medida" entregando menos que o
     Escala. Seção 15.
@@ -135,7 +137,7 @@ Ordenado por dano × prazo × esforço, não por dificuldade.
 | 6 | **Parar a faxina que apaga parcelas com vencimento a mais de 1 ano** | quem parcelou em 24× já está perdendo parcelas do Financeiro (seção 10.1) |
 | 7 | **Tratar chargeback e estorno do Asaas** | o dinheiro sai da conta e o painel não muda; a disputa tem prazo de 150 dias (seção 5.4) |
 | 8 | **Honrar o `user_preferences` da Meta** | é o opt-out que o cliente faz dentro do WhatsApp. O projeto já levou **dois** avisos de spam, e a origem do consentimento que temos gravada ninguém consegue ler (seções 5.3.1 e 11.4) |
-| 9 | **Decidir o que fazer com a cobertura de tribunais** | a venda diz "monitora processos" sem ressalva e o motor não conhece TJSP nem nenhum TRT. Ou muda o texto, ou muda a cobertura — mas não dá pra vender assim (seção 15.1) |
+| 9 | ~~Decidir o que fazer com a cobertura de tribunais~~ **decidido e em andamento** | o dono escolheu as duas coisas: texto honesto (feito 12/09) e ampliar o motor (fase 1 na branch, 13/09 — seção 15.1.1). Falta o que só ele faz: testar nos portais |
 | 10 | **Completar o "excluir cliente"** | ele deixa 5 tabelas intactas — telefone, CNJ, acordo, pergunta à IA — e os arquivos no disco, dizendo que apagou. É a ferramenta com que o escritório cumpre pedido de exclusão do cliente dele (seções 16.1 e 16.2) |
 | 11 | ~~Validar o cargo em `atribuirCargo`~~ **feito 12/09** | `atribuirCargo` recusa cargo de outro escritório (NOT_FOUND) e `checkPermission` ignora cargo alheio, caindo no cargo pelo nome (item **D-15**) |
 | 12 | **Corrigir o detector de cobrança duplicada** | não acha duplicata de valor redondo, que é o valor mais comum em honorário (item **D-1**) |
@@ -159,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.746 verdes, 390 arquivos** (12/09, depois de Instagram, tribunais, Sob medida, cancelamento, helper da Anthropic, D-13/D-15 e o merge do develop; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.944 verdes, 398 arquivos** (13/09, em develop e main com o motor fase 1 e a Central de ajuda; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -203,7 +205,7 @@ A coluna **estado** significa:
 | Atendimento (WhatsApp + IG) | completo na tela | ligar por telefone está desligado com trava de teste; a operação segue aberta na API (**D-4**) | sim |
 | Funil Kanban | não auditado | — | sim |
 | Agenda e Tarefas | parcial | lembrete por e-mail e WhatsApp desabilitado com "em breve" (decisão consciente) | sim |
-| Monitoramento de Processos | ligado para 16 tribunais no código, **comprovado em campo só no TJCE** (seção 9.2) | validação real nos outros 15 | sim |
+| Monitoramento de Processos | ligado para 16 tribunais com credencial + 3 por consulta pública + 24 TRTs em teste (na branch, 13/09), **comprovado em campo só no TJCE** (seções 9.2 e 15.1.1) | validação real nos outros; TJSP (e-SAJ) ainda sem adapter | sim |
 | SmartFlow (automação) | **completo** — os 32 tipos de bloco têm executor de verdade (conferido) | — | sim |
 | Agentes IA | não auditado | cobrança por uso não implementada (`router-agente-chat.ts`, único TODO do repo) | sim |
 | Cálculos Jurídicos | parcial | Tributário é rota viva que abre um cartão vazio, mas **nenhum caminho de tela leva até ela** (**D-7**) | sim |
@@ -1459,6 +1461,11 @@ olhando um painel que mente para ele.**
    do servidor liga **exclusivamente** por variável de ambiente
    (`SENTRY_DSN_BACKEND`), e o painel exibe "Sentry conectado" com base em outra
    coisa. Ou seja: é possível — e provável — que o monitoramento de erro esteja
+   **13/09:** a Visão rápida de Saúde passou a AFIRMAR a captura: `adminErros.listar`
+   devolve `capturaConfigurada` = `capturaSentryConfigurada(process.env)`
+   (`SENTRY_DSN_BACKEND || SENTRY_DSN`, a mesma régua de `initSentry`) e a linha
+   "Erros no sistema" fica âmbar "não dá pra afirmar" enquanto nenhuma das duas
+   existir (seção 18).
    **desligado** enquanto a tela garante que está ligado. Isso fecha o círculo com
    o JurisIA, que não tem Sentry nenhum: o erro não aparece em lugar algum.
    *(crítico)*
@@ -1782,18 +1789,25 @@ um texto que o cliente lê antes de pagar com o código que atende aquilo depois
 
 ### 15.1 O mais grave: a cobertura de tribunais
 
-A comparação da landing diz **"Monitora processos e novas ações por CPF/CNPJ com
+> **Estado em 13/09:** o texto da venda ficou honesto em 12/09 (seção 15.4.1) e o
+> motor ganhou a Justiça do Trabalho em 12–13/09 (seção 15.1.1, mergeado em
+> develop e main em 13/09, sem comprovação em portal). O diagnóstico abaixo é o de
+> 12/09 e continua valendo para o TJSP.
+
+A comparação da landing dizia **"Monitora processos e novas ações por CPF/CNPJ com
 motor próprio"**, sem uma linha de ressalva. Os três cartões de plano vendem
 **"Vigia 300 / 1.000 / 2.500 processos"**.
 
-O motor conhece **16 tribunais**. Conferi contando o registro:
+O que o motor conhece hoje (fonte: `coberturaTribunais()` em
+`shared/tribunais-pje.ts`, que alimenta todos os textos):
 
-| cobertos | quais |
-|---|---|
-| 12 estaduais | CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR |
-| 4 federais | TRF1, TRF2, TRF3, TRF6 |
+| caminho | quais | comprovado em campo |
+|---|---|---|
+| com credencial no Cofre | 12 TJs (CE, DF, MA, MG, MT, PA, PB, PE, RJ, RN, RO, RR) e TRF1, TRF2, TRF3, TRF6 | só o TJCE (o TJMT teve login validado pelo dono em 31/08) |
+| consulta pública, sem credencial | TRF5, TRT2, TRT15 | nenhum (os adapters dos TRTs nunca abriram o portal) |
+| em teste, com credencial | TRT1 a TRT24, 1º e 2º grau | nenhum; endereços deduzidos do padrão histórico do PJe-JT |
 
-**Não estão na lista: TJSP e todos os TRTs.**
+**Fora: TJSP** (e-SAJ; adapter é a próxima fase) — e os demais estaduais.
 
 Isso não é um detalhe de cobertura. São Paulo é o maior tribunal do país, e os TRTs
 são a Justiça do Trabalho inteira. Um escritório trabalhista que assinar o plano hoje
@@ -1805,6 +1819,70 @@ lugar.
 E há a camada de baixo, da seção 5.7: dos 16 que estão na lista, o endereço de seis
 deles é montado com o padrão do TJCE e provavelmente está errado. Então o número
 realmente comprovado continua sendo **um** pelo código — **dois** contando o TJMT, que o dono validou com login real em 31/08 (relato dele no CLAUDE.md; o sistema não guarda esse resultado fora da grade do Cofre em produção, que é a fonte a conferir antes de publicar qualquer número).
+
+### 15.1.1 Motor próprio — fase 1 (12–13/09), em produção, aguardando validação em campo
+
+Origem: o dono, 12/09 — *"quero que crie logo o motor, nada de DataJud, processos
+lá têm atrasos de meses"*. Três frentes em worktrees, integradas em 13/09 e
+**mergeadas em develop e main em 13/09 ("pode mergear")**. Nada dela pôde ser
+conferido daqui (o ambiente não alcança portal nenhum): a validação é nos portais,
+pelo dono, na ordem abaixo.
+
+O que mudou:
+- **Despachante** (`consultarProcesso` em `server/processos/adapters/index.ts`):
+  um lugar só decide o caminho pelo tribunal do CNJ. Consulta pública quando
+  existe adapter aberto (vence mesmo com sessão — o caminho com credencial dos
+  TRTs é candidato não comprovado e o aberto não pede login); senão PJe com a
+  config DO tribunal (antes o runner da aba Consultar chamava sem config e caía
+  sempre no TJCE — com credencial de outro estado a aba não funcionava); tribunal
+  do registro sem sessão dá "exige credencial no Cofre"; fora dos dois, a mesma
+  mensagem do router. O cron perdeu o `if (tribunal === 'trf5')` literal.
+- **Consulta pública**: `pje-trt.ts` (TRT2 e TRT15, adapter do spike do TRF5
+  reaproveitado), mapa `ADAPTERS_PUBLICOS` com import sob demanda; a lista
+  compartilhada `TRIBUNAIS_CONSULTA_PUBLICA_PJE` tem que bater com o mapa
+  (teste trava nos dois sentidos).
+- **Justiça do Trabalho com credencial**: os 24 TRTs entraram em `REGISTRO` e
+  `REGISTRO_G2` (`pdpjTrtConfig`, `/primeirograu/` e `/segundograu/`), o Cofre
+  aceita `pje_trt1..24`, `sistemaCofrePorTribunal(trtN)` = nacional, processo
+  trabalhista passa a "ter motor próprio". Na shared são o balde `emTeste` de
+  `coberturaTribunais()`: o robô aceita e tenta, o número vendido
+  (`totalTribunaisVigiaveis`) não os conta.
+- **Busca por CPF/CNPJ** (`consultarPorDocumento`, `consultarDocumento`,
+  `criarMonitoramentoNovasAcoes`): só em tribunal que EXIGE credencial
+  (`tribunalRequerCredencial`) — consulta pública não tem busca por parte, e os
+  TRTs ficaram FORA do seletor de CPF de propósito (só o TJCE é comprovado). O
+  tribunal-base do monitor de novas ações passou a entrar na lista vigiada.
+- **Parsers puros** (`adapters/parse/`, `linkedom` como devDependency) com
+  fixtures sintéticas feliz/nenhum/layout-mudado — ainda NÃO substituem o
+  `page.evaluate` do adapter de produção: precisam de HTML real salvo de um
+  portal antes de assumir.
+- **Textos**: `bulletVigiaPlano` → "12 TJs e 4 TRFs com credencial; TRF5, TRT2 e
+  TRT15 sem credencial; outros 22 TRTs em teste — TJSP ainda não"; migration
+  0227 troca o bullet dos 3 planos (só onde o texto ainda é o da 0223; editado
+  no painel fica). Aba Consultar e guia usam `textoConsultaNaHora()`.
+- **Amarras**: `adapters/index.test` (14), `pje-trt.test` (5),
+  `parse/pje-lista.test` (15), `motor-proprio-despachante` (20),
+  `processos-consulta-publica-router` (15), bloco PJe-JT em
+  `tribunais-pdpj.test` (12) — 29 mutações vermelhas
+  (`scratchpad/mutar-motor-despachante.py`, `mutar-trt.py`).
+
+**Só o dono valida (ordem sugerida):** (1) rodar a auditoria de portais do
+painel admin com os alvos `trt2-1g/2g` e `trt15-1g/2g` — diz se o PJe-JT
+redireciona pro SSO do PDPJ antes de gastar login; (2) consulta real no TRT2 e
+TRT15 pela aba Consultar, sem credencial; (3) aba Consultar num tribunal do
+registro fora do TJCE (TJMG, TJRJ, TRF1) com credencial; (4) "Testar tudo" no
+Cofre — atenção: com credencial nacional passou a ter **78 combinações** (24
+TRTs × 2 graus a mais), sem teto de tempo; "Parar" continua funcionando.
+
+**Ficou de fora, anotado (tela → precisa de mockup):** a tela não manda
+`codigoTribunal` na busca por CPF (o servidor aceita; o padrão é a sede);
+`ImportarAdvboxDialog.tsx` escreve "consulta pública (TRF-5…)" em texto fixo em
+três lugares; `GradeTribunais.tsx` diz "12 estados" no cabeçalho; o rótulo
+derivado "PJe — todos os estados (N)" conta TRFs e TRTs como estados;
+`consultarCNJSincrono` ("Carregar detalhes" das novas ações) não passa pelo
+despachante; filtro por segmento (TJ/TRF/TRT) na grade do "Testar tudo".
+**Próxima fase**: TJSP (e-SAJ, `esaj_tjsp`), a partir do spike `EsajTjceScraper`
+(login + busca prontos, extração não).
 
 ### 15.2 Limites vendidos que o código não impõe
 
@@ -2272,43 +2350,116 @@ certo:
 - **O histórico de movimentações tem teto** (`.limit(50)`). O problema do 17.3 é o
   laço, não a consulta.
 
-## 18. Manual de uso e painel dos robôs — proposta entregue (12/09), aguardando decisão
+## 18. Central de ajuda — ENTREGUE e mergeada em develop e main (13/09)
 
 Origem: o dono, olhando `/admin/saude`: *"esse robô funciona? está muito
 complexo. O princípio é ser fácil de usar. Precisamos criar um manual para
-ensinar a usar"* — e depois *"vamos fazer"*. Pela regra dele, nasceu como mockup
-navegável: **`mockup-central-de-ajuda.html`** (raiz do repo, 6 abas, fontes
-embutidas, sem referência externa; conferido em 1280px e 400px).
+ensinar a usar"* → *"vamos fazer"* → mockup `mockup-central-de-ajuda.html`
+(raiz do repo) → *"pode fazer"* (12/09), com as recomendações: página própria
+`/ajuda`; prints a partir do app real; "Primeiros passos" só pro dono; a ordem
+proposta dos 5 passos; Visão rápida em 3 linhas sem remover nada. **Mergeada em
+develop e main em 13/09 ("pode mergear"), junto com o motor fase 1.**
+Atenção: o mockup foi desenhado na paleta antiga (violeta/Poppins); a
+implementação segue o app (marinho, Inter, componentes de `components/ui`).
 
-Fatos conferidos no código que sustentam a proposta:
-- **Não existe botão de ajuda em lugar nenhum do app** — nem no `AppLayout`
-  (barra lateral tem Buscar ⌘K, avatar, Configurações, Sair), nem rota `/ajuda`.
-  A única orientação é o `GuiaProcessual` (só pra quem tem o pacote processual)
-  e dicas soltas em 6 telas, sem sistema.
-- **O robô de jornada não tira print de tela** (nenhum `screenshot(` em
-  `tests/e2e`). Prints do manual saem feitos à mão; ensinar o robô é trabalho a
-  mais (decisão 2).
-- `/admin/saude` tem **6 abas** (Visão rápida, Erros, Robô auditor, Robô de
-  jornada, E-mails, Auditoria), ~20 números e vocabulário de programador
-  (`runId`, latência em ms, "invariantes", "shadow mode"). Não responde
-  "funciona?" em lugar nenhum. O "0 erros abertos" não prova nada enquanto o
-  `SENTRY_DSN_BACKEND` não estiver confirmado (seção 11.1).
+### 18.1 O que existe agora
 
-A proposta, em três camadas: (1) **Central de ajuda por tarefa** em `/ajuda`
-(botão "Ajuda" na barra lateral + "?" no topo de cada tela; 20 tarefas escritas
-do jeito que o advogado pensa, com print da tela real, passo a passo, "se não deu
-certo" e botão "Abrir a tela"; fora do porteiro de módulos); (2) **Primeiros
-passos** no Dashboard do dono (5 passos com marcação automática, some ao
-completar — o `GuiaProcessual` esticado pra todos os planos); (3) vídeos curtos
-depois. E o painel dos robôs com a **Visão rápida em 3 linhas** (semáforo +
-frase + "o que fazer"), abas técnicas dobradas em "detalhes técnicos" — **nada
-removido**.
+- **Central `/ajuda` e `/ajuda/:tarefa`** (`client/src/pages/Ajuda.tsx`,
+  `client/src/pages/ajuda/`): busca por título e palavra-chave, tarefas
+  agrupadas nos MESMOS grupos do menu lateral (derivado de `GRUPOS_MENU`),
+  faixa "Primeiros passos" (só dono, fica mesmo depois de completo — é onde se
+  revê), rodapé "Falar com a gente" pelo `subscription.contatoComercial`
+  (nunca número cravado). Rotas dentro do app pelo wrapper `ClientAreaSoTermos` (AppLayout +
+  `TermosGate`, sem porteiro de módulo e sem guarda de assinatura); sem o módulo a página avisa e segue
+  legível (`contratoLibera`, a mesma régua do `ModuloGuard`, por
+  `modulosDaRota`). Botão **Ajuda** no rodapé da barra lateral (ao lado do
+  Buscar ⌘K), item "Ajuda" no menu do avatar do modo atendimento; `/ajuda`
+  liberada no modo focado do celular.
+- **Conteúdo** em `client/src/pages/ajuda/tarefas.ts` (fonte única, dados
+  tipados): 5 tarefas completas — Conectar o WhatsApp · Cadastrar um cliente ·
+  Vigiar um processo · Convidar alguém e dar permissões · Cobrar um cliente
+  (boleto ou Pix) — e 16 títulos "em breve" (sem link). Regra de escrita: todo
+  rótulo de tela vai entre «» e TEM que existir, letra por letra, no arquivo
+  da tela (`arquivoTela` + `arquivosApoio`) — o teste trava; foi isso que
+  corrigiu o mockup («Testar login» → «Validar», «Monitoramentos» →
+  «Monitoramento», o Novo Cliente exige qualificação e endereço).
+- **Prints reais** em `client/public/ajuda/*.png` (9, ≤ 250 KB, capturados
+  com Playwright do app rodando com escritório de demonstração fictício).
+  `serveStatic` ganhou `redirect: false` — com a pasta `dist/public/ajuda`
+  existindo, `GET /ajuda` devolvia 301 pra `/ajuda/`. Falta o print do
+  passo "Conectar com Facebook" (precisa de app Meta configurado).
+- **"?" ao lado do título** (`AjudaDaTela`) em Processos, Clientes,
+  Configurações → Equipe, Configurações → Canais e Financeiro, cada um
+  apontando pra tarefa da tela.
+- **Primeiros passos** (`server/escritorio/router-ajuda.ts`, procedure
+  `ajuda.primeirosPassos`; regras puras em `shared/primeiros-passos.ts`;
+  bloco `client/src/pages/dashboards/PrimeirosPassos.tsx`): 5 passos com
+  detecção por escritório — WhatsApp = canal `whatsapp_api` conectado com
+  telefone (régua da aba Canais); cliente = contato do escritório que NÃO
+  nasceu de mensagem de WhatsApp; Cofre = credencial ativa/validando;
+  processo = monitoramento de movimentações ativo; equipe = 2º colaborador
+  ativo ou convite enviado. Dono = `cargo === "dono"` do vínculo (mesma regra
+  do TermosGate); não-dono recebe lista vazia sem consulta nenhuma. Passo de
+  módulo não contratado sai da lista e do total. Cada passo abre o fluxo real
+  por deep-link (`?novo=1` — Clientes e Canais passaram a ler; Equipe rola e
+  foca o convite). Bloco some quando completo; a variante processual do
+  Dashboard NÃO monta o bloco (o `GuiaProcessual` segue lá).
+- **Saúde do sistema → Visão rápida em 3 linhas** (`shared/saude-semaforos.ts`:
+  `semaforoErros`, `semaforoAuditor`, `semaforoJornada`, `achadosRepetidos`,
+  `jornadaNaoConfiavel`; montagem query → semáforo também pura): semáforo +
+  frase + botão. Erros: o painel passou a AFIRMAR a captura do Sentry
+  (`capturaConfigurada` em `adminErros.listar`, lido do env do servidor —
+  fecha a observação da seção 11.1 "diz conectado sem conferir"); leitura do
+  Sentry falhando nunca vira verde. Auditor: sem rodar há mais de 36 h =
+  vermelho; achados repetidos (comparados pelas regras violadas, ou pelo
+  número quando o histórico não as traz) viram card "Precisa de você" na
+  Visão Geral. Jornada: menos de 2 s por tela = vermelho "resultado não
+  confiável" com "Rodar de novo" — e selo "NÃO CONFIÁVEL" no card da aba.
+  Tudo que existia (4 cards, Últimos erros, Últimas rondas, Fila de
+  tribunais) continua, dobrado em "Detalhes técnicos".
 
-Decisões pendentes do dono (recomendação entre parênteses): 1 · Central em
-página própria ou painel deslizante (página); 2 · prints à mão agora ou robô
-tirando (à mão pra lançar, robô na fatia 4); 3 · Primeiros passos só pro dono
-(sim); 4 · quais 5 passos e a ordem (WhatsApp → 1º cliente → Cofre → vigiar
-processo → convidar equipe); 5 · simplificar a Visão rápida (sim). Fatias:
-1 Central + botão + 5 tarefas · 2 Primeiros passos · 3 robôs em 3 linhas ·
-4 mais 15 tarefas + prints pelo robô + vídeos. **Nada implementado até o
-"pode fazer".**
+### 18.2 Como foi feito e conferido
+
+Três frentes em worktrees (commits 500ed7e, 1ddb8f4, 6952acb), integradas em
+1563b95; 26 achados de três revisores independentes (tenancy, fidelidade ao
+mockup, qualidade das amarras), cada um julgado por 3 céticos — 25
+confirmados, 1 refutado (o card "Precisa de você" não pisca: as seis queries
+saem num único lote do `httpBatchLink`) — e corrigidos por área (7992a28,
+d2e6e28, 1d3b3c4). Verificação final no worktree: `tsc` limpo, **5.944
+testes em 398 arquivos**, `vite build` ok, árvore limpa. Dois prints foram
+RECAPTURADOS porque o seed de demonstração carregava um telefone real
+(trocado por fictício em `scratchpad/estudo-telas/povoar.sql`; amarra
+confere). Amarras: `central-de-ajuda` (rotas derivadas do
+App.tsx, rótulos no arquivo da tela, prints existem e são renderizados, botão
+e «?» no lugar), `primeiros-passos` (WHERE renderizado com `escritorioId` em
+cada consulta, dono/não-dono, cadeado, módulo, rotas), `saude-semaforos`
+(regras e bordas) — mutações em `scratchpad/mutar-central-ajuda.py`,
+`mutar-primeiros-passos.py`, `mutar-saude-semaforos.py`.
+
+### 18.3 O que fica pra decisão do dono
+
+- O diálogo Novo Cliente exige CPF, qualificação e endereço; o manual diz a
+  verdade da tela. Se "nome e WhatsApp bastam" for a regra desejada, é
+  mudança no diálogo (mockup antes).
+- Lead que chega sozinho pelo WhatsApp não conta como "1º cliente cadastrado"
+  (decisão do integrador); convite expirado conta como "equipe convidada".
+- A promessa "sem risco de banimento" saiu do manual, mas continua no cartão
+  WhatsApp Business de Configurações e no diálogo da Meta — texto de produto,
+  mockup antes de mudar. Hoje o manual diz uma coisa e a tela outra.
+- **Dado real no repositório público**: o telefone de um cliente real ainda
+  aparece em `shared/telefone.ts`, testes, docs de auditoria e no CLAUDE.md
+  (caso Tirzah), além do histórico do git com os PNG antigos. Esta entrega
+  fechou só o print servido pelo app. Varrer o resto é decisão do dono.
+- Conferência visual no app rodando: feita pelo integrador em 13/09 (11 fotos,
+  1440px e 390px, nenhuma rola de lado; enviadas ao dono). O print do passo
+  "Conectar com Facebook" continua faltando (precisa de app Meta configurado).
+  Dois pontos vistos no celular, ambos comportamento ANTERIOR a esta entrega:
+  o Dashboard do dono em 390px abre direto no modo Atendimento (então o bloco
+  "Primeiros passos" só aparece no computador — a faixa da Central cobre o
+  celular), e o cabeçalho fixo desse modo escreve "Atendimento" mesmo com a
+  Central aberta embaixo.
+- Print de Canais mostra um número já conectado (ilustrativo).
+- Dentro da dobra "Detalhes técnicos", a lista antiga ainda usa a heurística
+  de 60 s pra jornada suspeita; as 3 linhas usam 2 s/tela. Unificar é
+  remoção da antiga.
+- Fatia 4 (mais 15 tarefas, prints pelo robô, vídeos) não começou.

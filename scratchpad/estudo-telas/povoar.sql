@@ -31,7 +31,7 @@ DELETE FROM agendamentos WHERE escritorioId = @esc;
 -- ── clientes ────────────────────────────────────────────────────────────
 -- As 5 fichas do seed de staging ([E2E-SEED]) são reescritas com nome de
 -- gente; as outras 5 entram novas. Assim nada depende de id.
-UPDATE contatos SET nomeContato='Maria Aparecida Nogueira de Sousa', telefoneContato='(85) 99796-5706',
+UPDATE contatos SET nomeContato='Maria Aparecida Nogueira de Sousa', telefoneContato='(85) 99999-0001',
   emailContato='maria.nogueira@gmail.com', cpfCnpj='810.442.313-04', origemContato='whatsapp',
   estagioContato='cliente', responsavelIdContato=@dono, tagsContato='Trabalhista'
   WHERE escritorioIdContato=@esc AND nomeContato LIKE '%João Silva%';
@@ -56,11 +56,11 @@ DELETE FROM contatos WHERE escritorioIdContato=@esc AND nomeContato IN (
   'José Ribamar da Silva Filho','Laticínios Serra Azul S/A','Raimundo Nonato de Alencar',
   'Cleide Farias do Nascimento','Tirzah Barbosa de Lima');
 INSERT INTO contatos (escritorioIdContato,nomeContato,telefoneContato,emailContato,cpfCnpj,origemContato,estagioContato,responsavelIdContato,tagsContato,createdAtContato) VALUES
- (@esc,'José Ribamar da Silva Filho','(85) 98811-1508','ribamar.silva@gmail.com','702.338.115-88','whatsapp','cliente',@dono,'Consumidor',NOW()-INTERVAL 40 DAY),
+ (@esc,'José Ribamar da Silva Filho','(85) 99999-0002','ribamar.silva@gmail.com','702.338.115-88','whatsapp','cliente',@dono,'Consumidor',NOW()-INTERVAL 40 DAY),
  (@esc,'Laticínios Serra Azul S/A','(85) 3266-7010','juridico@serraazul.com.br','09.554.221/0001-33','site','cliente',@gestor,'Cível',NOW()-INTERVAL 120 DAY),
  (@esc,'Raimundo Nonato de Alencar','(85) 99455-2277','raimundo.alencar@gmail.com','338.201.774-90','telefone','cliente',@atend,'Trabalhista',NOW()-INTERVAL 15 DAY),
  (@esc,'Cleide Farias do Nascimento','(88) 99733-4412',NULL,NULL,'whatsapp','lead',NULL,NULL,NOW()-INTERVAL 2 DAY),
- (@esc,'Tirzah Barbosa de Lima','(85) 98811-1508',NULL,NULL,'whatsapp','lead',NULL,NULL,NOW()-INTERVAL 1 DAY);
+ (@esc,'Tirzah Barbosa de Lima','(85) 9999-0002',NULL,NULL,'whatsapp','lead',NULL,NULL,NOW()-INTERVAL 1 DAY);
 
 -- atalhos por nome, para o resto do arquivo não usar id fixo
 SET @maria  = (SELECT id FROM contatos WHERE escritorioIdContato=@esc AND nomeContato='Maria Aparecida Nogueira de Sousa');
@@ -164,12 +164,12 @@ INSERT INTO canais_integrados (escritorioId,tipoCanal,nomeCanal,statusCanal,tele
 SET @canal = LAST_INSERT_ID();
 
 INSERT INTO conversas (escritorioIdConv,contatoIdConv,canalIdConv,atendenteIdConv,statusConv,prioridadeConv,assuntoConv,chatIdExterno,ultimaMensagemAt,ultimaMensagemPreview,atendimentoIniciadoEmConv,createdAtConv) VALUES
- (@esc,@tirzah,@canal,NULL,'aguardando','normal',NULL,'558588111508',NOW()-INTERVAL 4 MINUTE,'Boa tarde! Vi o anúncio de vocês, queria falar sobre uma rescisão',NOW()-INTERVAL 9 MINUTE,NOW()-INTERVAL 9 MINUTE),
+ (@esc,@tirzah,@canal,NULL,'aguardando','normal',NULL,'558599990002',NOW()-INTERVAL 4 MINUTE,'Boa tarde! Vi o anúncio de vocês, queria falar sobre uma rescisão',NOW()-INTERVAL 9 MINUTE,NOW()-INTERVAL 9 MINUTE),
  (@esc,@cleide,@canal,@atend,'em_atendimento','alta','Auxílio-doença negado','558897334412',NOW()-INTERVAL 21 MINUTE,'Então eu levo os exames amanhã de manhã?',NOW()-INTERVAL 2 HOUR,NOW()-INTERVAL 2 HOUR),
- (@esc,@maria,@canal,@dono,'em_atendimento','normal','Audiência de instrução','558597965706',NOW()-INTERVAL 1 HOUR,'Dra., confirmo presença na audiência de amanhã',NOW()-INTERVAL 3 HOUR,NOW()-INTERVAL 3 HOUR),
+ (@esc,@maria,@canal,@dono,'em_atendimento','normal','Audiência de instrução','558599990001',NOW()-INTERVAL 1 HOUR,'Dra., confirmo presença na audiência de amanhã',NOW()-INTERVAL 3 HOUR,NOW()-INTERVAL 3 HOUR),
  (@esc,@antonia,@canal,@atend,'aguardando','urgente','Entrada do acordo em atraso','558897331201',NOW()-INTERVAL 35 MINUTE,'Consigo pagar na sexta, pode ser?',NOW()-INTERVAL 50 MINUTE,NOW()-INTERVAL 50 MINUTE),
  (@esc,@edilson,@canal,@gestor,'resolvido','normal','Perícia do INSS','558599120344',NOW()-INTERVAL 1 DAY,'Obrigado, doutor! Até amanhã então',NOW()-INTERVAL 1 DAY,NOW()-INTERVAL 1 DAY),
- (@esc,@ribamar,@canal,@dono,'em_atendimento','alta','Sentença — recurso','558598111508',NOW()-INTERVAL 2 HOUR,'Eu quero recorrer sim, o valor ficou muito baixo',NOW()-INTERVAL 5 HOUR,NOW()-INTERVAL 5 HOUR);
+ (@esc,@ribamar,@canal,@dono,'em_atendimento','alta','Sentença — recurso','5585999990002',NOW()-INTERVAL 2 HOUR,'Eu quero recorrer sim, o valor ficou muito baixo',NOW()-INTERVAL 5 HOUR,NOW()-INTERVAL 5 HOUR);
 
 SET @cv_tirzah = (SELECT id FROM conversas WHERE escritorioIdConv=@esc AND contatoIdConv=@tirzah LIMIT 1);
 SET @cv_cleide = (SELECT id FROM conversas WHERE escritorioIdConv=@esc AND contatoIdConv=@cleide LIMIT 1);

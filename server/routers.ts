@@ -46,6 +46,7 @@ import { comissoesRouter } from "./escritorio/router-comissoes";
 import { comissoesAgendaRouter } from "./escritorio/router-comissoes-agenda";
 import { despesasRouter } from "./escritorio/router-despesas";
 import { backupRouter } from "./escritorio/router-backup";
+import { ajudaRouter } from "./escritorio/router-ajuda";
 
 // Integrações
 import { twilioRouter } from "./integracoes/router-twilio";
@@ -181,6 +182,9 @@ export const appRouter = router({
 
   // Dashboard do utilizador
   dashboard: dashboardRouter,
+
+  // Central de ajuda — Primeiros passos do dono (core, nunca bloqueia)
+  ajuda: ajudaRouter,
 
   // Administração do sistema (admin only)
   admin: adminRouter,

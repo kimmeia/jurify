@@ -1,15 +1,15 @@
 /**
  * Orquestrador do motor próprio em produção.
  *
- * Recebe pedidos via `consultarCNJ` (router-processos), executa
- * o adapter PJe TJCE em background, cacheia o resultado e expõe
- * shape `ResultadoScraper` direto pro frontend.
+ * Recebe pedidos via `consultarCNJ` (router-processos), executa o adapter
+ * do tribunal em background (quem escolhe é o despachante em `./adapters`),
+ * cacheia o resultado e expõe shape `ResultadoScraper` direto pro frontend.
  *
  * Cache: memória do processo (TTL 30min). Sprint 2+ pode mover pra Redis.
  */
 
 import { randomUUID } from "node:crypto";
-import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { consultarPorDocumento, consultarProcesso } from "./adapters";
 import { parseCnjTribunal } from "./cnj-parser";
 import type { ResultadoScraper } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { lerPolo, paraLadoJudit } from "../../shared/polo-parte";
@@ -99,7 +99,8 @@ export function ehRequestMotorProprio(requestId: string): boolean {
 
 export function iniciarConsultaMotorProprio(
   cnj: string,
-  storageStateJson: string,
+  /** null = consulta pública (TRF5, TRT2, TRT15): sem credencial, sem sessão. */
+  storageStateJson: string | null,
   /** Quando informado, runner marca credencial como "expirada" se scrape
    *  falhar por motivo de sessão (heurística em `erroSugereSessaoCaida`). */
   credencialId?: number,
@@ -134,8 +135,9 @@ export function iniciarConsultaMotorProprio(
 /**
  * Inicia consulta por documento (CPF/CNPJ) no motor próprio.
  *
- * Hoje só funciona pro TJCE (único tribunal com adapter de CPF implementado
- * via `consultarTjcePorCpf`). Cobrança do crédito é responsabilidade do caller.
+ * Vale pra qualquer tribunal do registro do PJe (o despachante escolhe a
+ * config pelo `codigoTribunal`); comprovado em campo só no TJCE. Cobrança
+ * do crédito é responsabilidade do caller.
  */
 export function iniciarConsultaDocumentoMotorProprio(
   tipo: "cpf" | "cnpj",
@@ -175,19 +177,14 @@ async function executarConsultaDocumento(
 ): Promise<void> {
   const inicio = Date.now();
   try {
-    let resultado: ResultadoCpfShape;
-    if (codigoTribunal === "tjce") {
-      const r = await consultarTjcePorCpf(valor, storageStateJson);
-      resultado = {
-        ok: r.ok,
-        cnjs: r.ok ? r.cnjs : [],
-        latenciaMs: Date.now() - inicio,
-        mensagemErro: r.ok ? null : (r as { mensagemErro?: string }).mensagemErro ?? "Erro desconhecido",
-        categoriaErro: r.ok ? null : (r as { categoriaErro?: string }).categoriaErro ?? "outro",
-      };
-    } else {
-      throw new Error(`Adapter de documento pra ${codigoTribunal} não implementado`);
-    }
+    const r = await consultarPorDocumento(codigoTribunal, tipo, valor, storageStateJson);
+    const resultado: ResultadoCpfShape = {
+      ok: r.ok,
+      cnjs: r.ok ? r.cnjs : [],
+      latenciaMs: Date.now() - inicio,
+      mensagemErro: r.ok ? null : (r as { mensagemErro?: string }).mensagemErro ?? "Erro desconhecido",
+      categoriaErro: r.ok ? null : (r as { categoriaErro?: string }).categoriaErro ?? "outro",
+    };
 
     log.info(
       {
@@ -228,17 +225,12 @@ async function executarConsultaDocumento(
 async function executarConsulta(
   requestId: string,
   cnj: string,
-  storageStateJson: string,
+  storageStateJson: string | null,
   codigoTribunal: string,
   credencialId?: number,
 ): Promise<void> {
   try {
-    let resultado: ResultadoScraper;
-    if (codigoTribunal === "tjce") {
-      resultado = await consultarTjce(cnj, storageStateJson);
-    } else {
-      throw new Error(`Adapter motor próprio pra ${codigoTribunal} não implementado`);
-    }
+    const resultado: ResultadoScraper = await consultarProcesso(codigoTribunal, cnj, storageStateJson);
 
     log.info(
       {

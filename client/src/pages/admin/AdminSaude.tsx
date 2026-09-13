@@ -5,7 +5,15 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import {
+  montarSemaforosDaVisaoRapida,
+  type CorSemaforo,
+  type Semaforo,
+  type TipoAcaoSemaforo,
+} from "@shared/saude-semaforos";
 import AdminErros from "./AdminErros";
 import AdminRoboAuditor from "./AdminRoboAuditor";
 import AdminRoboJornada from "./AdminRoboJornada";
@@ -129,7 +137,61 @@ function FilaTribunais() {
   );
 }
 
+const BOLINHA: Record<CorSemaforo, string> = {
+  verde: "bg-success",
+  ambar: "bg-warning",
+  vermelho: "bg-danger",
+  cinza: "bg-muted-foreground/40",
+};
+
+const ROTULO_COR: Record<CorSemaforo, string> = {
+  verde: "tudo certo",
+  ambar: "atenção",
+  vermelho: "problema",
+  cinza: "sem dado",
+};
+
+/**
+ * Uma linha do painel: semáforo, frase em português e o botão "o que fazer".
+ * A frase vem pronta de `shared/saude-semaforos` — aqui só se desenha.
+ */
+function LinhaSemaforo({
+  semaforo,
+  pendente,
+  onAcao,
+}: {
+  semaforo: Semaforo;
+  pendente: boolean;
+  onAcao: (tipo: TipoAcaoSemaforo) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-start gap-3 px-4 py-3">
+      <span
+        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${BOLINHA[semaforo.cor]}`}
+        role="img"
+        aria-label={ROTULO_COR[semaforo.cor]}
+      />
+      <div className="min-w-0 flex-1 basis-56">
+        <p className="text-sm font-semibold text-foreground">{semaforo.titulo}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{semaforo.frase}</p>
+      </div>
+      {semaforo.acao && (
+        <Button
+          size="sm"
+          variant={semaforo.cor === "verde" ? "outline" : "default"}
+          className="shrink-0"
+          disabled={pendente}
+          onClick={() => onAcao(semaforo.acao!.tipo)}
+        >
+          {pendente ? "Rodando…" : semaforo.acao.rotulo}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
+  const utils = trpc.useUtils();
   const erros = trpc.adminErros.listar.useQuery(
     { status: "unresolved", limite: 25, pagina: 1 },
     { staleTime: 5 * 60_000, refetchOnWindowFocus: false, retry: false },
@@ -140,15 +202,60 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
   );
   const jornada = trpc.adminJornada.historico.useQuery(
     { limite: 4 },
-    { staleTime: 60_000, refetchOnWindowFocus: false, retry: false },
+    {
+      staleTime: 60_000,
+      refetchOnWindowFocus: false,
+      retry: false,
+      // "Rodar de novo" leva minutos: enquanto houver execução de pé, a linha
+      // se atualiza sozinha, como a aba do robô já faz.
+      refetchInterval: (q) => (q.state.data?.emAndamento ? 5_000 : false),
+    },
   );
   const emails = trpc.adminEmailLog.resumo.useQuery(undefined, {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
     retry: false,
   });
+  // Fechado por padrão (decisão 5 = A): as três linhas respondem "funciona?";
+  // os números continuam todos aqui dentro, pra quem precisar deles.
+  const [detalhes, setDetalhes] = useState(false);
+  const varrerAuditor = trpc.adminRoboAuditor.varrer.useMutation({
+    onSuccess: (r) => {
+      toast.success("Varredura do auditor concluída", {
+        description: `${r.resumo.achados} achado(s) em ${r.resumo.regrasExecutadas} regra(s)`,
+      });
+      utils.adminRoboAuditor.historico.invalidate();
+    },
+    onError: (e) => toast.error("Não deu pra rodar o auditor", { description: e.message }),
+  });
+  const rodarJornada = trpc.adminJornada.rodar.useMutation({
+    onSuccess: (r) => {
+      toast.success("Varredura de jornada iniciada", {
+        description: `Rodando contra ${r.baseUrl}. Leva alguns minutos — a linha se atualiza sozinha.`,
+      });
+      utils.adminJornada.historico.invalidate();
+    },
+    onError: (e) => toast.error("Não deu pra rodar o robô de jornada", { description: e.message }),
+  });
 
+  const agora = new Date();
   const issues = erros.data?.issues ?? [];
+  // Do payload das procedures às três frases: tudo na shared, testado com o
+  // formato real. Aqui só se entrega o que cada query devolveu.
+  const semaforos = montarSemaforosDaVisaoRapida({
+    erros: { data: erros.data, isError: erros.isError },
+    auditor: { data: auditor.data },
+    jornada: { data: jornada.data },
+    agora,
+  });
+  const executarAcao = (tipo: TipoAcaoSemaforo) => {
+    if (tipo === "aba_erros") irParaAba("erros");
+    else if (tipo === "aba_auditor") irParaAba("robo-auditor");
+    else if (tipo === "aba_jornada") irParaAba("robo-jornada");
+    else if (tipo === "rodar_auditor") varrerAuditor.mutate({});
+    else if (tipo === "rodar_jornada") rodarJornada.mutate();
+  };
+  const jornadaEmVoo = rodarJornada.isPending || jornada.data?.emAndamento === true;
   const errosAbertos = erros.data?.total ?? 0;
   const ultimoAuditor = (auditor.data?.varreduras ?? [])[0] ?? null;
   const ultimaJornada = (jornada.data?.varreduras ?? []).find((v: any) => v.status !== "rodando") ?? null;
@@ -182,6 +289,34 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardContent className="divide-y p-0">
+          {erros.isLoading ? (
+            <div className="px-4 py-3"><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <LinhaSemaforo semaforo={semaforos.erros} pendente={false} onAcao={executarAcao} />
+          )}
+          {auditor.isLoading ? (
+            <div className="px-4 py-3"><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <LinhaSemaforo semaforo={semaforos.auditor} pendente={varrerAuditor.isPending} onAcao={executarAcao} />
+          )}
+          {jornada.isLoading ? (
+            <div className="px-4 py-3"><Skeleton className="h-10 w-full" /></div>
+          ) : (
+            <LinhaSemaforo semaforo={semaforos.jornada} pendente={jornadaEmVoo} onAcao={executarAcao} />
+          )}
+        </CardContent>
+      </Card>
+
+      <Collapsible open={detalhes} onOpenChange={setDetalhes}>
+        <CollapsibleTrigger asChild>
+          <Button variant="ghost" size="sm" className="w-full h-auto justify-between gap-2 py-2 text-left whitespace-normal">
+            <span>Detalhes técnicos — os 4 números, últimos erros, rondas dos robôs e fila de tribunais</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${detalhes ? "rotate-180" : ""}`} />
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-4 pt-2">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
@@ -370,6 +505,8 @@ function VisaoRapida({ irParaAba }: { irParaAba: (aba: Aba) => void }) {
 
         <FilaTribunais />
       </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

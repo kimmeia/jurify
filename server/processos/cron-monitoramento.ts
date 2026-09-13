@@ -30,6 +30,7 @@ import {
 } from "../../drizzle/schema";
 import { recuperarSessao } from "../escritorio/cofre-helpers";
 import { consultarTjce, consultarTjcePorCpf } from "./adapters/pje-tjce";
+import { consultarProcesso, temAdapterPublico } from "./adapters";
 import { getConfigTribunal, tribunalRequerCredencial } from "./tribunais-pdpj";
 import { lerTribunaisDoMonitor, lerTribunaisBaseline } from "./monitor-tribunais";
 import { siglaDoTribunal } from "../../shared/tribunais-pje";
@@ -285,9 +286,11 @@ export async function pollarUmMonitoramentoMovs(
 
     if (!requerCred) {
       // ── Caminho consulta pública (sem cofre) ──
-      if (mon.tribunal === "trf5") {
-        const { consultarTrf5 } = await import("./adapters/pje-trf5");
-        resultado = await consultarTrf5(mon.searchKey);
+      // Quem sabe qual adapter aberto atende o tribunal é o despachante
+      // (TRF5, TRT2, TRT15…); aqui só se confere que existe um, pra falha
+      // de "tribunal sem adapter" continuar legível no diagnóstico.
+      if (temAdapterPublico(mon.tribunal)) {
+        resultado = await consultarProcesso(mon.tribunal, mon.searchKey, null, { teorMaximo });
       } else {
         log.warn(
           { tribunal: mon.tribunal, monId: mon.id },
