@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.975 verdes em 13/09/2026 (400 arquivos, ~1min30)
+pnpm test               # vitest (server/**/*.test.ts) — 5.976 verdes em 13/09/2026 (400 arquivos, ~1min30)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1521,7 +1521,14 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   ficaram: consulta pública vence a credencial quando existe; busca por CPF só
   onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
   Só o dono valida nos portais (ordem em ESTADO 15.1.1).
-- **Na branch, aprovado pelo dono em 13/09 ("menu aprovado")**: o menu lateral
+- **Mergeado em develop e main (13/09, "menu aprovado" + "merge"), e o TOM
+  corrigido em seguida**: ele viu no ar e disse "esse roxo tá muito forte,
+  algo igual o do Devular está bom... mantenha a logo". O escuro do menu
+  passou a ser o navy do Devular (`#1B2138`, tirado de `app/lib/core/theme.dart`
+  do repositório dele, anexado à sessão), com texto `#C7CDE0` e superfície
+  `#252D49`; o violeta ficou só na marca e no realce do item aberto — a regra
+  de lá é "navy é a base, o acento entra com moderação". Histórico abaixo.
+- **Versão anterior do mesmo dia**: o menu lateral
   veste a cor da logo — fundo roxo-quase-preto, «Jurid» em branco puro, «Flow»
   e o item aberto em violeta; o marinho segue sendo a cor de ação do CONTEÚDO.
   O violeta exato da logo não passa de contraste sobre o menu (2,89:1 antes,

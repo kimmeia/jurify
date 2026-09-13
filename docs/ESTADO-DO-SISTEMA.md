@@ -56,7 +56,7 @@ Não é burocracia. É o custo medido de não ter tido a regra:
 
 ## 1. O retrato em dezesseis linhas
 
-1. O sistema é grande e está saudável na base: **5.975 testes verdes** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; eram 5.570 no início da auditoria), tipos
+1. O sistema é grande e está saudável na base: **5.976 testes verdes** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; eram 5.570 no início da auditoria), tipos
    limpos, 126 tabelas, 70 áreas de API, 72 telas.
 2. A engenharia tem hábitos bons e raros: travas de teste ("amarras") por assunto,
    comentários que explicam o *porquê*, e listas de exclusão explícitas. O
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.975 verdes, 400 arquivos** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **5.976 verdes, 400 arquivos** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -2536,7 +2536,21 @@ paleta levou a marca junto e ela virou azul; em 04/09 ela voltou ao violeta
 por um token só dela (`--marca`), mas um passo mais clara, para continuar
 legível sobre o menu azul.
 
-### 19.2 O que foi entregue (opção B do mockup)
+### 19.2 O que foi entregue (opção B do mockup, com o tom corrigido em seguida)
+
+**Correção do mesmo dia, pedida por ele depois de ver no ar:** *"Esse roxo ta
+muito forte, algo igual o do Devular está bom. Veja como é la e replique e
+mantenha a logo."* O Devular é a outra casa de software dele; o repositório
+foi anexado a esta sessão e as cores saíram de lá, não de memória
+(`app/lib/core/theme.dart` e `docs/BRAND.md`): navy `#1B2138`, superfície
+escura `#252D49`, texto do menu `#C7CDE0`, rótulo de seção `#7C86A3`, e a
+regra da casa — *"navy é a base, o acento entra com moderação, como o ponto
+do logo"*. O menu do JuridFlow passou a usar exatamente esses valores; o
+acento continua sendo o violeta da marca, e a logo não mudou. Medido depois
+no navegador: fundo `#1b2138`, texto `#c7cde0`, item aberto `#252d49`,
+marca branca + `#9a73ff`.
+
+### 19.2.1 O que a primeira versão tinha (registro)
 
 `--sidebar`, `--sidebar-accent`, `--sidebar-primary` e `--sidebar-ring`
 passam ao matiz da marca nos DOIS temas; `MarcaJ` escreve «Jurid» em branco

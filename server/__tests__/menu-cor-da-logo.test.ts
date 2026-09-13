@@ -5,8 +5,10 @@
  * e ela virou azul; em 04/09 ela voltou ao violeta, mas por um token só dela
  * (`--marca`), justamente pra não ir de arrasto na próxima. Em 13/09 o dono
  * aprovou o menu inteiro no escuro da logo — e o azul saiu de lá. Esta amarra
- * guarda as duas pontas: o menu é da família da logo, e a cor de AÇÃO do
- * conteúdo continua sendo o marinho.
+ * guarda as três pontas: o escuro do menu é o navy do Devular (a mesma casa
+ * de software; o roxo cheio ficou forte demais e o dono pediu este tom), o
+ * acento continua sendo o violeta da marca, e a cor de AÇÃO do conteúdo
+ * continua sendo o marinho.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -26,21 +28,30 @@ function valores(token: string): { l: number; c: number; h: number }[] {
 
 /** Faixa de matiz do violeta da marca (a logo é #7c3aed ≈ matiz 296). */
 const VIOLETA = (h: number) => h >= 285 && h <= 305;
+/** Navy do Devular, o escuro do menu (#1B2138 ≈ matiz 272). */
+const NAVY_DEVULAR = (h: number) => h >= 262 && h <= 282;
 /** Faixa do marinho de ação do conteúdo (#194b86 ≈ matiz 255). */
 const MARINHO = (h: number) => h >= 245 && h <= 265;
 
 describe("o menu veste a cor da logo", () => {
-  it("o fundo do menu é violeta escuro nos dois temas — não o azul-ardósia de antes", () => {
+  it("o fundo do menu é o navy do Devular nos dois temas — nem o ardósia antigo, nem roxo cheio", () => {
     const fundos = valores("--sidebar");
     expect(fundos).toHaveLength(2);
     for (const f of fundos) {
-      expect(VIOLETA(f.h)).toBe(true);
-      expect(f.l).toBeLessThan(0.24); // escuro de verdade, como o da logo
-      expect(f.c).toBeGreaterThan(0.02); // tem cor: cinza-azulado não serve
+      expect(NAVY_DEVULAR(f.h)).toBe(true);
+      expect(f.l).toBeLessThan(0.27); // escuro de verdade
+      expect(f.c).toBeGreaterThan(0.02); // tem cor: cinza puro não serve
+      expect(f.c).toBeLessThan(0.06); // e não é roxo cheio: foi o que ficou forte demais
     }
   });
 
-  it("o realce do item aberto (barra e ícone) também é da marca, não azul", () => {
+  it("a superfície do item aberto acompanha o mesmo navy", () => {
+    const sup = valores("--sidebar-accent");
+    expect(sup).toHaveLength(2);
+    for (const v of sup) expect(NAVY_DEVULAR(v.h)).toBe(true);
+  });
+
+  it("o realce do item aberto (barra e ícone) é da marca — o acento entra com parcimônia, como o ponto coral do Devular", () => {
     const p = valores("--sidebar-primary");
     expect(p).toHaveLength(2);
     for (const v of p) expect(VIOLETA(v.h)).toBe(true);
