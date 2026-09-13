@@ -63,6 +63,19 @@ export default function AdminErros() {
         Issues capturadas pelo Sentry no frontend e no backend.
       </p>
 
+      {data?.capturaConfigurada === false && (
+        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning-bg/30 px-4 py-3 text-sm">
+          <AlertTriangle className="h-4 w-4 text-warning-fg mt-0.5 shrink-0" />
+          <div className="min-w-0 text-muted-foreground">
+            <span className="font-medium text-foreground">Captura do servidor não confirmada.</span>{" "}
+            O backend só manda erros pro Sentry quando a variável <code>SENTRY_DSN_BACKEND</code> (ou a
+            genérica <code>SENTRY_DSN</code>) está definida no Railway — e o servidor subiu sem nenhuma
+            das duas. Pra confirmar: Railway → serviço do app → Variables → <code>SENTRY_DSN_BACKEND</code>{" "}
+            com a DSN do projeto, depois redeploy. Até lá, "zero erros" aqui não prova nada.
+          </div>
+        </div>
+      )}
+
       {!configurado && (
         <Card className="border-warning/30 bg-warning-bg/30">
           <CardHeader>

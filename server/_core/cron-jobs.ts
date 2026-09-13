@@ -570,6 +570,19 @@ export function iniciarJobs() {
     }
   }, 60 * 60 * 1000);
 
+  // 1x por dia: assinatura cancelada em carência recebe o aviso "seu acesso
+  // termina em 3 dias" (janela de 2 a 4 dias; `avisoFimAcessoEnviadoEm`
+  // garante um só e-mail por assinatura).
+  setInterval(async () => {
+    try {
+      const { processarAvisosFimDeAcesso } = await import("../billing/trial-cron");
+      const r = await processarAvisosFimDeAcesso();
+      if (r.avisos > 0) log.info({ avisos: r.avisos }, "[Cron] processarAvisosFimDeAcesso concluído");
+    } catch (err: any) {
+      log.error("[Cron] processarAvisosFimDeAcesso falhou:", err.message);
+    }
+  }, 24 * 60 * 60 * 1000);
+
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
 

@@ -318,6 +318,46 @@ export const adminRouter = router({
     }).optional())
     .query(async ({ input }) => getAllUsersWithSubscription(input ?? {})),
 
+  /**
+   * Fila do "Avisar quando chegar": quantos escritórios pediram cada
+   * tribunal e quantos já receberam o aviso. Alimenta o card da Saúde.
+   */
+  interessesTribunais: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+    const { agruparInteresses, depsInteresseTribunais } = await import("../admin/interesse-tribunais");
+    const rows = await depsInteresseTribunais(db).listarInteresses();
+    return { grupos: agruparInteresses(rows), total: rows.length };
+  }),
+
+  /**
+   * Tribunal entrou na cobertura: e-mail pro dono de cada escritório que
+   * pediu e ainda não foi avisado. Quem já recebeu não recebe de novo.
+   */
+  avisarInteressadosTribunal: adminProcedure
+    .input(z.object({ tribunal: z.string().trim().min(2).max(120) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
+      const { avisarInteressados, depsInteresseTribunais } = await import("../admin/interesse-tribunais");
+      const resultado = await avisarInteressados(depsInteresseTribunais(db), input.tribunal);
+
+      await registrarAuditoria({
+        ctx,
+        acao: "admin.avisar_interessados_tribunal",
+        alvoTipo: "tribunal",
+        alvoNome: resultado.tribunal,
+        detalhes: {
+          enviados: resultado.enviados,
+          falhas: resultado.falhas.length,
+          jaAvisados: resultado.jaAvisados,
+          semEmail: resultado.semEmail,
+        },
+      });
+
+      return resultado;
+    }),
+
   /** Os 3 cartões "Pra falar hoje" de /admin/clients (e o card da Visão Geral). */
   funilRemarketing: adminProcedure.query(async () => {
     const { calcularFunilRemarketing } = await import("../db");
@@ -2561,9 +2601,12 @@ export const adminRouter = router({
         }
       }
 
+      // O diálogo promete "perde o acesso ao fim do período": a carência da
+      // cláusula 5 vale também quando quem cancela é o painel.
+      const { camposDeCancelamento } = await import("../billing/periodo-pago");
       await db
         .update(subscriptionsTable)
-        .set({ status: "canceled" })
+        .set(camposDeCancelamento(sub))
         .where(eq(subscriptionsTable.id, input.subscriptionId));
 
       await registrarAuditoria({
@@ -2705,6 +2748,7 @@ export const adminRouter = router({
             trialExpiraEm: trialAte,
             currentPeriodEnd: trialAte,
             trialConvertido: true,
+            ciclo: input.interval,
           })
           .where(eq(subscriptionsTable.id, currentSub.id));
         subLocalId = currentSub.id;
@@ -2721,6 +2765,7 @@ export const adminRouter = router({
             asaasCustomerId: customerId,
             planId: input.newPlanId,
             status: "incomplete",
+            ciclo: input.interval,
           });
         }
       }
@@ -2859,6 +2904,7 @@ export const adminRouter = router({
           asaasCustomerId: customerId,
           status: "incomplete",
           valorNegociadoCentavos: valorMensalCentavos,
+          ciclo: input.interval,
         });
         subLocalId = Number((ins as any)?.insertId ?? 0);
       } else {
@@ -2874,6 +2920,7 @@ export const adminRouter = router({
             trialExpiraEm: Math.max(ultima.trialExpiraEm ?? 0, prazoPagamento),
             trialConvertido: true,
             valorNegociadoCentavos: valorMensalCentavos,
+            ciclo: input.interval,
           })
           .where(eq(subscriptionsTable.id, ultima.id));
         subLocalId = ultima.id;

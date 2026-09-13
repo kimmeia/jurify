@@ -98,6 +98,14 @@ describe("ALVOS", () => {
     expect(ids).toContain("pdpj-sso");
   });
 
+  it("inclui as portas de login do PJe-JT (TRT-2 e TRT-15, 1º e 2º grau)", () => {
+    const porId = new Map(ALVOS.map((a) => [a.id, a.url]));
+    expect(porId.get("trt2-1g")).toBe("https://pje.trt2.jus.br/primeirograu/login.seam");
+    expect(porId.get("trt2-2g")).toBe("https://pje.trt2.jus.br/segundograu/login.seam");
+    expect(porId.get("trt15-1g")).toBe("https://pje.trt15.jus.br/primeirograu/login.seam");
+    expect(porId.get("trt15-2g")).toBe("https://pje.trt15.jus.br/segundograu/login.seam");
+  });
+
   it("todas as URLs são https", () => {
     for (const a of ALVOS) expect(a.url.startsWith("https://")).toBe(true);
   });

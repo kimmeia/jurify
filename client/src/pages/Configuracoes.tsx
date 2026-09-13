@@ -5,6 +5,7 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,7 @@ import { toast } from "sonner";
 import { CARGO_LABELS, CARGO_DESCRICAO, CUSTO_COLABORADOR_EXTRA, FUSOS_HORARIOS, FUSO_HORARIO_PADRAO } from "@shared/escritorio-types";
 import type { CargoColaborador } from "@shared/escritorio-types";
 import { TIPO_CANAL_LABELS, TIPO_CANAL_DESCRICAO, STATUS_CANAL_LABELS, STATUS_CANAL_CORES } from "@shared/canal-types";
+import { canalEmBreve } from "@shared/smartflow-types";
 import type { TipoCanal, StatusCanal } from "@shared/canal-types";
 import {
   AsaasDialog,
@@ -196,6 +198,19 @@ export default function Configuracoes() {
   const { data, isLoading, refetch } = trpc.configuracoes.meuEscritorio.useQuery();
   const { data: equipeData, refetch: refetchEquipe } = trpc.configuracoes.listarColaboradores.useQuery(undefined, { enabled: !!data });
   const { data: convites, refetch: refetchConvites } = trpc.configuracoes.listarConvites.useQuery(undefined, { enabled: !!data });
+  // Deep-link dos Primeiros passos (?tab=equipe&novo=1): leva ao formulário
+  // de convite — o mesmo caminho do botão "Convidar colaborador".
+  useEffect(() => {
+    if (!data || tabAtiva !== "equipe") return;
+    if (new URLSearchParams(window.location.search).get("novo") !== "1") return;
+    const t = setTimeout(() => {
+      const el = document.getElementById("convite-email-input");
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      (el as HTMLInputElement | null)?.focus();
+    }, 150);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
   // Cargos personalizados criados pelo admin em /configuracoes (aba
   // Permissões). O select de "Cargo" do convite mostra os 3 default +
   // todos os custom (excluindo "Dono", "Gestor", "Atendente", "Estagiário"
@@ -827,7 +842,10 @@ export default function Configuracoes() {
                 {/* Header: contagem + botão Convidar */}
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div>
-                    <h3 className="text-base font-bold tracking-tight">Equipe</h3>
+                    <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+                      Equipe
+                      <AjudaDaTela tarefa="convidar-equipe" />
+                    </h3>
                     <p className="text-[11px] text-muted-foreground">
                       <b className="text-foreground">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
                       {(equipeData?.extras ?? 0) > 0 && (
@@ -1714,10 +1732,15 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
   // Estado do dialog Meta: além do tipo de canal, guarda canalId opcional.
   // canalId definido → editando canal específico (entre os múltiplos).
   // canalId undefined → conectando NOVO canal (caso de "+ Adicionar outro").
+  // Deep-link dos Primeiros passos (?tab=canais&novo=1): abre o diálogo de
+  // conectar um WhatsApp novo, o mesmo do card "Conectar".
   const [metaDialog, setMetaDialog] = useState<{
     type: "whatsapp" | "instagram" | "messenger";
     canalId?: number;
-  } | null>(null);
+  } | null>(() => {
+    const p = new URLSearchParams(window.location.search);
+    return p.get("tab") === "canais" && p.get("novo") === "1" ? { type: "whatsapp" } : null;
+  });
   // Dialog separado: cadastro manual de WhatsApp Cloud API. Bypassa o
   // Embedded Signup (usado quando OAuth tá bloqueado — App Review pendente,
   // BM dona do app coincide com a dos números, etc).
@@ -1764,6 +1787,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     comErro: boolean;
     /** Card de "+ Adicionar outro" — renderiza estilo tracejado. */
     isAdicionar?: boolean;
+    /** Canal que ainda não recebe nem envia mensagem — o card não abre o diálogo. */
+    emBreve?: boolean;
   };
 
   const cardsWhatsApp: CardCanal[] = whatsappCanais.map((c: any) => ({
@@ -1817,23 +1842,29 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       key: "instagram",
       dialog: { type: "instagram" },
       nome: "Instagram Business",
-      descricao: "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
+      descricao: canalEmBreve("instagram")
+        ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
+        : "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
       logo: "📸",
       cor: "from-danger to-danger",
       canal: instagramCanal,
       conectado: instagramCanal?.status === "conectado",
       comErro: instagramCanal?.status === "erro",
+      emBreve: canalEmBreve("instagram"),
     },
     {
       key: "messenger",
       dialog: { type: "messenger" },
       nome: "Facebook Messenger",
-      descricao: "Mensagens da sua página do Facebook direto no Inbox.",
+      descricao: canalEmBreve("facebook")
+        ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
+        : "Mensagens da sua página do Facebook direto no Inbox.",
       logo: "💙",
       cor: "from-info to-info",
       canal: facebookCanal,
       conectado: facebookCanal?.status === "conectado",
       comErro: facebookCanal?.status === "erro",
+      emBreve: canalEmBreve("facebook"),
     },
   ];
 
@@ -1845,7 +1876,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       {/* Header da aba */}
       <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <h3 className="text-base font-bold tracking-tight">Canais de comunicação</h3>
+          <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
+            Canais de comunicação
+            <AjudaDaTela tarefa="conectar-whatsapp" />
+          </h3>
           <p className="text-[11px] text-muted-foreground">
             {canaisPrincipais.length} canais disponíveis ·
             <b className="text-success-fg ml-1">{totalCanaisConectados} conectados</b>
@@ -1867,8 +1901,8 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
               Conexão simplificada via Facebook
             </p>
             <p className="text-xs text-info-fg mt-1">
-              WhatsApp, Instagram e Messenger se conectam com 1 clique. Sem precisar copiar
-              tokens ou IDs manualmente — basta autorizar pelo Facebook Login.
+              O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar
+              pelo Facebook Login. Instagram e Messenger: em breve.
             </p>
             {/* Fallback pra quando OAuth não roda (App Review pendente,
                 Tech Provider não aprovado, BM dona do app = dos números).
@@ -1888,7 +1922,9 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         {canaisPrincipais.map((canal) => (
           <Card
             key={canal.key}
-            className={`overflow-hidden cursor-pointer hover:shadow-lg transition-all border-2 ${
+            className={`overflow-hidden hover:shadow-lg transition-all border-2 ${
+              canal.emBreve ? "cursor-default" : "cursor-pointer"
+            } ${
               canal.isAdicionar
                 ? "border-dashed border-success/30 bg-success-bg/30 hover:bg-success-bg/50"
                 : canal.conectado
@@ -1897,7 +1933,10 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                     ? "border-danger/30"
                     : "border-transparent hover:border-primary/20"
             }`}
-            onClick={() => setMetaDialog(canal.dialog)}
+            onClick={() => {
+              if (canal.emBreve) return;
+              setMetaDialog(canal.dialog);
+            }}
           >
             <CardContent className="p-5">
               <div className="flex items-start gap-4">
@@ -1911,6 +1950,11 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h3 className="font-semibold text-sm">{canal.nome}</h3>
+                    {canal.emBreve && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning-bg text-warning-fg text-[9px] font-bold">
+                        <span className="w-1 h-1 rounded-full bg-warning" /> Em breve
+                      </span>
+                    )}
                     {!canal.isAdicionar && canal.conectado && (
                       <Badge
                         variant="outline"
@@ -2004,14 +2048,17 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
                   variant={canal.conectado || canal.isAdicionar ? "outline" : "default"}
                   size="sm"
                   className="text-xs"
+                  disabled={canal.emBreve}
                 >
-                  {canal.isAdicionar
-                    ? "Conectar novo"
-                    : canal.conectado
-                      ? "Gerenciar"
-                      : canal.comErro
-                        ? "Reconectar"
-                        : "Conectar"}
+                  {canal.emBreve
+                    ? "Em breve"
+                    : canal.isAdicionar
+                      ? "Conectar novo"
+                      : canal.conectado
+                        ? "Gerenciar"
+                        : canal.comErro
+                          ? "Reconectar"
+                          : "Conectar"}
                 </Button>
               </div>
             </CardContent>

@@ -134,6 +134,8 @@ docs/lp-mockups/out-*.png
 # repositório sem dar nada em troca.
 scratchpad/mockup-navegavel-*.html
 scratchpad/comparador-antes-depois*.html
+/mockup-cor-do-menu.html
+/mockup-quatro-decisoes.html
 
 # Fotos de tela geradas pelos scripts de scratchpad/estudo-telas — o app
 # rodando as reproduz a qualquer momento, e elas só entram aqui de passagem,
@@ -145,3 +147,6 @@ scripts/.sondagem/
 
 # Planilha do resgate de cards: leva nome de cliente, não versiona
 cards-sumidos-kanban.xlsx
+
+# worktrees temporários dos agentes de implementação
+.claude/worktrees/

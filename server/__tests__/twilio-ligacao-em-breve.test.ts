@@ -98,7 +98,9 @@ describe("Configurações avisa antes de alguém configurar à toa", () => {
     expect(card).toMatch(/emBreve:\s*true/);
     // o selo tem que estar DESENHADO, não só declarado no objeto: o campo
     // `emBreve` sozinho não aparece pra ninguém
-    const j = t.indexOf("emBreve ?");
+    // ancorado na expressão do card de integração — a aba Canais também
+    // desenha um "Em breve" (Instagram/Messenger), com outro objeto
+    const j = t.indexOf("(integ as any).emBreve ?");
     expect(j, "o selo não é renderizado em lugar nenhum").toBeGreaterThan(-1);
     expect(t.slice(j, j + 320)).toContain("Em breve");
   });

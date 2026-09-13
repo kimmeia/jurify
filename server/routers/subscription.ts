@@ -22,6 +22,9 @@ import { getAdminAsaasClient, isAsaasBillingConfigured } from "../billing/asaas-
 import { getPlansResolved, getPlanByIdResolved } from "../billing/products-resolver";
 import { subscriptions as subscriptionsTable, users } from "../../drizzle/schema";
 import { validarCpfCnpj } from "../../shared/validacoes";
+import { emCarenciaDeCancelamento, fimDoAcessoAoCancelar } from "../../shared/assinatura-carencia";
+import { cicloParaAsaas, fusoDoDonoDaAssinatura, vencimentoAposFimDoAcesso } from "../billing/periodo-pago";
+import { registrarAuditoria } from "../_core/audit";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("router-subscription");
@@ -483,6 +486,7 @@ export const subscriptionRouter = router({
                 trialExpiraEm: trialAte,
                 currentPeriodEnd: trialAte,
                 trialConvertido: true,
+                ciclo: input.interval,
               })
               .where(eq(subscriptionsTable.id, subTrial.id));
             log.info(
@@ -497,6 +501,7 @@ export const subscriptionRouter = router({
               asaasCustomerId: customerId,
               planId: input.planId,
               status: "incomplete", // aguarda primeiro pagamento
+              ciclo: input.interval,
             });
             log.info(
               { userId: ctx.user.id, subId: sub.id },
@@ -526,13 +531,41 @@ export const subscriptionRouter = router({
       };
     }),
 
-  /** Cancela a assinatura ativa imediatamente (Asaas não tem "cancel at period end") */
+  /**
+   * O que acontece se o cliente cancelar agora: até quando o acesso fica
+   * (cláusula 5 dos Termos) — é o texto do diálogo de confirmação.
+   */
+  previaCancelamento: protectedProcedure.query(async ({ ctx }) => {
+    const sub = await getActiveSubscription(ctx.user.id);
+    if (!sub) return null;
+    const plano = sub.planId ? await getPlanByIdResolved(sub.planId) : null;
+    return {
+      planName: plano?.name ?? sub.planId ?? "JuridFlow",
+      jaCancelada: sub.status === "canceled",
+      acessoAte: fimDoAcessoAoCancelar(sub),
+    };
+  }),
+
+  /**
+   * Cancela a assinatura: nenhuma cobrança nova, e o acesso permanece até
+   * o fim do período já pago (cláusula 5 dos Termos). O Asaas não tem
+   * "cancel at period end" — a assinatura é apagada lá agora, e a carência
+   * é sustentada localmente por `fimPeriodoPagoEm` + `cancelAtPeriodEnd`.
+   */
   cancel: protectedProcedure.mutation(async ({ ctx }) => {
     const sub = await getActiveSubscription(ctx.user.id);
     if (!sub) throw new Error("Nenhuma assinatura ativa encontrada.");
+    if (sub.status === "canceled") {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Esta assinatura já foi cancelada." });
+    }
     if (!sub.asaasSubscriptionId) {
       throw new Error("Assinatura sem ID Asaas — contate o suporte.");
     }
+
+    // Decidido ANTES de apagar no Asaas: se não houver período pago
+    // registrado nem vencimento futuro, o acesso encerra na hora — e o
+    // retorno diz isso, em vez de prometer uma data que não existe.
+    const acessoAte = fimDoAcessoAoCancelar(sub);
 
     const client = await getAdminAsaasClient();
     await client.cancelarAssinatura(sub.asaasSubscriptionId);
@@ -541,11 +574,125 @@ export const subscriptionRouter = router({
     if (db) {
       await db
         .update(subscriptionsTable)
-        .set({ status: "canceled", cancelAtPeriodEnd: true })
+        .set({
+          status: "canceled",
+          cancelAtPeriodEnd: true,
+          ...(acessoAte != null ? { fimPeriodoPagoEm: acessoAte } : {}),
+        })
         .where(eq(subscriptionsTable.id, sub.id));
     }
 
-    return { success: true };
+    try {
+      const { enviarEmailAssinaturaCancelada } = await import("../_core/email");
+      const plano = sub.planId ? await getPlanByIdResolved(sub.planId) : null;
+      if (ctx.user.email) {
+        await enviarEmailAssinaturaCancelada({
+          email: ctx.user.email,
+          nome: ctx.user.name ?? "",
+          planoNome: plano?.name ?? sub.planId ?? "JuridFlow",
+          acessoAte,
+        });
+      }
+    } catch (err: any) {
+      log.warn({ err: err?.message, userId: ctx.user.id }, "e-mail de assinatura cancelada falhou");
+    }
+
+    return { success: true, acessoAte, acessoEncerraAgora: acessoAte == null };
+  }),
+
+  /**
+   * Volta atrás no cancelamento enquanto o período pago ainda corre. O Asaas
+   * não reabre assinatura apagada: é criada uma NOVA lá, mesmo cliente, mesmo
+   * plano e valor, mesmo ciclo, com a primeira cobrança no dia seguinte ao
+   * fim do período pago — nada é cobrado agora. A linha local é a mesma.
+   */
+  reativar: protectedProcedure.mutation(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) throw new Error("Database indisponível");
+
+    const sub = await getActiveSubscription(ctx.user.id);
+    if (!sub || !emCarenciaDeCancelamento(sub)) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Só uma assinatura cancelada e ainda dentro do período pago pode ser reativada.",
+      });
+    }
+    if (!sub.planId) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Assinatura sem plano — fale com a gente." });
+    }
+    const plan = await getPlanByIdResolved(sub.planId);
+    if (!plan) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Plano não encontrado." });
+
+    const fimAcesso = sub.fimPeriodoPagoEm!;
+    const ciclo = sub.ciclo ?? "monthly";
+    // O valor negociado é guardado em base mensal (fatura composta).
+    const valorCentavos =
+      sub.valorNegociadoCentavos != null && sub.valorNegociadoCentavos > 0
+        ? ciclo === "yearly"
+          ? sub.valorNegociadoCentavos * 12
+          : sub.valorNegociadoCentavos
+        : ciclo === "yearly"
+          ? plan.priceYearly
+          : plan.priceMonthly;
+
+    const [u] = await db
+      .select({ asaasCustomerId: users.asaasCustomerId })
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .limit(1);
+    const customerId = sub.asaasCustomerId || u?.asaasCustomerId || null;
+    if (!customerId) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Cadastro de cobrança não encontrado — fale com a gente." });
+    }
+
+    const fuso = await fusoDoDonoDaAssinatura(db, ctx.user.id);
+    const nextDueDate = vencimentoAposFimDoAcesso(fimAcesso, fuso);
+
+    // Se o Asaas falhar, nada muda aqui: a assinatura segue cancelada em
+    // carência e o cliente pode tentar de novo.
+    let nova: { id: string };
+    try {
+      const client = await getAdminAsaasClient();
+      nova = await criarAssinaturaComFallback(client, {
+        customer: customerId,
+        billingType: "UNDEFINED",
+        value: valorCentavos / 100,
+        nextDueDate,
+        cycle: cicloParaAsaas(ciclo),
+        description: `${plan.name} — JuridFlow SaaS`,
+        externalReference: `${ctx.user.id}:${sub.planId}`,
+      });
+    } catch (err: any) {
+      log.warn({ err: err?.message, userId: ctx.user.id }, "reativar: Asaas recusou a nova assinatura");
+      throw new TRPCError({
+        code: "BAD_GATEWAY",
+        message: `Não foi possível reativar agora (${err?.message || "erro no Asaas"}). Nada mudou — tente de novo em instantes.`,
+      });
+    }
+
+    await db
+      .update(subscriptionsTable)
+      .set({
+        status: "active",
+        cancelAtPeriodEnd: false,
+        asaasSubscriptionId: nova.id,
+        asaasCustomerId: customerId,
+        currentPeriodEnd: fimAcesso,
+        ciclo,
+      })
+      .where(eq(subscriptionsTable.id, sub.id));
+
+    await registrarAuditoria({
+      ctx,
+      acao: "subscription.reativar",
+      alvoTipo: "subscription",
+      alvoId: sub.id,
+      alvoNome: ctx.user.name || ctx.user.email || undefined,
+      detalhes: { planId: sub.planId, ciclo, valorCentavos, nextDueDate, asaasSubscriptionId: nova.id },
+    });
+
+    log.info({ userId: ctx.user.id, subId: sub.id, asaasSubscriptionId: nova.id, nextDueDate }, "assinatura reativada");
+    return { success: true, asaasSubscriptionId: nova.id, proximaCobranca: nextDueDate };
   }),
 
   /**
@@ -614,6 +761,7 @@ export const subscriptionRouter = router({
             asaasCustomerId: customerId,
             planId: input.newPlanId,
             status: "incomplete",
+            ciclo: input.interval,
           });
         }
       }

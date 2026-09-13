@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { WhatsAppTemplatesDialog } from "./whatsapp-templates-dialog";
 import { WhatsAppProfileDialog } from "./whatsapp-profile-dialog";
 import { WhatsAppCallingDialog } from "./whatsapp-calling-dialog";
+import { canalEmBreve } from "@shared/smartflow-types";
 
 export type MetaChannelType = "whatsapp" | "instagram" | "messenger";
 
@@ -80,6 +81,13 @@ const CHANNEL_META: Record<
   },
 };
 
+/** O diálogo fala em "messenger"; o enum de canais fala em "facebook". */
+const TIPO_CANAL_DO_DIALOGO: Record<MetaChannelType, string> = {
+  whatsapp: "whatsapp_api",
+  instagram: "instagram",
+  messenger: "facebook",
+};
+
 // ─── Componente ──────────────────────────────────────────────────────────────
 
 export function MetaConnectDialog({
@@ -91,6 +99,9 @@ export function MetaConnectDialog({
   canEdit = true,
 }: MetaConnectDialogProps) {
   const meta = CHANNEL_META[channel];
+  // O card da aba já não abre este diálogo pra canal "em breve"; a trava aqui
+  // é defesa em profundidade pra quem chegar por outro caminho.
+  const emBreve = canalEmBreve(TIPO_CANAL_DO_DIALOGO[channel]);
   const [conectando, setConectando] = useState(false);
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const [pin, setPin] = useState("");
@@ -685,13 +696,23 @@ export function MetaConnectDialog({
             </div>
           )}
 
+          {emBreve && (
+            <div className="p-3 rounded-lg bg-warning-bg border border-warning/30 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-warning-fg shrink-0 mt-0.5" />
+              <p className="text-xs text-warning-fg">
+                <strong>Em breve.</strong> Este canal ainda não recebe nem envia mensagens.
+                Quando estiver pronto, você conecta com 1 clique pelo Facebook Login.
+              </p>
+            </div>
+          )}
+
           {/* Estado: pronto para conectar */}
           {!conectado && !comErro && metaConfig?.appId && (
             <div className="space-y-3">
               <Button
                 className="w-full h-12 text-base bg-[#1877F2] hover:bg-[#166FE5] text-white"
                 onClick={handleConectar}
-                disabled={conectando || !sdkLoaded}
+                disabled={conectando || !sdkLoaded || emBreve}
               >
                 {conectando ? (
                   <Loader2 className="h-5 w-5 mr-2 animate-spin" />

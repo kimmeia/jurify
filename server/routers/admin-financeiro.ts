@@ -319,12 +319,19 @@ export const adminFinanceiroRouter = router({
       const client = await getClient();
       await client.cancelarAssinatura(input.asaasSubscriptionId);
 
-      // Marcar local se existir
+      // Marcar local se existir — com a carência da cláusula 5: o acesso
+      // fica até o fim do período já pago.
       const db = await getDb();
       if (db) {
+        const { camposDeCancelamento } = await import("../billing/periodo-pago");
+        const [local] = await db
+          .select({ fimPeriodoPagoEm: subsTable.fimPeriodoPagoEm, currentPeriodEnd: subsTable.currentPeriodEnd })
+          .from(subsTable)
+          .where(eq(subsTable.asaasSubscriptionId, input.asaasSubscriptionId))
+          .limit(1);
         await db
           .update(subsTable)
-          .set({ status: "canceled" })
+          .set(camposDeCancelamento(local))
           .where(eq(subsTable.asaasSubscriptionId, input.asaasSubscriptionId));
       }
 

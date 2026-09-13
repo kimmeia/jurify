@@ -6,6 +6,7 @@
 import { motion } from "framer-motion";
 import { CheckCircle2, Wallet, BrainCircuit, FileSearch } from "lucide-react";
 import { Reveal, staggerParent, staggerItem } from "./lpkit";
+import { textoCoberturaComparativo } from "@shared/tribunais-pje";
 
 const diffs = [
   {
@@ -31,7 +32,7 @@ const diffs = [
   {
     icon: FileSearch,
     titulo: "Motor próprio de processos",
-    desc: "Monitora processos e novas ações por CPF/CNPJ com motor próprio, análise estratégica por IA e mensagem pronta pro cliente.",
+    desc: `Monitora processos e novas ações por CPF/CNPJ com motor próprio nos tribunais cobertos — ${textoCoberturaComparativo()}; lista nos planos —, análise estratégica por IA e mensagem pronta pro cliente.`,
     bullets: [
       "Alerta de movimentação nova com resumo por IA",
       "Cofre de credenciais OAB (segredo de justiça)",

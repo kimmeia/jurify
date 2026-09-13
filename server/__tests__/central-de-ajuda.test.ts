@@ -1,0 +1,550 @@
+/**
+ * Central de ajuda — o manual que mora dentro do sistema.
+ *
+ * O que estas amarras impedem, cada uma nascida de um jeito de o manual
+ * mentir sem ninguém ver:
+ *  - tarefa apontando pra rota que não existe mais (o botão "Abrir a tela"
+ *    caía no 404) — as rotas são DERIVADAS do App.tsx, não listadas à mão;
+ *  - passo citando botão que a tela não tem («Testar login» quando o botão
+ *    se chama «Validar») — todo rótulo entre «» tem que existir no arquivo
+ *    da tela;
+ *  - print referenciado que não está em client/public (a tela mostrava a
+ *    moldura quebrada);
+ *  - a Central caindo atrás do porteiro de módulo ou da guarda de
+ *    assinatura (quem não tem o módulo é justamente quem precisa ler);
+ *  - o botão "Ajuda" sumindo da barra lateral;
+ *  - uma segunda lista de tarefas nascendo em outro arquivo e as duas
+ *    divergindo.
+ */
+
+import { describe, it, expect } from "vitest";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
+import {
+  GRUPOS_AJUDA,
+  TAREFAS_AJUDA,
+  buscarTarefas,
+  modulosQueLiberam,
+  tarefaCompleta,
+  tarefaPorId,
+  type TarefaCompleta,
+} from "../../client/src/pages/ajuda/tarefas";
+import { contratoLibera, modulosDaRota } from "../../shared/modulos-contratacao";
+import { ler, semComentarios } from "./_paginas-publicas";
+
+const raiz = join(__dirname, "..", "..");
+
+const TAREFAS_COMPLETAS_ESPERADAS = [
+  "conectar-whatsapp",
+  "cadastrar-cliente",
+  "vigiar-processo",
+  "convidar-equipe",
+  "cobrar-cliente",
+] as const;
+
+const completas = TAREFAS_AJUDA.filter(tarefaCompleta) as readonly TarefaCompleta[];
+
+/** Todos os `path="..."` do <Switch> do App.tsx. */
+function rotasDoApp(): string[] {
+  const app = ler("client/src/App.tsx");
+  const corpo = app.slice(app.indexOf("<Switch>"), app.indexOf("</Switch>"));
+  return [...corpo.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => m[1]);
+}
+
+/** "/processos?tab=cofre" casa com "/processos"; "/ajuda/x" casa com "/ajuda/:tarefa". */
+function rotaExiste(destino: string, rotas: string[]): boolean {
+  const caminho = destino.split("?")[0];
+  return rotas.some((r) => {
+    const re = new RegExp("^" + r.replace(/:[^/]+/g, "[^/]+") + "$");
+    return re.test(caminho);
+  });
+}
+
+/** Tudo que a tarefa escreve entre «aspas angulares». */
+function rotulosCitados(t: TarefaCompleta): string[] {
+  const textos = [
+    t.antesDeComecar,
+    ...t.passos.flatMap((p) => [p.titulo, p.texto]),
+    ...t.depois,
+    ...t.seNaoDeuCerto.flatMap((f) => [f.titulo, f.texto]),
+  ];
+  return textos.flatMap((s) => [...s.matchAll(/«([^»]+)»/g)].map((m) => m[1]));
+}
+
+function arquivosTsx(dir: string): string[] {
+  const saida: string[] = [];
+  for (const nome of readdirSync(dir)) {
+    const caminho = join(dir, nome);
+    if (statSync(caminho).isDirectory()) saida.push(...arquivosTsx(caminho));
+    else if (nome.endsWith(".tsx") || nome.endsWith(".ts")) saida.push(caminho);
+  }
+  return saida;
+}
+
+describe("Central de ajuda — conteúdo (tarefas.ts)", () => {
+  it("as cinco tarefas combinadas estão completas e todas as outras são «em breve»", () => {
+    const ids = completas.map((t) => t.id).sort();
+    expect(ids).toEqual([...TAREFAS_COMPLETAS_ESPERADAS].sort());
+    for (const t of TAREFAS_AJUDA) {
+      if (!TAREFAS_COMPLETAS_ESPERADAS.includes(t.id as (typeof TAREFAS_COMPLETAS_ESPERADAS)[number])) {
+        expect(t.emBreve, `${t.id} não é uma das cinco e precisa ser emBreve`).toBe(true);
+      }
+    }
+  });
+
+  it("tarefa completa tem todos os campos obrigatórios preenchidos", () => {
+    for (const t of completas) {
+      const onde = `tarefa ${t.id}`;
+      expect(t.titulo.trim(), onde).not.toBe("");
+      expect(t.tempo.trim(), onde).not.toBe("");
+      expect(t.quemPode.trim(), onde).not.toBe("");
+      expect(t.palavrasChave.length, `${onde}: palavras-chave`).toBeGreaterThan(0);
+      expect(t.antesDeComecar.trim(), onde).not.toBe("");
+      expect(t.passos.length, `${onde}: passos`).toBeGreaterThanOrEqual(3);
+      for (const p of t.passos) {
+        expect(p.titulo.trim(), onde).not.toBe("");
+        expect(p.texto.trim(), onde).not.toBe("");
+      }
+      expect(t.depois.length, `${onde}: depois`).toBeGreaterThan(0);
+      expect(t.seNaoDeuCerto.length, `${onde}: se não deu certo`).toBeGreaterThan(0);
+      expect(t.tarefasLigadas.length, `${onde}: tarefas ligadas`).toBeGreaterThan(0);
+      expect(t.abrirTela.rota.startsWith("/"), `${onde}: rota`).toBe(true);
+      expect(t.abrirTela.rotulo.trim(), onde).not.toBe("");
+      expect(existsSync(join(raiz, t.arquivoTela)), `${onde}: arquivoTela ${t.arquivoTela} não existe`).toBe(true);
+      for (const a of t.arquivosApoio ?? []) {
+        expect(existsSync(join(raiz, a)), `${onde}: arquivo de apoio ${a} não existe`).toBe(true);
+      }
+    }
+  });
+
+  it("ids são únicos, em kebab-case, e todo grupo é um dos grupos do menu", () => {
+    const ids = TAREFAS_AJUDA.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const t of TAREFAS_AJUDA) {
+      expect(t.id, `id fora do padrão: ${t.id}`).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+      expect(GRUPOS_AJUDA as readonly string[], `grupo desconhecido em ${t.id}`).toContain(t.grupo);
+    }
+  });
+
+  it("os grupos da Central são EXATAMENTE os grupos do menu lateral, na mesma ordem", () => {
+    const layout = ler("client/src/components/AppLayout.tsx");
+    const bloco = layout.slice(layout.indexOf("const GRUPOS_MENU"), layout.indexOf("export default function AppLayout"));
+    const titulos = [...bloco.matchAll(/titulo:\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(titulos.length, "GRUPOS_MENU não foi lido").toBeGreaterThan(0);
+    expect([...GRUPOS_AJUDA]).toEqual(titulos);
+  });
+
+  it("toda rota de «Abrir a tela» existe no App.tsx (derivado, não listado)", () => {
+    const rotas = rotasDoApp();
+    expect(rotas.length).toBeGreaterThan(20);
+    for (const t of completas) {
+      expect(rotaExiste(t.abrirTela.rota, rotas), `${t.id}: rota ${t.abrirTela.rota} não existe no App.tsx`).toBe(true);
+    }
+  });
+
+  it("a rota de «Abrir a tela» só leva ?tab=/?novo= que a tela realmente lê", () => {
+    for (const t of completas) {
+      const query = t.abrirTela.rota.split("?")[1];
+      if (!query) continue;
+      const tela = ler(t.arquivoTela);
+      for (const [chave] of new URLSearchParams(query)) {
+        expect(tela, `${t.id}: a tela ${t.arquivoTela} não lê ?${chave}=`).toContain(`get("${chave}")`);
+      }
+    }
+  });
+
+  it("toda tarefa ligada aponta para uma tarefa que existe", () => {
+    for (const t of completas) {
+      for (const id of t.tarefasLigadas) {
+        expect(tarefaPorId(id), `${t.id} liga para "${id}", que não existe`).toBeTruthy();
+        expect(id, `${t.id} liga para si mesma`).not.toBe(t.id);
+      }
+    }
+  });
+
+  it("todo rótulo citado entre «» existe, letra por letra, no arquivo da tela", () => {
+    for (const t of completas) {
+      // sem comentários: rótulo que só existe num `//` não está na tela
+      const fontes = [t.arquivoTela, ...(t.arquivosApoio ?? [])].map((a) => semComentarios(ler(a))).join("\n");
+      const citados = rotulosCitados(t);
+      expect(citados.length, `${t.id}: nenhum rótulo citado — o manual precisa nomear os botões`).toBeGreaterThan(3);
+      for (const r of citados) {
+        expect(fontes.includes(r), `${t.id}: «${r}» não existe em ${t.arquivoTela} nem nos arquivos de apoio`).toBe(true);
+      }
+    }
+  });
+
+  it("todo print referenciado existe em client/public/ajuda", () => {
+    let prints = 0;
+    for (const t of completas) {
+      for (const p of t.passos) {
+        if (!p.print) continue;
+        prints++;
+        expect(p.print, `${t.id}: print fora de /ajuda/`).toMatch(/^\/ajuda\/[a-z0-9-]+\.png$/);
+        expect(existsSync(join(raiz, "client", "public", p.print)), `${t.id}: falta o arquivo ${p.print}`).toBe(true);
+      }
+      expect(t.passos.filter((p) => p.print).length, `${t.id}: no máximo 2 prints por tarefa`).toBeLessThanOrEqual(2);
+    }
+    expect(prints, "nenhuma tarefa tem print").toBeGreaterThan(0);
+  });
+
+  it("a busca acha por título e por palavra-chave, sem acento e sem caixa", () => {
+    expect(buscarTarefas("VIGIAR").map((t) => t.id)).toContain("vigiar-processo");
+    expect(buscarTarefas("pje").map((t) => t.id)).toContain("vigiar-processo");
+    expect(buscarTarefas("cobranca").map((t) => t.id)).toContain("cobrar-cliente");
+    expect(buscarTarefas("boleto pix").map((t) => t.id)).toEqual(["cobrar-cliente"]);
+    expect(buscarTarefas("xyzw-nada")).toHaveLength(0);
+    expect(buscarTarefas("   ")).toHaveLength(TAREFAS_AJUDA.length);
+  });
+});
+
+describe("Central de ajuda — rotas e navegação", () => {
+  it("/ajuda e /ajuda/:tarefa montam AppLayout + TermosGate — sem porteiro de módulo nem guarda de assinatura", () => {
+    const app = semComentarios(ler("client/src/App.tsx"));
+    const corpo = app.slice(app.indexOf("<Switch>"), app.indexOf("</Switch>"));
+    const blocos = [...corpo.matchAll(/<Route\b[\s\S]*?<\/Route>/g)].map((m) => m[0]);
+    for (const path of ["/ajuda", "/ajuda/:tarefa"]) {
+      const bloco = blocos.find((b) => b.includes(`path="${path}"`));
+      expect(bloco, `rota ${path} não está no App.tsx`).toBeTruthy();
+      expect(bloco, `${path} precisa de <ClientAreaSoTermos>`).toContain("<ClientAreaSoTermos>");
+      expect(bloco, `${path} não pode passar pelo <ClientArea> (porteiro + assinatura)`).not.toMatch(/<ClientArea>/);
+      // NoGuard pula também os Termos — o aceite é governança do dono e vale em toda rota
+      expect(bloco, `${path} fora do gate dos Termos (ClientAreaNoGuard é só do Roadmap)`).not.toContain("<ClientAreaNoGuard>");
+    }
+    expect(blocos.find((b) => b.includes('path="/ajuda/:tarefa"'))).toContain("<AjudaTarefa");
+    expect(blocos.find((b) => b.includes('path="/ajuda"'))).toContain("<Ajuda ");
+
+    // O wrapper é EXATAMENTE AppLayout + TermosGate + children.
+    const def = app.slice(app.indexOf("function ClientAreaSoTermos"), app.indexOf("function ClientesPorContrato"));
+    expect(def, "ClientAreaSoTermos sumiu do App.tsx").not.toBe("");
+    expect(def.replace(/\s+/g, " ")).toContain("<AppLayout> <TermosGate /> {children} </AppLayout>");
+    expect(def).not.toContain("SubscriptionGuard");
+    expect(def).not.toContain("ModuloGuard");
+    // o mesmo gate que o ClientArea monta, importado do mesmo lugar
+    expect(app).toContain('import TermosGate from "./components/TermosGate"');
+    const areaCliente = app.slice(app.indexOf("function ClientArea("), app.indexOf("function ClientAreaNoGuard"));
+    expect(areaCliente).toContain("<TermosGate />");
+  });
+
+  it("o botão «Ajuda» está no rodapé da barra lateral, ao lado do Buscar, e leva a /ajuda", () => {
+    const layout = semComentarios(ler("client/src/components/AppLayout.tsx"));
+    const rodape = layout.slice(layout.indexOf("<SidebarFooter"), layout.indexOf("</SidebarFooter>"));
+    expect(rodape, "rodapé da barra lateral não encontrado").not.toBe("");
+    expect(rodape).toContain("⌘K");
+    const i = rodape.indexOf('aria-label="Ajuda"');
+    expect(i, "botão Ajuda sumiu do rodapé").toBeGreaterThan(-1);
+    const botao = rodape.slice(rodape.lastIndexOf("<button", i), rodape.indexOf("</button>", i));
+    expect(botao).toContain('setLocation("/ajuda")');
+    expect(botao).toContain("<CircleHelp");
+    expect(botao).toContain(">Ajuda<");
+    // Ajuda não passa pelo `navigateOrBlock`: sem plano é quando mais se lê.
+    expect(botao).not.toContain("navigateOrBlock");
+  });
+
+  it("no celular, o menu do avatar do modo atendimento também tem «Ajuda» e a rota não é jogada de volta", () => {
+    const layout = semComentarios(ler("client/src/components/AppLayout.tsx"));
+    const foco = layout.slice(layout.indexOf("{isMobile && modoFocadoMobile && ("), layout.indexOf("Abrir versão completa"));
+    expect(foco, "menu do modo atendimento não encontrado").not.toBe("");
+    expect(foco).toContain('setLocation("/ajuda")');
+    expect(foco).toContain("<span>Ajuda</span>");
+    const guarda = layout.slice(layout.indexOf("const permitida"), layout.indexOf("if (!permitida)"));
+    expect(guarda, "o modo focado precisa deixar /ajuda passar").toContain('location.startsWith("/ajuda")');
+  });
+
+  it("o «?» de cada tela coberta aponta pra tarefa certa, e só pra tarefas que existem", () => {
+    const esperado: Record<string, string> = {
+      "client/src/pages/Processos.tsx": "vigiar-processo",
+      "client/src/pages/Clientes.tsx": "cadastrar-cliente",
+      "client/src/pages/Financeiro.tsx": "cobrar-cliente",
+    };
+    for (const [arquivo, tarefa] of Object.entries(esperado)) {
+      const src = ler(arquivo);
+      expect(src, `${arquivo} não importa AjudaDaTela`).toContain('from "@/components/AjudaDaTela"');
+      expect(src, `${arquivo} não tem o ? da tarefa ${tarefa}`).toContain(`<AjudaDaTela tarefa="${tarefa}" />`);
+    }
+    const conf = ler("client/src/pages/Configuracoes.tsx");
+    expect(conf).toContain('<AjudaDaTela tarefa="convidar-equipe" />');
+    expect(conf).toContain('<AjudaDaTela tarefa="conectar-whatsapp" />');
+
+    for (const arquivo of arquivosTsx(join(raiz, "client", "src"))) {
+      const src = readFileSync(arquivo, "utf8");
+      for (const m of src.matchAll(/<AjudaDaTela tarefa="([^"]+)"/g)) {
+        const t = tarefaPorId(m[1]);
+        expect(t, `${arquivo} aponta pra tarefa inexistente ${m[1]}`).toBeTruthy();
+        expect(t && tarefaCompleta(t), `${arquivo}: o ? não pode levar a tarefa «em breve» (${m[1]})`).toBe(true);
+      }
+    }
+  });
+
+  it("o componente AjudaDaTela é um link pra /ajuda/<id> com o tooltip «Como fazer isso»", () => {
+    const src = ler("client/src/components/AjudaDaTela.tsx");
+    expect(src).toContain("href={`/ajuda/${tarefa}`}");
+    expect(src).toContain("<TooltipContent>Como fazer isso</TooltipContent>");
+    expect(src).toContain("<CircleHelp");
+  });
+
+  it("a home monta a faixa dos Primeiros passos entre a busca e «Por tarefa» (aba 2 do mockup)", () => {
+    const home = ler("client/src/pages/Ajuda.tsx");
+    expect(home).toContain('import { PrimeirosPassosResumo } from "@/pages/dashboards/PrimeirosPassos"');
+    const busca = home.indexOf('aria-label="Buscar tarefa"');
+    const faixa = home.indexOf("<PrimeirosPassosResumo />");
+    // O cabeçalho renderizado, não o literal (que também aparece em comentário).
+    const porTarefa = home.indexOf('"Por tarefa"}');
+    expect(busca).toBeGreaterThan(-1);
+    expect(faixa, "a faixa sumiu da Central").toBeGreaterThan(busca);
+    expect(porTarefa).toBeGreaterThan(faixa);
+    // O portão (souDono && total > 0) mora no componente, não na home.
+    const comp = ler("client/src/pages/dashboards/PrimeirosPassos.tsx");
+    const resumo = comp.slice(comp.indexOf("export function PrimeirosPassosResumo()"));
+    expect(resumo).toContain("if (!data || !data.souDono || data.total === 0) return null;");
+  });
+
+  it("a Central lê o WhatsApp comercial da MESMA procedure da LP — nunca um número escrito", () => {
+    const home = ler("client/src/pages/Ajuda.tsx");
+    expect(home).toContain("trpc.subscription.contatoComercial.useQuery");
+    expect(home).toContain("https://wa.me/${whatsapp}");
+    expect(home, "número de telefone cravado na Central").not.toMatch(/wa\.me\/\d{8,}/);
+    expect(ler("client/src/pages/ajuda/tarefas.ts"), "número cravado no conteúdo").not.toMatch(/\b55\d{10,11}\b/);
+  });
+
+  it("a página da tarefa avisa (e não bloqueia) quando falta o módulo, com o mesmo contrato do ModuloGuard", () => {
+    const src = ler("client/src/pages/ajuda/AjudaTarefa.tsx");
+    expect(src).toContain('from "@/components/ModuloGuard"');
+    expect(src).toContain("useModulosContratados()");
+    // A régua da ROTA (modulosQueLiberam), não o `modulo` solto da tarefa.
+    expect(src).toContain("const modulosDaTela = modulosQueLiberam(tarefa);");
+    expect(src).toContain("contratoLibera(contratados, modulosDaTela)");
+    expect(src).not.toContain("[tarefa.modulo]");
+    expect(src).toContain("Este recurso depende do módulo");
+    expect(src, "o aviso precisa ser RENDERIZADO, não só definido").toContain("{semModulo && <AvisoModulo modulos={modulosDaTela} />}");
+    const corpo = src.slice(src.indexOf("export default function AjudaTarefa"));
+    // avisa, não bloqueia: entre calcular `semModulo` e renderizar não pode
+    // haver saída condicional — os passos continuam na tela sem o módulo.
+    const depois = corpo.slice(corpo.indexOf("const semModulo"));
+    const ateORender = depois.slice(0, depois.indexOf("return"));
+    expect(ateORender, "sem módulo a página AVISA; não pode sair antes dos passos").not.toMatch(/\bif\s*\(/);
+    expect(corpo.indexOf("<AvisoModulo")).toBeLessThan(corpo.indexOf("tarefa.passos.map"));
+    // hooks ANTES da saída antecipada (React #310)
+    expect(corpo.indexOf("useModulosContratados()")).toBeLessThan(corpo.indexOf("if (!tarefa) return"));
+    expect(src).toContain("Esta tarefa não existe");
+  });
+
+  it("o gate da tarefa é a régua do ModuloGuard sobre a rota de «Abrir a tela»: cadastrar-cliente abre no pacote só-processos", () => {
+    const por = (id: string) => TAREFAS_AJUDA.find((t) => t.id === id) as TarefaCompleta;
+    for (const t of completas) {
+      const daRota = modulosDaRota(t.abrirTela.rota);
+      // Rota com regra → a regra; sem regra (Configurações) → o módulo declarado.
+      expect(modulosQueLiberam(t), t.id).toEqual(daRota ?? (t.modulo ? [t.modulo] : []));
+      if (daRota && t.modulo) {
+        expect(daRota, `${t.id}: modulo "${t.modulo}" não é o que libera ${t.abrirTela.rota}`).toContain(t.modulo);
+      }
+    }
+    // O caso real: cesta do monitoramento-essencial (migration 0203) — /clientes
+    // abre lá como versão essencial (lê ?novo=1), então o manual não pode dizer "bloqueada".
+    const soProcessos = ["dashboard", "configuracoes", "processos"];
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("cadastrar-cliente")))).toBe(true);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("vigiar-processo")))).toBe(true);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("cobrar-cliente")))).toBe(false);
+    expect(contratoLibera(soProcessos, modulosQueLiberam(por("conectar-whatsapp")))).toBe(false);
+    expect(modulosQueLiberam(por("convidar-equipe"))).toEqual([]);
+    expect(ler("client/src/pages/ClientesEssencial.tsx")).toContain('get("novo") === "1"');
+    // Sem regra de rota, Configurações esconde a aba Canais pelo MESMO módulo que a tarefa declara.
+    expect(modulosQueLiberam(por("conectar-whatsapp"))).toEqual(["atendimento"]);
+    expect(ler("client/src/pages/Configuracoes.tsx")).toContain('const abaCanais = libera(["atendimento"]);');
+  });
+});
+
+describe("Central de ajuda — fonte única e servir os prints", () => {
+  it("nenhuma tela lê a lista de tarefas de outro lugar que não tarefas.ts", () => {
+    const fonteUnica = join(raiz, "client", "src", "pages", "ajuda", "tarefas.ts");
+    const usos: string[] = [];
+    for (const arquivo of arquivosTsx(join(raiz, "client", "src"))) {
+      const src = readFileSync(arquivo, "utf8");
+      const rel = arquivo.slice(raiz.length + 1);
+      if (arquivo !== fonteUnica) {
+        // uma segunda lista com o mesmo título é a divergência que se quer impedir
+        expect(src, `${rel} define tarefa por fora de tarefas.ts`).not.toContain('titulo: "Vigiar um processo"');
+        expect(src, `${rel} declara a própria lista de tarefas`).not.toMatch(/const TAREFAS[A-Z_]* = \[/);
+      }
+      if (/\b(TAREFAS_AJUDA|tarefaPorId|buscarTarefas|tarefasDoGrupo|GRUPOS_AJUDA)\b/.test(src) && arquivo !== fonteUnica) {
+        usos.push(rel);
+        expect(src, `${rel} usa a lista sem importar de pages/ajuda/tarefas`).toMatch(/from "(@\/pages\/ajuda\/tarefas|\.\/tarefas|\.\.\/ajuda\/tarefas)"/);
+      }
+    }
+    expect(usos, "a home e a página da tarefa precisam ler de tarefas.ts").toEqual(
+      expect.arrayContaining(["client/src/pages/Ajuda.tsx", "client/src/pages/ajuda/AjudaTarefa.tsx"]),
+    );
+  });
+
+  it("a pasta client/public/ajuda existe e o static de produção não redireciona /ajuda pra /ajuda/", () => {
+    // Com a pasta dist/public/ajuda no ar, o `express.static` padrão devolve
+    // 301 → "/ajuda/" antes de o index.html ter a vez (medido). O `redirect:
+    // false` é o que mantém a URL limpa e a rota do app inteira.
+    expect(existsSync(join(raiz, "client", "public", "ajuda"))).toBe(true);
+    const vite = semComentarios(ler("server/_core/vite.ts"));
+    const serve = vite.slice(vite.indexOf("export function serveStatic"));
+    expect(serve).toMatch(/express\.static\(distPath,\s*\{\s*redirect:\s*false\s*\}\)/);
+  });
+
+  it("os prints são PNG de até 250 KB, nomeados <tarefa>-<n>.png por tarefa que existe", () => {
+    const dir = join(raiz, "client", "public", "ajuda");
+    const arquivos = readdirSync(dir).filter((a) => a.endsWith(".png"));
+    expect(arquivos.length).toBeGreaterThan(0);
+    for (const a of arquivos) {
+      const m = a.match(/^([a-z0-9-]+)-(\d)\.png$/);
+      expect(m, `nome fora do padrão: ${a}`).toBeTruthy();
+      expect(tarefaPorId(m![1]), `${a} não pertence a tarefa nenhuma`).toBeTruthy();
+      const kb = statSync(join(dir, a)).size / 1024;
+      expect(kb, `${a} tem ${Math.round(kb)} KB — reduzir pra 1200px`).toBeLessThanOrEqual(250);
+      const cabecalho = readFileSync(join(dir, a)).subarray(0, 8).toString("hex");
+      expect(cabecalho, `${a} não é PNG`).toBe("89504e470d0a1a0a");
+    }
+  });
+});
+
+/** Rota do App.tsx → arquivo da página que ela renderiza (pelos imports; null quando é wrapper local). */
+function arquivoDaRota(rota: string): string | null {
+  const app = ler("client/src/App.tsx");
+  const corpo = app.slice(app.indexOf("<Switch>"), app.indexOf("</Switch>"));
+  const caminho = rota.split("?")[0];
+  // cada pedaço começa num <Route — sem regex preguiçoso engolindo o bloco vizinho
+  const bloco = corpo.split(/(?=<Route\b)/).find((b) => {
+    const path = b.match(/^<Route\s+path="([^"]+)"/)?.[1];
+    return !!path && new RegExp("^" + path.replace(/:[^/]+/g, "[^/]+") + "$").test(caminho);
+  });
+  if (!bloco) return null;
+  for (const [, comp] of bloco.matchAll(/<([A-Z]\w*)\s*\/>/g)) {
+    const imp = app.match(new RegExp(`import ${comp} from "\\./(pages/[^"]+)"`));
+    if (imp) return `client/src/${imp[1]}.tsx`;
+  }
+  return null;
+}
+
+describe("Central de ajuda — o que a revisão pegou", () => {
+  it("o link de cada tarefa na home e em «Tarefas ligadas» é /ajuda/<id> — o id, não o grupo nem o título", () => {
+    const home = semComentarios(ler("client/src/pages/Ajuda.tsx"));
+    const linha = home.slice(home.indexOf("function LinhaTarefa"), home.indexOf("export default function Ajuda"));
+    expect(linha, "LinhaTarefa sumiu da home").not.toBe("");
+    // «em breve» não vira link; a completa aponta pro id
+    const completa = linha.slice(linha.indexOf("if (!tarefaCompleta(tarefa))"));
+    expect(completa).toContain("href={`/ajuda/${tarefa.id}`}");
+    expect(linha.match(/href=/g)?.length, "a linha da home tem UM link").toBe(1);
+
+    const pag = semComentarios(ler("client/src/pages/ajuda/AjudaTarefa.tsx"));
+    const inicio = pag.indexOf('titulo="Tarefas ligadas"');
+    const ligadas = pag.slice(inicio, pag.indexOf("</Bloco>", inicio));
+    expect(ligadas, "bloco «Tarefas ligadas» sumiu").not.toBe("");
+    expect(ligadas).toContain("tarefaCompleta(t) ?");
+    expect(ligadas).toContain("href={`/ajuda/${t.id}`}");
+    expect(ligadas.match(/href=/g)?.length).toBe(1);
+
+    // e /ajuda/<id> é rota que existe pra todo id
+    const rotas = rotasDoApp();
+    for (const t of TAREFAS_AJUDA) expect(rotaExiste(`/ajuda/${t.id}`, rotas), t.id).toBe(true);
+  });
+
+  it("todo ?tab= que a Central cita existe como aba da tela de destino (value=\"…\"), inclusive nas rotas fora do catálogo", () => {
+    const literais: { onde: string; rota: string }[] = [];
+    for (const t of completas) literais.push({ onde: `tarefa ${t.id}`, rota: t.abrirTela.rota });
+    // rotas escritas nos componentes da Central (o «Ver meu plano» do aviso de módulo mora aqui)
+    for (const arquivo of [
+      "client/src/pages/Ajuda.tsx",
+      "client/src/pages/ajuda/AjudaTarefa.tsx",
+      "client/src/pages/ajuda/TextoComRotulos.tsx",
+      "client/src/components/AjudaDaTela.tsx",
+      "client/src/pages/dashboards/PrimeirosPassos.tsx",
+    ]) {
+      const src = semComentarios(ler(arquivo));
+      for (const m of src.matchAll(/(?:setLocation\(|href=)["'](\/[^"']*)["']/g)) literais.push({ onde: arquivo, rota: m[1] });
+    }
+    expect(literais.some((l) => l.rota === "/configuracoes?tab=meu-plano"), "o «Ver meu plano» saiu da varredura").toBe(true);
+    expect(literais.some((l) => l.rota.startsWith("/processos?tab=")), "a rota de «Vigiar um processo» saiu da varredura").toBe(true);
+
+    const rotas = rotasDoApp();
+    for (const { onde, rota } of literais) {
+      expect(rotaExiste(rota, rotas), `${onde}: rota ${rota} não existe no App.tsx`).toBe(true);
+      const tab = new URLSearchParams(rota.split("?")[1] ?? "").get("tab");
+      if (!tab) continue;
+      const arquivo = arquivoDaRota(rota);
+      expect(arquivo, `${onde}: não achei a tela de ${rota} pelos imports do App.tsx`).toBeTruthy();
+      // a aba tem que existir: Processos cai em "central" e Configurações abre sem aba quando o valor é desconhecido
+      expect(ler(arquivo!), `${onde}: a tela ${arquivo} não tem a aba value="${tab}"`).toContain(`value="${tab}"`);
+    }
+  });
+
+  it("a página da tarefa RENDERIZA o print de cada passo — não basta o PNG existir", () => {
+    const src = semComentarios(ler("client/src/pages/ajuda/AjudaTarefa.tsx"));
+    const laco = src.slice(src.indexOf("tarefa.passos.map"), src.indexOf("</ol>"));
+    expect(laco, "o laço dos passos sumiu").not.toBe("");
+    // com print → mostra; sem print, só o 1º passo mostra a moldura «print em breve»
+    expect(laco).toContain("{(passo.print || i === 0) && <Print src={passo.print} alt={`Tela real: ${passo.titulo}`} />}");
+    const print = src.slice(src.indexOf("function Print("), src.indexOf("function TarefaNaoEncontrada"));
+    expect(print).toContain("if (!src)");
+    expect(print).toContain("print em breve");
+    expect(print.replace(/\s+/g, " ")).toContain("<img src={src} alt={alt}");
+    expect(print).toContain('loading="lazy"');
+    // a promessa da home continua sendo verdade
+    expect(ler("client/src/pages/Ajuda.tsx")).toContain("Cada tarefa mostra a tela real");
+  });
+
+  it("o cabeçalho da tarefa tem os três chips do mockup: tempo, quem pode e «vídeo: em breve» (sem link)", () => {
+    const src = semComentarios(ler("client/src/pages/ajuda/AjudaTarefa.tsx"));
+    const header = src.slice(src.indexOf("<header"), src.indexOf("</header>"));
+    expect(header).toContain("{tarefa.tempo}");
+    expect(header).toContain("{tarefa.quemPode}");
+    const i = header.indexOf("<Clapperboard");
+    expect(i, "chip de vídeo sumiu do cabeçalho").toBeGreaterThan(header.indexOf("{tarefa.quemPode}"));
+    const chip = header.slice(i, header.indexOf("</span>", i));
+    expect(chip).toContain("vídeo:");
+    // o MESMO selo «em breve» das tarefas — vídeo é a camada 3 do mockup, «depois»
+    expect(chip).toContain(">em breve</Badge>");
+    expect(chip).not.toContain("<Link");
+    expect(src).toMatch(/import \{[^}]*\bClapperboard\b[^}]*\} from "lucide-react"/);
+  });
+
+  it("na aba Canais o «?» fica no título «Canais de comunicação» (como no h3 «Equipe»), não dentro do banner", () => {
+    const conf = semComentarios(ler("client/src/pages/Configuracoes.tsx"));
+    const i = conf.indexOf("Canais de comunicação");
+    const h3 = conf.slice(conf.lastIndexOf("<h3", i), conf.indexOf("</h3>", i));
+    expect(h3).toContain('<AjudaDaTela tarefa="conectar-whatsapp" />');
+    const j = conf.indexOf("Conexão simplificada via Facebook");
+    const banner = conf.slice(conf.lastIndexOf("<p", j), conf.indexOf("</p>", j));
+    expect(banner, "o «?» voltou pro banner").not.toContain("AjudaDaTela");
+    expect(conf.match(/<AjudaDaTela tarefa="conectar-whatsapp" \/>/g)?.length).toBe(1);
+    const k = conf.indexOf('<AjudaDaTela tarefa="convidar-equipe" />');
+    expect(conf.slice(conf.lastIndexOf("<h3", k), k)).toContain("Equipe");
+  });
+
+  it("o manual não promete «sem risco de banimento» — o produto grava o status «banido» e freia em qualidade RED", () => {
+    expect(ler("client/src/pages/ajuda/tarefas.ts")).not.toMatch(/banimento/i);
+    const t = tarefaPorId("conectar-whatsapp") as TarefaCompleta;
+    expect(t.antesDeComecar).toContain("API oficial da Meta (número não clonado)");
+    expect(t.antesDeComecar).toContain("qualidade do número");
+    expect(ler("drizzle/schema.ts")).toContain('"banido"');
+  });
+
+  it("«Vigiar um processo» descreve o botão do diálogo de CNJ como ele é (leva a sigla) e cita «Avisar quando chegar» só onde o Cofre tem esse rótulo", () => {
+    const t = tarefaPorId("vigiar-processo") as TarefaCompleta;
+    const proc = semComentarios(ler("client/src/pages/Processos.tsx"));
+    const dialogo = proc.slice(proc.indexOf("<DialogTitle>Monitorar movimentações</DialogTitle>"), proc.indexOf("Credencial OAB"));
+    expect(dialogo, "diálogo de CNJ não encontrado").not.toBe("");
+    expect(dialogo).toContain("Avisar quando o {tribunalForaDaCobertura.sigla} chegar");
+    expect(dialogo, "o rótulo do Cofre não existe neste diálogo").not.toContain("Avisar quando chegar");
+    const passo2 = t.passos[1];
+    expect(passo2.texto).not.toContain("«Avisar quando chegar»");
+    expect(passo2.texto).toContain("botão de avisar quando o tribunal chegar");
+    const cofre = proc.slice(proc.indexOf("function CofreTab"));
+    expect(cofre).toContain("Avisar quando chegar");
+    const falha = t.seNaoDeuCerto.find((f) => f.titulo === "Tribunal fora da cobertura");
+    expect(falha?.texto).toContain("No Cofre");
+    expect(falha?.texto).toContain("«Avisar quando chegar»");
+  });
+
+  it("o seed dos prints (povoar.sql) não carrega os telefones reais registrados no CLAUDE.md", () => {
+    const seed = ler("scratchpad/estudo-telas/povoar.sql");
+    for (const real of ["99796-5706", "97965706", "8811-1508", "88111508", "98111508"]) {
+      expect(seed, `número real no seed: ${real}`).not.toContain(real);
+    }
+    expect(seed).toContain("telefoneContato='(85) 99999-0001'");
+  });
+});

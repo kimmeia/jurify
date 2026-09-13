@@ -75,7 +75,7 @@ describe("chamarIA — provider Anthropic", () => {
   it("usa endpoint anthropic.com quando config.provider='anthropic'", async () => {
     obterConfigChatBotMock.mockResolvedValue({
       provider: "anthropic",
-      modelo: "claude-sonnet-4-20250514",
+      modelo: "claude-sonnet-4-6",
       anthropicApiKey: "sk-ant-xxx",
       maxTokens: 800,
       temperatura: 0.5,
@@ -94,7 +94,7 @@ describe("chamarIA — provider Anthropic", () => {
     expect(r).toBe("Resposta do Claude");
     expect(fetchCalls).toHaveLength(1);
     expect(fetchCalls[0].url).toContain("anthropic.com");
-    expect(fetchCalls[0].body.model).toBe("claude-sonnet-4-20250514");
+    expect(fetchCalls[0].body.model).toBe("claude-sonnet-4-6");
     expect(fetchCalls[0].body.max_tokens).toBe(800);
     expect(fetchCalls[0].body.temperature).toBe(0.5);
   });
@@ -216,7 +216,7 @@ describe("executarAgente — respeita provider do agente", () => {
       id: 1,
       nome: "Bot Trabalhista",
       prompt: "Especialista em trabalhista.",
-      modelo: "claude-sonnet-4-20250514",
+      modelo: "claude-sonnet-4-6",
       provider: "anthropic",
       anthropicApiKey: "sk-ant",
       maxTokens: 1500,
@@ -232,7 +232,7 @@ describe("executarAgente — respeita provider do agente", () => {
     await exec.executarAgente(1, "minha pergunta");
 
     expect(fetchCalls[0].url).toContain("anthropic.com");
-    expect(fetchCalls[0].body.model).toBe("claude-sonnet-4-20250514");
+    expect(fetchCalls[0].body.model).toBe("claude-sonnet-4-6");
     expect(fetchCalls[0].body.max_tokens).toBe(1500);
     expect(fetchCalls[0].body.system).toContain("Especialista em trabalhista");
     expect(fetchCalls[0].body.system).toContain("doc xyz");

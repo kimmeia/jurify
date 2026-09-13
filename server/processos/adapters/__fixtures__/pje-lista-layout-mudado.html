@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>PJe — Consulta de processos (fixture sintética, layout mudado)</title></head>
+<body>
+<form id="fPP">
+  <!-- O tribunal trocou os títulos das colunas. Os dados estão lá, mas sem
+       "Classe" nem "Polo ativo" reconhecíveis o parser tem que devolver
+       VAZIO — ler pela posição entregaria o campo errado. -->
+  <table id="fPP:processosTable" class="rich-table">
+    <thead>
+      <tr>
+        <th>Identificador</th>
+        <th>Tipo</th>
+        <th>Unidade</th>
+        <th>Data</th>
+        <th>Parte A</th>
+        <th>Parte B</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>3024938-55.2026.8.06.0001</td>
+        <td>Busca e Apreensão em Alienação Fiduciária</td>
+        <td>3ª Vara Cível de Fortaleza</td>
+        <td>11 ago 2025</td>
+        <td>AURORA TELECOM NORDESTE S.A.</td>
+        <td>MARCOS AURÉLIO RIBEIRO LIMA</td>
+      </tr>
+    </tbody>
+  </table>
+</form>
+</body>
+</html>

@@ -202,6 +202,21 @@ export async function checkPermission(
   // permissões customizadas pelo admin no painel.
   let cargoId = (esc.colaborador as any).cargoPersonalizadoId as number | null | undefined;
 
+  // Cargo gravado que pertence a OUTRO escritório não vale: `permissoes_cargo`
+  // não tem escritorioId, então seguir o id alheio aplicaria a matriz de lá.
+  // Trata como se não houvesse cargo personalizado (cai no nome do cargo).
+  if (cargoId) {
+    const db = await getDb();
+    if (db) {
+      const [cp] = await db
+        .select({ escritorioId: cargosPersonalizados.escritorioId })
+        .from(cargosPersonalizados)
+        .where(eq(cargosPersonalizados.id, cargoId))
+        .limit(1);
+      if (!cp || cp.escritorioId !== esc.escritorio.id) cargoId = null;
+    }
+  }
+
   if (!cargoId) {
     const NOMES_CARGO: Record<string, string> = {
       dono: "Dono",

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Check, Sparkles } from "lucide-react";
 import { Reveal, staggerParent, staggerItem } from "./lpkit";
+import { textoCoberturaPricing } from "@shared/tribunais-pje";
 
 interface Props {
   onCta: (modo: "login" | "signup") => void;
@@ -86,6 +87,7 @@ export function Pricing({ onCta }: Props) {
             resumo em português.
             {trialMaiorDias > 0 ? ` Teste grátis por ${trialMaiorDias} dias, sem cartão.` : ""}
           </p>
+          <p className="mt-3 text-[13px] text-info/55">{textoCoberturaPricing()}</p>
         </Reveal>
 
         {isLoading || !planos ? (

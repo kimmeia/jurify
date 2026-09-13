@@ -16,6 +16,7 @@
  *   3. Fallback pra key admin do JuridFlow (admin_integracoes.openai)
  */
 
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { z } from "zod";
 import { protectedProcedure, router } from "../_core/trpc";
 import { requireModulo } from "../_core/trpc-gates";
@@ -942,13 +943,13 @@ export const agentesIaRouter = router({
               "x-api-key": resolved.key,
               "anthropic-version": "2023-06-01",
             },
-            body: JSON.stringify({
+            body: JSON.stringify(montarBodyAnthropic({
               model: agente.modelo || "claude-haiku-4-5-20251001",
               system: systemPrompt,
               messages: [{ role: "user", content: input.pergunta }],
-              max_tokens: maxTokens,
-              temperature: temperatura,
-            }),
+              maxTokens,
+              temperatura,
+            })),
             signal: AbortSignal.timeout(30000),
           });
 
@@ -963,7 +964,7 @@ export const agentesIaRouter = router({
           };
 
           return {
-            resposta: data.content?.[0]?.text?.trim() || "(sem resposta)",
+            resposta: textoDaRespostaAnthropic(data) || "(sem resposta)",
             tokensUsados: (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0),
           };
         }

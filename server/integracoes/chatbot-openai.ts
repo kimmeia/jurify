@@ -1,3 +1,4 @@
+import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
 import { createLogger } from "../_core/logger";
 const log = createLogger("integracoes-chatbot-openai");
 
@@ -39,12 +40,12 @@ export async function gerarRespostaAnthropic(
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: modelo || "claude-haiku-4-5-20251001", system: prompt, messages, max_tokens: maxTokens || 500, temperature: temperatura || 0.7 }),
+      body: JSON.stringify(montarBodyAnthropic({ model: modelo || "claude-haiku-4-5-20251001", system: prompt, messages, maxTokens: maxTokens || 500, temperatura: temperatura || 0.7 })),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) { const err = await res.text(); log.error({ status: res.status, err }, "Anthropic retornou erro"); return { resposta: null, tokensUsados: 0, erro: `Claude ${res.status}` }; }
     const data = await res.json();
-    const texto = data.content?.[0]?.text?.trim() || "";
+    const texto = textoDaRespostaAnthropic(data);
     const tokens = (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0);
     return { resposta: texto, tokensUsados: tokens };
   } catch (err: any) {

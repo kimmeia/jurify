@@ -1,10 +1,47 @@
 # JuridFlow — guia rápido para sessões Claude Code
 
+> ## ⚠ Leia primeiro: correções de 12/09/2026
+>
+> Uma auditoria de leitura conferiu este arquivo contra o código. **Onde este
+> texto e o código discordam, o código ganha.** O estado atual do produto está
+> em **`docs/ESTADO-DO-SISTEMA.md`** — comece por lá.
+>
+> Correções já aplicadas aqui: a contagem de testes, e as cinco citações
+> `arquivo:linha` (as cinco apontavam pro lugar errado; agora citam o símbolo).
+>
+> **Trechos abaixo que estão DESATUALIZADOS e não foram reescritos** (reescrever
+> narrativa do dono sem autorização seria remoção; a correção está no documento
+> de estado):
+>
+> - **Fila item A (JurisIA)** diz "Nenhum plano libera hoje" e "não existe como
+>   comprar". **Falso desde 09/09:** a migration 0217 criou o plano `escala` com
+>   `jurisia_mensagens_mes = 200` e `'jurisia'` na cesta, e a lista de vantagens
+>   do plano vende "JurisIA: pesquisa jurisprudencial (200 consultas por mês)".
+>   Está vendido. Os itens A.1 (cobrança cruzada), A.6 (zero Sentry, nenhuma tela
+>   de consumo) seguem abertos — e agora valem em produção.
+> - **"novas ações (CPF/CNPJ) hoje é SÓ TJCE"** — desatualizado. O adapter é
+>   genérico (o próprio `cnj-parser.ts` diz "adapter genérico em pje-tjce.ts
+>   cobre todos"), `consultarTjcePorCpf` recebe a config do tribunal, e o cron
+>   percorre os tribunais do monitoramento. `shared/tribunais-pje.ts` oferece 16.
+>   O que segue verdade: só o TJCE foi validado em campo. Escreva "ligado para
+>   16, comprovado em 1".
+> - **Pendência 4 (conferências do robô de jornada)** está certa, e é pior: o
+>   painel grava `conferenciasTotal` — quantas existem — sem rodar nenhuma.
+> - **Entregas de 11/09 sem registro:** botões do fluxo na conversa, assinado sem
+>   comprovante (migration 0220) e **crédito virou teto mensal por plano**
+>   (migration 0221, `escritorio_uso_mensal`). A última troca uma regra de
+>   negócio central e não tem uma linha aqui.
+> - **Duas migrations numeradas 0220** coexistem (`0220_assinatura_comprovante_erro`
+>   e `0220_lead_cancelamento`).
+> - **Anti-pattern "hardcode `cargo === 'dono'`"** está na prática limpo: as 13
+>   ocorrências são o resolvedor da matriz, proteção do registro do dono,
+>   governança deliberada e um fallback documentado. Não gastar tempo aqui.
+
 ## Comandos essenciais
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 5.526 verdes em 11/09/2026 (378 arquivos, ~2 min)
+pnpm test               # vitest (server/**/*.test.ts) — 5.975 verdes em 13/09/2026 (400 arquivos, ~1min30)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -104,6 +141,46 @@ no caminho; refatorar não é licença pra apagar; código "aparentemente
 morto" também não sai sem perguntar. Na dúvida, pergunta antes. (Origem:
 ele estranhou um suposto sumiço do timeout do Atendente IA — era alarme
 falso, mas a regra fica.)
+
+### Documento vivo do estado do sistema (regra do dono, 12/09/2026)
+
+`docs/ESTADO-DO-SISTEMA.md` é o retrato de onde o produto está. **Toda
+entrega atualiza esse arquivo no MESMO commit da entrega** — não depois,
+não num commit separado de "docs". Se a mudança não cabe no documento,
+ela não está pronta.
+
+O que cada entrega revisita lá:
+- **Baseline** — rodou `pnpm test`? o número é o que o terminal mostrou
+- **Módulos** — algum módulo mudou de estado (casca → parcial → completo)?
+- **Pendências** — fechou item? abriu item? mudou o prazo de algum?
+- **Dependências externas** — mexeu em Meta, Asaas, OpenAI/Anthropic,
+  DataJud, Resend, Twilio ou BACEN? então versão, endpoint e data de
+  conferência mudam
+- **Regras de negócio** — mudou regra que decide dinheiro, permissão ou prazo?
+
+Três regras de escrita, cada uma nascida de um erro medido neste repo:
+1. **Cite símbolo, nunca linha.** `exigirPlanoContratavel` em
+   `planos-repo.ts`, não `planos-repo.ts:147`. Em 12/09/2026 as CINCO
+   citações `arquivo:linha` deste CLAUDE.md apontavam todas pro lugar
+   errado. Linha apodrece em dias; nome de função não.
+2. **Número medido, ou número nenhum.** Contagem de teste, de achado, de
+   tabela só entra junto com o comando que a produziu. Este arquivo dizia
+   "5.526 testes em 378 arquivos"; o real era 5.570 em 380.
+3. **Estado, não diário.** O documento responde "onde estamos hoje". O
+   histórico de como chegamos aqui fica aqui no CLAUDE.md e no git.
+
+**Regra de leitura, a que mais importa:** quando este CLAUDE.md e o código
+discordam, **o código ganha** — e corrigir o CLAUDE.md faz parte da tarefa
+que descobriu a diferença.
+
+Por que a regra existe, em um exemplo: o commit `e2e3c0b` (11/09) trocou
+uma regra de negócio central — crédito parou de decidir operação, entrou
+teto mensal por plano (migration 0221) — e este arquivo não tem uma linha
+sobre isso. Pior: por causa da defasagem, a seção da fila abaixo afirma
+que o JurisIA "não tem como ser vendido", quando ele **já está sendo
+vendido** no plano Escala desde 09/09, com os riscos jurídicos que o
+próprio texto classificou como "pode esperar, ninguém compra ainda".
+Documentação velha não é inútil: ela faz tomar decisão errada.
 
 ### Comentários
 - Default: NÃO escrever. Só pra "WHY" não-óbvio (workaround, invariant escondido, surpresa pra um leitor futuro)
@@ -301,6 +378,20 @@ biblioteca e worker TÊM que ser da mesma variante, misturar dá
 "sendWithPromise null"), e o canvas da assinatura preserva os traços em
 resize (teclado do Android apagava a assinatura desenhada).
 
+### Chamadas à Anthropic passam pelo helper (12/09/2026)
+
+Toda chamada a `api.anthropic.com` monta o corpo com `montarBodyAnthropic` e lê a
+resposta com `textoDaRespostaAnthropic` (`server/_core/anthropic-http.ts`).
+Motivo medido: Opus 4.7+ e toda a família Claude 5 devolvem **400** se recebem
+`temperature`/`top_p`/`top_k`, e `ai-call.ts` mandava `temperature` pro
+`claude-opus-4-7` — Atendente IA, captura de campos e JurisIA quebrados em
+silêncio. O helper também troca modelo **retirado** pelo substituto oficial
+(`claude-sonnet-4-20250514` era o padrão do JurisIA e está retirado desde
+15/06/2026) e, na família 5, protege o `max_tokens` do raciocínio. Amarra:
+`anthropic-http.test.ts` — quebra se um arquivo do servidor mandar
+`temperature` por fora, ler `content[0]` ou usar modelo retirado como padrão.
+Mesma ideia do `montarBodyOpenAIChat` que já existia pro lado OpenAI.
+
 ### Migration safety
 
 - ALTER TABLE ADD COLUMN sempre com default pra cobrir rows antigas non-destrutivamente
@@ -351,12 +442,12 @@ P0 em uma linha cada (detalhe e linhas no relatório):
   padrão × botão "Testar grátis").
 - **C · dinheiro** — taxa do Asaas vira despesa 2× (webhook + cron do extrato).
 - **D · admin** — "Excluir conta permanentemente" na Equipe exclui o DONO
-  (`AdminClients.tsx:1693` usa `userId` do prop, não `current`).
+  (em `AdminClients.tsx`, o botão usava `userId` do prop, não `current`).
 - **E · Twilio** — "Ligar" liga pro CLIENTE com mensagem de teste
   (**decisão do dono**: esconder o botão é remoção).
 
 Regressão da entrega de 02/09 que entra no P1: o `maskPhoneBR` local do
-Atendimento (`Atendimento.tsx:471`) não corta o DDI — deep-link
+Atendimento (`Atendimento.tsx`) não cortava o DDI — deep-link
 `?telefone=` com número do cadastro `5585…` preenche `(55) 85997-9657` e o
 envio vai pra número inválido. Fix: delegar pra `mascararTelefoneBR` do
 shared (atendimento-x1).
@@ -1385,40 +1476,58 @@ saudação, precisa de mockup próprio); tabela do Financeiro virar cartão no
 celular (hoje rola dentro da moldura — virar cartão é redesenho); contraste
 do valor verde-escuro no hero verde (decisão de cor).
 
-### Entregue 13/09 — a cor do menu, nos dois produtos ("pode fazer")
+### A cor do menu — DUAS decisões do dono colidiram em 13/09; a dele que está
+### no ar VENCEU, e a outra ficou em espera
 
-Ele mandou o print do header do Devular: *"vamos usar essa cor do header na
-mesma transparência para o menu de juridflow e também para o menu de devular"*.
-O valor está em `crm-saas` `client/src/pages/Home.tsx:148` —
-`bg-[#07060f]/80 backdrop-blur-md`, borda `white/10`.
+Duas sessões receberam pedidos diferentes sobre o MESMO token no mesmo dia, e
+os dois foram aprovados por ele. **Quem lê isto depois: não "corrija" um pelo
+outro sem ele mandar.**
 
-**O achado que decidiu a forma:** "a mesma transparência" NÃO dá a mesma cor
-nos dois lugares, porque o que está atrás muda. Medido com canvas, não no olho:
-o header sobre o hero escuro do Devular rende `#080710`; os MESMOS 80% num
-menu lateral, que tem a página clara atrás, rendem `#37363e` — grafite. Por
-isso vai **sólido `#07060f`**: é a cor que se vê, e fica idêntica nos dois
-produtos independente do fundo. Mockup `mockup-cor-do-menu.html` com as quatro
-variantes fotografadas no app rodando, em tamanho real.
+- **O que está no ar** (sessão da tarde, mergeado em `develop` e `main`): o
+  menu veste a cor da LOGO — `--sidebar: oklch(0.205 0.045 296)`, que rende
+  `#191229`, roxo-quase-preto. Pedido dele: *"Vamos deixar a cor desse menu
+  mais alinhado com a logo real?"*. Seção 19 do `docs/ESTADO-DO-SISTEMA.md`,
+  amarra `menu-cor-da-logo.test.ts`.
+- **O que ficou de fora** (esta sessão): `--sidebar: #07060f`, a cor do header
+  do Devular. Pedido dele, com o print do header: *"vamos usar essa cor do
+  header na mesma transparência para o menu de juridflow e também para o menu
+  de devular"*, aprovado no `mockup-cor-do-menu-devular.html` (variante B —
+  renomeado no merge porque a outra sessão chamou o comparador DELA pelo mesmo
+  nome, e o nome curto ficou com a decisão que está no ar)
+  e com "merge" autorizado.
 
-- **JuridFlow (feito e conferido):** `--sidebar: #07060f` nos DOIS temas — o
-  menu é o mesmo objeto no claro e no escuro. Item ativo fica no azul de hoje
-  (`#24384f`): sobre o quase-preto ele GANHA contraste; a variante que
-  neutralizava esse azul quase apagava onde o usuário está. O comentário do
-  token dizia "Ardósia, não quase-preto" — era a decisão anterior e virou o
-  contrário do código; reescrito. Sonda de pixel no app rodando confirma
-  `#07060f`. Amarra `cor-do-menu.test.ts` (5 testes, 6 mutações vermelhas em
-  `scratchpad/mutar-cor-do-menu.py`) — ela proíbe a transparência voltar, que é
-  o erro que PARECE certo: copiar a linha do Devular e receber cinza.
-- **Devular (`crm-saas`, branch `claude/cor-do-menu-13-09`, NÃO conferido
-  visualmente):** lá o menu era quase branco com texto escuro, então os cinco
-  tokens mudam juntos (texto, item ativo, contraste do item, borda em branco
-  10%, acento) — trocar só o fundo deixaria texto preto sobre preto. Entrou
-  também `color-scheme: dark` na barra, que o JuridFlow já pagou para aprender
-  (sem isso o navegador pinta a rolagem nativa em cinza claro cortando o menu).
-  **Não foi possível subir aquele app aqui**: o proxy bloqueia
+**Por que a do ar venceu, e não a mais nova.** O mockup que ele aprovou aqui
+fotografou o "hoje" como `#16202c` — o azul-ardósia, que já estava substituído
+pelo roxo quando ele olhou. Ou seja: ele nunca comparou `#07060f` contra o
+roxo da logo; comparou contra uma tela que não existe mais. Trocar seria
+desfazer, sem mockup, uma decisão dele que está em produção — as duas regras
+da casa (mockup antes, nunca remover sem autorização expressa) apontam pro
+mesmo lado. O código de `#07060f` está inteiro no commit `48e8236` desta
+branch (CSS, `cor-do-menu.test.ts`, `scratchpad/mutar-cor-do-menu.py`): se ele
+escolher essa, é um `git cherry-pick` e resolver o token.
+
+**O achado que sobrevive à escolha, e que vale pros dois produtos:** "a mesma
+transparência" NÃO dá a mesma cor em lugares diferentes, porque o que está
+atrás muda. Medido com canvas (não no olho): o header sobre o hero escuro do
+Devular rende `#080710`; os MESMOS 80% num menu lateral, que tem a PÁGINA
+CLARA atrás, rendem `#37363e` — grafite. Copiar a linha `bg-[#07060f]/80` de
+um pro outro parece certo e entrega cinza. Por isso, onde a cor do Devular for
+usada num menu, ela vai **sólida**.
+
+- **Devular (`crm-saas`, branch `claude/cor-do-menu-13-09`, NÃO mergeada e NÃO
+  conferida visualmente):** lá o menu era quase branco com texto escuro, então
+  os cinco tokens mudam juntos (texto, item ativo, contraste do item, borda em
+  branco 10%, acento) — trocar só o fundo deixaria texto preto sobre preto.
+  Entrou também `color-scheme: dark` na barra, que o JuridFlow já pagou para
+  aprender (sem isso o navegador pinta a rolagem nativa em cinza claro cortando
+  o menu). **Não foi possível subir aquele app aqui**: o proxy bloqueia
   `codeload.github.com` (403) e uma dependência vem de lá, então `pnpm install`
-  falha. A amarra de lá (6 testes, 6 mutações vermelhas) foi rodada com o
-  vitest do jurify, porque o teste só lê o CSS.
+  falha — sem foto e sem `pnpm check`/`pnpm test`, os pré-requisitos de merge
+  da casa não podem nem ser avaliados. A amarra de lá (6 testes, 6 mutações
+  vermelhas) foi rodada com o vitest do jurify, porque o teste só lê o CSS.
+  **Esta branch também depende da escolha acima**: se o JuridFlow fica no roxo
+  da logo e o Devular vai pro `#07060f`, cada produto veste a própria marca —
+  que é o que eu recomendo, e não é o que o pedido dele dizia ("nos dois").
 
 ### Raio-X do design em produção (13/09)
 
@@ -1462,6 +1571,43 @@ zeros, então nada gravado precisa de recadastro. A chave colada em
 Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
 (crypto-utils) — não era o problema. Amarra: `agentes-api-key-crypto.test.ts`
 (6 mutações vermelhas).
+
+## Entregas de 12–13/09/2026 (resumo; detalhe em `docs/ESTADO-DO-SISTEMA.md`)
+
+- **Mergeado em develop e main (12/09, "pode mergear")**: Instagram "em breve"
+  (`canalEmBreve`), texto honesto de tribunais (`coberturaTribunais` na shared,
+  migrations 0223/0224, fila "Avisar quando chegar" com e-mail), cancelar
+  honrando a cláusula 5 (migration 0225, `emCarenciaDeCancelamento`,
+  Reativar), "Sob medida" ≥ Escala (0226), helper único da Anthropic
+  (seção acima), D-13 (cadastro nunca apaga conta) e D-15 (cargo só do próprio
+  escritório).
+- **Mergeado em develop e main (13/09, "pode mergear")**: motor próprio fase 1 — despachante por
+  tribunal, TRT2/TRT15 por consulta pública, 24 TRTs com credencial "em teste",
+  parsers puros com `linkedom`, migration 0227. Regras de integração que
+  ficaram: consulta pública vence a credencial quando existe; busca por CPF só
+  onde `tribunalRequerCredencial`; TRTs em teste não entram no número vendido.
+  Só o dono valida nos portais (ordem em ESTADO 15.1.1).
+- **Na branch, aprovado pelo dono em 13/09 ("menu aprovado")**: o menu lateral
+  veste a cor da logo — fundo roxo-quase-preto, «Jurid» em branco puro, «Flow»
+  e o item aberto em violeta; o marinho segue sendo a cor de ação do CONTEÚDO.
+  O violeta exato da logo não passa de contraste sobre o menu (2,89:1 antes,
+  3,18:1 depois, mínimo 4,5); o tom entregue é a clareada mínima, 5,41:1.
+  Comparador `mockup-cor-do-menu.html` (opções A e C ficaram lá). Amarra
+  `menu-cor-da-logo.test.ts`, 11 mutações vermelhas. Detalhe na seção 19 do
+  documento de estado; a skill `mockup-juridflow` foi corrigida junto, porque
+  dizia que violeta não é o app.
+- **Mergeado em develop e main (13/09, "pode mergear")**: Central de ajuda (`mockup-central-de-
+  ajuda.html`, "pode fazer" com as recomendações; ESTADO seção 18) — `/ajuda`
+  e `/ajuda/:tarefa` (`ClientAreaSoTermos`), 5 tarefas com prints reais + 16
+  "em breve", botão Ajuda na barra lateral, `AjudaDaTela` nas 5 telas,
+  Primeiros passos no Dashboard do dono (`ajuda.primeirosPassos`,
+  `shared/primeiros-passos.ts`), Visão rápida de Saúde em 3 linhas
+  (`shared/saude-semaforos.ts`; `capturaConfigurada` = `SENTRY_DSN_BACKEND ||
+  SENTRY_DSN`). Regra que nasceu aqui: rótulo de tela citado no manual vai
+  entre «» e tem que existir no arquivo da tela (teste `central-de-ajuda`).
+  O mockup foi desenhado na paleta antiga (violeta/Poppins); a implementação
+  segue o app (marinho, Inter). Amarras: `central-de-ajuda`,
+  `primeiros-passos`, `saude-semaforos` — 146 mutações vermelhas.
 
 ## Fila combinada com o dono (31/08/2026)
 
@@ -1520,7 +1666,7 @@ deixa de ser "sem dado", então gira eternamente. Só a Milena vê porque o
 cargo dela é verProprios e o lead não é dela. Fix: separar carregando de
 vazio (vale pra tela toda). Decisão do dono em aberto: quem ATENDE a conversa
 deveria poder abrir a ficha do contato? (mudar isso mexe na regra de acesso).
-**Estado 03/09**: (2) resolvido — `Clientes.tsx:2919` separa carregando de
+**Estado 03/09**: (2) resolvido — em `Clientes.tsx`, `ClienteDetalhe` separa carregando de
 vazio ("Não foi possível abrir este cadastro", com cadeado) e a decisão de
 acesso virou a entrega H; (1) editar o nome inline NÃO foi feito, aguarda o
 "pode fazer" dele.
@@ -1870,10 +2016,11 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    mudança relevante no texto = bump em TERMOS_VERSAO (dispara re-aceite).
 3. **HMAC da Meta em modo brando** — sem App Secret cadastrado, o webhook
    ACEITA a requisição e só loga aviso (`verif.mode === "no-secret"` em
-   whatsapp-cloud-webhook.ts): qualquer um na internet forja mensagem
-   recebida, cria conversa falsa e dispara SmartFlow. Conferido ainda aberto
-   em 10/09, no dia do lançamento — o dono foi avisado pra checar
-   /admin → Integrações → WhatsApp Cloud. Endurecer em produção.
+   whatsapp-cloud-webhook.ts). **12/09: o dono confirmou que o App Secret
+   está cadastrado no painel** (Integrações → WhatsApp Cloud) — em produção
+   o webhook está no modo estrito. O código continua fail-open sem secret
+   (decisão de desenho registrada no documento de estado); não cobrar de
+   novo.
 4. **Conferências do robô de jornada** só rodam pelo Playwright — ligar no
    executor do painel. Depois: cron de staging de hora em hora.
 5. **CSP desligado** no Helmet; **body-parser 3GB em memória** (OOM) — sai
@@ -1891,7 +2038,9 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    mockup; sem ela, esvazia o histórico de todo mundo e vira remoção.
 7. **Portão `contatoEhDoEscritorio` duplicado** (10/09) — a fonte única está
    em `server/escritorio/contato-do-escritorio.ts` e só a agenda usa; as
-   cópias privadas em `router-crm.ts:70` e `router-kanban.ts:60` continuam.
+   cópias privadas continuam em `router-crm.ts` e `router-kanban.ts`, com
+   OUTRO nome (`contatoDoEscritorio`); e há uma segunda duplicata que este
+   registro não citava: `colaboradorDoEscritorio`, copiada nos dois routers.
    Apontar as duas pra ela é higiene, não segurança (as três funcionam) — e
    é remoção de código, então precisa de autorização.
 
@@ -1946,6 +2095,9 @@ no dia 1 — é o número que diz se o anúncio vai pagar.
 - ❌ Frontend lendo `c.customerKey` ou `c.username` da view do cofre (não existem)
 - ❌ Procedure mostrar erro só no response sem persistir
 - ❌ Hardcode `cargo === "dono"` (use checkPermission)
+- ❌ `fetch` à `api.anthropic.com` montando o body à mão — `temperature` dá 400
+  em Opus 4.7+/Claude 5 e `content[0]` pode ser raciocínio; use
+  `montarBodyAnthropic` + `textoDaRespostaAnthropic`
 - ❌ confirm() nativo do browser pra ações destrutivas (use AlertDialog) —
   catraca em `robo-acao-cercas.test.ts` com a dívida por arquivo: a lista só
   encolhe. Além do padrão, o robô de ação NÃO consegue responder confirm(),
