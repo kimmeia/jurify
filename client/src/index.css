@@ -168,12 +168,16 @@
    * de o shadcn manter uma paleta `--sidebar-*` independente da paleta geral
    * — trocar aqui não mexe em mais nada.
    *
-   * No tema escuro estes valores são sobrescritos em `.dark` (um pouco mais
-   * claros que o fundo, senão o menu some no plano de fundo).
+   * No tema escuro os demais valores são sobrescritos em `.dark`; a cor do
+   * fundo é a MESMA nos dois temas, de propósito — o menu é o mesmo objeto.
    *
-   * Ardósia, não quase-preto: o contraste com o conteúdo branco continua
-   * fazendo o trabalho, e a barra para de pesar na tela. */
-  --sidebar: oklch(0.240 0.027 253);
+   * `#07060f` é a cor do header do Devular (`bg-[#07060f]/80` em
+   * `crm-saas` client/src/pages/Home.tsx). Lá ele flutua sobre um hero escuro
+   * e os 80% quase não clareiam, então aparenta #080710; aqui o menu tem a
+   * PÁGINA CLARA atrás, e repetir os 80% renderizaria #37363e — grafite, não
+   * o quase-preto do original. Por isso vai sólido: é a cor que se vê, e ela
+   * fica idêntica nos dois produtos independente do que houver atrás. */
+  --sidebar: #07060f;
   --sidebar-foreground: oklch(0.847 0.018 248);
   --sidebar-accent: oklch(0.335 0.048 253);
   --sidebar-accent-foreground: oklch(0.99 0 0);
@@ -255,7 +259,8 @@
   --chart-3: oklch(0.600 0.100 250);
   --chart-4: oklch(0.500 0.095 252);
   --chart-5: oklch(0.400 0.080 254);
-  --sidebar: oklch(0.180 0.015 253);
+  /* A mesma cor do tema claro: o menu é o mesmo objeto nos dois temas. */
+  --sidebar: #07060f;
   --sidebar-foreground: oklch(0.843 0.017 245);
   --sidebar-accent: oklch(0.268 0.042 252);
   --sidebar-accent-foreground:  oklch(0.985 0 0);
