@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>JuridFlow — Hoje</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOJE — a tela de entrada reconstruída.
+   Não é o Dashboard repintado: o Dashboard de hoje é saudação + cartão de
+   dinheiro + gráfico + cartão de agenda + 3 cartões. Aqui a estrutura é outra:
+   uma FRASE que diz o estado do escritório, o DIA como uma coluna de tempo,
+   uma RÉGUA DE PRAZOS com contagem regressiva, e o dinheiro numa linha só.
+   Nada de cartão de KPI, nada de gráfico decorativo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root{
+  --preto:#07060f;        /* a cor do menu, que agora é a do app inteiro */
+  --superficie:#0d0c17;
+  --superficie2:#13111f;
+  --fio:rgba(255,255,255,.07);
+  --fio2:rgba(255,255,255,.13);
+  --texto:#eceaf4;
+  --texto2:#9d98b3;
+  --texto3:#6b6782;
+  --marca:#9a73ff;
+  --urgente:#ff6b5e;
+  --ok:#4fd18b;
+  --dinheiro:#7fe0a8;
+  --fonte:"Inter",-apple-system,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--preto);color:var(--texto);font-family:var(--fonte);
+     font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+     font-variant-numeric:tabular-nums;display:flex;height:100vh;overflow:hidden}
+
+/* ── menu: o mesmo que já está no ar ───────────────────────────────────── */
+.menu{width:216px;flex:none;background:var(--preto);border-right:1px solid var(--fio);
+      display:flex;flex-direction:column;padding:18px 0 14px}
+.marca{display:flex;align-items:center;gap:9px;padding:0 18px 22px;font-size:17px;font-weight:700;
+       letter-spacing:-.02em}
+.marca .j{font-family:Poppins,var(--fonte);font-size:21px}
+.marca .flow{color:var(--marca)}
+.grupo{padding:14px 18px 5px;font-size:10px;font-weight:700;letter-spacing:.13em;
+       text-transform:uppercase;color:var(--texto3)}
+.item{display:flex;align-items:center;gap:10px;padding:7px 18px;color:var(--texto2);font-size:13.5px}
+.item.on{color:#fff;background:rgba(154,115,255,.13);
+         box-shadow:inset 2px 0 0 var(--marca)}
+.item .n{margin-left:auto;font-size:10.5px;min-width:17px;height:17px;border-radius:5px;
+         display:grid;place-items:center;background:rgba(255,255,255,.08);color:var(--texto2)}
+.item .n.alerta{background:rgba(255,107,94,.18);color:var(--urgente)}
+.menu .pe{margin-top:auto;padding:12px 18px 0;border-top:1px solid var(--fio);
+          color:var(--texto3);font-size:12px}
+
+/* ── área de trabalho ──────────────────────────────────────────────────── */
+.tela{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--preto)}
+
+.topo{display:flex;align-items:baseline;gap:14px;padding:20px 28px 0}
+.topo h1{font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--texto3)}
+.topo .data{font-size:13px;color:var(--texto3)}
+.topo .k{margin-left:auto;display:flex;gap:7px;align-items:center;font-size:12px;color:var(--texto3)}
+.tecla{border:1px solid var(--fio2);border-radius:5px;padding:1px 6px;font-size:11px;color:var(--texto2)}
+
+/* A FRASE — substitui a fileira de cartões de KPI.
+   Quatro números viravam quatro caixas; aqui viram uma leitura. */
+.frase{padding:14px 28px 20px;font-size:27px;line-height:1.34;font-weight:400;
+       letter-spacing:-.018em;max-width:1000px;color:var(--texto2)}
+.frase b{color:var(--texto);font-weight:650}
+.frase .mau{color:var(--urgente);font-weight:650}
+.frase .bom{color:var(--dinheiro);font-weight:650}
+
+.corpo{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 316px;
+       gap:0;border-top:1px solid var(--fio)}
+
+/* ── o DIA: coluna de tempo, não lista de cartões ──────────────────────── */
+.dia{min-width:0;overflow:auto;padding:0 0 24px}
+.dia-cab{position:sticky;top:0;background:var(--preto);display:flex;align-items:center;gap:10px;
+         padding:13px 28px 11px;border-bottom:1px solid var(--fio);z-index:2}
+.dia-cab h2{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--texto3)}
+.filtros{margin-left:auto;display:flex;gap:5px}
+.filtros span{font-size:11.5px;padding:2px 9px;border-radius:99px;color:var(--texto2);
+              border:1px solid transparent}
+.filtros span.on{border-color:var(--fio2);color:var(--texto)}
+
+.linha{display:grid;grid-template-columns:58px 20px minmax(0,1fr);align-items:start;
+       gap:0 12px;padding:11px 28px 11px 20px;position:relative}
+.linha::before{content:"";position:absolute;left:76px;top:0;bottom:0;width:1px;background:var(--fio)}
+.linha:first-of-type::before{top:14px}
+.linha:last-of-type::before{bottom:calc(100% - 14px)}
+.hora{font-size:12px;color:var(--texto3);padding-top:2px;text-align:right}
+.hora.agora{color:var(--urgente);font-weight:650}
+.ponto{width:9px;height:9px;border-radius:50%;background:var(--superficie2);
+       border:2px solid var(--texto3);margin:5px 0 0 -4px;z-index:1;position:relative}
+.ponto.tribunal{border-color:#6ba7ff;background:#6ba7ff}
+.ponto.cliente{border-color:#3fd0bb;background:#3fd0bb}
+.ponto.agenda{border-color:var(--marca);background:var(--marca)}
+.ponto.dinheiro{border-color:var(--dinheiro);background:var(--dinheiro)}
+.ponto.vazio{background:var(--preto)}
+.corpo-linha{min-width:0}
+.corpo-linha .t{font-size:14.5px;font-weight:600;letter-spacing:-.005em}
+.corpo-linha .s{font-size:12.5px;color:var(--texto3);margin-top:1px}
+.corpo-linha .s em{font-style:normal;color:var(--texto2)}
+.fala{font-size:13.5px;color:var(--texto2);margin-top:3px;padding-left:10px;
+      border-left:2px solid var(--fio2)}
+.marcas{display:inline-flex;gap:6px;margin-left:8px;vertical-align:1px}
+.mk{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    padding:1px 7px;border-radius:4px}
+.mk.novo{background:rgba(154,115,255,.18);color:#c0a6ff}
+.mk.espera{background:rgba(255,107,94,.15);color:#ff9c92}
+.linha.destaque{background:linear-gradient(90deg,rgba(255,107,94,.07),transparent 62%)}
+.agora-marca{display:grid;grid-template-columns:58px 20px minmax(0,1fr);gap:0 12px;
+             padding:2px 28px 2px 20px;align-items:center}
+.agora-marca .risco{grid-column:3;height:1px;background:var(--urgente);position:relative}
+.agora-marca .risco span{position:absolute;left:0;top:-8px;font-size:10px;font-weight:700;
+                         letter-spacing:.1em;text-transform:uppercase;color:var(--urgente);
+                         background:var(--preto);padding-right:7px}
+.agora-marca .h{grid-column:1;text-align:right;font-size:12px;color:var(--urgente);font-weight:650}
+
+/* ── régua de prazos: o que pode destruir o escritório ─────────────────── */
+.regua{border-left:1px solid var(--fio);min-width:0;overflow:auto;background:var(--superficie)}
+.regua h2{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+          color:var(--texto3);padding:13px 20px 11px;border-bottom:1px solid var(--fio)}
+.prazo{display:flex;gap:13px;padding:13px 20px;border-bottom:1px solid var(--fio);align-items:flex-start}
+.conta{flex:none;width:46px;text-align:center}
+.conta .d{font-size:25px;font-weight:700;letter-spacing:-.03em;line-height:1}
+.conta .u{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--texto3)}
+.conta.critico .d{color:var(--urgente)}
+.conta.perto .d{color:#ffbf5e}
+.prazo .q{min-width:0}
+.prazo .q .t{font-size:13.5px;font-weight:600;line-height:1.35}
+.prazo .q .s{font-size:12px;color:var(--texto3);margin-top:2px}
+
+.espera{padding:13px 20px 6px;border-bottom:1px solid var(--fio)}
+.espera h3{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--texto3);margin-bottom:9px}
+.quem{display:flex;align-items:center;gap:10px;padding:6px 0}
+.ini{width:26px;height:26px;flex:none;border-radius:7px;display:grid;place-items:center;
+     font-size:11px;font-weight:700;background:var(--superficie2);color:var(--texto2)}
+.quem .nome{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quem .t{margin-left:auto;font-size:12px;color:var(--texto3)}
+.quem .t.mau{color:var(--urgente);font-weight:650}
+
+/* ── dinheiro: uma linha, não quatro cartões ───────────────────────────── */
+.caixa{border-top:1px solid var(--fio);display:flex;align-items:baseline;gap:30px;
+       padding:14px 28px;background:var(--superficie);grid-column:1 / -1;flex-wrap:wrap}
+.caixa .v{display:flex;flex-direction:column;gap:1px}
+.caixa .v .r{font-size:10.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--texto3)}
+.caixa .v .n{font-size:19px;font-weight:650;letter-spacing:-.02em}
+.caixa .v .n.bom{color:var(--dinheiro)}
+.caixa .v .n.mau{color:var(--urgente)}
+.caixa .v .h{font-size:11.5px;color:var(--texto3)}
+.caixa .fim{margin-left:auto;font-size:12px;color:var(--texto3)}
+</style>
+</head>
+<body>
+
+<nav class="menu">
+  <div class="marca"><span class="j">J.</span> <span>Jurid<span class="flow">Flow</span></span></div>
+  <div class="grupo">Dia a dia</div>
+  <div class="item on">Hoje</div>
+  <div class="item">Agenda <span class="n">2</span></div>
+  <div class="item">Atendimento <span class="n alerta">2</span></div>
+  <div class="grupo">Carteira</div>
+  <div class="item">Clientes</div>
+  <div class="item">Processos <span class="n">2</span></div>
+  <div class="item">Acordos</div>
+  <div class="item">Kanban</div>
+  <div class="grupo">Gestão</div>
+  <div class="item">Financeiro</div>
+  <div class="item">Relatórios</div>
+  <div class="pe">Dono Smoke<br>Boyadjian Advogados</div>
+</nav>
+
+<main class="tela">
+
+  <div class="topo">
+    <h1>Hoje</h1>
+    <span class="data">domingo, 13 de setembro</span>
+    <span class="k"><span class="tecla">⌘K</span> buscar ou criar qualquer coisa</span>
+  </div>
+
+  <!-- A FRASE: é o que substitui a fileira de cartões de KPI. O mesmo número,
+       lido em vez de contado. -->
+  <p class="frase">
+    <b>2 clientes</b> esperam resposta há mais de 4 horas,
+    <b class="mau">1 prazo vence em 3 dias</b> e
+    <b class="mau">R$ 1.600,00</b> estão vencidos.<br>
+    O resto do dia tem <b>4 compromissos</b> e <b>2 tarefas</b>.
+  </p>
+
+  <div class="corpo">
+
+    <!-- ── O DIA ─────────────────────────────────────────────────────── -->
+    <section class="dia">
+      <div class="dia-cab">
+        <h2>O dia</h2>
+        <div class="filtros">
+          <span class="on">tudo</span><span>tribunal</span><span>clientes</span>
+          <span>agenda</span><span>dinheiro</span>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">05:30</span><span class="ponto agenda"></span>
+        <div class="corpo-linha">
+          <div class="t">Audiência de instrução</div>
+          <div class="s">Fórum Clóvis Beviláqua · <em>2ª Vara Cível</em> · Maria Aparecida</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">07:00</span><span class="ponto agenda"></span>
+        <div class="corpo-linha">
+          <div class="t">Reunião — proposta de acordo</div>
+          <div class="s">Maria Aparecida Nogueira de Sousa</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">08:14</span><span class="ponto tribunal"></span>
+        <div class="corpo-linha">
+          <div class="t">Juntada de petição — recurso inominado da parte autora
+            <span class="marcas"><span class="mk novo">novo</span></span></div>
+          <div class="s">0812345-67.2024.8.06.0001 · TJCE · <em>Cleide Farias</em></div>
+        </div>
+      </div>
+
+      <div class="linha destaque">
+        <span class="hora">09:02</span><span class="ponto cliente"></span>
+        <div class="corpo-linha">
+          <div class="t">José Ribamar da Silva Filho
+            <span class="marcas"><span class="mk espera">esperando há 6h</span></span></div>
+          <div class="fala">“Eu quero recorrer sim, o valor ficou muito baixo”</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">09:40</span><span class="ponto tribunal"></span>
+        <div class="corpo-linha">
+          <div class="t">Sentença publicada — procedente em parte
+            <span class="marcas"><span class="mk novo">novo</span></span></div>
+          <div class="s">0056789-12.2024.8.06.0001 · <em>recurso até 25/09</em></div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">11:00</span><span class="ponto agenda"></span>
+        <div class="corpo-linha">
+          <div class="t">Perícia médica</div>
+          <div class="s">Cleide Farias do Nascimento</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">11:35</span><span class="ponto dinheiro"></span>
+        <div class="corpo-linha">
+          <div class="t">R$ 2.000,00 recebido</div>
+          <div class="s">Maria Aparecida Nogueira de Sousa · PIX</div>
+        </div>
+      </div>
+
+      <div class="agora-marca">
+        <span class="h">13:12</span><span></span><span class="risco"><span>agora</span></span>
+      </div>
+
+      <div class="linha destaque">
+        <span class="hora agora">13:30</span><span class="ponto agenda"></span>
+        <div class="corpo-linha">
+          <div class="t">Ligar para a cliente
+            <span class="marcas"><span class="mk espera">em 18 min</span></span></div>
+          <div class="s">Antônia Gomes Vasconcelos · <em>“Consigo pagar na sexta, pode ser?”</em></div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">14:43</span><span class="ponto tribunal"></span>
+        <div class="corpo-linha">
+          <div class="t">Vista dos autos à parte contrária pelo prazo legal
+            <span class="marcas"><span class="mk novo">novo</span></span></div>
+          <div class="s">0812345-67.2024.8.06.0001 · TJCE</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">sem hora</span><span class="ponto vazio"></span>
+        <div class="corpo-linha">
+          <div class="t">Juntar procuração assinada da Vale Verde</div>
+          <div class="s">tarefa · sem prazo marcado</div>
+        </div>
+      </div>
+
+      <div class="linha">
+        <span class="hora">sem hora</span><span class="ponto vazio"></span>
+        <div class="corpo-linha">
+          <div class="t">Preparar perguntas das testemunhas</div>
+          <div class="s">tarefa · para a audiência de amanhã</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── RÉGUA DE PRAZOS ───────────────────────────────────────────── -->
+    <aside class="regua">
+      <h2>Prazos</h2>
+
+      <div class="prazo">
+        <div class="conta critico"><div class="d">3</div><div class="u">dias</div></div>
+        <div class="q">
+          <div class="t">Recurso inominado</div>
+          <div class="s">0056789-12 · vence 25/09 · Cleide Farias</div>
+        </div>
+      </div>
+
+      <div class="prazo">
+        <div class="conta perto"><div class="d">8</div><div class="u">dias</div></div>
+        <div class="q">
+          <div class="t">Contestação</div>
+          <div class="s">0034521-89 · vence 21/09 · Raimundo Nonato</div>
+        </div>
+      </div>
+
+      <div class="prazo">
+        <div class="conta"><div class="d">14</div><div class="u">dias</div></div>
+        <div class="q">
+          <div class="t">Manifestação sobre laudo</div>
+          <div class="s">0091234-56 · vence 27/09 · Antônia Gomes</div>
+        </div>
+      </div>
+
+      <div class="espera">
+        <h3>Esperando você</h3>
+        <div class="quem"><span class="ini">JR</span><span class="nome">José Ribamar da Silva</span>
+          <span class="t mau">6h</span></div>
+        <div class="quem"><span class="ini">AG</span><span class="nome">Antônia Gomes Vasconcelos</span>
+          <span class="t mau">4h</span></div>
+        <div class="quem"><span class="ini">TB</span><span class="nome">Tirzah Barbosa de Sousa</span>
+          <span class="t">4h</span></div>
+        <div class="quem"><span class="ini">FE</span><span class="nome">Francisco Edilson Martins</span>
+          <span class="t">1d</span></div>
+      </div>
+    </aside>
+
+    <!-- ── CAIXA: o dinheiro numa linha ──────────────────────────────── -->
+    <div class="caixa">
+      <div class="v"><span class="r">Recebido em setembro</span>
+        <span class="n bom">R$ 10.700,00</span></div>
+      <div class="v"><span class="r">A receber, em dia</span>
+        <span class="n">R$ 7.750,00</span><span class="h">3 cobranças</span></div>
+      <div class="v"><span class="r">Vencido</span>
+        <span class="n mau">R$ 1.600,00</span><span class="h">1 cliente · 13%</span></div>
+      <div class="v"><span class="r">Em negociação</span>
+        <span class="n">R$ 22.700,00</span><span class="h">4 leads</span></div>
+      <span class="fim">setembro · ver o mês inteiro →</span>
+    </div>
+
+  </div>
+</main>
+</body>
+</html>
