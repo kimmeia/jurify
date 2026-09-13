@@ -765,7 +765,7 @@ function CriarNotaInline({ contatoId, onSuccess }: { contatoId: number; onSucces
 // ─── Adicionar processo inline (popover) ─────────────────────────────────────
 //
 // Usa o Judit.IO como provedor (mais rápido, mais confiável e cobre mais
-// tribunais que o DataJud). Custa créditos do plano Judit do escritório.
+// tribunais que o DataJud).
 
 function AdicionarProcessoInline({ onSuccess }: { onSuccess: () => void }) {
   const [open, setOpen] = useState(false);

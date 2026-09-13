@@ -13,7 +13,6 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { ehModuloValido } from "../../shared/modulos-app";
-import { cotaMensalDoPlano } from "../billing/escritorio-creditos";
 
 const raiz = join(__dirname, "..", "..");
 const mig = readFileSync(join(raiz, "drizzle/0217_pacote_3_planos.sql"), "utf8");
@@ -67,16 +66,6 @@ describe("migration 0217 — os três planos como aprovados", () => {
     for (const slug of ["atende", "escritorio", "escala"]) {
       expect(tuplaDe(slug)).toContain("novas ações: TJCE por enquanto");
     }
-  });
-
-  it("os créditos que cada plano financia batem com a fórmula do catálogo", () => {
-    // O mockup prometeu 845 / 2.850 / 7.550 — é o que `cotaMensalDoPlano`
-    // devolve pros limites acima (cálculos + processos×2 + CPFs×15).
-    const cota = (calc: number, proc: number, cpf: number) =>
-      cotaMensalDoPlano({ creditosCalculosMes: calc, maxMonitoramentosProcessos: proc, maxMonitoramentosCpf: cpf } as any);
-    expect(cota(20, 300, 15)).toBe(845);
-    expect(cota(100, 1000, 50)).toBe(2850);
-    expect(cota(300, 2500, 150)).toBe(7550);
   });
 
   it("um selo só: popular vai pro Escritório e sai dos outros", () => {

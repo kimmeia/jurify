@@ -215,7 +215,7 @@ describe("a tela", () => {
   });
 
   it("card com capa não pede crédito de novo pelo que já tem", () => {
-    expect(tela).toContain("Capa lida na detecção — sem crédito extra");
+    expect(tela).toContain("Capa lida na detecção — sem consulta extra");
     expect(tela).toContain('"Ver movimentações"');
   });
 });

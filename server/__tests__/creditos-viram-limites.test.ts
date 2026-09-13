@@ -18,7 +18,7 @@
  * dia do deploy.
  */
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
@@ -37,6 +37,7 @@ import { LIMITE_ILIMITADO } from "../../shared/planos-types";
 
 const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
+const existe = (p: string) => existsSync(join(raiz, p));
 
 describe("a régua: o que conta como limite", () => {
   it("null e 0 são 'sem limite' — é o que preserva os planos antigos", () => {
@@ -188,14 +189,24 @@ describe("as operações passaram a contar no limite", () => {
 
   it("cálculo conta no teto do mês (era o mesmo bolso dos processos)", () => {
     const db = ler("server/db.ts");
+    // O nome `consumirCredito` era a última mentira de pé: por dentro já
+    // contava o teto e por fora dizia "seus créditos acabaram".
+    expect(db).toContain("export async function contarCalculoNoMes");
+    expect(db).not.toContain("export async function consumirCredito");
     expect(db).toContain('const aval = await verificarUso(esc.escritorio.id, "calculo");');
     expect(db).toContain('await registrarUso(esc.escritorio.id, "calculo");');
   });
 
-  it("o saldo de créditos e o histórico continuam no banco", () => {
-    // Decisão do dono: "param de valer, e nada é apagado".
-    expect(ler("server/billing/escritorio-creditos.ts")).toContain("export async function consumirCreditosEscritorio");
-    expect(ler("drizzle/0221_limites_uso_mensal.sql")).not.toMatch(/DROP TABLE|DELETE FROM/i);
+  it("a moeda saiu do produto, e as tabelas continuam de pé", () => {
+    // 11/09 crédito parou de DECIDIR; 13/09 ele saiu do produto inteiro
+    // ("tudo referente a creditos pode excluir"). O que não foi feito, de
+    // propósito: apagar as tabelas — histórico não se joga fora por
+    // migration, e nada mais lê aquilo.
+    expect(existe("server/billing/escritorio-creditos.ts")).toBe(false);
+    expect(ler("drizzle/schema.ts")).toContain("escritorio_creditos");
+    for (const m of ["0221_limites_uso_mensal.sql", "0229_cartao_sem_ponto_da_equipe.sql"]) {
+      expect(ler(`drizzle/${m}`)).not.toMatch(/DROP TABLE|DELETE FROM/i);
+    }
   });
 });
 

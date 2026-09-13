@@ -1,7 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { cotaMensalDoPlano } from "../billing/escritorio-creditos";
 import { limitesDoPlano, getLimites } from "../billing/plan-limits";
 import type { Plano, PlanoLimites } from "../../shared/planos-types";
 
@@ -22,25 +21,6 @@ function limites(parcial: Partial<PlanoLimites>): PlanoLimites {
     ...parcial,
   };
 }
-
-describe("cotaMensalDoPlano — a promessa do plano financiada em créditos", () => {
-  it("plano de monitoramento ganha franquia pros limites que vende (50 proc + 10 CPFs)", () => {
-    // 50 processos × 2 cred + 10 CPFs × 15 cred — sem isso o trial do
-    // superlançamento nascia com 0 créditos e não criava nem um monitor.
-    expect(cotaMensalDoPlano(limites({ maxMonitoramentosProcessos: 50, maxMonitoramentosCpf: 10 }))).toBe(250);
-  });
-
-  it("profissional: 200 proc + 50 CPFs + 50 créditos de cálculo", () => {
-    expect(
-      cotaMensalDoPlano(limites({ creditosCalculosMes: 50, maxMonitoramentosProcessos: 200, maxMonitoramentosCpf: 50 })),
-    ).toBe(1200);
-  });
-
-  it("plano antigo (monitoramento ilimitado/null) segue como sempre foi", () => {
-    expect(cotaMensalDoPlano(limites({ creditosCalculosMes: 100 }))).toBe(100);
-    expect(cotaMensalDoPlano(limites({ creditosCalculosMes: 100, maxMonitoramentosProcessos: 999999 }))).toBe(100);
-  });
-});
 
 describe("limitesDoPlano — tabela `planos` é a fonte, não o mapa hardcoded", () => {
   const planoNovo = {
@@ -66,20 +46,9 @@ describe("limitesDoPlano — tabela `planos` é a fonte, não o mapa hardcoded",
 });
 
 describe("amarras no código", () => {
-  it("calcularCotaDoPlano deriva da cota nova; o `?? 3` que engolia cota 0 morreu", () => {
-    const fonte = ler("server/billing/escritorio-creditos.ts");
-    expect(fonte).toContain("cotaMensalDoPlano(plano.limites)");
-    expect(fonte).not.toContain("creditosCalculosMes ?? 3");
-  });
-
   it("verificarLimite e moduloDisponivel resolvem limites pela tabela planos", () => {
     const fonte = ler("server/billing/plan-limits.ts");
     expect(fonte.match(/await resolverLimites\(planId\)/g)?.length).toBe(2);
-  });
-
-  it("conta presa com cota 0 se auto-cura na primeira leitura de saldo", () => {
-    const fonte = ler("server/billing/escritorio-creditos.ts");
-    expect(fonte).toContain("correcao_cota");
   });
 
   it("telas do pacote processual não chamam mais clientes.listar às cegas", () => {

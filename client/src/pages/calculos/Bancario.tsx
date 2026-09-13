@@ -807,7 +807,7 @@ export default function Bancario() {
                 <><Calculator className="h-5 w-5 mr-2" /> Analisar contrato</>
               )}
             </Button>
-            <p className="text-[11px] text-muted-foreground">Consome 1 crédito do seu plano</p>
+            <p className="text-[11px] text-muted-foreground">Conta no limite de cálculos do mês</p>
           </div>
         </div>
         </div>

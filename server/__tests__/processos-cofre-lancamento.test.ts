@@ -66,7 +66,6 @@ describe("processos-9 — um CNJ, um monitoramento", () => {
     expect(iLimite).toBeLessThan(iInsert);
     expect(criar).not.toContain("consumirCreditos(");
     const retorno = recorte(criar, "if (existente)", "// Limite do plano");
-    expect(retorno).toContain("custoCred: 0");
     expect(retorno).toContain("jaExistia: true");
     expect(retorno).toContain("status: existente.status");
   });

@@ -22,7 +22,8 @@ const ACAO_LABELS: Record<string, { label: string; icon: any; color: string }> =
   "user.impersonar": { label: "Entrou como usuário", icon: LogIn, color: "text-info-fg bg-info/10" },
   "user.resetSenha": { label: "Resetou senha", icon: RotateCcw, color: "text-warning-fg bg-warning/10" },
   "user.updateRole": { label: "Mudou role", icon: ShieldAlert, color: "text-info-fg bg-info/10" },
-  "user.concederCreditos": { label: "Concedeu créditos", icon: Coins, color: "text-success-fg bg-success/10" },
+  // Histórico: a ação saiu do painel em 13/09, as linhas antigas ficaram.
+  "user.concederCreditos": { label: "Concedeu créditos (descontinuado)", icon: Coins, color: "text-success-fg bg-success/10" },
   "escritorio.suspender": { label: "Suspendeu escritório", icon: AlertTriangle, color: "text-danger-fg bg-danger/10" },
   "escritorio.reativar": { label: "Reativou escritório", icon: Building2, color: "text-success-fg bg-success/10" },
 };

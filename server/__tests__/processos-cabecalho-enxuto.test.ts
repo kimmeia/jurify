@@ -121,7 +121,11 @@ describe("o que ficou de pé de propósito", () => {
       .toContain("SEM ENTRADA NA TELA DESDE 13/09");
   });
 
-  it("o aviso de saldo baixo não foi tocado (o dono não pediu)", () => {
-    expect(processos).toContain("Saldo baixo.");
+  it("o aviso de saldo baixo saiu depois, quando ele autorizou a moeda inteira", () => {
+    // Em 13/09 este aviso ficou de pé de propósito: ele tinha pedido a
+    // PASTILHA. Na mensagem seguinte veio "tudo referente a creditos pode
+    // excluir" — e aí o aviso, que mandava "comprar mais créditos", saiu.
+    expect(processos).not.toContain("Saldo baixo.");
+    expect(processos).not.toContain("comprar mais créditos");
   });
 });

@@ -275,7 +275,7 @@ export default function Imobiliario() {
       setResultado(data.resultado);
       setTaxaMediaInfo(data.taxaMediaBACEN);
       setStep(4);
-      toast.success("Cálculo realizado com sucesso! (1 crédito descontado)");
+      toast.success("Cálculo realizado com sucesso!");
     },
     onError: (error) => {
       toast.error(`Erro: ${error.message}`);
@@ -812,7 +812,7 @@ export default function Imobiliario() {
               </Button>
             </div>
             <p className="text-xs text-center text-muted-foreground">
-              Cada análise consome 1 crédito do seu plano
+              Cada análise conta no limite de cálculos do mês
             </p>
           </CardContent>
         </Card>

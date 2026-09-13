@@ -10,9 +10,9 @@
  * Tribunais sem adapter retornam TRPCError NOT_IMPLEMENTED com
  * mensagem instrutiva.
  *
- * Cobrança: 1 cred por consulta (cobrado via `motorCreditos`/
- * `motorTransacoes`). Consulta motor próprio não tem custo
- * operacional externo (só servidor + tribunal de origem).
+ * Cobrança: o que barra é o TETO MENSAL do plano (`limites-uso`), contado em
+ * `contarUso`. O saldo de créditos saiu do produto em 13/09 — consulta pelo
+ * motor próprio não tem custo externo, só servidor e tribunal de origem.
  */
 
 import { montarBodyAnthropic, textoDaRespostaAnthropic } from "../_core/anthropic-http";
@@ -22,8 +22,6 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, adminProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import {
-  motorCreditos,
-  motorTransacoes,
   cofreCredenciais,
   motorMonitoramentos,
   eventosProcesso,
@@ -69,15 +67,6 @@ import { recuperarSessao } from "../escritorio/cofre-helpers";
 
 const log = createLogger("processos-motor");
 
-const PACOTES_CREDITOS = [
-  { id: "pack_50", nome: "50 creditos", creditos: 50, preco: 49.9, popular: false },
-  { id: "pack_200", nome: "200 creditos", creditos: 200, preco: 149.9, popular: true },
-  { id: "pack_500", nome: "500 creditos", creditos: 500, preco: 299.9, popular: false },
-  { id: "pack_1000", nome: "1000 creditos", creditos: 1000, preco: 499.9, popular: false },
-] as const;
-
-export { CUSTOS } from "../processos/custos-creditos";
-import { CUSTOS } from "../processos/custos-creditos";
 import type { OperacaoLimitada } from "../../shared/limites-uso";
 
 function safeParse(json: string): unknown {
@@ -252,29 +241,6 @@ function sistemasParaDocumento(codigoTribunal: string): string[] {
 }
 
 export const processosRouter = router({
-  saldo: protectedProcedure.query(async ({ ctx }) => {
-    const esc = await getEscritorioPorUsuario(ctx.user.id);
-    if (!esc) return { saldo: 0, totalConsumido: 0, totalComprado: 0, cotaMensal: 0, ultimoReset: null };
-
-    // Helper garante registro existe (cria com cota do plano se primeiro
-    // acesso). Sem race conditions porque getSaldoEscritorio é idempotente.
-    try {
-      const { getSaldoEscritorio } = await import("../billing/escritorio-creditos");
-      const s = await getSaldoEscritorio(esc.escritorio.id);
-      return {
-        saldo: s.saldo,
-        totalConsumido: s.totalConsumido,
-        totalComprado: s.totalComprado,
-        cotaMensal: s.cotaMensal,
-        ultimoReset: s.ultimoReset,
-      };
-    } catch {
-      return { saldo: 0, totalConsumido: 0, totalComprado: 0, cotaMensal: 0, ultimoReset: null };
-    }
-  }),
-
-  pacotes: protectedProcedure.query(() => ({ pacotes: PACOTES_CREDITOS, custos: CUSTOS })),
-
   /**
    * Inicia consulta de processo por CNJ via motor próprio.
    *
@@ -1072,86 +1038,9 @@ export const processosRouter = router({
       return r;
     }),
 
-  /** Histórico de transações do escritório */
-  transacoes: protectedProcedure
-    .input(z.object({ limite: z.number().min(1).max(100).default(50) }).optional())
-    .query(async ({ ctx, input }) => {
-      const esc = await getEscritorioPorUsuario(ctx.user.id);
-      if (!esc) return [];
-      const db = await getDb();
-      if (!db) return [];
-      return db
-        .select()
-        .from(motorTransacoes)
-        .where(eq(motorTransacoes.escritorioId, esc.escritorio.id))
-        .orderBy(desc(motorTransacoes.createdAt))
-        .limit(input?.limite ?? 50);
-    }),
-
-  /** Admin: adiciona créditos manualmente (após pagamento via Stripe etc) */
-  adicionarCreditos: adminProcedure
-    .input(
-      z.object({
-        escritorioId: z.number().int().positive(),
-        quantidade: z.number().int().positive(),
-        motivo: z.string().min(1).max(255),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const db = await getDb();
-      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB indisponível" });
-
-      let [creditos] = await db
-        .select()
-        .from(motorCreditos)
-        .where(eq(motorCreditos.escritorioId, input.escritorioId))
-        .limit(1);
-
-      if (!creditos) {
-        await db.insert(motorCreditos).values({
-          escritorioId: input.escritorioId,
-          saldo: 0,
-          totalComprado: 0,
-          totalConsumido: 0,
-        });
-        const [novo] = await db
-          .select()
-          .from(motorCreditos)
-          .where(eq(motorCreditos.escritorioId, input.escritorioId))
-          .limit(1);
-        creditos = novo;
-      }
-
-      const novoSaldo = creditos.saldo + input.quantidade;
-      // Saldo e extrato juntos: saldo é cache do extrato, e atualizar um
-      // sem o outro deixa crédito que ninguém consegue explicar depois.
-      await db.transaction(async (tx) => {
-        await tx
-          .update(motorCreditos)
-          .set({
-            saldo: novoSaldo,
-            totalComprado: creditos.totalComprado + input.quantidade,
-          })
-          .where(eq(motorCreditos.id, creditos.id));
-
-        await tx.insert(motorTransacoes).values({
-          escritorioId: input.escritorioId,
-          tipo: "compra",
-          quantidade: input.quantidade,
-          saldoAnterior: creditos.saldo,
-          saldoDepois: novoSaldo,
-          operacao: "compra_admin",
-          detalhes: input.motivo,
-          userId: ctx.user.id,
-        });
-      });
-
-      return { adicionados: input.quantidade, saldoNovo: novoSaldo };
-    }),
-
-  // ─── MONITORAMENTOS (Sprint 2) ──────────────────────────────────────────
-  // Cobra cred imediatamente (primeira mensalidade) na criação. Cron mensal
-  // (cobrarMonitoramentosMensais) cobra renovação após 30 dias.
+  // ─── MONITORAMENTOS ─────────────────────────────────────────────────────
+  // Quem barra aqui é a VAGA do plano (`limites-monitoramento`), conferida
+  // antes de inserir. Crédito saiu do produto em 13/09.
 
   meusMonitoramentos: protectedProcedure
     .input(
@@ -1367,7 +1256,7 @@ export const processosRouter = router({
         )
         .limit(1);
       if (existente) {
-        return { id: existente.id, custoCred: 0, jaExistia: true as const, status: existente.status };
+        return { id: existente.id, jaExistia: true as const, status: existente.status };
       }
 
       // Limite do plano ANTES de cobrar crédito — recusar depois de cobrar
@@ -1405,7 +1294,7 @@ export const processosRouter = router({
         "[motor-proprio] monitoramento de processo criado",
       );
 
-      return { id: insertId, custoCred: CUSTOS.monitorar_processo_mes, jaExistia: false as const };
+      return { id: insertId, jaExistia: false as const };
     }),
 
   pausarMonitoramento: protectedProcedure
@@ -2144,7 +2033,7 @@ export const processosRouter = router({
         "[motor-proprio] monitoramento de novas ações criado",
       );
 
-      return { id: insertId, custoCred: CUSTOS.monitorar_pessoa_mes };
+      return { id: insertId };
     }),
 
   /**

@@ -24,6 +24,15 @@ import { COOKIE_NAME } from "../../shared/const";
 
 const getDbMock = vi.fn();
 
+// O porteiro do plano (13/09) recusa qualquer procedure sem assinatura, e este
+// banco falso não tem nenhuma. Aqui o assunto é outro — quem guarda o porteiro
+// é `uso-so-com-plano.test.ts`.
+vi.mock("../_core/gate-assinatura", () => ({
+  conferirPlanoDoPath: async () => {},
+  temPlanoVigente: async () => true,
+  invalidarCacheGateAssinatura: () => {},
+}));
+
 vi.mock("../db", async (importOriginal) => {
   const real = await importOriginal<typeof import("../db")>();
   return { ...real, getDb: (...a: unknown[]) => (getDbMock as any)(...a) };

@@ -53,8 +53,6 @@ import {
   getAdminStats,
   getCalculosRecentes,
   getEstatisticasUso,
-  getUserCreditsInfo,
-  addCreditsToUser,
   getActiveSubscription,
 } from "../db";
 import { PLANS } from "../billing/products";
@@ -633,33 +631,9 @@ export const adminRouter = router({
         .limit(1);
       if (user.length === 0) throw new Error("Utilizador não encontrado");
 
-      // Saldo: prefere fonte real (escritório). Fallback pra userCredits
-      // legacy só se user não tem escritório (admin JuridFlow, onboarding).
       const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
-      const { getSaldoEscritorio } = await import("../billing/escritorio-creditos");
       const esc = await getEscritorioPorUsuario(input.userId);
-
-      let credits: any;
-      let creditsSource: "escritorio" | "legacy" = "legacy";
-      let escritorioId: number | null = null;
-      if (esc) {
-        const saldoEsc = await getSaldoEscritorio(esc.escritorio.id);
-        credits = {
-          // Shape compatível com UI legacy: mantém creditsTotal/creditsUsed
-          // calculados em runtime pra mostrar coerente.
-          creditsTotal: saldoEsc.totalComprado + saldoEsc.cotaMensal,
-          creditsUsed: saldoEsc.totalConsumido,
-          // Campos novos do escritório (UI nova pode usar)
-          saldo: saldoEsc.saldo,
-          totalComprado: saldoEsc.totalComprado,
-          totalConsumido: saldoEsc.totalConsumido,
-          cotaMensal: saldoEsc.cotaMensal,
-        };
-        creditsSource = "escritorio";
-        escritorioId = esc.escritorio.id;
-      } else {
-        credits = await getUserCreditsInfo(input.userId);
-      }
+      const escritorioId: number | null = esc?.escritorio.id ?? null;
 
       const subscription = await getActiveSubscription(input.userId);
       const calculos = await getCalculosRecentes(input.userId, 10);
@@ -726,8 +700,6 @@ export const adminRouter = router({
 
       return {
         user: user[0],
-        credits,
-        creditsSource,
         escritorioId,
         subscription,
         calculos,
@@ -737,47 +709,6 @@ export const adminRouter = router({
         colaboradores: colaboradoresLista,
         donoDoEscritorio,
       };
-    }),
-
-  /** Conceder créditos manualmente a um cliente.
-   *  Credita no escritório do user (saldo compartilhado entre colaboradores).
-   *  Fallback legacy só pra users sem escritório. */
-  concederCreditos: adminProcedure
-    .input(
-      z.object({
-        userId: z.number(),
-        quantidade: z.number().min(1).max(10000),
-        motivo: z.string().max(255).optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
-      const { creditarEscritorio } = await import("../billing/escritorio-creditos");
-
-      const esc = await getEscritorioPorUsuario(input.userId);
-      if (esc) {
-        await creditarEscritorio(
-          esc.escritorio.id,
-          ctx.user.id,
-          input.quantidade,
-          "bonus",
-          "admin_concedeu",
-          input.motivo ?? "Concedido manualmente pelo admin",
-        );
-      } else {
-        // User sem escritório (admin JuridFlow, ou cliente em onboarding)
-        await addCreditsToUser(input.userId, input.quantidade);
-      }
-
-      await registrarAuditoria({
-        ctx,
-        acao: "user.concederCreditos",
-        alvoTipo: "user",
-        alvoId: input.userId,
-        detalhes: { quantidade: input.quantidade, motivo: input.motivo, escritorioId: esc?.escritorio.id ?? null },
-      });
-
-      return { success: true, mensagem: `${input.quantidade} créditos adicionados` };
     }),
 
   /**
@@ -826,74 +757,6 @@ export const adminRouter = router({
         mensagem: `+${input.quantidade} em ${ROTULO_OPERACAO[input.operacao]} neste mês`,
       };
     }),
-
-  /** Retirar créditos de um cliente (reverso de concederCreditos).
-   *  Debita do escritório. Falha se saldo insuficiente. */
-  retirarCreditos: adminProcedure
-    .input(
-      z.object({
-        userId: z.number(),
-        quantidade: z.number().min(1).max(10000),
-        motivo: z.string().max(255).optional(),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
-      const { consumirCreditosEscritorio } = await import("../billing/escritorio-creditos");
-
-      const esc = await getEscritorioPorUsuario(input.userId);
-      if (!esc) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "User não pertence a um escritório — sem saldo do escritório pra retirar.",
-        });
-      }
-
-      // Reusa consumirCreditosEscritorio: valida saldo + registra transação
-      // tipo "consumo" (operacao distingue admin vs uso normal).
-      await consumirCreditosEscritorio(
-        esc.escritorio.id,
-        ctx.user.id,
-        input.quantidade,
-        "admin_retirou",
-        input.motivo ?? "Retirado manualmente pelo admin",
-      );
-
-      await registrarAuditoria({
-        ctx,
-        acao: "user.retirarCreditos",
-        alvoTipo: "user",
-        alvoId: input.userId,
-        detalhes: { quantidade: input.quantidade, motivo: input.motivo, escritorioId: esc.escritorio.id },
-      });
-
-      return { success: true, mensagem: `${input.quantidade} créditos removidos` };
-    }),
-
-  /** Migrar saldo userCredits (legacy) → escritorio_creditos.
-   *  One-shot, idempotente. Pra rodar após deploy. */
-  migrarCreditosLegacy: adminProcedure.mutation(async ({ ctx }) => {
-    const { migrarCreditosLegacyParaEscritorio } = await import(
-      "../billing/migrate-legacy-credits"
-    );
-    const result = await migrarCreditosLegacyParaEscritorio();
-
-    await registrarAuditoria({
-      ctx,
-      acao: "system.migrarCreditosLegacy",
-      alvoTipo: "system",
-      alvoId: 0,
-      detalhes: {
-        processados: result.processados,
-        migrados: result.migrados,
-        totalCreditos: result.totalCreditos,
-        pulados: result.pulados,
-        erros: result.erros,
-      },
-    });
-
-    return result;
-  }),
 
   // ═══════════════════════════════════════════════════════════════════════
   // CONTROLE DE CLIENTE — Sprint 1
