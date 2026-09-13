@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
@@ -2326,7 +2327,10 @@ function CabecalhoProcessos({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-pagina font-bold tracking-tight leading-none">Processos</h1>
+        <h1 className="text-pagina font-bold tracking-tight leading-none flex items-center gap-2">
+          Processos
+          <AjudaDaTela tarefa="vigiar-processo" />
+        </h1>
         <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
         </p>

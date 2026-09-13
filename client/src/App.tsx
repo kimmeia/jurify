@@ -9,6 +9,8 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Roadmap from "./pages/Roadmap";
+import Ajuda from "./pages/Ajuda";
+import AjudaTarefa from "./pages/ajuda/AjudaTarefa";
 import Termos from "./pages/Termos";
 import Privacidade from "./pages/Privacidade";
 import EsqueciSenha from "./pages/EsqueciSenha";
@@ -93,6 +95,20 @@ function ClientArea({ children }: { children: React.ReactNode }) {
 
 function ClientAreaNoGuard({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
+}
+
+/**
+ * Central de ajuda: sem porteiro de módulo nem guarda de assinatura (quem
+ * não tem o módulo é justamente quem precisa ler), mas COM o gate dos
+ * Termos — o aceite é governança do dono e vale em toda rota do app.
+ */
+function ClientAreaSoTermos({ children }: { children: React.ReactNode }) {
+  return (
+    <AppLayout>
+      <TermosGate />
+      {children}
+    </AppLayout>
+  );
 }
 
 /**
@@ -239,6 +255,19 @@ function Router() {
         <AdminArea>
           <Roadmap />
         </AdminArea>
+      </Route>
+      {/* Central de ajuda: dentro do app, sem porteiro de módulo nem guarda
+          de assinatura — quem não tem o módulo ainda lê como funciona —,
+          mas com o gate dos Termos, como toda rota do app. */}
+      <Route path="/ajuda/:tarefa">
+        <ClientAreaSoTermos>
+          <AjudaTarefa />
+        </ClientAreaSoTermos>
+      </Route>
+      <Route path="/ajuda">
+        <ClientAreaSoTermos>
+          <Ajuda />
+        </ClientAreaSoTermos>
       </Route>
       <Route path="/admin/settings">
         <AdminArea>

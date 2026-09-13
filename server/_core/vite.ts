@@ -58,7 +58,12 @@ export function serveStatic(app: Express) {
     );
   }
 
-  app.use(express.static(distPath));
+  // `redirect: false`: com o padrão, pedir uma rota do app que também existe
+  // como PASTA em dist/public (é o caso de /ajuda — os prints da Central moram
+  // em client/public/ajuda/) devolvia 301 pra "/ajuda/" antes de o index.html
+  // ter a vez. Arquivo continua sendo servido igual; só a pasta deixa de
+  // responder por si.
+  app.use(express.static(distPath, { redirect: false }));
 
   // fall through to index.html if the file doesn't exist
   app.use("*", (_req, res) => {
