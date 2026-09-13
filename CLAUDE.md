@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.075 verdes em 13/09/2026 (408 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.106 verdes em 13/09/2026 (410 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1795,6 +1795,48 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
     (`scratchpad/mutar-ponto-e-processos.py`; 1 sobreviveu na 1ª volta — a amarra
     conferia a POSIÇÃO da recusa de ambiente e dava pra desarmar a condição no
     lugar; agora confere que o `if` é incondicional).
+
+- **Entregue 13/09, dois achados do dono usando o sistema — "ok faça" (seção 25
+  do documento de estado).** Os dois foram REPRODUZIDOS no app rodando antes de
+  consertar, e o "antes" de cada um é foto.
+  - **A Central escondia movimentação pendente** ("tudo marcado como resolvido e
+    movimentações ainda mostra 11"). A lista pede o período ordenado por DATA e
+    cortado em `limite` (80), e só DEPOIS do corte separava resolvida de
+    pendente: com 91 no período e as 11 pendentes mais ANTIGAS que as 80 que
+    couberam, elas caíam fora da consulta — não eram mal contadas, eram
+    **inalcançáveis** por aquela tela (90 dias piora; só a busca alcançava,
+    porque roda antes do corte). O badge conta o BANCO sem teto, a tela contava
+    a PÁGINA — daí os dois números discordarem, e o «Resolvidas (80)» ser o
+    tamanho da página. Conferido antes de acusar: contador e lista filtram o
+    mesmo recorte, e `prazos_sugeridos` tem UNIQUE em `evento_id` (o leftJoin
+    não duplica) — o teto era a única diferença. Conserto em duas garantias que
+    só valem juntas: **ordem** `asc(lido), desc(dataEvento)` (pendente primeiro,
+    é o que impede o teto de comer trabalho) e **janela** (contagem à parte no
+    banco, por estado, em `triar(...).janela`). `contagem` segue descrevendo a
+    página e encolhendo com o filtro de tipo — decisão antiga, preservada e
+    testada. A tela passou a usar a janela no texto do vazio, na decisão "nada
+    no período" × "tudo resolvido" e no rótulo Resolvidas, e ganhou o aviso
+    «Mostrando 69 de 80 resolvidas…», que só aparece quando falta algo.
+  - **Cliente em teste não conseguia pagar o plano que testava** ("clico em
+    adicionar pagamento e não acontece nada"). Três portas fechadas: a faixa
+    mandava pra `/configuracoes?tab=meu-plano`, a tela em que ele JÁ estava
+    (navegar pra rota atual é não-evento); o bloco do plano atual só tinha botão
+    pra sob consulta e pra carência; e o cartão do próprio plano travava em
+    «✓ Você está aqui» (texto de quem já paga), com o rótulo «Continuar com este
+    plano» — escrito pra esse caso — **inalcançável**. O servidor sempre esteve
+    pronto (`createCheckout` tem o "Cenário B: conversão trial → pago" e não
+    recusa o plano atual). Pagar só dava escolhendo plano DIFERENTE. Conserto:
+    botão «Adicionar pagamento» no bloco (só teste + preço fechado + fora de
+    carência, vira «Ver o pagamento» com cobrança aberta), `travadoPorSerOAtual`
+    separando quem paga de quem testa, e `irPagar()` na faixa (de outra tela
+    navega; já em Meu plano rola e foca o botão). `billingOk === false` continua
+    travando os dois, como antes.
+  Amarras: `central-nao-esconde-pendente` (12) e `pagar-o-plano-em-teste` (14) —
+  **31 mutações vermelhas** (`scratchpad/mutar-pendente-e-pagamento.py`); 3
+  sobreviveram na 1ª volta pelo motivo de sempre (a amarra conferia o NOME, não
+  quem alimentava o número — dava pra reatribuir a variável à página com o
+  literal de pé em outro lugar). `central-grupos` ganhou 2 testes e teve o
+  `expect` de objeto inteiro atualizado; os 17 de comportamento, intocados.
 
 ## Fila combinada com o dono (31/08/2026)
 

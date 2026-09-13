@@ -116,7 +116,24 @@ describe("triar", () => {
       itens: [],
       contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 },
       total: 0,
+      janela: { aResolver: 0, resolvidas: 0, noPeriodo: 0 },
     });
+  });
+
+  it("sem os números do período, a janela descreve a própria página", () => {
+    // Caller que não passa a contagem do banco (teste, chamada antiga) não
+    // pode receber zero: a tela leria "nada no período" e trocaria o texto.
+    const r = triar(universo, { estado: "todas" });
+    expect(r.janela).toEqual({ aResolver: 3, resolvidas: 3, noPeriodo: 6 });
+  });
+
+  it("a janela vem do banco e NÃO encolhe com o teto da página", () => {
+    // O caso do Boyadjian: 91 no período, 80 couberam, as 11 pendentes eram
+    // mais antigas. `contagem` fala da página; `janela` fala do período.
+    const paginaSoResolvidas = universo.filter((i) => i.lido);
+    const r = triar(paginaSoResolvidas, { estado: "a_resolver" }, { aResolver: 11, resolvidas: 80 });
+    expect(r.contagem.resolvidas).toBe(3);
+    expect(r.janela).toEqual({ aResolver: 11, resolvidas: 80, noPeriodo: 91 });
   });
 
   it("grupos vazio equivale a não filtrar", () => {

@@ -15,7 +15,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, or, sql, like } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql, like } from "drizzle-orm";
 import { protectedProcedure, router } from "../_core/trpc";
 import { contarMovimentacoesNaoLidas } from "./contador-movimentacoes";
 import { getDb } from "../db";
@@ -64,6 +64,7 @@ export type Estado = "a_resolver" | "resolvidas" | "todas";
 export function triar<T extends { grupo: Grupo; lido: boolean }>(
   itens: T[],
   filtros: { grupos?: Grupo[]; estado?: Estado },
+  janela?: { aResolver: number; resolvidas: number },
 ) {
   const porGrupo: Record<Grupo, number> = { exigem_acao: 0, relevante: 0, rotina: 0 };
   for (const i of itens) porGrupo[i.grupo]++;
@@ -85,6 +86,19 @@ export function triar<T extends { grupo: Grupo; lido: boolean }>(
     itens: filtrados,
     contagem: { ...porGrupo, aResolver, resolvidas: visiveis.length - aResolver },
     total: visiveis.length,
+    // O que existe no PERÍODO, contado no banco, ao lado do que coube nesta
+    // página. `contagem` continua descrevendo a página (e encolhe com o
+    // filtro de tipo, como sempre); a janela é a régua que diz se a página é
+    // tudo. Sem ela a tela afirmava, sem saber, que o que mostrava era o
+    // total — foi assim que escreveu "as 80 movimentações do período já foram
+    // resolvidas" para um escritório com 91 e 11 pendentes.
+    janela: {
+      aResolver: janela?.aResolver ?? aResolver,
+      resolvidas: janela?.resolvidas ?? visiveis.length - aResolver,
+      noPeriodo:
+        (janela?.aResolver ?? aResolver) +
+        (janela?.resolvidas ?? visiveis.length - aResolver),
+    },
   };
 }
 
@@ -162,15 +176,18 @@ export const movimentacoesRouter = router({
         .optional(),
     )
     .query(async ({ ctx, input }) => {
+      const vazia = {
+        itens: [],
+        contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 },
+        total: 0,
+        janela: { aResolver: 0, resolvidas: 0, noPeriodo: 0 },
+      };
+
       const perm = await checkPermission(ctx.user.id, "processos", "ver");
-      if (!perm.allowed) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 }, total: 0 };
-      }
+      if (!perm.allowed) return vazia;
 
       const db = await getDb();
-      if (!db) {
-        return { itens: [], contagem: { exigem_acao: 0, relevante: 0, rotina: 0, aResolver: 0, resolvidas: 0 }, total: 0 };
-      }
+      if (!db) return vazia;
 
       const dias = input?.dias ?? 7;
       const limite = input?.limite ?? 80;
@@ -233,8 +250,32 @@ export const movimentacoesRouter = router({
         )
         .leftJoin(prazosSugeridos, eq(prazosSugeridos.eventoId, eventosProcesso.id))
         .where(and(...conds))
-        .orderBy(desc(eventosProcesso.dataEvento))
+        // NÃO LIDA PRIMEIRO, depois a mais recente. A ordem é o que impede o
+        // teto de `limite` de esconder trabalho: por data pura, um escritório
+        // com mais movimentações do que cabem na página perdia justamente as
+        // pendentes antigas — a tela dizia "nada pendente" com o badge
+        // marcando 11, porque as 11 eram mais velhas que as 80 que couberam.
+        .orderBy(asc(eventosProcesso.lido), desc(eventosProcesso.dataEvento))
         .limit(limite);
+
+      // Quantas existem de verdade no período (mesmo recorte da lista, sem o
+      // teto), separadas por estado. São os números que a tela usa pra saber
+      // se o que está mostrando é tudo — em vez de deduzir da própria página,
+      // que foi o que a fez afirmar "as 80 movimentações do período já foram
+      // resolvidas" para um escritório com 91 e 11 pendentes.
+      const [totalJanela] = await db
+        .select({
+          aResolver: sql<number>`SUM(CASE WHEN ${eventosProcesso.lido} = FALSE THEN 1 ELSE 0 END)`,
+          resolvidas: sql<number>`SUM(CASE WHEN ${eventosProcesso.lido} = TRUE THEN 1 ELSE 0 END)`,
+        })
+        .from(eventosProcesso)
+        .leftJoin(
+          motorMonitoramentos,
+          eq(motorMonitoramentos.id, eventosProcesso.monitoramentoId),
+        )
+        .where(and(...conds));
+      const aResolverPeriodo = Number(totalJanela?.aResolver ?? 0);
+      const resolvidasPeriodo = Number(totalJanela?.resolvidas ?? 0);
 
       const hoje = new Date();
 
@@ -296,7 +337,11 @@ export const movimentacoesRouter = router({
         };
       });
 
-      return triar(itens, { grupos: input?.grupos, estado: input?.estado });
+      return triar(
+        itens,
+        { grupos: input?.grupos, estado: input?.estado },
+        { aResolver: aResolverPeriodo, resolvidas: resolvidasPeriodo },
+      );
     }),
 
   /**
