@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.103 verdes, 410 arquivos** (13/09, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.106 verdes, 410 arquivos** (13/09, na ponta do merge, com as seções 24 e 25; 6.075 em 408 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3260,5 +3260,6 @@ atualizado (o retorno de `triar` cresceu); os 17 de comportamento não foram
 tocados — inclusive o que trava «o filtro de tipo encolhe as contagens de
 estado junto», que é decisão antiga da casa e continua valendo.
 
-Baseline: **6.103 testes verdes em 410 arquivos**, `pnpm check` limpo,
-`pnpm vite build` passando.
+Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
+trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
+limpo e `pnpm vite build` passando.
