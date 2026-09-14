@@ -1616,6 +1616,27 @@ vista). Detalhe na seção 31 do documento de estado. Amarras: teste novo em
 `telas-cabem-no-celular.test.ts` + `cofre-erros.test.ts` atualizado, 6 mutações
 vermelhas.
 
+### Entregue 13/09 — Kanban filtra pela data de conclusão
+
+Pergunta do dono: *"filtro so permite buscar por data de criação do card, quero
+saber também por data de conclusão."* O card sabia em QUAL coluna estava, nunca
+QUANDO chegou nela (`updatedAt` muda em qualquer edição). **Mas o passado
+existia**: `kanban_movimentacoes` registra cada movimento desde sempre, então a
+migration 0231 recuperou a data de conclusão de todo card já concluído — o
+filtro não nasceu vazio.
+
+Campo novo `kanban_cards.concluidoEm`, gravado no `moverCard` e no `criarCard`.
+**Regra escolhida pelo dono: vale a ÚLTIMA conclusão e a data SOME se o card
+voltar pro fluxo** — guardar a primeira faria o filtro dizer "concluído em
+agosto" sobre card que hoje está em produção. `condicoesCards` ganhou
+`campoData` (quadro e PDF compartilham) e o popover do período ganhou "Contar
+pela data de" ANTES dos campos De/Até.
+
+Regra que fica: **antes de dizer que um dado histórico não existe, procurar a
+tabela de log** — aqui ela transformou "o filtro só vale daqui pra frente" em
+"o filtro já vem com o passado inteiro". Detalhe na seção 35 do documento de
+estado; amarra `kanban-filtro-concluido-em.test.ts`, 14 mutações vermelhas.
+
 ### Raio-X do design em produção (13/09)
 
 `docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o

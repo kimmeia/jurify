@@ -2814,6 +2814,18 @@ export const kanbanCards = mysqlTable("kanban_cards", {
   processoId: int("processoIdKCard").references(() => clienteProcessos.id, { onDelete: "cascade" }),
   /** Se o card está atrasado (prazo vencido sem mover) */
   atrasado: boolean("atrasadoKCard").default(false).notNull(),
+  /**
+   * Quando o card entrou numa coluna de conclusão (`kanban_colunas.tipo =
+   * 'conclusao'`). NULL = não está concluído.
+   *
+   * Vale a ÚLTIMA vez, e volta a NULL se o card sair pro fluxo de novo —
+   * decisão do dono: o filtro tem que bater com o que o quadro mostra, e não
+   * dizer "concluído em agosto" sobre card que hoje está em produção.
+   *
+   * O passado foi preenchido na migration 0231 a partir de
+   * `kanban_movimentacoes`, que já registrava cada movimento.
+   */
+  concluidoEm: timestamp("concluidoEmKCard"),
   /** Arquivar = some do quadro sem perder dados. Histórico/comentários/
    *  movimentações continuam intactos. Útil pra cards concluídos antigos
    *  que poluem visualmente a coluna de Finalizado. */

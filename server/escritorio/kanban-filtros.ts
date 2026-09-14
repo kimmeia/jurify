@@ -36,13 +36,23 @@ export function colunaVizinha<T extends { id: number; ordem: number }>(colunas: 
   return ordenadas[i - 1] ?? ordenadas[i + 1] ?? null;
 }
 
+/**
+ * Qual data o filtro de período compara. "criado" é o de sempre; "concluido"
+ * usa `kanban_cards.concluidoEm` — a última vez que o card entrou numa coluna
+ * de conclusão (migration 0231 preencheu o passado pelo histórico de
+ * movimentações).
+ */
+export type CampoDataCard = "criado" | "concluido";
+
 export interface FiltrosCards {
   responsavelId?: number;
   prioridade?: "baixa" | "media" | "alta";
   prazoFiltro?: "vencidos" | "hoje" | "7dias" | "sem_prazo";
-  /** YYYY-MM-DD — data de criação do card. */
+  /** YYYY-MM-DD — data de criação OU de conclusão, conforme `campoData`. */
   dataInicio?: string;
   dataFim?: string;
+  /** Ausente = "criado", que é como o filtro sempre funcionou. */
+  campoData?: CampoDataCard;
   mostrarArquivados?: boolean;
 }
 
@@ -89,13 +99,25 @@ export function condicoesCards(args: {
   }
 
   if (filtros.prioridade) conds.push(eq(kanbanCards.prioridade, filtros.prioridade));
-  // `createdAt` é instante real: o dia digitado começa e termina no fuso do
-  // escritório, não no do servidor (card das 22h caía no dia seguinte).
+
+  // Os dois campos são instante real: o dia digitado começa e termina no fuso
+  // do escritório, não no do servidor (card das 22h caía no dia seguinte).
+  //
+  // Em "concluido", card sem data (ainda não concluído) fica FORA mesmo quando
+  // só uma das pontas do período foi preenchida — `NULL > data` não é falso em
+  // SQL, é desconhecido, e a linha some do resultado sozinha; a condição
+  // explícita existe pra valer também quando o usuário abre só "desde" ou só
+  // "até", e pra deixar a intenção escrita.
+  const porConclusao = filtros.campoData === "concluido";
+  const coluna = porConclusao ? kanbanCards.concluidoEm : kanbanCards.createdAt;
+  if (porConclusao && (filtros.dataInicio || filtros.dataFim)) {
+    conds.push(sql`${kanbanCards.concluidoEm} IS NOT NULL`);
+  }
   if (filtros.dataInicio) {
-    conds.push(gte(kanbanCards.createdAt, inicioDoDiaNoFuso(filtros.dataInicio, tz)));
+    conds.push(gte(coluna, inicioDoDiaNoFuso(filtros.dataInicio, tz)));
   }
   if (filtros.dataFim) {
-    conds.push(lte(kanbanCards.createdAt, fimDoDiaNoFuso(filtros.dataFim, tz)));
+    conds.push(lte(coluna, fimDoDiaNoFuso(filtros.dataFim, tz)));
   }
 
   if (filtros.prazoFiltro === "vencidos") {
