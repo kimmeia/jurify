@@ -26,6 +26,7 @@ describe("router jurisia", () => {
       "jurisia.casosRecentes",
       "jurisia.conversa",
       "jurisia.conversar",
+      "jurisia.ementas",
       "jurisia.estado",
       "jurisia.excluirPesquisa",
       "jurisia.perguntar",

@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 28 e `develop` dentro; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.167 verdes, 413 arquivos** (14/09, com a seção 29; 6.136 em 412 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3517,4 +3517,120 @@ avanço, senão "plano vencido segue passando pra sempre" passa despercebido.
 continua sendo o último elo, e é isso que ele guarda).
 
 Baseline: **6.136 testes verdes em 412 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.
+
+---
+
+## 29. Jurisprudência de verdade: o robô que busca ementa, e os dois módulos viram um (14/09)
+
+**Pedido do dono**, depois da conversa sobre o que faltava pra concorrer com o
+JusIA: *"uma IA que busca de tempos em tempos todo o material nos sites
+oficiais para alimentarmos base de conhecimento e entendimentos regionais…
+vamos transformar esses 2 em um só"*. Aprovado no comparador
+`comparador-conhecimento-juridico.html`, com o "pode fazer".
+
+### 29.1 O diagnóstico que decidiu o desenho
+
+O acervo que existia (`jurisia_processos`, do DataJud) traz classe, assunto,
+vara, movimentos e datas — e **nenhuma linha de texto de decisão**. O
+"resultado" de cada processo é DEDUZIDO do código do movimento. Por isso a
+JurisIA sabia dizer "62% terminam em parte" e não sabia citar um precedente: a
+matéria-prima da citação nunca esteve lá. O próprio prompt já dizia isso em
+voz alta ("processo do acervo é estatística, não precedente citável").
+
+Jurisprudência é **acórdão publicado**, que é público por desenho e mora nos
+portais de jurisprudência dos tribunais — não no sistema de processo, e não
+atrás de credencial.
+
+### 29.2 O que entrou
+
+- **`jurisia_ementas`** (migration 0230): fonte, tribunal, identificador,
+  órgão, relator, data, o texto da ementa, a URL oficial. UNIQUE por
+  (fonte, identificador) e **FULLTEXT** na ementa.
+- **`jurisia_fontes_coleta`**: o estado do robô em cada fonte — ligada,
+  status, última coleta, próxima, quantos itens, último erro.
+- **`shared/fontes-oficiais.ts`**: a lista declarada (STJ, STF, TJCE, TJSP,
+  TJMG, TRF5, DataJud, com `material: "ementa" | "metadado"` e a cadência).
+- **`server/jurisia/extrair-ementas.ts`**: extração pura, de JSON e de HTML.
+- **`server/jurisia/coletor-ementas.ts`**: a passada em cada fonte, o estado
+  gravado e `rodarColetaDevida()` pro cron (de hora em hora **pergunta**;
+  quem manda é a cadência de cada fonte).
+- **`server/jurisia/busca-ementas.ts`**: a busca por TEXTO (FULLTEXT em modo
+  booleano), com o tribunal do caso pesando na ORDEM.
+- Painel: `jurisiaFontesOficiais`, `jurisiaLigarFonte`, `jurisiaColetarFonte`,
+  `jurisiaEntendimentosRegionais`. Tela `ConhecimentoJuridicoTab` substitui as
+  duas abas antigas.
+- Advogado: a conversa passa a citar ementa (`jurisprudencia` na resposta
+  gravada), a coluna da direita mostra as TRÊS fontes e o chip "citou N
+  ementas de acórdão" aparece junto dos outros.
+
+### 29.3 As cinco decisões que carregam o resto
+
+1. **Ementa vem antes do número, e a tela diz por quê.** "Ementa é acórdão
+   publicado — entra na peça. O painel abaixo é estatística: diz como costuma
+   terminar, não fundamenta." Misturar os dois é o que faz citar média como se
+   fosse precedente.
+2. **Fonte nasce DESLIGADA.** Subir uma versão não pode ligar um robô contra o
+   site de um tribunal. O cron só visita o que alguém ligou no painel, e o
+   botão de ligar **não coleta na hora** — quem coleta é a cadência.
+3. **Citação sem endereço não entra.** Ementa sem URL é descartada na
+   gravação, e a coluna é `NOT NULL`: o advogado tem que abrir o acórdão no
+   site do tribunal antes de assinar.
+4. **A busca é por TEXTO, não por semelhança de vetor.** "Capitalização" tem
+   que achar capitalização. Semelhança é boa pra pergunta vaga e péssima pra
+   termo jurídico exato — e é o termo exato que decide qual acórdão entra na
+   peça. O tribunal do caso **ordena**, não filtra: filtrar devolveria vazio
+   no tribunal ainda não coletado, e resposta sem ementa é pior que ementa de
+   outro estado marcada como tal.
+5. **O extrator é genérico, e isso é consequência de um limite honesto.** O
+   ambiente bloqueia os portais dos tribunais: parser escrito sem ver o corpo
+   real é ficção que passa no teste inventado e quebra no primeiro dia. O
+   genérico procura o que todo portal tem — um campo/bloco chamado "ementa"
+   com um identificador ao lado — e o produto compensa com a fonte desligada
+   por padrão e a sondagem obrigatória antes de ligar.
+
+### 29.4 Conferido com o sistema rodando (não deduzido)
+
+- a migration aplica sozinha no boot e as duas tabelas nascem com o
+  **collation do banco** — a primeira versão fixou `utf8mb4_unicode_ci` e o
+  MySQL recusou comparar a sigla do tribunal com a do acervo ("Illegal mix of
+  collations"), o mesmo tropeço que a migration 0196 já tinha pago. Por
+  segurança dupla, a contagem de ementa por tribunal deixou de ser JOIN e
+  virou uma segunda consulta casada em JS;
+- a busca FULLTEXT roda contra o MySQL de verdade: com `tribunalPreferido:
+  "TJCE"` o acórdão do TJCE (score 0,73) vem na frente do STJ (0,91); sem
+  preferência, manda o score;
+- o painel mostra estado real por fonte (em dia · nunca coletou · bloqueada
+  com o texto do 403 em vermelho) e os cartões de entendimento por tribunal
+  saem do acervo povoado;
+- a tela do advogado mostra "Jurisprudência 8 · ementas de 4 tribunais" e a
+  resposta com as três ementas, cada uma com «ver no tribunal».
+
+### 29.5 O que NÃO foi feito, e por quê
+
+- **Credencial de tribunal continua fora**: ela só abre o que é do escritório,
+  e base de jurisprudência é feita de processo de terceiro; varrer em volume
+  com login de advogado arrisca o acesso da OAB. Acórdão publicado é aberto —
+  é por essa porta que o robô entra.
+- **Nenhuma fonte foi ligada.** Ligar depende da sondagem, que só roda em
+  produção (`/admin/ia` → dobra "Tribunais e varredura" → ferramentas
+  técnicas): ela diz quais portais respondem DO SERVIDOR e quais devolvem
+  ementa. Até lá o acervo de ementas fica vazio, e a tela diz isso.
+- **Busca por semelhança (embedding) sobre as ementas** não entrou: hoje a
+  biblioteca da casa carrega tudo na memória pra comparar, o que serve pra
+  centenas de súmulas e não pra dezenas de milhares de ementas. O FULLTEXT
+  resolve a precisão; o híbrido é a próxima fatia.
+
+### 29.6 Amarra
+
+`jurisprudencia-de-verdade.test.ts` (31 testes) — **39 mutações vermelhas**
+(`scratchpad/mutar-jurisprudencia.py`). Duas sobreviveram na primeira volta e
+as duas eram fixture fraca, não código: faltava um registro JSON com ementa e
+sem identificador, e o HTML de duas linhas não tinha container — sem ele, o
+mutante que pega "o bloco de fora" era equivalente. `admin-layout-novo` e
+`jurisia-router-contrato` foram ATUALIZADAS para a verdade nova, preservando
+o que elas protegem (que os dois painéis continuam montados, e o contrato de
+procedures da tela).
+
+Baseline: **6.167 testes verdes em 413 arquivos**, `pnpm check` limpo,
 `pnpm vite build` passando.

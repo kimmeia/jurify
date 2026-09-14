@@ -240,6 +240,113 @@ export const adminRouter = router({
     return { graus, natureza: contarNatureza(graus), classificacao };
   }),
 
+  /** Estado de cada fonte oficial: o que traz, quando voltou, quantas trouxe. */
+  jurisiaFontesOficiais: adminProcedure.query(async () => {
+    const { estadoDasFontes } = await import("../jurisia/coletor-ementas");
+    const { contarEmentas } = await import("../jurisia/busca-ementas");
+    const [fontes, ementas] = await Promise.all([estadoDasFontes(), contarEmentas()]);
+    return { fontes, ementas };
+  }),
+
+  /**
+   * Liga ou desliga a coleta de uma fonte.
+   *
+   * Ligar NÃO coleta na hora, de propósito: quem coleta é a cadência. O botão
+   * de coletar agora existe separado, pra quem quer ver o que vem antes de
+   * deixar rodando sozinho.
+   */
+  jurisiaLigarFonte: adminProcedure
+    .input(z.object({ fonteId: z.string().min(2).max(40), ligada: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const { ligarFonte } = await import("../jurisia/coletor-ementas");
+      await ligarFonte(input.fonteId, input.ligada);
+      return { ok: true };
+    }),
+
+  /** Uma passada agora nessa fonte, com o termo que o admin quiser. */
+  jurisiaColetarFonte: adminProcedure
+    .input(
+      z.object({
+        fonteId: z.string().min(2).max(40),
+        termo: z.string().max(160).optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { coletarFonte } = await import("../jurisia/coletor-ementas");
+      return coletarFonte(input.fonteId, {
+        termos: input.termo?.trim() ? [input.termo.trim()] : undefined,
+      });
+    }),
+
+  /**
+   * O que cada tribunal vem decidindo, no acervo que já temos.
+   *
+   * O número nacional não ajuda a escolher a tese: o que muda a peça é o que a
+   * câmara DAQUELE tribunal costuma fazer com aquele pedido. Conta em SQL, por
+   * tribunal, e junta quantas ementas citáveis existem de cada um.
+   */
+  jurisiaEntendimentosRegionais: adminProcedure.query(async () => {
+    const db = await getDb();
+    type Entendimento = {
+      tribunal: string;
+      total: number;
+      procedente: number;
+      parcial: number;
+      improcedente: number;
+      acordo: number;
+      extinto: number;
+      acordaos: number;
+      ementas: number;
+      assunto: string | null;
+    };
+    if (!db) return [] as Entendimento[];
+    const linhas = await db.execute(sql`
+      SELECT p.tribunalJurisProc AS tribunal,
+             COUNT(*) AS total,
+             SUM(p.resultadoJurisProc = 'procedente') AS procedente,
+             SUM(p.resultadoJurisProc = 'parcial') AS parcial,
+             SUM(p.resultadoJurisProc = 'improcedente') AS improcedente,
+             SUM(p.resultadoJurisProc = 'acordo') AS acordo,
+             SUM(p.resultadoJurisProc = 'extinto_sem_merito') AS extinto,
+             SUM(p.grauJurisProc = 'G2') AS acordaos,
+             MAX(p.assuntoNomeJurisProc) AS assunto
+      FROM jurisia_processos p
+      WHERE p.resultadoJurisProc IS NOT NULL
+      GROUP BY p.tribunalJurisProc
+      ORDER BY total DESC
+      LIMIT 24
+    `);
+    // As ementas são contadas à PARTE e casadas aqui, em vez de num JOIN pela
+    // sigla: comparar texto entre duas tabelas depende do collation delas
+    // baterem, e foi assim que esta consulta morreu na primeira tentativa
+    // ("Illegal mix of collations"). Duas consultas pequenas não dependem.
+    const porTribunal = await db.execute(sql`
+      SELECT tribunalJurisEm AS tribunal, COUNT(*) AS ementas
+      FROM jurisia_ementas GROUP BY tribunalJurisEm
+    `);
+    const ementasRows =
+      (Array.isArray(porTribunal) ? porTribunal[0] : (porTribunal as { rows?: unknown[] }).rows) ?? [];
+    const ementasPorTribunal = new Map(
+      (ementasRows as Array<Record<string, unknown>>).map((r) => [
+        String(r.tribunal ?? "").toUpperCase(),
+        Number(r.ementas ?? 0),
+      ]),
+    );
+    const rows = (Array.isArray(linhas) ? linhas[0] : (linhas as { rows?: unknown[] }).rows) ?? [];
+    return (rows as Array<Record<string, unknown>>).map((r): Entendimento => ({
+      tribunal: String(r.tribunal),
+      total: Number(r.total ?? 0),
+      procedente: Number(r.procedente ?? 0),
+      parcial: Number(r.parcial ?? 0),
+      improcedente: Number(r.improcedente ?? 0),
+      acordo: Number(r.acordo ?? 0),
+      extinto: Number(r.extinto ?? 0),
+      acordaos: Number(r.acordaos ?? 0),
+      ementas: ementasPorTribunal.get(String(r.tribunal).toUpperCase()) ?? 0,
+      assunto: r.assunto ? String(r.assunto) : null,
+    }));
+  }),
+
   /**
    * Uma página, SEM GRAVAR NADA.
    *

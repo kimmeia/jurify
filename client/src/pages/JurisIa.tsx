@@ -514,6 +514,14 @@ function ChipsConsulta({ c }: { c: ConversaUnaGravada["consulta"] }) {
   if (c.movimentacoes > 0) {
     chips.push({ chave: "mov", icone: Layers, texto: `${c.movimentacoes} movimentações dos autos` });
   }
+  if ((c.ementas ?? 0) > 0) {
+    chips.push({
+      chave: "ementas",
+      icone: Library,
+      texto: `citou ${c.ementas} ementa${(c.ementas ?? 0) > 1 ? "s" : ""} de acórdão`,
+      realce: true,
+    });
+  }
   if (c.acervo > 0) {
     chips.push({
       chave: "acervo",
@@ -667,6 +675,48 @@ function RespostaUna({
           </div>
         )}
 
+        {/* Ementa vem ANTES do painel de número: é ela que fundamenta a peça.
+            O painel logo abaixo mede, e a frase entre os dois diz isso em voz
+            alta — misturar os dois é o que faz citar estatística como se fosse
+            precedente. */}
+        {r.jurisprudencia && r.jurisprudencia.length > 0 && (
+          <div className="mt-2 rounded-xl border border-info/30 bg-info-bg/30 p-3">
+            <p className="flex items-center gap-1.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-info-fg">
+              <Library className="h-3 w-3" />
+              O que os tribunais decidiram · {r.jurisprudencia.length}{" "}
+              {r.jurisprudencia.length === 1 ? "ementa" : "ementas"}
+            </p>
+            <div className="mt-2 space-y-2">
+              {r.jurisprudencia.map((e) => (
+                <div key={e.identificador} className="rounded-lg border bg-card px-3 py-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="text-[11.5px] font-bold">{e.identificador}</span>
+                    <span className="text-[10.5px] text-muted-foreground">
+                      {e.orgao}
+                      {e.data ? ` · ${e.data}` : ""}
+                    </span>
+                    {e.url && (
+                      <a
+                        href={e.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto text-[10.5px] font-bold text-info-fg underline underline-offset-2"
+                      >
+                        ver no tribunal
+                      </a>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">“{e.ementa}”</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10.5px] text-muted-foreground">
+              Ementa é acórdão publicado — entra na peça. O painel abaixo é estatística: diz como
+              costuma terminar, não fundamenta.
+            </p>
+          </div>
+        )}
+
         {r.prova && <PainelProva p={r.prova} />}
         {r.prova?.comparacao && <div className="mt-2"><PainelComparacao c={r.prova.comparacao} /></div>}
 
@@ -783,9 +833,12 @@ function PainelComparacao({ c }: { c: Comparacao }) {
  */
 function PainelContexto({
   acervo,
+  ementas,
   ultima,
 }: {
   acervo?: ComposicaoAcervo;
+  /** Quantas ementas existem pra citar, e de quantos tribunais. */
+  ementas?: { total: number; tribunais: number };
   ultima: PesquisaGravada | null;
 }) {
   return (
@@ -794,10 +847,27 @@ function PainelContexto({
         O que a IA está usando
       </p>
 
+      {/* A jurisprudência vem primeiro de propósito: é dela que sai a citação
+          da peça. O acervo do DataJud, logo abaixo, é número — não fundamenta. */}
       <div className="rounded-lg border border-info/30 bg-info-bg/40 px-3 py-2.5 dark:border-info/30">
         <div className="flex items-center gap-1.5">
-          <Database className="h-3.5 w-3.5 shrink-0 text-info-fg" />
-          <p className="flex-1 text-[11.5px] font-bold">Acervo público</p>
+          <Library className="h-3.5 w-3.5 shrink-0 text-info-fg" />
+          <p className="flex-1 text-[11.5px] font-bold">Jurisprudência</p>
+          <span className="rounded-full border border-info/30 bg-info-bg px-1.5 py-px text-[9px] font-extrabold text-info-fg">
+            {(ementas?.total ?? 0).toLocaleString("pt-BR")}
+          </span>
+        </div>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+          {ementas && ementas.total > 0
+            ? `Ementas de acórdão de ${ementas.tribunais} ${ementas.tribunais > 1 ? "tribunais" : "tribunal"}. É o que a resposta cita, com link pro site oficial.`
+            : "Nenhuma ementa coletada ainda — sem ela a resposta mede, mas não cita."}
+        </p>
+      </div>
+
+      <div className="rounded-lg border px-3 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <Database className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p className="flex-1 text-[11.5px] font-bold">Como costuma terminar</p>
           <span className="rounded-full border border-success/30 bg-success-bg px-1.5 py-px text-[9px] font-extrabold text-success-fg">
             {(acervo?.total ?? 0).toLocaleString("pt-BR")}
           </span>
@@ -806,6 +876,17 @@ function PainelContexto({
           {acervo && acervo.tribunais.length > 0
             ? `${acervo.tribunais.map((t) => t.tribunal).join(", ")} · desfecho e tempo contados no banco.`
             : "Nenhum tribunal coletado ainda."}
+        </p>
+      </div>
+
+      <div className="rounded-lg border px-3 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <Gavel className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <p className="flex-1 text-[11.5px] font-bold">Seu escritório</p>
+        </div>
+        <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+          Os autos e os documentos do caso escolhido, mais o histórico de como pedidos parecidos
+          terminaram aqui dentro. Nada disso sai do seu escritório.
         </p>
       </div>
 
@@ -1143,6 +1224,7 @@ export default function JurisIa() {
   const utils = trpc.useUtils();
   const { data: estado } = trpc.jurisia.estado.useQuery();
   const { data: acervo } = trpc.jurisia.acervo.useQuery();
+  const { data: ementas } = trpc.jurisia.ementas.useQuery();
   const { data: pesquisas } = trpc.jurisia.pesquisas.useQuery();
   const { data, isLoading } = trpc.jurisia.pesquisa.useQuery({ conversaId });
 
@@ -1456,7 +1538,7 @@ export default function JurisIa() {
 
         <aside className="hidden flex-col gap-2.5 xl:flex">
           <SeletorCaso caso={caso} onCaso={setCaso} />
-          <PainelContexto acervo={acervo} ultima={ultimaResposta} />
+          <PainelContexto acervo={acervo} ementas={ementas} ultima={ultimaResposta} />
         </aside>
       </div>
 

@@ -280,6 +280,25 @@ export function iniciarJobs() {
   setTimeout(rodarFilaJurisIa, 90 * 1000);
   setInterval(rodarFilaJurisIa, 2 * 60 * 1000);
 
+  // Coleta de ementa nas fontes oficiais, de hora em hora.
+  //
+  // O intervalo NÃO é a frequência da coleta: quem decide é a cadência de cada
+  // fonte (`shared/fontes-oficiais.ts`). Isto aqui só pergunta "venceu alguma?"
+  // — e fonte desligada nem é consultada, que é o que impede o robô de começar
+  // a bater no site de um tribunal sozinho.
+  const rodarColetaEmentas = async () => {
+    try {
+      const { rodarColetaDevida } = await import("../jurisia/coletor-ementas");
+      const feitos = await rodarColetaDevida();
+      if (feitos.length) {
+        log.info({ fontes: feitos.map((f) => `${f.fonteId}:${f.status}`) }, "[Cron] coleta de ementas");
+      }
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] coleta de ementas falhou");
+    }
+  };
+  setInterval(rodarColetaEmentas, 60 * 60 * 1000);
+
   // A cada 1 hora: expirar assinaturas + verificar prazos kanban
   setInterval(() => expirarAssinaturas(), 60 * 60 * 1000);
   setInterval(() => verificarPrazosKanban(), 60 * 60 * 1000);
