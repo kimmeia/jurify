@@ -527,7 +527,7 @@ export async function marcarInicioAtendimento(conversaId: number, quando: Date =
 async function condicoesConversa(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   escritorioId: number,
-  filtros?: { ids?: number[]; atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean; modoPeriodo?: "inicio" | "mensagens" },
+  filtros?: { ids?: number[]; atendenteId?: number; atendenteIds?: number[]; setorId?: number; canalId?: number; dataInicio?: string; dataFim?: string; arquivadas?: boolean; busca?: string; somenteNovos?: boolean; somenteAnuncio?: boolean; modoPeriodo?: "inicio" | "mensagens" },
 ): Promise<SQL[] | null> {
   const conditions: SQL[] = [eq(conversas.escritorioId, escritorioId)];
   // Arquivadas ficam fora de TODAS as vistas padrão (lista, contadores);
@@ -583,6 +583,13 @@ async function condicoesConversa(
   }
   if (filtros?.canalId) {
     conditions.push(eq(conversas.canalId, filtros.canalId));
+  }
+
+  // Chegou por anúncio (Click-to-WhatsApp). A origem mora no CONTATO, não na
+  // conversa: quem clicou no anúncio uma vez segue marcado nas conversas
+  // seguintes — é a pessoa que veio da campanha, não aquele atendimento.
+  if (filtros?.somenteAnuncio) {
+    conditions.push(isNotNull(contatos.origemAnuncio));
   }
 
   // Multi-atendente (e compat com atendenteId único legacy).
@@ -692,9 +699,10 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
   // acontecido com `canalId`.
   arquivadas?: boolean;
   busca?: string;
+  somenteAnuncio?: boolean;
   modoPeriodo?: "inicio" | "mensagens";
-}): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number; fechado: number }> {
-  const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0 };
+}): Promise<{ todos: number; aguardando: number; em_atendimento: number; resolvido: number; fechado: number; anuncio: number }> {
+  const zero = { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0, anuncio: 0 };
   const db = await getDb();
   if (!db) return zero;
   const base = await condicoesConversa(db, escritorioId, filtros);
@@ -721,6 +729,22 @@ export async function contarConversasPorStatus(escritorioId: number, filtros?: {
     // possa ser conferida contra o total em vez de divergir em silêncio.
     else if (r.status === "fechado") out.fechado = n;
   }
+
+  // Chip "Anúncio N": mesmas condições da vista MAIS a origem — e sempre com
+  // o próprio filtro DESLIGADO. Os pills de status seguem o filtro (senão
+  // divergem da lista, defeito que já aconteceu aqui com canalId, busca e
+  // arquivadas); o chip não pode seguir, ou ligado ele contaria a si mesmo e
+  // o número viraria o total da lista, perdendo o "7 de 2420".
+  const baseSemAnuncio = filtros?.somenteAnuncio
+    ? await condicoesConversa(db, escritorioId, { ...filtros, somenteAnuncio: false })
+    : base;
+  const [{ n: nAnuncio } = { n: 0 }] = await db
+    .select({ n: sql<number>`COUNT(*)` })
+    .from(conversas)
+    .innerJoin(contatos, eq(conversas.contatoId, contatos.id))
+    .innerJoin(canaisIntegrados, eq(conversas.canalId, canaisIntegrados.id))
+    .where(and(...(baseSemAnuncio ?? base), isNotNull(contatos.origemAnuncio)));
+  out.anuncio = Number(nAnuncio || 0);
   return out;
 }
 
@@ -773,6 +797,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
   busca?: string;
   /** Só conversas cujo PRIMEIRO contato caiu na janela (lead novo). */
   somenteNovos?: boolean;
+  /** Só contatos que chegaram por anúncio (Click-to-WhatsApp). */
+  somenteAnuncio?: boolean;
   /** Como o período conta: "inicio" (default — início do atendimento) × "mensagens" (qualquer mensagem na janela). */
   modoPeriodo?: "inicio" | "mensagens";
 }) {
@@ -794,6 +820,8 @@ export async function listarConversas(escritorioId: number, filtros?: {
       // de verdade ou ficha magra do WhatsApp, não do CPF em si.
       contatoCpfCnpj: contatos.cpfCnpj, contatoEmail: contatos.email,
       contatoEstagio: contatos.estagio, contatoOrigem: contatos.origem,
+      contatoOrigemAnuncio: contatos.origemAnuncio,
+      contatoOrigemAnuncioEm: contatos.origemAnuncioEm,
       optOutWhatsapp: contatos.optOutWhatsapp, optOutWhatsappEm: contatos.optOutWhatsappEm,
       canalId: conversas.canalId, canalNome: canaisIntegrados.nome, canalTipo: canaisIntegrados.tipo, canalTelefone: canaisIntegrados.telefone,
       // Estado do canal na conversa: a UI trava o composer e sinaliza em
@@ -881,9 +909,13 @@ export async function listarConversas(escritorioId: number, filtros?: {
     }
   }
 
-  return rows.map(({ marcadaNaoLidaEm, contatoCpfCnpj, contatoEmail, contatoEstagio, ...r }) => ({
+  const { origemAnuncioParaLista } = await import("../integracoes/whatsapp-origem-anuncio");
+
+  return rows.map(({ marcadaNaoLidaEm, contatoCpfCnpj, contatoEmail, contatoEstagio, contatoOrigemAnuncio, contatoOrigemAnuncioEm, ...r }) => ({
     ...r,
     contatoCadastroCompleto: !!(contatoCpfCnpj?.trim() || contatoEmail?.trim() || contatoEstagio === "cliente"),
+    origemAnuncio: origemAnuncioParaLista(contatoOrigemAnuncio),
+    origemAnuncioEm: toIsoString(contatoOrigemAnuncioEm) ?? undefined,
     atendenteNome: r.atendenteId ? atendenteMap[r.atendenteId] : undefined,
     temAtraso: contatosComAtraso.has(r.contatoId),
     naoLidas: naoLidasPorConversa.get(r.id) ?? 0,

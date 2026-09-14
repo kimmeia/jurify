@@ -568,7 +568,16 @@ describe("amarras no código", () => {
     expect(atd).toContain('{mascararTelefoneBR(conv.contatoTelefone || conv.chatIdExterno?.replace(/@.*/, "") || "")}');
     // A lista de conversas só carrega o que o selo precisa — booleano, nunca o CPF.
     expect(dbCrm).toContain("contatoCadastroCompleto: !!(contatoCpfCnpj?.trim() || contatoEmail?.trim() || contatoEstagio === \"cliente\")");
-    expect(dbCrm).toContain("return rows.map(({ marcadaNaoLidaEm, contatoCpfCnpj, contatoEmail, contatoEstagio, ...r }) => ({");
+    // Confere o MECANISMO, não a linha inteira: os campos crus têm que sair
+    // do objeto no destructuring (senão o `...r` os espalha na resposta).
+    // Amarrar o literal da linha quebrava a cada campo novo — e o que
+    // protege é a saída deles, não a ordem em que estão escritos.
+    const mapeador = dbCrm.slice(dbCrm.indexOf("return rows.map(({"));
+    const assinatura = mapeador.slice(0, mapeador.indexOf("=> ({"));
+    for (const cru of ["contatoCpfCnpj", "contatoEmail", "contatoEstagio"]) {
+      expect(assinatura, `${cru} tem que ser desestruturado pra fora`).toContain(cru);
+    }
+    expect(assinatura).toContain("...r");
   });
 
   it("Clientes: telefone padronizado na lista e na ficha, e a faxina de duplicados no cabeçalho", () => {

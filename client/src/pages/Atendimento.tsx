@@ -66,7 +66,7 @@ import { CliqueEmBotao, OpcoesEnviadas } from "./atendimento/opcoes-interativas"
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { IconeTwilio } from "@/components/IconeTwilio";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot, Megaphone, Play, ExternalLink as ExternalLinkIcon } from "lucide-react";
 
 /** "2 conversas, 1 cobrança" — o que a unificação levou junto, em palavras. */
 function resumoContagens(c: { conversas: number; cobrancas: number; processos: number; leads: number; arquivos: number }): string {
@@ -642,6 +642,10 @@ export default function Atendimento() {
   // tem prioridade sobre os presets acima. Hora é opcional: vazia, o extremo
   // assume o dia inteiro (De=00:00, Até=23:59) — comportamento antigo.
   const [somenteNovos, setSomenteNovos] = useState(false);
+  // Chip "Anúncio": compõe com o status (dá pra ver só os que estão
+  // aguardando E vieram de campanha), por isso é um interruptor à parte e
+  // não mais uma aba do seletor de status.
+  const [somenteAnuncio, setSomenteAnuncio] = useState(false);
   const [dataIni, setDataIni] = useState(""); // "YYYY-MM-DD"
   const [dataFim, setDataFim] = useState("");
   const [horaIni, setHoraIni] = useState(""); // "HH:MM"
@@ -697,6 +701,7 @@ export default function Atendimento() {
     // Só faz sentido com início definido — é ele que marca "antes disso não pode
     // haver mensagem". O backend também ignora sem dataInicio.
     if (somenteNovos && dataIni) f.somenteNovos = true;
+    if (somenteAnuncio) f.somenteAnuncio = true;
     if (!dataIni && !dataFim && periodoFiltro !== "todos") {
       if (periodoFiltro === "hoje") {
         const hoje = new Date();
@@ -842,6 +847,7 @@ export default function Atendimento() {
     aguardando: countsData?.aguardando ?? 0,
     em_atendimento: countsData?.em_atendimento ?? 0,
     resolvido: countsData?.resolvido ?? 0,
+    anuncio: countsData?.anuncio ?? 0,
   };
   const { data: contatos, refetch: rCt } = trpc.crm.listarContatos.useQuery(busca ? { busca } : undefined);
   // Pausa o polling enquanto há drag em curso no Pipeline (senão refetch
@@ -852,7 +858,8 @@ export default function Atendimento() {
   const { data: canaisData } = trpc.configuracoes.listarCanais.useQuery();
   // Disjuntor anti-spam: canais que a Meta restringiu (131031 e afins). Enquanto
   // houver, mostra banner e o sistema pausa os templates. Refetch de 30s pra
-  // sumir sozinho quando a Meta liberar (auto-cura via envio bem-sucedido).
+  // sumir quando o canal for liberado (teste de conexão ou reconexão — um 200
+  // da Meta não conta: conta restrita aceita o POST e mata a entrega depois).
   const { data: canaisRestritos, refetch: rCr } = trpc.crm.canaisRestritos.useQuery(undefined, { refetchInterval: 30000 });
   const reativarCanal = trpc.crm.reativarCanal.useMutation({
     onSuccess: () => { toast.success("Canal reativado — o sistema vai voltar a tentar enviar."); rCr(); },
@@ -1385,6 +1392,28 @@ export default function Atendimento() {
                   })}
                 </div>
                 )}
+                {/* Origem por campanha: só aparece quando existe lead de
+                    anúncio na vista — escritório que não anuncia não ganha
+                    um controle morto no topo da caixa. */}
+                {!mostrarArquivadas && (counts.anuncio > 0 || somenteAnuncio) && (
+                  <button
+                    type="button"
+                    data-testid="inbox-chip-anuncio"
+                    data-ativa={somenteAnuncio}
+                    onClick={() => setSomenteAnuncio((v) => !v)}
+                    title="Contatos que chegaram clicando num anúncio do Facebook ou Instagram"
+                    className={
+                      "mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-micro font-bold transition-colors " +
+                      (somenteAnuncio
+                        ? "bg-accent-purple text-hero-fg border-transparent"
+                        : "bg-accent-purple-bg text-accent-purple-fg border-accent-purple/30 hover:bg-accent-purple-bg/70")
+                    }
+                  >
+                    <Megaphone className="h-3 w-3" />
+                    Anúncio
+                    <span className="tabular-nums font-extrabold">{counts.anuncio}</span>
+                  </button>
+                )}
               </div>
               <ScrollArea className="flex-1 min-h-0">
                 {mostrarArquivadas && (resumoArq?.canaisDesativados?.length ?? 0) > 0 && (
@@ -1562,6 +1591,19 @@ export default function Atendimento() {
                               ) : null}
                             </div>
                             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                              {(c as any).origemAnuncio && (
+                                <span
+                                  data-testid="selo-anuncio"
+                                  className="text-micro px-1.5 py-0 rounded font-bold bg-accent-purple-bg text-accent-purple-fg border border-accent-purple/30 inline-flex items-center gap-0.5"
+                                  title={
+                                    (c as any).origemAnuncio.titulo
+                                      ? `Chegou pelo anúncio: ${(c as any).origemAnuncio.titulo}`
+                                      : "Chegou por um anúncio"
+                                  }
+                                >
+                                  <Megaphone className="h-2.5 w-2.5" /> ANÚNCIO
+                                </span>
+                              )}
                               {(c as any).temAtraso ? (
                                 <span className="text-micro px-1.5 py-0 rounded font-bold bg-danger-bg text-danger-fg border border-danger/30 inline-flex items-center gap-0.5">
                                   <AlertTriangle className="h-2.5 w-2.5" /> SLA crítico
@@ -2380,6 +2422,67 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
     </div>
     )}
+    {/* De onde a pessoa veio, no topo da conversa: o atendente abre já sabendo
+        qual anúncio ela clicou e o que ele prometia — é o que permite responder
+        no assunto em vez de perguntar "como podemos ajudar?". A Meta manda esse
+        bloco na primeira mensagem do clique; campos que ela não envia somem. */}
+    {(conv as any)?.origemAnuncio && (() => {
+      const ad = (conv as any).origemAnuncio;
+      const capa = ad.thumbnailUrl || ad.imagemUrl;
+      const ehVideo = ad.midiaTipo === "video";
+      const quando = (() => {
+        const iso = (conv as any).origemAnuncioEm;
+        if (!iso) return "";
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "";
+        return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
+      })();
+      return (
+        <div
+          data-testid="cartao-origem-anuncio"
+          className="mx-3 mt-2 flex gap-3 rounded-lg border border-accent-purple/30 bg-accent-purple-bg/50 px-3 py-2.5"
+        >
+          <div className="fundo-hero relative w-16 h-12 rounded-md shrink-0 overflow-hidden flex items-center justify-center">
+            {capa ? (
+              <img src={capa} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Megaphone className="h-4 w-4 text-hero-fg" />
+            )}
+            {ehVideo && (
+              <span className="absolute inset-0 flex items-center justify-center bg-black/25">
+                <Play className="h-3.5 w-3.5 text-white fill-white" />
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-micro font-bold uppercase tracking-wider text-accent-purple-fg">
+              Chegou por um anúncio
+            </p>
+            {ad.titulo && (
+              <p className="text-corpo font-semibold leading-snug mt-1 line-clamp-2">{ad.titulo}</p>
+            )}
+            {ad.corpo && (
+              <p className="text-apoio text-muted-foreground leading-snug mt-0.5 line-clamp-2">{ad.corpo}</p>
+            )}
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap text-apoio text-muted-foreground">
+              <span>{ehVideo ? "Anúncio em vídeo" : "Anúncio"}</span>
+              {quando && <span>· clique em {quando}</span>}
+              {ad.sourceUrl && (
+                <a
+                  href={ad.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold text-accent-purple-fg hover:underline inline-flex items-center gap-1"
+                >
+                  ver anúncio <ExternalLinkIcon className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+
     {/* Aberta por link, por aviso de número repetido ou pela pasta Arquivadas:
         a conversa existe e está inteira, mas o recorte atual do Inbox não a
         lista. Sem dizer isso, a tela parece ter perdido a conversa. */}
