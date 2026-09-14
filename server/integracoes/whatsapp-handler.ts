@@ -184,6 +184,24 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
 
   // Rastro documental de opt-in (LGPD/política Meta): o primeiro inbound do
   // contato registra "iniciou conversa". Best-effort, fire-and-forget.
+  // O clique em anúncio é registrado ANTES de tentar gravar, e fora do
+  // try: é a única linha que separa "a Meta não mandou referral" de "chegou
+  // e a gravação falhou". Sem ela os dois casos ficam com a mesma cara — sem
+  // log nenhum — e não há como investigar lead de campanha que não aparece.
+  if (msg.referral) {
+    log.info(
+      {
+        contatoId,
+        canalId,
+        sourceId: msg.referral.sourceId,
+        sourceType: msg.referral.sourceType,
+        midiaTipo: msg.referral.midiaTipo,
+        temTitulo: !!msg.referral.titulo,
+      },
+      "[OrigemAnuncio] mensagem chegou COM referral de anúncio",
+    );
+  }
+
   void (async () => {
     try {
       const { getDb } = await import("../db");
@@ -195,7 +213,14 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
         const { registrarOrigemAnuncioSeAusente } = await import("./whatsapp-origem-anuncio");
         await registrarOrigemAnuncioSeAusente(db, contatoId, msg.referral, msg.timestamp * 1000);
       }
-    } catch { /* best-effort */ }
+    } catch (e: any) {
+      // Idem: o opt-in e a origem são enriquecimento, mas falha muda de ser
+      // invisível para ser procurável.
+      log.warn(
+        { contatoId, temReferral: !!msg.referral, erro: String(e?.message || e).slice(0, 300) },
+        "[Handler] rastro de opt-in/origem do anúncio falhou",
+      );
+    }
   })();
 
   // Comandos de opt-out/opt-in na conversa (SAIR/PARAR/STOP → para proativos;

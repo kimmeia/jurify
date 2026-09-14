@@ -88,7 +88,16 @@ export async function registrarOrigemAnuncioSeAusente(
       },
       "[OrigemAnuncio] lead veio de anúncio — origem gravada",
     );
-  } catch {
-    /* best-effort: origem é enriquecimento, nunca bloqueia o atendimento */
+  } catch (e: any) {
+    // Best-effort no ATENDIMENTO (origem é enriquecimento e nunca pode
+    // derrubar a mensagem do cliente), mas NUNCA silencioso: engolir sem
+    // registrar deixava "a Meta não mandou referral" e "a gravação falhou"
+    // com exatamente a mesma cara — nenhuma linha de log, nenhum jeito de
+    // saber qual dos dois aconteceu. Coluna ausente num ambiente que não
+    // migrou é o caso clássico.
+    log.error(
+      { contatoId, erro: String(e?.message || e).slice(0, 300) },
+      "[OrigemAnuncio] FALHOU ao gravar a origem do anúncio — o lead veio de campanha e o registro se perdeu",
+    );
   }
 }
