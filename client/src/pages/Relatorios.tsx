@@ -28,6 +28,7 @@ import {
   TrendingDown, Hourglass, Repeat,
   CalendarCheck, XCircle, Users,
   PhoneOutgoing, PhoneIncoming, X,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RelatoriosTab as DreFinanceiroTab } from "./financeiro/Relatorios";
@@ -1150,6 +1151,102 @@ function RankingPodioTabela({
  * abre a lista de clientes daquele fechamento (mesmo recorte de
  * período/atendente do relatório). Aprovado via mockup.
  */
+/**
+ * De qual anúncio veio o lead (Click-to-WhatsApp).
+ *
+ * Só aparece pra quem anuncia: sem lead de anúncio no período, o cartão some
+ * em vez de mostrar uma tabela vazia no meio do relatório.
+ */
+function AnunciosCard({ itens }: { itens: any[] }) {
+  if (itens.length === 0) return null;
+  const totLeads = itens.reduce((s: number, a: any) => s + (a.leads || 0), 0);
+  const totFechados = itens.reduce((s: number, a: any) => s + (a.fechados || 0), 0);
+  const totFechado = itens.reduce((s: number, a: any) => s + (a.valorFechado || 0), 0);
+  const totRecebido = itens.reduce((s: number, a: any) => s + (a.recebido || 0), 0);
+  const taxa = (f: number, l: number) => (l > 0 ? `${((f / l) * 100).toFixed(0)}%` : "—");
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-sm">De qual anúncio veio o lead</CardTitle>
+          <p className="text-[11px] text-muted-foreground">
+            <strong className="text-foreground">{totLeads}</strong> leads de anúncio ·{" "}
+            <strong className="text-foreground">{totFechados}</strong> fecharam ·{" "}
+            <strong className="text-success-fg">{formatBRL(totRecebido)}</strong> recebido no período
+          </p>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          Quem clicou num anúncio do Facebook ou Instagram e chamou no WhatsApp. O período conta pelo
+          CLIQUE, não pelo fechamento. Recebido = o mesmo do card do topo, distribuído por anúncio —
+          não é uma segunda conta. A Meta não informa o nome da campanha nem do conjunto, só o anúncio;
+          por isso a linha é o criativo.
+        </p>
+      </CardHeader>
+      <CardContent>
+        {/* A tabela rola dentro da própria moldura no celular. O `min-w` existe
+            pra ela rolar COM as colunas legíveis: sem ele, o título do anúncio
+            (que é longo por natureza) engolia a largura toda e o leitor não via
+            número nenhum sem arrastar — defeito que só a foto em 390px mostrou. */}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-xs">
+            <thead>
+              <tr className="border-b text-[10px] uppercase tracking-wider text-muted-foreground">
+                <th className="text-left font-bold py-2">Anúncio</th>
+                <th className="text-right font-bold py-2 px-2 whitespace-nowrap">Leads</th>
+                <th className="text-right font-bold py-2 px-2 whitespace-nowrap">Fecharam</th>
+                <th className="text-right font-bold py-2 px-2 whitespace-nowrap">Taxa</th>
+                <th className="text-right font-bold py-2 px-2 whitespace-nowrap">Fechado</th>
+                <th className="text-right font-bold py-2 pl-2 whitespace-nowrap">Recebido</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itens.map((a: any) => (
+                <tr key={a.anuncioId || a.titulo} className="border-b last:border-0">
+                  <td className="py-2 pr-2 max-w-[220px] sm:max-w-[340px]">
+                    <div className="flex items-center gap-2">
+                      <Megaphone className="h-3.5 w-3.5 shrink-0 text-accent-purple-fg" />
+                      <div className="min-w-0">
+                        <p className="font-medium truncate" title={a.titulo}>{a.titulo}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {a.tipo === "post" ? "Publicação" : "Anúncio"}
+                          {a.midiaTipo === "video" ? " em vídeo" : a.midiaTipo === "image" ? " em imagem" : ""}
+                          {a.sourceUrl ? (
+                            <>
+                              {" · "}
+                              <a href={a.sourceUrl} target="_blank" rel="noreferrer" className="font-semibold text-accent-purple-fg hover:underline">
+                                ver anúncio
+                              </a>
+                            </>
+                          ) : null}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="text-right tabular-nums py-2 px-2 font-semibold">{a.leads}</td>
+                  <td className="text-right tabular-nums py-2 px-2 font-semibold text-success-fg">{a.fechados}</td>
+                  <td className="text-right tabular-nums py-2 px-2 text-muted-foreground">{taxa(a.fechados, a.leads)}</td>
+                  <td className="text-right tabular-nums py-2 px-2">{formatBRL(a.valorFechado || 0)}</td>
+                  <td className={`text-right tabular-nums py-2 pl-2 font-semibold ${a.recebido > 0 ? "text-success-fg" : "text-muted-foreground/60"}`}>
+                    {formatBRL(a.recebido || 0)}
+                  </td>
+                </tr>
+              ))}
+              <tr className="font-bold">
+                <td className="py-2">Total</td>
+                <td className="text-right tabular-nums py-2 px-2">{totLeads}</td>
+                <td className="text-right tabular-nums py-2 px-2 text-success-fg">{totFechados}</td>
+                <td className="text-right tabular-nums py-2 px-2 text-muted-foreground">{taxa(totFechados, totLeads)}</td>
+                <td className="text-right tabular-nums py-2 px-2">{formatBRL(totFechado)}</td>
+                <td className="text-right tabular-nums py-2 pl-2 text-success-fg">{formatBRL(totRecebido)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function FechamentosPorOrigemCard({ itens }: { itens: any[] }) {
   const [origemAberta, setOrigemAberta] = useState<string | null>(null);
   const aberta = itens.find((o: any) => o.origem === origemAberta);
@@ -1972,6 +2069,9 @@ function DashboardComercial() {
 
           {/* Fechamentos por origem — texto livre do cadastro de fechamento */}
           <FechamentosPorOrigemCard itens={data.fechamentosPorOrigem || []} />
+
+          {/* Atribuição por anúncio — só aparece pra quem anuncia */}
+          <AnunciosCard itens={(data as any).anuncios || []} />
 
           {/* Contratos cancelados no período — pela data do cancelamento */}
           <ContratosCanceladosCard itens={data.contratosCancelados || []} />

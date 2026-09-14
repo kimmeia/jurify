@@ -2,13 +2,14 @@
  * Gera o Relatório Comercial em PDF usando pdfkit — espelha a aba Comercial
  * de Relatórios (mesmas seções/cores da tela): fechamento total (KPIs),
  * fechamento por atendente (ranking), fechado e recebido por cliente do
- * atendente (drill-down), funil, faturado por dia, contatos por canal e
- * fechamentos por origem.
+ * atendente (drill-down), funil, faturado por dia, contatos por canal,
+ * fechamentos por origem e atribuição por anúncio.
  *
  * Mesmo padrão do `dre-pdf.ts`: retorna Buffer (base64 na camada tRPC).
  */
 
 import PDFDocument from "pdfkit";
+import { textoParaPdfWinAnsi } from "../../shared/texto-pdf-winansi";
 
 // ── Tipos do payload (subset do retorno de relatorios.comercialDashboard) ────
 
@@ -89,6 +90,19 @@ export type ComercialDashboardData = {
       canceladoEm?: string | null;
       motivoCancelamento?: string | null;
     }>;
+  }>;
+  /** Atribuição por anúncio (Click-to-WhatsApp). Opcional: payload antigo
+   *  (relatório programado gravado antes desta entrega) não tem o campo. */
+  anuncios?: Array<{
+    anuncioId: string;
+    titulo: string;
+    tipo: string;
+    midiaTipo: string;
+    sourceUrl: string;
+    leads: number;
+    fechados: number;
+    valorFechado: number;
+    recebido: number;
   }>;
   filtros: { setorId: number | null; atendenteId: number | null };
 };
@@ -871,6 +885,70 @@ export async function gerarComercialPdf(args: {
         doc.y += 8;
       }
 
+      // ── 9) DE QUAL ANÚNCIO VEIO O LEAD ───────────────────────────────────────
+      if (data.anuncios && data.anuncios.length > 0) {
+        const lista = data.anuncios;
+        const totLeads = lista.reduce((s, a) => s + (a.leads || 0), 0);
+        const totFech = lista.reduce((s, a) => s + (a.fechados || 0), 0);
+        const totValor = lista.reduce((s, a) => s + (a.valorFechado || 0), 0);
+        const totRec = lista.reduce((s, a) => s + (a.recebido || 0), 0);
+        ensure(70);
+        sectionHeader(
+          "De qual anúncio veio o lead", C.dark,
+          `${totLeads} lead(s) de anúncio · ${totFech} fecharam · ${formatBRL(totRec)} recebido. ` +
+            "O período conta pelo CLIQUE no anúncio. A Meta não informa campanha nem conjunto, só o anúncio.",
+        );
+        const xTit = L + 4, wTit = 210, xLeads = L + 218, wLeads = 46, xFech = L + 268, wFech = 56,
+          xTaxa = L + 328, wTaxa = 44, xVal = L + 376, wVal = 76, xRec = L + 456, wRec = W - 460;
+        const yc = doc.y;
+        doc.fillColor(C.muted).font("Helvetica-Bold").fontSize(7);
+        doc.text("Anúncio", xTit, yc, { width: wTit });
+        doc.text("Leads", xLeads, yc, { width: wLeads, align: "right" });
+        doc.text("Fecharam", xFech, yc, { width: wFech, align: "right" });
+        doc.text("Taxa", xTaxa, yc, { width: wTaxa, align: "right" });
+        doc.text("Fechado", xVal, yc, { width: wVal, align: "right" });
+        doc.text("Recebido", xRec, yc, { width: wRec, align: "right" });
+        doc.y = yc + 10;
+        hr(doc.y, C.line, 0.5);
+        doc.y += 3;
+        for (const a of lista) {
+          ensure(14);
+          const yr = doc.y;
+          // O título é texto do anunciante e chega da Meta: criativo com emoji
+          // é comum, e as 14 fontes padrão do PDF só escrevem WinAnsi — sem
+          // este filtro o pdfkit imprime glifo errado no lugar.
+          const titulo = textoParaPdfWinAnsi(a.titulo) || "Anúncio sem título";
+          doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+            .text(fit(titulo, wTit), xTit, yr, { width: wTit, lineBreak: false });
+          doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8)
+            .text(String(a.leads || 0), xLeads, yr, { width: wLeads, align: "right", lineBreak: false });
+          doc.fillColor(C.emerald).font("Helvetica-Bold").fontSize(8)
+            .text(String(a.fechados || 0), xFech, yr, { width: wFech, align: "right", lineBreak: false });
+          doc.fillColor(C.muted).font("Helvetica").fontSize(8)
+            .text(a.leads > 0 ? `${Math.round((a.fechados / a.leads) * 100)}%` : "—",
+              xTaxa, yr, { width: wTaxa, align: "right", lineBreak: false });
+          doc.fillColor(C.dark).font("Helvetica").fontSize(8)
+            .text(formatBRL(a.valorFechado || 0), xVal, yr, { width: wVal, align: "right", lineBreak: false });
+          doc.fillColor((a.recebido || 0) > 0 ? C.emerald : C.muted)
+            .font((a.recebido || 0) > 0 ? "Helvetica-Bold" : "Helvetica").fontSize(8)
+            .text(formatBRL(a.recebido || 0), xRec, yr, { width: wRec, align: "right", lineBreak: false });
+          doc.y = yr + 12;
+        }
+        ensure(16);
+        hr(doc.y, C.line, 0.5);
+        doc.y += 3;
+        const yt = doc.y;
+        doc.fillColor(C.dark).font("Helvetica-Bold").fontSize(8);
+        doc.text("Total", xTit, yt, { width: wTit, lineBreak: false });
+        doc.text(String(totLeads), xLeads, yt, { width: wLeads, align: "right", lineBreak: false });
+        doc.fillColor(C.emerald).text(String(totFech), xFech, yt, { width: wFech, align: "right", lineBreak: false });
+        doc.fillColor(C.muted).text(totLeads > 0 ? `${Math.round((totFech / totLeads) * 100)}%` : "—",
+          xTaxa, yt, { width: wTaxa, align: "right", lineBreak: false });
+        doc.fillColor(C.dark).text(formatBRL(totValor), xVal, yt, { width: wVal, align: "right", lineBreak: false });
+        doc.fillColor(C.emerald).text(formatBRL(totRec), xRec, yt, { width: wRec, align: "right", lineBreak: false });
+        doc.y = yt + 16;
+      }
+
       // ── Nota de metodologia ──────────────────────────────────────────────────
       ensure(40);
       hr(doc.y, C.line, 0.7);
@@ -884,7 +962,10 @@ export async function gerarComercialPdf(args: {
           "Recebido por origem: os mesmos pagamentos do card Recebido, cada um no fechamento mais recente do cliente " +
           "antes da data do pagamento; o que não encaixa em origem nenhuma vai para \"Sem origem / fora do filtro\". " +
           "Cancelados: contratos fechados que o cliente desfez, pela data do cancelamento; o fechamento continua " +
-          "contando no mês em que fechou e o que já foi recebido não muda. \"Lançado por engano\" não entra na conta.",
+          "contando no mês em que fechou e o que já foi recebido não muda. \"Lançado por engano\" não entra na conta. " +
+          "De qual anúncio veio o lead: quem clicou num anúncio do Facebook/Instagram e chamou no WhatsApp, " +
+          "contado pela data do CLIQUE (não do fechamento); o recebido é o mesmo do card Recebido, distribuído por " +
+          "anúncio. A Meta não informa campanha nem conjunto de anúncios — só o anúncio e o criativo.",
         L, doc.y, { width: W, align: "left" },
       );
 

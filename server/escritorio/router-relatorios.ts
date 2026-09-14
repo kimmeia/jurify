@@ -24,7 +24,7 @@ import {
   comissoesFechadas, users, canaisIntegrados, chamadas,
   relatoriosProgramados, atendimentos,
 } from "../../drizzle/schema";
-import { eq, and, sql, gte, lte, or, inArray, desc } from "drizzle-orm";
+import { eq, and, sql, gte, lte, or, inArray, desc, isNotNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { MOTIVO_CANCELAMENTO_ENGANO, contaComoCancelamento } from "../../shared/cancelamento-contrato";
 import { createLogger } from "../_core/logger";
@@ -118,6 +118,91 @@ export type GrupoFechamentosPorOrigem = {
 };
 
 const centavos = (n: number) => Math.round(n * 100) / 100;
+
+export type GrupoAnuncio = {
+  /** `source_id` da Meta — o anúncio em si. Balde `""` = origem sem id. */
+  anuncioId: string;
+  titulo: string;
+  tipo: string;
+  midiaTipo: string;
+  sourceUrl: string;
+  /** Leads que CHEGARAM por este anúncio dentro do período. */
+  leads: number;
+  /** Destes, quantos já têm contrato fechado no período. */
+  fechados: number;
+  valorFechado: number;
+  recebido: number;
+};
+
+/**
+ * Agrupa por ANÚNCIO (Click-to-WhatsApp) os leads que chegaram no período e o
+ * que eles fecharam e pagaram.
+ *
+ * Agrupa por anúncio, e não por campanha, porque campanha NÃO EXISTE no que a
+ * Meta entrega: o `referral` do webhook traz o id do anúncio, o criativo e o
+ * texto; nome de campanha e de conjunto só vivem na Marketing API, que exige
+ * `ads_read` — permissão que o app não tem. O rótulo é o título do criativo.
+ *
+ * `recebido` NÃO é recalculado aqui: chega pronto de
+ * `atribuirRecebidoAosFechamentos`, a mesma distribuição que alimenta o card
+ * Recebido e o agrupamento por origem. Uma segunda definição de receita na
+ * mesma tela seria dois números certos que não somam.
+ */
+export function agruparPorAnuncio(
+  leadsDoPeriodo: Array<{ contatoId: number; origemAnuncio: string | null }>,
+  fechamentos: Array<{ contatoId: number; valor: number; recebido: number }>,
+): GrupoAnuncio[] {
+  const porContato = new Map<number, { valor: number; recebido: number }>();
+  for (const f of fechamentos) {
+    const a = porContato.get(f.contatoId) || { valor: 0, recebido: 0 };
+    a.valor += Number(f.valor || 0);
+    a.recebido += Number(f.recebido || 0);
+    porContato.set(f.contatoId, a);
+  }
+
+  const grupos = new Map<string, GrupoAnuncio>();
+  for (const l of leadsDoPeriodo) {
+    let ref: any = null;
+    try {
+      ref = l.origemAnuncio ? JSON.parse(l.origemAnuncio) : null;
+    } catch {
+      ref = null;
+    }
+    if (!ref || typeof ref !== "object") continue;
+    // A chave é o id do anúncio; sem ele, o título serve. Sem nenhum dos dois
+    // não há o que atribuir — juntar tudo num balde vazio fundiria anúncios
+    // diferentes numa linha só e o número mentiria.
+    const anuncioId = String(ref.sourceId || "");
+    const chave = anuncioId || String(ref.titulo || "");
+    if (!chave) continue;
+    let g = grupos.get(chave);
+    if (!g) {
+      g = {
+        anuncioId,
+        titulo: String(ref.titulo || "") || "Anúncio sem título",
+        tipo: String(ref.sourceType || ""),
+        midiaTipo: String(ref.midiaTipo || ""),
+        sourceUrl: String(ref.sourceUrl || ""),
+        leads: 0,
+        fechados: 0,
+        valorFechado: 0,
+        recebido: 0,
+      };
+      grupos.set(chave, g);
+    }
+    g.leads++;
+    const f = porContato.get(l.contatoId);
+    if (f) {
+      g.fechados++;
+      g.valorFechado = centavos(g.valorFechado + f.valor);
+      g.recebido = centavos(g.recebido + f.recebido);
+    }
+  }
+
+  // Quem trouxe dinheiro primeiro; empate, quem trouxe mais lead. É a ordem
+  // que responde "qual anúncio se paga" sem precisar reordenar na tela.
+  return [...grupos.values()].sort((a, b) => b.recebido - a.recebido || b.leads - a.leads);
+}
 
 export type ContratoCanceladoItem = {
   leadId: number;
@@ -2435,6 +2520,28 @@ export const relatoriosRouter = router({
         idsForaDoFiltro.map((id) => ({ contatoId: id, cliente: nomesForaDoFiltro.get(id) || null, recebido: foraDoFiltro.get(id) || 0 })),
       );
 
+      // ── Atribuição por anúncio (Click-to-WhatsApp) ────────────────────────
+      // O período conta pelo CLIQUE (`origemAnuncioEm`), não pelo fechamento:
+      // a pergunta é quanto lead cada anúncio trouxe na janela. O dinheiro vem
+      // da MESMA distribuição do card Recebido — não há segunda conta aqui.
+      const leadsDeAnuncioRows = await db
+        .select({ contatoId: contatos.id, origemAnuncio: contatos.origemAnuncio })
+        .from(contatos)
+        .where(and(
+          eq(contatos.escritorioId, eid),
+          isNotNull(contatos.origemAnuncio),
+          gte(contatos.origemAnuncioEm, dataInicio),
+          lte(contatos.origemAnuncioEm, dataFim),
+        ));
+      const anuncios = agruparPorAnuncio(
+        leadsDeAnuncioRows.map((r) => ({ contatoId: Number(r.contatoId), origemAnuncio: r.origemAnuncio })),
+        fechamentosDetalheRows.map((r) => ({
+          contatoId: Number(r.contatoId),
+          valor: Number(r.valor || 0),
+          recebido: porLead.get(Number(r.leadId)) || 0,
+        })),
+      );
+
       // ── Lista de contratos cancelados no período ──────────────────────────
       const canceladosRows = await db
         .select({
@@ -2562,6 +2669,7 @@ export const relatoriosRouter = router({
         funilResumo,
         leadsPorCanal,
         fechamentosPorOrigem,
+        anuncios,
         contratosCancelados,
         filtros: {
           setorId: input?.setorId ?? null,
