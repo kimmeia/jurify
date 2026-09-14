@@ -3574,3 +3574,50 @@ No celular a página do Cofre rola **1px** de lado: é o `animate-ping` do selo
 mudança** (medido nas duas versões: 400px antes, 399px depois). Consertar
 significa cortar o pulso ou trocar a animação — mudança visível que o dono não
 pediu. Fica aqui até ele decidir.
+
+## 32. As marcas dos cards passaram a ser as REAIS (13/09)
+
+Pedido do dono, com todas as letras: *"esse card conexão simplificada acho que
+pode remover pq ja podemos conectar com 1 clique. Tambem quero que use as logos
+reais nos cards (whatsapp, facebool, instagram) em canais e app externos. nada
+de parecido, quero icones reais."*
+
+### 32.1 As marcas
+
+`client/src/components/logos-marcas.tsx` (padrão do `IconeTwilio`, que já
+existia): SVG embutido, traçado do Simple Icons (dados em CC0), cor da MARCA e
+não do tema — `currentColor` faria um WhatsApp roxo no dia em que a paleta
+mudar. Cinco: WhatsApp (#25D366), Instagram (degradê oficial — chapado ele
+deixa de ser a marca que se reconhece), Messenger (#0866FF), OpenAI (preta, com
+`dark:fill-white` pra não sumir no tema escuro) e Claude (#D97757).
+
+Saíram da tela os emojis 💬 📸 💙 🤖 🦾.
+
+**O ladrilho mudou junto, e precisava:** ele era um degradê CHEIO da cor do
+canal, desenhado para um emoji branco por cima. Marca verde sobre ladrilho
+verde some. Agora é claro, com borda; o degradê sobrou só no cartão
+"+ Adicionar outro", que não tem marca.
+
+**Duas escolhas ditas na cara:** o card é "Facebook Messenger", então leva a
+marca do **Messenger** — o "f" azul é o Facebook, que é outro produto. E o
+**Asaas continua com o ícone antigo**: a marca não está no Simple Icons nem em
+pacote que este ambiente alcance, e desenhar "parecido" é exatamente o que ele
+pediu pra não fazer. Entra quando o SVG oficial entrar no repositório.
+
+### 32.2 O banner saiu — e o que ele carregava, não
+
+O banner azul "conexão simplificada" saiu: os cards já conectam com 1 clique e
+o texto repetia isso.
+
+**O cuidado que valeu:** dentro dele morava a ÚNICA porta do **cadastro manual
+do WhatsApp Cloud** — o caminho de quando o OAuth não roda (App Review
+pendente, Tech Provider não aprovado, BM dona do app). Tirar o banner inteiro
+levaria junto uma função que ninguém mandou remover. Ela virou uma linha
+discreta embaixo dos cards, com o mesmo clique.
+
+O aviso "Instagram e Messenger: em breve", que o banner também dava, continua
+na descrição de cada card, no pill ao lado do nome e no botão travado — o teste
+`instagram-em-breve` foi ajustado para conferir esses três em vez do banner.
+
+Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 8 mutações vermelhas
+em `scratchpad/mutar-logos-reais.py`.
