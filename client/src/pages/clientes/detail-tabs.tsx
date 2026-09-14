@@ -1031,8 +1031,9 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     if (!tel.trim()) e.tel = "Telefone obrigatório";
     else { const t = tel.replace(/\D/g, ""); if (t.length < 10 || t.length > 13) e.tel = "Telefone inválido"; }
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) e.email = "Email inválido";
-    // Qualificação + endereço (helper compartilhado)
-    const qualifFaltando = validarQualificacaoCompleta(qualif);
+    // Qualificação + endereço (helper compartilhado). No cadastro NOVO a data
+    // de nascimento entra junto; na edição, não — ver CAMPOS_OBRIGATORIOS_CADASTRO.
+    const qualifFaltando = validarQualificacaoCompleta(qualif, { exigirNascimento: true });
     if (qualifFaltando.length > 0) {
       e.qualif = `Faltam: ${qualifFaltando.join(", ")}`;
     }
@@ -1067,7 +1068,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
       // `validar` já preenche `erros` que aparecem inline. Mas pra
       // qualificação/endereço o erro vai no `erros.qualif` agregado —
       // mostra como toast porque o componente é separado.
-      const qualifFaltando = validarQualificacaoCompleta(qualif);
+      const qualifFaltando = validarQualificacaoCompleta(qualif, { exigirNascimento: true });
       if (qualifFaltando.length > 0) {
         toast.error(`Faltam: ${qualifFaltando.join(", ")}`);
       }
@@ -1150,6 +1151,7 @@ export function NovoClienteDialog({ open, onOpenChange, onSuccess }: { open: boo
     <div className="space-y-1.5"><Label>CPF/CNPJ <span className="text-destructive">*</span></Label><Input placeholder="000.000.000-00" value={cpf} onChange={e => setCpf(formatCpfCnpj(e.target.value))} className={erros.cpf ? "border-danger/30" : ""} />{erros.cpf && <p className="text-[10px] text-danger">{erros.cpf}</p>}</div>
     <CamposQualificacaoEndereco
       obrigatorios
+      exigirNascimento
       value={qualif}
       onChange={(patch) => setQualif((q) => ({ ...q, ...patch }))}
     />
