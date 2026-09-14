@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, tinyint, uniqueIndex, primaryKey, json } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, bigint, boolean, index, decimal, double, tinyint, uniqueIndex, primaryKey, json, date } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -4455,6 +4455,67 @@ export const jurisiaVarredura = mysqlTable(
     porTribunal: uniqueIndex("jurisia_varr_tribunal").on(t.tribunal),
   }),
 );
+
+/**
+ * Ementa — o acórdão publicado, que é o que se cita na petição.
+ *
+ * Separado de `jurisiaProcessos` de propósito: lá é metadado do DataJud (vira
+ * estatística) e aqui é texto de decisão (vira citação). Juntar os dois numa
+ * tabela só apagaria justamente a distinção que o produto precisa fazer.
+ * O índice FULLTEXT da coluna `ementa` é criado pela migration 0230.
+ */
+export const jurisiaEmentas = mysqlTable(
+  "jurisia_ementas",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    /** Qual fonte oficial trouxe (shared/fontes-oficiais.ts). */
+    fonteId: varchar("fonteIdJurisEm", { length: 40 }).notNull(),
+    tribunal: varchar("tribunalJurisEm", { length: 16 }).notNull(),
+    /** Como o tribunal chama o julgado — é o texto que vai pra peça. */
+    identificador: varchar("identificadorJurisEm", { length: 255 }).notNull(),
+    orgao: varchar("orgaoJurisEm", { length: 180 }),
+    relator: varchar("relatorJurisEm", { length: 180 }),
+    julgadoEm: date("julgadoEmJurisEm", { mode: "string" }),
+    ementa: text("ementaJurisEm").notNull(),
+    /** Endereço oficial: citação que não se confere não entra em petição. */
+    url: varchar("urlJurisEm", { length: 500 }).notNull(),
+    assuntos: varchar("assuntosJurisEm", { length: 500 }),
+    coletadoEm: timestamp("coletadoEmJurisEm").defaultNow().notNull(),
+  },
+  (t) => ({
+    porFonteIdent: uniqueIndex("uq_juris_ementa").on(t.fonteId, t.identificador),
+  }),
+);
+export type JurisiaEmenta = typeof jurisiaEmentas.$inferSelect;
+
+/**
+ * O estado do robô em cada fonte oficial.
+ *
+ * `ligada` nasce FALSE e só muda no painel: robô não começa a bater no site de
+ * um tribunal porque subiu uma versão. Antes de ligar, a sondagem conta se a
+ * fonte responde DO NOSSO SERVIDOR — o que o computador de casa responde não
+ * serve de prova.
+ */
+export const jurisiaFontesColeta = mysqlTable(
+  "jurisia_fontes_coleta",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    fonteId: varchar("fonteIdJurisFonte", { length: 40 }).notNull(),
+    ligada: boolean("ligadaJurisFonte").default(false).notNull(),
+    status: mysqlEnum("statusJurisFonte", ["nunca", "ok", "coletando", "erro", "bloqueada"])
+      .default("nunca")
+      .notNull(),
+    ultimaColetaEm: timestamp("ultimaColetaEmJurisFonte"),
+    proximaEm: timestamp("proximaEmJurisFonte"),
+    itens: int("itensJurisFonte").default(0).notNull(),
+    ultimoErro: varchar("ultimoErroJurisFonte", { length: 500 }),
+    atualizadoEm: timestamp("atualizadoEmJurisFonte").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    porFonte: uniqueIndex("uq_juris_fonte").on(t.fonteId),
+  }),
+);
+export type JurisiaFonteColeta = typeof jurisiaFontesColeta.$inferSelect;
 
 /**
  * Ponto digital — uma linha por colaborador por dia.
