@@ -3808,3 +3808,69 @@ vermelhas em `scratchpad/mutar-busca-nas-abas.py`.
 No celular o painel Financeiro rola **8px** de lado (398px num aparelho de 390).
 Medido nas duas versões, antes e depois: **não veio desta mudança**. É o bloco
 do gráfico.
+
+## 35. Kanban: filtrar pela data de CONCLUSÃO, não só pela de criação (13/09)
+
+Pergunta do dono: *"filtro so permite buscar por data de criação do card, quero
+saber também por data de conclusão. como podemos fazer?"* — recomendação dada,
+aprovada com *"pode fazer como recomendou"*.
+
+### 35.1 Por que não dava pra filtrar
+
+O card sempre soube em QUAL coluna está (`colunaId`), mas nunca soube QUANDO
+chegou nela. `updatedAt` não serve: muda em qualquer edição. Então não existia
+data de conclusão pra comparar — daí o filtro só oferecer "Criado em".
+
+**Mas o passado existia.** Cada movimento de card já era registrado em
+`kanban_movimentacoes` (card, coluna de origem, coluna de destino, quando, por
+quem), desde sempre. O filtro não precisava nascer vazio.
+
+### 35.2 O que foi feito
+
+- **`kanban_cards.concluidoEm`** (migration 0231, aditiva, nasce NULL, índice
+  `(escritorioId, concluidoEm)`). Gravada em `moverCard` quando o destino é
+  coluna de conclusão e **zerada quando o destino é coluna normal**; e em
+  `criarCard`, pro card que nasce direto numa coluna de conclusão e por isso
+  nunca passaria pelo `moverCard`.
+- **A regra, escolhida pelo dono**: vale a ÚLTIMA conclusão, e a data some se o
+  card voltar pro fluxo. Guardar a primeira faria o filtro dizer "concluído em
+  agosto" sobre card que hoje está em produção.
+- **O passado**, na mesma migration: `MAX(createdAt)` das movimentações cujo
+  destino é coluna de conclusão, só pra card que está AGORA concluído; card sem
+  histórico (nasceu na conclusão) cai na data de criação. A migration zera
+  antes quem não está concluído, então pode rodar de novo sem deixar data velha
+  — o executor repassa migrations quando alguma falha.
+- **O filtro** (`condicoesCards`, compartilhado pelo quadro e pelo PDF) ganhou
+  `campoData: "criado" | "concluido"`. Ausente = criado, como sempre foi. Em
+  "concluido", card sem data fica fora explicitamente (`IS NOT NULL`) — em SQL
+  `NULL > data` é desconhecido, não falso, e a condição existe pra valer também
+  quando o usuário abre só uma ponta do período, e pra deixar a intenção
+  escrita. Sem período nenhum, `campoData` não vira filtro.
+- **A tela**: o popover do período ganhou "Contar pela data de" ANTES dos
+  campos De/Até — o mesmo "01 a 31" devolve listas diferentes nas duas datas, e
+  quem digita as datas primeiro erra de qual estava falando. O rótulo do botão
+  vira "Concluído em", e o aviso diz que só entram cards em coluna de conclusão.
+- **O PDF veio junto** (usa o mesmo `condicoesCards`) e o rótulo do arquivo
+  passou a dizer "(por conclusão)" ou "(por criação)": o mesmo intervalo gera
+  listas diferentes, e o impresso precisa contar qual é.
+
+### 35.3 Conferido de ponta a ponta, no app rodando
+
+Banco povoado com os quatro casos que importam, e o filtro dirigido por
+Playwright na tela de verdade:
+
+| card | situação | `concluidoEm` |
+|---|---|---|
+| concluído em 05/09, com histórico de 2 movimentos | em coluna de conclusão | 05/09 16:30 |
+| concluído 02/09, voltou, concluído de novo 10/09 | em coluna de conclusão | **10/09** (a última) |
+| criado direto na conclusão, sem histórico | em coluna de conclusão | data de criação |
+| foi concluído 04/09 e voltou pro fluxo | em coluna normal | **vazio** |
+
+Filtro por conclusão 01→06/09 devolveu só o primeiro; 01→30/09 devolveu os três
+concluídos; por criação, os seis. Sem erro de console.
+
+Amarra: `kanban-filtro-concluido-em.test.ts` (19 testes; a regra SQL é
+renderizada com `MySqlDialect` porque banco falso engole `isNull`) — 14 mutações
+vermelhas em `scratchpad/mutar-kanban-concluido.py`. A do `tipo` da coluna só
+morreu depois de a amarra recortar o `criarCard`: o `moverCard` faz a MESMA
+consulta, e olhar o arquivo inteiro deixava passar.

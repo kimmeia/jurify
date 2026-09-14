@@ -23,7 +23,12 @@ export type FiltrosKanban = {
   prazoFiltro?: "vencidos" | "hoje" | "7dias" | "sem_prazo";
   dataInicio?: string;
   dataFim?: string;
+  /** Qual data o período compara. Ausente = criação, como sempre foi. */
+  campoData?: "criado" | "concluido";
 };
+
+/** Rótulo curto de cada data, usado no botão e no título do popover. */
+const NOME_DA_DATA = { criado: "criação", concluido: "conclusão" } as const;
 
 export const FILTROS_VAZIOS: FiltrosKanban = {};
 
@@ -63,6 +68,7 @@ export function FiltrosBar({
 
   // Popover de período (Criado de/até). Inputs locais até "Aplicar".
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [campoLocal, setCampoLocal] = useState<"criado" | "concluido">(filtros.campoData || "criado");
   const [deLocal, setDeLocal] = useState(filtros.dataInicio || "");
   const [ateLocal, setAteLocal] = useState(filtros.dataFim || "");
 
@@ -147,13 +153,16 @@ export function FiltrosBar({
       </div>
 
       <div className="flex flex-col gap-1">
-        <Label className="text-[10px] text-muted-foreground">Criado em</Label>
+        <Label className="text-[10px] text-muted-foreground">
+          {filtros.campoData === "concluido" ? "Concluído em" : "Criado em"}
+        </Label>
         <Popover
           open={popoverOpen}
           onOpenChange={(o) => {
             setPopoverOpen(o);
             // Hidrata inputs locais com o estado atual ao abrir.
             if (o) {
+              setCampoLocal(filtros.campoData || "criado");
               setDeLocal(filtros.dataInicio || "");
               setAteLocal(filtros.dataFim || "");
             }
@@ -170,7 +179,31 @@ export function FiltrosBar({
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-64 space-y-2">
-            <p className="text-xs font-semibold">Período de criação</p>
+            <p className="text-xs font-semibold">Período de {NOME_DA_DATA[campoLocal]}</p>
+            {/* A escolha da data vem ANTES do intervalo de propósito: o mesmo
+                "01 a 31" devolve listas diferentes em cada uma, e quem digita
+                as datas primeiro erra de qual estava falando. */}
+            <div className="space-y-1">
+              <Label className="text-[10px]">Contar pela data de</Label>
+              <Select
+                value={campoLocal}
+                onValueChange={(v) => setCampoLocal(v as "criado" | "concluido")}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="criado">Criação do card</SelectItem>
+                  <SelectItem value="concluido">Conclusão do card</SelectItem>
+                </SelectContent>
+              </Select>
+              {campoLocal === "concluido" && (
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Só entram os cards que estão numa coluna de conclusão. Se o card
+                  voltar para o fluxo, ele sai deste filtro.
+                </p>
+              )}
+            </div>
             <div className="space-y-1">
               <Label className="text-[10px]">De</Label>
               <Input
@@ -198,7 +231,13 @@ export function FiltrosBar({
                   onClick={() => {
                     setDeLocal("");
                     setAteLocal("");
-                    setFiltros({ ...filtros, dataInicio: undefined, dataFim: undefined });
+                    setCampoLocal("criado");
+                    setFiltros({
+                      ...filtros,
+                      dataInicio: undefined,
+                      dataFim: undefined,
+                      campoData: undefined,
+                    });
                     setPopoverOpen(false);
                   }}
                 >
@@ -210,10 +249,14 @@ export function FiltrosBar({
                 className="flex-1 h-8 text-xs"
                 disabled={!!(deLocal && ateLocal && deLocal > ateLocal)}
                 onClick={() => {
+                  const temPeriodo = !!(deLocal || ateLocal);
                   setFiltros({
                     ...filtros,
                     dataInicio: deLocal || undefined,
                     dataFim: ateLocal || undefined,
+                    // Sem intervalo o campo não significa nada — guardá-lo
+                    // deixaria o rótulo dizendo "Concluído em" sem filtro algum.
+                    campoData: temPeriodo && campoLocal === "concluido" ? "concluido" : undefined,
                   });
                   setPopoverOpen(false);
                 }}
