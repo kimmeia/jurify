@@ -42,6 +42,15 @@ export interface Notificacao {
     // Saúde do canal WhatsApp (qualidade Meta caiu, disjuntor tripou, tier
     // rebaixado) — o aviso que faltou nos bans de jul/2026.
     | "whatsapp_saude"
+    // Tipos que nasceram com a tela de Notificações: cada um é um aviso que o
+    // dono escolhe. Prazo, dinheiro e credencial já existiam como registro e
+    // não chegavam no celular.
+    | "prazo_vencendo"
+    | "pagamento_recebido"
+    | "cobranca_vencida"
+    | "contrato_fechado"
+    | "cliente_esperando"
+    | "aniversario_cliente"
     | "info";
   titulo: string;
   mensagem: string;
@@ -110,6 +119,11 @@ export function registrarSSE(app: Express) {
 
 // Tipos que viram Web Push (notificação com o app fechado). "info" e a
 // sinalização de chamada ficam de fora — são silenciosos / ruído.
+//
+// Esta lista diz o que PODE virar push; QUEM decide se vira, para cada pessoa,
+// é a preferência dela (`pushPermitido`). Antes de existir escolha, esta lista
+// sozinha mandava — e era ela que fazia o celular do dono tocar a cada
+// mensagem de qualquer conversa.
 const TIPOS_PUSH = new Set<Notificacao["tipo"]>([
   "nova_mensagem",
   "novo_lead",
@@ -120,6 +134,17 @@ const TIPOS_PUSH = new Set<Notificacao["tipo"]>([
   // Aviso de saúde do canal precisa alcançar o dono mesmo com o app fechado —
   // é a diferença entre reagir no amarelo e descobrir no ban.
   "whatsapp_saude",
+  // Estes existiam no sino e NÃO chegavam no celular. Credencial quebrada para
+  // de vigiar processo em silêncio; prazo e dinheiro são o que o dono quer
+  // saber na hora.
+  "credencial_erro",
+  "credencial_recuperada",
+  "prazo_vencendo",
+  "pagamento_recebido",
+  "cobranca_vencida",
+  "contrato_fechado",
+  "cliente_esperando",
+  "aniversario_cliente",
 ]);
 
 /** Rota que a notificação abre ao ser tocada. */
@@ -130,6 +155,11 @@ function rotaPush(n: Omit<Notificacao, "timestamp">): string {
     return "/processos";
   }
   if (n.tipo === "whatsapp_saude") return "/configuracoes?tab=canais";
+  if (n.tipo === "credencial_erro" || n.tipo === "credencial_recuperada") return "/tribunais";
+  if (n.tipo === "prazo_vencendo") return "/agenda";
+  if (n.tipo === "pagamento_recebido" || n.tipo === "cobranca_vencida") return "/financeiro";
+  if (n.tipo === "contrato_fechado") return "/relatorios";
+  if (n.tipo === "aniversario_cliente") return "/clientes?aniversario=hoje";
   return "/atendimento";
 }
 
@@ -140,6 +170,20 @@ export function emitirNotificacao(userId: number, notificacao: Omit<Notificacao,
   if (TIPOS_PUSH.has(notificacao.tipo)) {
     (async () => {
       try {
+        // A escolha da pessoa decide o CELULAR, não o sino: o SSE abaixo
+        // continua saindo de qualquer jeito, e a notificação continua sendo
+        // criada por quem chamou. Desligar um aviso é "não me toque", não
+        // "esconda de mim".
+        const { pushPermitido } = await import("./preferencias-notificacao");
+        const decisao = await pushPermitido(userId, notificacao.tipo, notificacao.dados);
+        if (!decisao.enviar) {
+          log.info(
+            { userId, tipo: notificacao.tipo, motivo: decisao.motivo },
+            "[push] não enviado por preferência do usuário",
+          );
+          return;
+        }
+
         const { enviarPushParaUsuario } = await import("./web-push");
         const conversaId = notificacao.dados?.conversaId;
         await enviarPushParaUsuario(userId, {
@@ -225,43 +269,51 @@ export async function emitirParaAtendente(colaboradorId: number, notificacao: Om
  *  que só interessam a quem cuida do atendimento (não a todos os
  *  colaboradores, como acontecia com emitirParaEscritorio antes).
  */
+export async function responsaveisEMaster(
+  escritorioId: number,
+  atendenteResponsavelId: number | null | undefined,
+): Promise<number[]> {
+  const { getDb } = await import("../db");
+  const { colaboradores } = await import("../../drizzle/schema");
+  const { eq, and, or } = await import("drizzle-orm");
+
+  const db = await getDb();
+  if (!db) return [];
+
+  // Dono + gestores sempre. E o atendente responsável (se houver).
+  const conds: any[] = [
+    eq(colaboradores.cargo, "dono"),
+    eq(colaboradores.cargo, "gestor"),
+  ];
+  if (atendenteResponsavelId) {
+    conds.push(eq(colaboradores.id, atendenteResponsavelId));
+  }
+
+  const alvos = await db
+    .select({ userId: colaboradores.userId })
+    .from(colaboradores)
+    .where(and(
+      eq(colaboradores.escritorioId, escritorioId),
+      eq(colaboradores.ativo, true),
+      or(...conds),
+    ));
+
+  // Dedup por userId (dono pode estar em múltiplas listas)
+  const seen = new Set<number>();
+  for (const a of alvos) {
+    if (a.userId) seen.add(a.userId);
+  }
+  return [...seen];
+}
+
 export async function emitirParaResponsaveisEMaster(
   escritorioId: number,
   atendenteResponsavelId: number | null | undefined,
   notificacao: Omit<Notificacao, "timestamp">,
 ) {
   try {
-    const { getDb } = await import("../db");
-    const { colaboradores } = await import("../../drizzle/schema");
-    const { eq, and, or, inArray } = await import("drizzle-orm");
-
-    const db = await getDb();
-    if (!db) return;
-
-    // Dono + gestores sempre. E o atendente responsável (se houver).
-    const conds: any[] = [
-      eq(colaboradores.cargo, "dono"),
-      eq(colaboradores.cargo, "gestor"),
-    ];
-    if (atendenteResponsavelId) {
-      conds.push(eq(colaboradores.id, atendenteResponsavelId));
-    }
-
-    const alvos = await db
-      .select({ userId: colaboradores.userId })
-      .from(colaboradores)
-      .where(and(
-        eq(colaboradores.escritorioId, escritorioId),
-        eq(colaboradores.ativo, true),
-        or(...conds),
-      ));
-
-    // Dedup por userId (dono pode estar em múltiplas listas)
-    const seen = new Set<number>();
-    for (const a of alvos) {
-      if (!a.userId || seen.has(a.userId)) continue;
-      seen.add(a.userId);
-      emitirNotificacao(a.userId, notificacao);
+    for (const userId of await responsaveisEMaster(escritorioId, atendenteResponsavelId)) {
+      emitirNotificacao(userId, notificacao);
     }
   } catch (err: any) {
     log.error("[SSE] Erro ao emitir para responsáveis:", err.message);

@@ -11,7 +11,7 @@
  * controlado: estado fica no parent, fluindo via `value` + `onChange`.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,6 +24,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, MapPin, Search } from "lucide-react";
 import { toast } from "sonner";
+import {
+  brParaIsoData, dataCalendarioISO, dataLocalHoje, isoParaBrData, mascararDataBR,
+} from "@shared/data-calendario";
+import { diaEMes, proximoAniversario } from "@shared/aniversario";
 
 export type EstadoCivil =
   | "solteiro"
@@ -36,6 +40,8 @@ export interface QualificacaoEndereco {
   profissao: string;
   estadoCivil: EstadoCivil | "";
   nacionalidade: string;
+  /** `YYYY-MM-DD`. "" = não sei — e "não sei" nunca vira data nenhuma. */
+  dataNascimento: string;
   cep: string;
   logradouro: string;
   numeroEndereco: string;
@@ -49,6 +55,7 @@ export const QUALIFICACAO_ENDERECO_VAZIO: QualificacaoEndereco = {
   profissao: "",
   estadoCivil: "",
   nacionalidade: "",
+  dataNascimento: "",
   cep: "",
   logradouro: "",
   numeroEndereco: "",
@@ -120,6 +127,14 @@ export function validarQualificacaoCompleta(
   return faltando;
 }
 
+/** A leitura do que foi digitado: "12 de março · 41 anos", já embaixo do campo. */
+function rotuloDaData(iso: string): string {
+  const a = proximoAniversario(iso, dataLocalHoje());
+  if (!a) return "";
+  const idade = a.idadeHoje != null ? ` · ${a.idadeHoje} anos` : "";
+  return `${diaEMes(a)}${idade}`;
+}
+
 const REQ = (label: string, on: boolean) =>
   on ? (
     <>
@@ -131,6 +146,23 @@ const REQ = (label: string, on: boolean) =>
 
 export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Props) {
   const [buscandoCep, setBuscandoCep] = useState(false);
+  // O que está no campo enquanto se digita. O filtro só vira valor quando a
+  // data fecha — senão "12/0" apagaria o que já estava gravado.
+  const [nascimentoDigitado, setNascimentoDigitado] = useState(() =>
+    isoParaBrData(value.dataNascimento),
+  );
+  useEffect(() => {
+    setNascimentoDigitado(isoParaBrData(value.dataNascimento));
+  }, [value.dataNascimento]);
+
+  const nascimentoRuim = nascimentoDigitado.length === 10 && !brParaIsoData(nascimentoDigitado);
+
+  const digitarNascimento = (bruto: string) => {
+    const texto = mascararDataBR(bruto);
+    setNascimentoDigitado(texto);
+    const iso = brParaIsoData(texto);
+    if (iso || texto === "") onChange({ dataNascimento: iso });
+  };
 
   /** Consulta ViaCEP (API pública gratuita) e preenche os campos.
    *  Não bloqueia edição manual: mantém o que o usuário já digitou em
@@ -199,14 +231,44 @@ export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Pr
           </Select>
         </div>
       </div>
-      <div className="space-y-1.5">
-        <Label className="text-xs">{REQ("Nacionalidade", !!obrigatorios)}</Label>
-        <Input
-          value={value.nacionalidade}
-          onChange={(e) => onChange({ nacionalidade: e.target.value })}
-          maxLength={50}
-          placeholder="Brasileira"
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">{REQ("Nacionalidade", !!obrigatorios)}</Label>
+          <Input
+            value={value.nacionalidade}
+            onChange={(e) => onChange({ nacionalidade: e.target.value })}
+            maxLength={50}
+            placeholder="Brasileira"
+          />
+        </div>
+        <div className="space-y-1.5">
+          {/* Fora da lista de obrigatórios de propósito: o contrato sai sem
+              ela, e exigir agora travaria a geração pra toda a carteira que
+              já existe. */}
+          <Label className="text-xs">Data de nascimento</Label>
+          {/* Texto mascarado, não `input type=date`: o campo nativo desenha no
+              idioma do NAVEGADOR — num Chrome em inglês "12/03/1985" aparece
+              como "03/12/1985". A mesma decisão do filtro de cadastro. */}
+          <Input
+            type="text"
+            inputMode="numeric"
+            maxLength={10}
+            placeholder="dd/mm/aaaa"
+            value={nascimentoDigitado}
+            onChange={(e) => digitarNascimento(e.target.value)}
+            className={nascimentoRuim ? "border-danger" : ""}
+          />
+          <p
+            className={`text-[10.5px] leading-snug ${
+              nascimentoRuim ? "text-danger-fg" : "text-muted-foreground"
+            }`}
+          >
+            {nascimentoRuim
+              ? "Data que não existe — confira o dia e o mês."
+              : rotuloDaData(value.dataNascimento) ||
+                "Opcional. É ela que gera o lembrete do aniversário."}
+          </p>
+        </div>
       </div>
 
       {/* Endereço */}
@@ -328,6 +390,10 @@ export function extrairQualificacaoEndereco(
     profissao: (cliente.profissao as string) || "",
     estadoCivil: ((cliente.estadoCivil as EstadoCivil) || "") as EstadoCivil | "",
     nacionalidade: (cliente.nacionalidade as string) || "",
+    // Vem do servidor como Date ou "YYYY-MM-DD": a parte de data é lida em
+    // UTC, que é onde o dia foi gravado. Ler no fuso do navegador mostraria
+    // o dia anterior à noite.
+    dataNascimento: dataCalendarioISO(cliente.dataNascimento as string | Date | null),
     cep: (cliente.cep as string) || "",
     logradouro: (cliente.logradouro as string) || "",
     numeroEndereco: (cliente.numeroEndereco as string) || "",

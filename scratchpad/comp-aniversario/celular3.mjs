@@ -1,0 +1,14 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+import { mkdirSync } from "node:fs";
+const [OUT, PORTA] = process.argv.slice(2);
+mkdirSync(OUT, { recursive: true });
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
+const ctx = await b.newContext({ viewport: { width: 390, height: 900 }, storageState: "/home/user/jurify/scratchpad/comp-sumulas/sessao-dono.json", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto(`http://localhost:${PORTA}/clientes`, { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(5000);
+console.log("url:", p.url(), "| botões:", await p.locator("button").count());
+const nomes = await p.evaluate(() => [...document.querySelectorAll("button")].map(b => (b.textContent||"").trim()).filter(Boolean).slice(0, 25));
+console.log(JSON.stringify(nomes));
+await p.screenshot({ path: `${OUT}/celular-lista.png` });
+await b.close();

@@ -843,6 +843,16 @@ export const contatos = mysqlTable("contatos", {
     "uniao_estavel",
   ]),
   nacionalidade: varchar("nacionalidadeContato", { length: 50 }),
+  /**
+   * Data de nascimento. Opcional em toda tela — NULL quer dizer "não sei".
+   * Coluna própria (e não campo personalizado) porque precisa ser PROCURADA:
+   * é ela que responde "quem faz aniversário hoje".
+   */
+  // `mode: "string"` de propósito: o valor entra e sai como "YYYY-MM-DD", o
+  // mesmo de um `<input type="date">`. Virar Date faria o dia passear de fuso
+  // — 12/03 vira 11/03 depois das 21h, que é o defeito corrigido nas outras
+  // datas de calendário do sistema.
+  dataNascimento: date("dataNascimentoContato", { mode: "string" }),
   /** Endereço estruturado. CEP no formato "12345-678" (com hífen). */
   cep: varchar("cepContato", { length: 9 }),
   logradouro: varchar("logradouroContato", { length: 200 }),
@@ -4069,6 +4079,30 @@ export type InsertEmailLog = typeof emailLog.$inferInsert;
  * user autorizou a receber notificações. `endpoint` é único (o browser
  * reusa o mesmo) — upsert por endpoint. Removida em 404/410 (expirada).
  */
+/**
+ * O que cada pessoa quer receber no celular.
+ *
+ * Guarda SÓ o que diverge do padrão de fábrica (`shared/notificacoes-avisos.ts`):
+ * linha ausente = "como veio de fábrica". É o que deixa mudar um padrão depois
+ * sem sobrescrever quem já escolheu.
+ */
+export const notificacaoPreferencias = mysqlTable(
+  "notificacao_preferencias",
+  {
+    id: int("idNotifPref").autoincrement().primaryKey(),
+    userId: int("userIdNotifPref").notNull(),
+    /** Id do aviso ("processos.decisao") ou de um ajuste ("ajuste.silencio-noturno"). */
+    chave: varchar("chaveNotifPref", { length: 60 }).notNull(),
+    ligado: boolean("ligadoNotifPref").default(true).notNull(),
+    createdAt: timestamp("createdAtNotifPref").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtNotifPref").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uq: uniqueIndex("uq_notif_pref").on(t.userId, t.chave),
+    idxUser: index("idx_notif_pref_user").on(t.userId),
+  }),
+);
+
 export const pushSubscriptions = mysqlTable(
   "push_subscriptions",
   {
