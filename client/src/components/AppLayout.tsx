@@ -65,6 +65,7 @@ import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 import { Button } from "./ui/button";
 import { moduloOcultoNoMenu } from "@/config/visibility";
 import { contratoLibera } from "@shared/modulos-contratacao";
+import { moduloMostraSeloBeta, moduloRemovidoNoAmbiente } from "@shared/modulos-por-ambiente";
 import { useTheme } from "@/contexts/ThemeContext";
 import { toast } from "sonner";
 import { InstalarAppDialog } from "@/components/InstalarAppDialog";
@@ -291,20 +292,11 @@ function AppSidebarContent({
     }
   );
 
-  const { data: credits, isFetched: creditsFetched } = trpc.dashboard.credits.useQuery(
-    undefined,
-    {
-      enabled: !!user && user.role === "user",
-      retry: false,
-      refetchOnWindowFocus: false,
-    }
-  );
-
   const hasSubscription = !!subscription;
-  const hasCredits = (credits?.creditsRemaining ?? 0) > 0;
   const isUser = user?.role === "user";
-  // Items are locked only if user has NEITHER subscription NOR credits
-  const itemsLocked = isUser && subFetched && creditsFetched && !hasSubscription && !hasCredits;
+  // Sem assinatura, o menu tranca. Saldo de crédito destrancava junto até
+  // 13/09; a moeda saiu do produto e o acesso passou a ser só o contrato.
+  const itemsLocked = isUser && subFetched && !hasSubscription;
 
   // Nome do escritório — exibido no header do sidebar para deixar
   // claro a qual escritório o colaborador pertence.
@@ -350,6 +342,10 @@ function AppSidebarContent({
     staleTime: 60_000,
   });
   const modulosContratados: string[] | null = modulosData?.modulos ?? null;
+  // Onde o app está rodando. Admin e impersonação recebem `modulos: null`
+  // ("tudo liberado"), então sem isto eles veriam no menu um módulo que não
+  // existe em produção e o clique bateria no porteiro.
+  const ambiente = modulosData?.ambiente ?? null;
 
   const canSeeEstrito = (modulo: string) => {
     if (user?.role === "admin" || minhasPerms?.cargo === "Dono") return true;
@@ -444,19 +440,25 @@ function AppSidebarContent({
   // Contadores dos badges. Cada um é uma query barata (COUNT) — o menu vive
   // em toda tela, então puxar as listas completas só pra mostrar um número
   // seria caro a cada navegação.
+  // Sem plano o servidor recusa os três (porteiro de 13/09), e o menu já está
+  // trancado: perguntar a cada 2min seria 403 em loop na tela onde a pessoa
+  // está justamente escolhendo o plano. Admin não tem assinatura e conta.
+  const contadoresLiberados = !isUser || hasSubscription;
   const { data: contMovs } = (trpc as any).movimentacoes?.contador?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    enabled: contadoresLiberados,
   }) ?? { data: null };
   const { data: contAgenda } = trpc.agenda.contadores.useQuery(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
     // Sem Agenda no contrato a chamada só devolveria FORBIDDEN a cada 2min.
-    enabled: contratoLibera(modulosContratados, ["agenda"]),
+    enabled: contadoresLiberados && contratoLibera(modulosContratados, ["agenda"]),
   });
   const { data: contConversas } = (trpc as any).crm?.contarConversas?.useQuery?.(undefined, {
     refetchInterval: 2 * 60_000,
     retry: false,
+    enabled: contadoresLiberados,
   }) ?? { data: null };
 
   const badges: Record<string, number> = {
@@ -472,6 +474,7 @@ function AppSidebarContent({
    */
   const itemVisivelNoMenu = (i: ItemMenu) =>
     !(i.ocultaPor && moduloOcultoNoMenu(i.ocultaPor)) &&
+    !(i.modulo ?? []).some((m) => moduloRemovidoNoAmbiente(m, ambiente)) &&
     (i.modulo ? contratoLibera(modulosContratados, i.modulo) : true) &&
     (i.soSemModulo ? !contratoLibera(modulosContratados, i.soSemModulo) : true) &&
     (i.ver ? i.ver(canSee, canSeeEstrito) : true);
@@ -637,11 +640,21 @@ function AppSidebarContent({
                             <span className={`flex-1 rotulo-item ${CLASSES_ROTULO_RAIL}`}>
                               {item.rotulo}
                             </span>
-                            {item.selo && contagem === 0 && (
-                              <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
-                                {item.selo}
-                              </span>
-                            )}
+                            {(() => {
+                              // Módulo que só existe fora de produção carrega a
+                              // etiqueta sem precisar de `selo` fixo: quem decide
+                              // é a MESMA lista que esconde o item lá.
+                              const seloDoItem =
+                                item.selo ??
+                                ((item.modulo ?? []).some((m) => moduloMostraSeloBeta(m, ambiente))
+                                  ? "beta"
+                                  : undefined);
+                              return seloDoItem && contagem === 0 ? (
+                                <span className="ml-auto rounded-full border border-warning/30 bg-warning/15 px-1.5 py-px text-[9px] font-extrabold uppercase tracking-[0.06em] text-warning-fg group-data-[collapsible=icon]:hidden">
+                                  {seloDoItem}
+                                </span>
+                              ) : null;
+                            })()}
                             {contagem > 0 && (
                               <>
                                 <span
@@ -906,7 +919,7 @@ function AppSidebarContent({
  *   - 0-1 dia: vermelho
  */
 function TrialBanner() {
-  const [, setLocation] = useLocation();
+  const [local, setLocation] = useLocation();
   const { data: subscription } = trpc.subscription.current.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
@@ -937,6 +950,29 @@ function TrialBanner() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  /**
+   * Quem já está em "Meu plano" clicava e não acontecia NADA: mandar o
+   * navegador pra rota em que ele já está é um não-evento. Estando lá, o
+   * certo é levar os olhos até o botão de pagar; de qualquer outra tela, a
+   * navegação de sempre.
+   */
+  const irPagar = () => {
+    const destino = "/configuracoes?tab=meu-plano";
+    const alvo = document.getElementById("adicionar-pagamento");
+    if (alvo) {
+      alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+      alvo.focus({ preventScroll: true });
+      return;
+    }
+    if (local.startsWith("/configuracoes")) {
+      // Mesma tela, aba certa, e o botão ainda não pintou (troca de aba ou
+      // plano ainda carregando): recarrega em vez de fingir que navegou.
+      window.location.assign(destino);
+      return;
+    }
+    setLocation(destino);
+  };
+
   const cor =
     dias >= 4 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
     dias >= 2 ? "bg-warning-bg border-warning/30 text-warning-fg dark:border-warning/30" :
@@ -954,7 +990,7 @@ function TrialBanner() {
     <div className={`border-b px-4 py-2 flex items-center justify-between gap-3 text-sm ${cor}`}>
       <span className="font-medium">{texto}</span>
       <button
-        onClick={() => (sobConsulta ? abrirConversa() : setLocation("/configuracoes?tab=meu-plano"))}
+        onClick={() => (sobConsulta ? abrirConversa() : irPagar())}
         className="text-xs font-semibold underline underline-offset-2 hover:opacity-80"
       >
         {sobConsulta ? "💬 Fechar valor com a gente →" : "Adicionar pagamento →"}

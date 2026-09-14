@@ -80,10 +80,15 @@ describe("as telas cabem num celular de 390px", () => {
     expect(grade, "a grade voltou a empilhar caixa por grau").not.toContain(
       "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
     );
-    expect(grade, "a grade perdeu as colunas que se ajustam sozinhas").toMatch(
+    // Ancorado na CONSTANTE de classes, não no arquivo inteiro: o comentário
+    // acima dela cita `[&>*]:min-w-0`, e olhar o arquivo todo deixava a
+    // mutação que apaga a classe passar verde.
+    const classes = grade.match(/const CLASSES_GRADE =\s*\n?\s*"([^"]*)"/);
+    expect(classes, "a constante CLASSES_GRADE sumiu").toBeTruthy();
+    expect(classes![1], "a grade perdeu as colunas que se ajustam sozinhas").toMatch(
       /grid-cols-\[repeat\(auto-fill,minmax\(\d+px,1fr\)\)\]/,
     );
-    expect(grade, "sem [&>*]:min-w-0 a sigla estica a coluna").toContain("[&>*]:min-w-0");
+    expect(classes![1], "sem [&>*]:min-w-0 a sigla estica a coluna").toContain("[&>*]:min-w-0");
 
     const proc = tela("Processos.tsx");
     const i = proc.indexOf("SISTEMA_NACIONAL ?");
@@ -110,16 +115,19 @@ describe("as telas cabem num celular de 390px", () => {
       .toContain("grid-cols-1 sm:grid-cols-2");
   });
 
-  it("Processos: a fileira de ações do cabeçalho quebra de linha", () => {
-    // Ancorado no `<div>` que abre a fileira (o vizinho imediato do saldo em
-    // créditos): o cabeçalho tem outros `flex-wrap`, e olhar o trecho todo
-    // deixava a mutação passar.
+  it("Processos: o cabeçalho não tem fileira de ações, e a tira de abas quebra", () => {
+    // Em 12/09 a fileira (créditos + Consultar CNJ + Resumo diário) somava
+    // 425px e vazava da tela de 390px; o conserto foi `flex-wrap` nela. Em
+    // 13/09 o dono tirou os três controles, então o que impede o vazamento
+    // agora é não existir fileira — e quem segura a largura é a tira de abas.
     const src = tela("Processos.tsx");
-    const i = src.indexOf('<Coins className="h-4 w-4 text-warning" />');
-    expect(i, "o saldo de créditos do cabeçalho sumiu").toBeGreaterThan(-1);
-    const fileira = src.slice(0, i).match(/<div className="(flex items-center[^"]*)"[^>]*>\s*<div className="inline-flex[^"]*"[^>]*>\s*$/);
-    expect(fileira, "fileira de ações não encontrada").toBeTruthy();
-    expect(fileira![1], "sem flex-wrap os 3 controles somam 425px e vazam").toContain("flex-wrap");
+    const cabecalho = trecho(src, "function CabecalhoProcessos(", "export default function Processos(");
+    expect(cabecalho, "o cabeçalho voltou a ter controle na direita").not.toContain("<Button");
+
+    const tira = (src.match(/<TabsList[^>]*!bg-muted[^>]*/g) || [])[0];
+    expect(tira, "a régua de abas de Processos sumiu").toBeTruthy();
+    expect(tira, "sem flex-wrap as abas viram uma linha reta mais larga que a tela")
+      .toContain("flex-wrap");
   });
 
   it("Tarefas: os filtros descem para a linha de baixo", () => {

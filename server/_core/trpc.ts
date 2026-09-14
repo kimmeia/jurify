@@ -139,6 +139,24 @@ const requireUser = t.middleware(async opts => {
   );
 });
 
+// Porteiro do plano: sem assinatura (paga, teste, cortesia ou carência) o app
+// responde só o que serve pra escolher plano e cuidar da conta — a lista está
+// em shared/acesso-sem-plano.ts. Até 13/09 isso era só o SubscriptionGuard do
+// navegador; a API respondia tudo. Fail-open em indeterminação, detalhes em
+// gate-assinatura.ts.
+const requirePlanoEscolhido = t.middleware(async ({ ctx, path, next }) => {
+  if (ctx.user) {
+    const { conferirPlanoDoPath } = await import("./gate-assinatura");
+    await conferirPlanoDoPath({
+      path,
+      userId: ctx.user.id,
+      role: ctx.user.role,
+      impersonado: Boolean(ctx.user.impersonatedBy),
+    });
+  }
+  return next();
+});
+
 // Porteiro de módulos contratados: cada namespace tRPC declara seu módulo em
 // shared/modulos-contratacao.ts; plano que não inclui o módulo recebe
 // FORBIDDEN com cause.motivo="modulo_nao_liberado". Fail-open em qualquer
@@ -151,7 +169,10 @@ const requireModuloContratado = t.middleware(async ({ ctx, path, next }) => {
   return next();
 });
 
-export const protectedProcedure = t.procedure.use(requireUser).use(requireModuloContratado);
+export const protectedProcedure = t.procedure
+  .use(requireUser)
+  .use(requirePlanoEscolhido)
+  .use(requireModuloContratado);
 
 export const adminProcedure = t.procedure.use(
   t.middleware(async opts => {

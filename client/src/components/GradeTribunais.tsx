@@ -12,8 +12,8 @@
  *
  * DESENHO (13/09): a grade media 2.143px de altura porque cada estado era uma
  * caixa com DUAS caixas dentro (uma por grau), cada uma com rótulo, ponto,
- * texto e botão — 30 blocos empilhados num cartão de 335px de largura. Agora
- * cada estado é UMA linha: sigla à esquerda e dois selos de grau à direita, no
+ * texto e botão — 78 blocos empilhados num cartão de 335px de largura. Agora
+ * cada estado é UMA linha: sigla à esquerda e os selos de grau à direita, no
  * mesmo eixo. O que some é repetição de moldura, não informação: os dois graus,
  * os três estados possíveis, a contagem de processos, o botão de testar e o
  * texto cru do erro continuam todos aqui.
@@ -28,10 +28,23 @@ export interface TribunalDaCredencial {
   grau: 1 | 2;
   /** 2º grau sem endereço mapeado: lacuna de cobertura, não falha de login. */
   semCobertura: boolean;
+  /**
+   * Caminho candidato (PJe-JT): endereço derivado do padrão, nenhum login real
+   * passou. Fica numa dobra, fora da bateria — 48 portais que não têm como
+   * responder faziam o "Testar tudo" levar ~40min e terminar com a credencial
+   * pintada de vermelho por um tribunal do qual o escritório nem tem processo.
+   * Testável um por um, como sempre.
+   */
+  emTeste?: boolean;
   status: "nao_testado" | "ativa" | "erro";
   ultimoErro: string | null;
   ultimoSucessoEm: string | null;
   processos: number;
+}
+
+/** Os alvos que a bateria "Testar tudo" roda: caminho comprovado, com endereço. */
+export function alvosDaBateria(tribunais: TribunalDaCredencial[]): TribunalDaCredencial[] {
+  return tribunais.filter((t) => !t.semCobertura && !t.emTeste);
 }
 
 interface Props {
@@ -59,7 +72,7 @@ const ESTILO = {
   erro: {
     selo: "border-danger/40 bg-danger-bg text-danger-fg dark:bg-danger/20",
     ponto: "bg-danger",
-    rotulo: "falhou",
+    rotulo: "login falhou",
   },
   nao_testado: {
     selo: "border-border bg-muted/40 text-muted-foreground",
@@ -72,7 +85,7 @@ function chave(t: string, g: number) {
   return `${t}:${g}`;
 }
 
-/** Um grau: ponto + "1º" + estado, clicável pra testar de novo. */
+/** Um grau: ponto + "1º" + estado. O selo É o botão de testar aquele login. */
 function SeloGrau({
   g,
   testando,
@@ -87,7 +100,7 @@ function SeloGrau({
 
   if (g.semCobertura) {
     return (
-      /* "sem endereço" por extenso vazava 31px da coluna de 173px e invadia a
+      /* "sem endereço" por extenso vazava 31px da coluna de 186px e invadia a
          vizinha. O texto inteiro fica no balão e na legenda do rodapé. */
       <span
         className="inline-flex items-center gap-1 rounded-md border border-dashed border-border px-1.5 py-0.5 text-micro italic text-muted-foreground"
@@ -124,26 +137,63 @@ function SeloGrau({
   );
 }
 
+/* `[&>*]:min-w-0` porque a sigla não pode esticar a coluna — item de grid nasce
+   com `min-width:auto` e cresce até o conteúdo (foi o que empurrou a tela de
+   editar plano pra 2110px). */
+const CLASSES_GRADE =
+  "grid grid-cols-[repeat(auto-fill,minmax(186px,1fr))] gap-x-3 gap-y-0.5 [&>*]:min-w-0";
+
 export default function GradeTribunais({ tribunais, testando, onTestar, lote }: Props) {
+  // As contagens do rodapé falam do caminho comprovado. Somar os candidatos
+  // aqui diria "48 falharam" sobre portais que ninguém prometeu.
+  const comprovados = tribunais.filter((t) => !t.emTeste);
+  const candidatos = tribunais.filter((t) => t.emTeste);
   const conta = (s: TribunalDaCredencial["status"]) =>
-    tribunais.filter((t) => !t.semCobertura && t.status === s).length;
-  const semCobertura = tribunais.filter((t) => t.semCobertura).length;
+    comprovados.filter((t) => !t.semCobertura && t.status === s).length;
+  const semCobertura = comprovados.filter((t) => t.semCobertura).length;
   const [verErros, setVerErros] = useState(false);
 
   // Agrupa por estado preservando a ordem que o servidor mandou.
-  const estados: string[] = [];
-  for (const t of tribunais) if (!estados.includes(t.tribunal)) estados.push(t.tribunal);
+  const estadosDe = (lista: TribunalDaCredencial[]): string[] => {
+    const out: string[] = [];
+    for (const t of lista) if (!out.includes(t.tribunal)) out.push(t.tribunal);
+    return out;
+  };
+  const estados = estadosDe(comprovados);
+  const estadosCandidatos = estadosDe(candidatos);
+  const candidatosValidados = candidatos.filter((t) => t.status === "ativa").length;
 
-  // Um resumo por estado que falhou. O texto do Keycloak é o mesmo nos seis —
-  // repetir a caixa inteira embaixo de cada um era o que mais esticava a tela.
+  // Um resumo por estado que falhou, no caminho comprovado. O texto do Keycloak
+  // é o mesmo em todos — repetir a caixa inteira embaixo de cada estado era o
+  // que mais esticava a tela.
   const comErro = estados
     .map((estado) => {
-      const g = tribunais.find(
+      const g = comprovados.find(
         (t) => t.tribunal === estado && t.status === "erro" && t.ultimoErro,
       );
       return g ? { estado, erro: g.ultimoErro as string } : null;
     })
     .filter((x): x is { estado: string; erro: string } => x != null);
+
+  // Uma LINHA por estado: sigla à esquerda, os graus à direita no mesmo eixo.
+  // O mesmo desenho serve pro caminho comprovado e pra dobra dos candidatos —
+  // duas cópias divergiriam.
+  const linhaDoEstado = (estado: string) => {
+    const graus = tribunais.filter((t) => t.tribunal === estado);
+    return (
+      <div
+        key={estado}
+        className="flex items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0"
+      >
+        <span className="shrink-0 text-apoio font-bold tracking-wide">{estado.toUpperCase()}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+          {graus.map((g) => (
+            <SeloGrau key={chave(g.tribunal, g.grau)} g={g} testando={testando} onTestar={onTestar} />
+          ))}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <div>
@@ -198,29 +248,7 @@ export default function GradeTribunais({ tribunais, testando, onTestar, lote }: 
         </div>
       )}
 
-      {/* Uma LINHA por estado: sigla à esquerda, os graus à direita no mesmo
-          eixo. `min-w-0` em todo item porque a sigla não pode esticar a coluna
-          (foi o que empurrou a tela de editar plano pra 2110px). */}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(186px,1fr))] gap-x-3 gap-y-0.5 [&>*]:min-w-0">
-        {estados.map((estado) => {
-          const graus = tribunais.filter((t) => t.tribunal === estado);
-          return (
-            <div
-              key={estado}
-              className="flex items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0"
-            >
-              <span className="shrink-0 text-apoio font-bold tracking-wide">
-                {estado.toUpperCase()}
-              </span>
-              <span className="ml-auto flex shrink-0 items-center gap-1">
-                {graus.map((g) => (
-                  <SeloGrau key={chave(g.tribunal, g.grau)} g={g} testando={testando} onTestar={onTestar} />
-                ))}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <div className={CLASSES_GRADE}>{estados.map((estado) => linhaDoEstado(estado))}</div>
 
       {comErro.length > 0 && (
         <div className="mt-2.5">
@@ -267,11 +295,38 @@ export default function GradeTribunais({ tribunais, testando, onTestar, lote }: 
         </div>
       )}
 
+      {candidatos.length > 0 && (
+        <details className="mt-3 rounded-lg border border-dashed">
+          <summary className="cursor-pointer select-none px-2.5 py-2 text-apoio font-semibold">
+            Em teste — Justiça do Trabalho ({estadosCandidatos.length} tribunais)
+            {candidatosValidados > 0 && (
+              <span className="ml-1.5 font-normal text-success-fg">
+                · {candidatosValidados} já validado{candidatosValidados === 1 ? "" : "s"}
+              </span>
+            )}
+          </summary>
+          <div className="px-2.5 pb-2.5">
+            <p className="mb-2 text-micro leading-relaxed text-muted-foreground">
+              O endereço do PJe da Justiça do Trabalho foi <strong>deduzido do padrão</strong> e
+              nenhum login real passou por lá. Por isso eles ficam fora do “Testar tudo”: seriam{" "}
+              {candidatos.filter((t) => !t.semCobertura).length} logins de dezenas de segundos cada,
+              e a falha deles não diz nada sobre a sua senha. Teste um aqui quando quiser — o que
+              passar libera o monitoramento daquele tribunal sozinho.
+            </p>
+            <div className={CLASSES_GRADE}>
+              {estadosCandidatos.map((estado) => linhaDoEstado(estado))}
+            </div>
+          </div>
+        </details>
+      )}
+
       {conta("nao_testado") > 0 && (
         <p className="mt-2 text-micro leading-relaxed text-muted-foreground">
           <strong className="text-foreground">“Não testado” é honesto, não é promessa.</strong>{" "}
-          Esses portais nunca foram usados com login real — cada um só fica verde depois de um
-          login que funcionou. Clique no selo do grau pra testar um; “Testar tudo” roda a fila.
+          Esses portais têm o endereço derivado do padrão do TJCE e nunca foram usados com login
+          real. Cada um só fica verde depois de um login que funcionou — clique no selo do grau pra
+          testar um, e “Testar tudo” roda a fila dos comprovados. Os da Justiça do Trabalho ficam na
+          dobra “Em teste” e se testam um por um.
         </p>
       )}
     </div>

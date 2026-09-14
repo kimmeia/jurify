@@ -6,12 +6,7 @@
  *      `recurrence_horas`, executa adapter (consultarTjce), compara hash
  *      de movs com anterior, INSERT eventos_processo pra movs novas e
  *      dispara notif (sino + SSE).
- *
- *   2. cobrarMonitoramentosMensais (cada 6h)
- *      Pra cada monitoramento ativo cuja última cobrança foi há mais de
- *      30 dias, debita 2 cred (movs) ou 15 cred (novas_acoes). Sem saldo
- *      → pausa monitoramento + notifica.
- *
+ * *
  *   3. pollMonitoramentosNovasAcoes (Sub-sprint 2.2 — placeholder)
  *      Implementação após adapter consultarPorCpf estar pronto.
  */
@@ -22,8 +17,6 @@ import { getDb } from "../db";
 import {
   motorMonitoramentos,
   eventosProcesso,
-  motorCreditos,
-  motorTransacoes,
   notificacoes,
   prazosSugeridos,
   escritorios,
@@ -35,7 +28,6 @@ import { getConfigTribunal, tribunalRequerCredencial } from "./tribunais-pdpj";
 import { lerTribunaisDoMonitor, lerTribunaisBaseline } from "./monitor-tribunais";
 import { siglaDoTribunal } from "../../shared/tribunais-pje";
 import { detectarSubiuParaSegundoGrau, mesclarMovimentacoes } from "./detectar-grau-recurso";
-import { CUSTOS } from "../routers/processos";
 import { createLogger } from "../_core/logger";
 import { emitirNotificacao } from "../_core/sse-notifications";
 import { detectarSugestaoPrazo } from "./detector-prazos";
@@ -50,6 +42,7 @@ import {
   type FonteCapa,
 } from "../../shared/nova-acao-capa";
 import { capaBrutaDaLinha, capaDoScraperTemConteudo, linhaDoCnj } from "./capa-da-lista";
+import { guardarPrintDoErro } from "./print-do-erro";
 import { capaPorCnjNoDataJud } from "./capa-datajud";
 import type { LinhaDaBusca } from "../../scripts/spike-motor-proprio/lib/types-spike";
 import { lerDocumentoNoRotulo } from "../../shared/documento-no-rotulo";
@@ -355,11 +348,20 @@ export async function pollarUmMonitoramentoMovs(
     }
 
     if (!resultado.ok) {
+      // A foto que o adapter tirou vai pro volume, na pasta do escritório: é a
+      // única prova do que o portal mostrou, e ela morria no disco efêmero.
+      const printUrl = await guardarPrintDoErro(
+        mon.escritorioId,
+        (resultado as { screenshotPath?: string | null }).screenshotPath,
+      );
       await db
         .update(motorMonitoramentos)
         .set({
           ultimaConsultaEm: new Date(),
           ultimoErro: resultado.mensagemErro ?? "Erro na consulta",
+          // Sem foto nova, a anterior sai: foto de erro antigo ao lado de erro
+          // novo faz procurar problema na tela errada.
+          ultimoErroPrintUrl: printUrl,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
       return { ok: false, detectadas: 0, erro: resultado.mensagemErro ?? "Erro na consulta" };
@@ -481,6 +483,7 @@ export async function pollarUmMonitoramentoMovs(
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
+          ultimoErroPrintUrl: null,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
       log.info({ monId: mon.id, baseline: resultado.movimentacoes.length }, "[motor-cron] baseline silencioso registrado");
@@ -589,6 +592,7 @@ export async function pollarUmMonitoramentoMovs(
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
+            ultimoErroPrintUrl: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
 
@@ -665,6 +669,7 @@ export async function pollarUmMonitoramentoMovs(
             status: "ativo",
             ultimaConsultaEm: new Date(),
             ultimoErro: null,
+            ultimoErroPrintUrl: null,
           })
           .where(eq(motorMonitoramentos.id, mon.id));
       }
@@ -676,6 +681,7 @@ export async function pollarUmMonitoramentoMovs(
           status: "ativo",
           ultimaConsultaEm: new Date(),
           ultimoErro: null,
+          ultimoErroPrintUrl: null,
         })
         .where(eq(motorMonitoramentos.id, mon.id));
     }
@@ -740,110 +746,6 @@ export async function pollMonitoramentosMovs(): Promise<void> {
     );
   } finally {
     pollMovsRodando = false;
-  }
-}
-
-export async function cobrarMonitoramentosMensais(): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-
-  const trintaDiasAtras = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
-  const pendentes = await db
-    .select()
-    .from(motorMonitoramentos)
-    .where(
-      and(
-        eq(motorMonitoramentos.status, "ativo"),
-        or(
-          isNull(motorMonitoramentos.ultimaCobrancaEm),
-          lt(motorMonitoramentos.ultimaCobrancaEm, trintaDiasAtras),
-        ),
-      ),
-    );
-
-  if (pendentes.length === 0) return;
-
-  let cobrados = 0;
-  let pausados = 0;
-
-  for (const mon of pendentes) {
-    const custo =
-      mon.tipoMonitoramento === "novas_acoes"
-        ? CUSTOS.monitorar_pessoa_mes
-        : CUSTOS.monitorar_processo_mes;
-
-    const [cr] = await db
-      .select()
-      .from(motorCreditos)
-      .where(eq(motorCreditos.escritorioId, mon.escritorioId))
-      .limit(1);
-
-    const saldo = cr?.saldo ?? 0;
-    if (saldo < custo) {
-      // Sem saldo → pausa + notifica
-      await db
-        .update(motorMonitoramentos)
-        .set({ status: "pausado" })
-        .where(eq(motorMonitoramentos.id, mon.id));
-
-      try {
-        await db.insert(notificacoes).values({
-          userId: mon.criadoPor,
-          titulo: "Monitoramento pausado por falta de créditos",
-          mensagem: `"${mon.apelido ?? mon.searchKey}" foi pausado. Saldo: ${saldo}, custo mensal: ${custo}. Recarregue pra reativar.`,
-          tipo: "sistema",
-        });
-      } catch {
-        /* best-effort */
-      }
-      pausados++;
-      continue;
-    }
-
-    // Cobra
-    if (cr) {
-      const novoSaldo = saldo - custo;
-      // Saldo e extrato juntos: cobrar sem registrar (ou registrar sem
-      // cobrar) deixa o escritório com um saldo que o extrato não explica.
-      await db.transaction(async (tx) => {
-        await tx
-          .update(motorCreditos)
-          .set({
-            saldo: novoSaldo,
-            totalConsumido: cr.totalConsumido + custo,
-          })
-          .where(eq(motorCreditos.id, cr.id));
-
-        await tx.insert(motorTransacoes).values({
-          escritorioId: mon.escritorioId,
-          tipo: "consumo",
-          quantidade: custo,
-          saldoAnterior: saldo,
-          saldoDepois: novoSaldo,
-          operacao:
-            mon.tipoMonitoramento === "novas_acoes"
-              ? "monitorar_pessoa_mes"
-              : "monitorar_processo_mes",
-          detalhes: `Mensalidade ${mon.apelido ?? mon.searchKey}`,
-          userId: mon.criadoPor,
-        });
-      });
-
-      await db
-        .update(motorMonitoramentos)
-        .set({ ultimaCobrancaEm: new Date() })
-        .where(eq(motorMonitoramentos.id, mon.id));
-
-      cobrados++;
-    }
-  }
-
-  if (cobrados > 0 || pausados > 0) {
-    log.info(
-      { cobrados, pausados, total: pendentes.length },
-      "[motor-cron] cobrança mensal concluída",
-    );
   }
 }
 

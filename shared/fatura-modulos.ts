@@ -26,9 +26,20 @@ export interface DescontoEscritorio {
 }
 
 export interface ItemFatura {
-  tipo: "pacote" | "avulso" | "atendentes_adicionais";
+  tipo: "pacote" | "avulso" | "extra" | "atendentes_adicionais";
   rotulo: string;
   centavos: number;
+}
+
+/**
+ * Extra avulso (mais usuários, mais processos, mais números) já resolvido pela
+ * camada de leitura: o preço é o TOTAL congelado na concessão, então a fatura
+ * só soma — sem multiplicar, sem saber o que é "um".
+ */
+export interface ExtraFatura {
+  chave: string;
+  rotulo: string;
+  precoCentavos: number;
 }
 
 export interface FaturaCalculada {
@@ -51,6 +62,8 @@ export interface CalcularFaturaArgs {
    */
   valorNegociadoCentavos?: number | null;
   avulsos: AvulsoFatura[];
+  /** Ausente em caller antigo: fatura sem extra nenhum é a de antes. */
+  extras?: ExtraFatura[];
   atendentesAtivos: number;
   /** null = plano sem cobrança por assento (grandfather dos planos atuais). */
   atendentesInclusos: number | null;
@@ -76,6 +89,14 @@ export function calcularFatura(args: CalcularFaturaArgs): FaturaCalculada {
       tipo: "avulso",
       rotulo: `${avulso.nome} (avulso)`,
       centavos: Math.max(0, avulso.precoCentavos),
+    });
+  }
+
+  for (const extra of args.extras ?? []) {
+    itens.push({
+      tipo: "extra",
+      rotulo: `${extra.rotulo} (extra)`,
+      centavos: Math.max(0, extra.precoCentavos),
     });
   }
 

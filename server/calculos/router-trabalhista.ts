@@ -12,7 +12,7 @@ import { calcularRescisao } from "./engine-rescisao";
 import { calcularHorasExtras } from "./engine-horas-extras";
 import { gerarParecerRescisao, gerarParecerHorasExtras } from "./parecer-trabalhista";
 import type { TipoRescisao, TipoContrato, ParametrosRescisao, ParametrosHorasExtras } from "../../shared/trabalhista-types";
-import { registarCalculo, consumirCredito } from "../db";
+import { registarCalculo, contarCalculoNoMes } from "../db";
 
 // ─── Schemas de Validação ─────────────────────────────────────────────────────
 
@@ -65,9 +65,9 @@ export const trabalhistaRouter = router({
   calcularRescisao: protectedProcedure
     .input(rescisaoSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) {
+        throw new Error("Você atingiu o limite de cálculos do seu plano neste mês. Fale com a gente pra liberar mais ou trocar de plano.");
       }
 
       const params: ParametrosRescisao = {
@@ -113,9 +113,9 @@ export const trabalhistaRouter = router({
   calcularHorasExtras: protectedProcedure
     .input(horasExtrasSchema)
     .mutation(async ({ input, ctx }) => {
-      const temCredito = await consumirCredito(ctx.user.id);
-      if (!temCredito) {
-        throw new Error("Seus créditos acabaram. Adquira mais créditos ou faça upgrade do seu plano.");
+      const dentroDoLimite = await contarCalculoNoMes(ctx.user.id);
+      if (!dentroDoLimite) {
+        throw new Error("Você atingiu o limite de cálculos do seu plano neste mês. Fale com a gente pra liberar mais ou trocar de plano.");
       }
 
       const params: ParametrosHorasExtras = {

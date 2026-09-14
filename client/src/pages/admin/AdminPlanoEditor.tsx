@@ -449,7 +449,7 @@ export default function AdminPlanoEditor({ slug }: { slug: string }) {
                 <CampoNumero label="Resumos de IA / mês" valor={maxResumosMes} setValor={setMaxResumosMes} placeholder="vazio = ∞" />
                 <CampoNumero label="Conexões WhatsApp" valor={maxConexoesWhatsapp} setValor={setMaxConexoesWhatsapp} />
                 <CampoNumero label="Agentes IA" valor={maxAgentesIa} setValor={setMaxAgentesIa} />
-                <CampoNumero label="Créditos cálculo/mês" valor={creditosCalculos} setValor={setCreditosCalculos} />
+                <CampoNumero label="Cálculos por mês" valor={creditosCalculos} setValor={setCreditosCalculos} />
                 <CampoNumero label="JurisIA msgs/mês" valor={jurisiaMensagens} setValor={setJurisiaMensagens} hint="0 desliga o módulo" />
               </CardContent>
             </Card>

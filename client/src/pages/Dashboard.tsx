@@ -94,10 +94,10 @@ export default function Dashboard() {
   }
 
   // ─── Modo multi-painel: tabs no topo ────────────────────────────────────
-  // O bloco "Primeiros passos" morava aqui e SAIU por pedido do dono
-  // (13/09: informação demais na primeira dobra). Ele continua vivo na
-  // Central de ajuda (`PrimeirosPassosResumo` em /ajuda), que é onde se
-  // revê o que falta configurar.
+  // O bloco "Primeiros passos" saiu daqui a pedido do dono (13/09): o Dashboard
+  // é a tela de trabalho de quem já sabe usar, e ensinar ali cobrava espaço do
+  // dono todo dia. Logo depois ele mandou remover o módulo de ajuda inteiro,
+  // então o conteúdo não foi para lugar nenhum — vai virar vídeo.
   if (podeMultiPainel) {
     return <DashboardComTabs setorTipoInicial={setorTipo} setorNome={setorNome} />;
   }

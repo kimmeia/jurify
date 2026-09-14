@@ -28,14 +28,14 @@ describe("avaliarLimiteMonitoramentos", () => {
 });
 
 describe("amarras do superlançamento no código", () => {
-  it("os dois pontos de criação de monitoramento conferem o limite ANTES de cobrar crédito", () => {
+  it("os dois pontos de criação de monitoramento conferem a vaga do plano", () => {
+    // A régua do monitoramento sempre foi a VAGA. O crédito, que era a
+    // segunda cobrança pela mesma coisa, saiu do produto em 13/09 — o que
+    // esta amarra guarda é que a vaga continua sendo conferida nos dois.
     const fonte = ler("server/routers/processos.ts");
     const ocorrencias = fonte.match(/verificarLimiteMonitoramentos\(esc\.escritorio\.id, "(movimentacoes|novas_acoes)"\)/g) ?? [];
     expect(ocorrencias).toHaveLength(2);
-    // A verificação precisa vir antes do consumirCreditos em cada caminho.
-    const idxMov = fonte.indexOf('verificarLimiteMonitoramentos(esc.escritorio.id, "movimentacoes")');
-    expect(idxMov).toBeGreaterThan(-1);
-    expect(fonte.indexOf("monitorar_processo_mes", idxMov)).toBeGreaterThan(idxMov);
+    expect(fonte, "a moeda não pode voltar por este caminho").not.toContain("monitorar_processo_mes");
   });
 
   it("checkout self-service recusa plano sob consulta", () => {

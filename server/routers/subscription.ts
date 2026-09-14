@@ -293,10 +293,15 @@ export const subscriptionRouter = router({
    *  porteiro do servidor usa (cache incluso). `null` = tudo liberado
    *  (cortesia, admin, sem plano resolvido): o menu mostra tudo, como hoje. */
   modulosContratados: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role === "admin" || ctx.user.impersonatedBy) return { modulos: null };
+    // O ambiente vai junto porque admin e impersonação recebem `modulos: null`
+    // ("tudo liberado") — sem ele, o menu mostraria pra eles um módulo que não
+    // existe em produção, e o clique bateria no porteiro.
+    const { resolverAmbiente } = await import("../_core/ambiente");
+    const ambiente = resolverAmbiente();
+    if (ctx.user.role === "admin" || ctx.user.impersonatedBy) return { modulos: null, ambiente };
     const { modulosContratadosDoUsuario } = await import("../_core/gate-modulos");
     const modulos = await modulosContratadosDoUsuario(ctx.user.id);
-    return { modulos };
+    return { modulos, ambiente };
   }),
 
   /** Get all subscriptions for current user */

@@ -21,8 +21,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle, Mail } from "lucide-react";
-import { MovimentacoesCentral, ConfigResumoDiario } from "./Movimentacoes";
+import { Scale, Search, Loader2, Coins, Plus, Pause, Play, Trash2, AlertTriangle, Clock, Users, Gavel, Radar, CheckCircle2, ChevronDown, ChevronUp, User, Bell, KeyRound, Lock, Eye, EyeOff, ShieldAlert, Siren, FileText, MapPin, CircleDollarSign, RefreshCcw, Sparkles, ShieldCheck, Copy, MoreHorizontal, Globe, HelpCircle } from "lucide-react";
+import { MovimentacoesCentral } from "./Movimentacoes";
 import { EstadosPicker } from "@/components/EstadosPicker";
 import {
   TRIBUNAL_SEDE,
@@ -112,7 +112,7 @@ import { ImportarAdvboxDialog } from "./processos/ImportarAdvboxDialog";
 import { JurisIaPainel } from "./processos/JurisIaPainel";
 import { Upload } from "lucide-react";
 import LeitorQr from "@/components/LeitorQr";
-import GradeTribunais from "@/components/GradeTribunais";
+import GradeTribunais, { alvosDaBateria } from "@/components/GradeTribunais";
 
 /** Sistema do cofre que vale em qualquer PJe. Espelha SISTEMA_PJE_NACIONAL do servidor. */
 const SISTEMA_NACIONAL = "pje_*";
@@ -277,7 +277,7 @@ function poloDaParte(p: any): string {
 
 /**
  * `criarMonitoramento` devolve o monitor que já existia em vez de criar outro
- * — aí não há sucesso a comemorar nem crédito cobrado. Devolve true quando
+ * — aí não há sucesso a comemorar nem consumo a contar. Devolve true quando
  * foi esse o caso, pra quem chamou não emitir o toast de sucesso por cima.
  */
 function avisarSeJaMonitorado(d: any): boolean {
@@ -300,7 +300,7 @@ function ProcessoCard({
   onMonitorar?: (cnj: string) => void;
   /** Dados enriquecidos vindos de `consultarCNJSincrono` (mescla com `processo.response_data`). */
   detalhe?: any;
-  /** Handler que carrega detalhes pra esse CNJ (custa 1 cred). Quando definido, mostra botão se card vazio. */
+  /** Handler que carrega detalhes pra esse CNJ. Quando definido, mostra botão se card vazio. */
   onCarregarDetalhes?: (cnj: string) => void;
   carregandoDetalhes?: boolean;
   /** O "Monitorar" deste card está em voo — trava o botão pra o 2º clique não virar 2º monitor. */
@@ -445,9 +445,17 @@ function ProcessoCard({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ABA: CONSULTAR PROCESSOS
+// ABA: CONSULTAR PROCESSOS — SEM ENTRADA NA TELA DESDE 13/09
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/**
+ * A busca avulsa (CNJ/CPF/CNPJ sem colocar em monitoramento) ficou SEM porta:
+ * o dono tirou o botão "Consultar CNJ" do cabeçalho em 13/09 ("desnecessário").
+ *
+ * O código continua aqui de propósito — ele autorizou remover o BOTÃO, não
+ * apagar a consulta. Se alguém for deletar isto, pergunte antes; e se for
+ * devolver a entrada, é só montar este componente num Dialog outra vez.
+ */
 function ConsultarTab() {
   const [tipo, setTipo] = useState("lawsuit_cnj");
   const [valor, setValor] = useState("");
@@ -469,7 +477,7 @@ function ConsultarTab() {
     onSuccess: (d: any, vars: { cnj: string }) => {
       if (d?.lawsuit) {
         setDetalhesPorCnj((prev) => ({ ...prev, [vars.cnj]: d.lawsuit }));
-        toast.success("Detalhes carregados (1 cred)");
+        toast.success("Detalhes carregados");
       }
       setCarregandoCnj(null);
     },
@@ -526,7 +534,7 @@ function ConsultarTab() {
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
       if (avisarSeJaMonitorado(d)) return;
-      toast.success(`Processo adicionado às Movimentações (${d?.custoCred ?? 2} cred/mês)`);
+      toast.success("Processo adicionado às Movimentações");
     },
     onError: (e: any) => toast.error("Erro ao monitorar", { description: e.message }),
   });
@@ -583,7 +591,7 @@ function ConsultarTab() {
 
   const { data: statusData } = trpc.processos.statusConsulta.useQuery({ requestId }, { enabled: !!requestId && polling, refetchInterval: polling ? 3000 : false });
 
-  // `resultados` virou mutation (tem efeito colateral: cobra créditos por
+  // `resultados` virou mutation (tem efeito colateral: conta no limite do mês por
   // processo encontrado). Chamamos uma vez quando o status fica completed.
   const resultadosMut = trpc.processos.resultados.useMutation({
     onSuccess: (data: any) => {
@@ -716,7 +724,7 @@ function ConsultarTab() {
             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-bg border border-success/30">
               <Coins className="h-3 w-3 text-success-fg" />
               <p className="text-apoio text-success-fg">
-                Custo: <strong>1 crédito</strong> — consulta direta por número do processo.
+                Consulta direta por número do processo — conta no limite do mês do seu plano.
               </p>
             </div>
           ) : (
@@ -726,8 +734,7 @@ function ConsultarTab() {
                 <div>
                   <p className="font-semibold">Busca por {TIPO_LABELS[tipo]} — custo variável</p>
                   <p className="mt-0.5 text-apoio opacity-90">
-                    <strong>3 créditos base</strong> + <strong>1 crédito por lote de 10 processos</strong> encontrados (sem teto).
-                    Ex: 30 processos = 6 créditos. Sem resultados? Só os 3 base.
+                    Conta como uma busca no limite do mês do seu plano, não importa quantos processos voltem.
                   </p>
                   <p className="mt-0.5 text-micro opacity-75">Pode levar até 2 minutos.</p>
                 </div>
@@ -803,7 +810,7 @@ function ConsultarTab() {
                   <p className="text-sm font-medium">{processos.length} processo(s) encontrado(s)</p>
                   {ehListaCpf && (
                     <p className="text-micro text-muted-foreground">
-                      Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações (1 cred cada).
+                      Clique em <span className="font-semibold">Carregar detalhes</span> em cada card pra ver capa, partes e movimentações.
                     </p>
                   )}
                 </div>
@@ -1070,7 +1077,7 @@ function MonitoramentoCard({
       // (estágios antigos da pipeline). Mostra como "análise IA" igual
       // ao caso "ia" — usuário só precisa saber que veio de IA.
       const fonteLabel = data.fonte === "judit_ia" || data.fonte === "ia" ? " — análise IA" : "";
-      toast.success(`Resumo gerado (1 crédito)${fonteLabel}`);
+      toast.success(`Resumo gerado${fonteLabel}`);
       setConfirmResumoOpen(false);
     },
     onError: (e: any) => {
@@ -1079,7 +1086,7 @@ function MonitoramentoCard({
     },
   });
 
-  // Lock síncrono pra impedir double-click cobrar 2 créditos. mutation.isPending
+  // Lock síncrono pra impedir double-click contar 2 consultas. mutation.isPending
   // só vira true no próximo render — entre o 1º click e o re-render, um 2º click
   // passaria pelo disabled e dispararia 2ª request. Lock baseado em ref bloqueia
   // imediatamente.
@@ -1090,14 +1097,14 @@ function MonitoramentoCard({
         setProcessoCompleto(data.processo);
         const totalMovs = typeof data.totalMovs === "number" ? data.totalMovs : null;
         if (totalMovs === 0) {
-          toast.success("Processo encontrado, sem movimentações no tribunal (1 crédito)", {
+          toast.success("Processo encontrado, sem movimentações no tribunal", {
             description: "O tribunal retornou 0 movimentações. O processo pode estar sem trâmite recente ou em segredo de justiça.",
             duration: 8000,
           });
         } else if (totalMovs !== null) {
-          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s) (1 crédito)`);
+          toast.success(`${totalMovs} movimentação(ões) carregada(s) e salva(s)`);
         } else {
-          toast.success("Histórico completo carregado e salvo (1 crédito)");
+          toast.success("Histórico completo carregado e salvo");
         }
         // Refetch historico local pra que o dado persistido apareça
         if (mon.id) refetchHist();
@@ -1342,6 +1349,20 @@ function MonitoramentoCard({
                   Sem movimentação registrada ainda
                 </span>
               )}
+              {/* A foto que o robô tirou da tela do tribunal no instante da
+                  falha. Quando o portal muda de layout, é a única prova do que
+                  ele viu — antes ela era gravada em disco efêmero e sumia. */}
+              {mon.diagnostico && mon.ultimoErroPrintUrl && (
+                <a
+                  href={mon.ultimoErroPrintUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-micro text-muted-foreground underline shrink-0 hover:text-info-fg"
+                  title="Abre a imagem que o robô capturou da tela do tribunal quando a consulta falhou"
+                >
+                  ver a tela do tribunal
+                </a>
+              )}
             </div>
           </div>
 
@@ -1395,12 +1416,12 @@ function MonitoramentoCard({
                     <DropdownMenuItem disabled={buscarCompletoMut.isPending} onClick={clickHistorico}>
                       <Search className="h-3.5 w-3.5 mr-2" />
                       Buscar histórico
-                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
+                      
                     </DropdownMenuItem>
                     <DropdownMenuItem disabled={resumoMut.isPending} onClick={() => setConfirmResumoOpen(true)}>
                       <FileText className="h-3.5 w-3.5 mr-2" />
                       Resumo IA
-                      <span className="ml-auto text-micro text-muted-foreground">1 crédito</span>
+                      
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
@@ -1444,7 +1465,7 @@ function MonitoramentoCard({
               <div className="text-center py-8 text-xs text-muted-foreground">
                 <Clock className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>Ainda não há dados do processo.</p>
-                <p className="text-micro mt-1">Clique em <strong>Histórico</strong> pra puxar agora (1 crédito) ou aguarde o próximo poll automático (até 6h).</p>
+                <p className="text-micro mt-1">Clique em <strong>Histórico</strong> pra puxar agora ou aguarde o próximo poll automático (até 6h).</p>
               </div>
             ) : (
               <>
@@ -1587,8 +1608,7 @@ function MonitoramentoCard({
           <AlertDialogTitle>Gerar resumo IA?</AlertDialogTitle>
           <AlertDialogDescription>
             A IA analisará a capa e as movimentações deste processo e gerará um resumo
-            estruturado. <strong>Esta operação custa 1 crédito</strong> e é debitada
-            imediatamente do saldo do escritório.
+            estruturado. <strong>Conta no limite de resumos do mês do seu plano.</strong>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1601,7 +1621,7 @@ function MonitoramentoCard({
             disabled={resumoMut.isPending}
           >
             {resumoMut.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}
-            Gerar resumo (1 crédito)
+            Gerar resumo
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1939,7 +1959,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
             variant="outline"
             disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
             onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: listaMons.map((m: any) => m.id) })}
-            title="Reconsulta todos os monitoramentos, inclusive os parados. Sem custo de créditos."
+            title="Reconsulta todos os monitoramentos, inclusive os parados. Não conta no limite do mês."
           >
             {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
               <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2003,7 +2023,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
               size="sm"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando" || idsParados.length === 0}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsParados })}
-              title="Reconsulta apenas os processos parados. Sem custo de créditos."
+              title="Reconsulta apenas os processos parados. Não conta no limite do mês."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -2160,19 +2180,19 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
         </div>
       )}
 
-      {/* O saldo aparecia em destaque sem dizer o que o consome, e não havia
-          nada na tela dizendo com que frequência o robô roda. */}
+      {/* A tela não dizia com que frequência o robô roda — e sem isso a
+          impressão era de que cada atualização saía do bolso de alguém. */}
       {listaMons.length > 0 && (
         <div className="rounded-xl border bg-card px-4 py-2.5 flex items-center gap-2.5 flex-wrap text-corpo text-muted-foreground">
           <RefreshCcw className="h-3.5 w-3.5 shrink-0" />
           <span>
-            O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b>, sem
-            consumir créditos.
+            O robô varre os tribunais <b className="font-bold text-foreground">duas vezes por dia</b> —
+            isso não conta no limite do seu plano.
           </span>
           <span className="h-3.5 w-px bg-border" />
           <span>
-            Crédito é gasto só na <b className="font-bold text-foreground">consulta avulsa</b>, no{" "}
-            <b className="font-bold text-foreground">histórico completo</b> e no{" "}
+            Contam no limite do mês a <b className="font-bold text-foreground">consulta avulsa</b>, o{" "}
+            <b className="font-bold text-foreground">histórico completo</b> e o{" "}
             <b className="font-bold text-foreground">resumo IA</b> de um processo.
           </span>
         </div>
@@ -2233,7 +2253,7 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
                 <p className="font-semibold">Proteção de dados (LGPD)</p>
                 <p>
                   O monitoramento de movimentações requer credencial OAB para garantir que apenas
-                  advogados habilitados acessem dados processuais. Custo: 2 créditos/mês.
+                  advogados habilitados acessem dados processuais.
                 </p>
               </div>
             </div>
@@ -2297,32 +2317,16 @@ function MonitorarTab({ onIrAoCofre }: { onIrAoCofre?: () => void }) {
  * Cabeçalho do módulo.
  *
  * Era um banner roxo em degradê que comemorava "419 monitorados" enquanto
- * 418 deles estavam quebrados. O número que manda passou a ser pastilha, no
- * mesmo padrão da Agenda e da central de movimentações.
+ * 418 deles estavam quebrados. Depois virou pastilha + controles; hoje é só
+ * título e uma linha do que a tela faz.
+ *
+ * As três pastilhas (monitorados, parados, nova ação) saíram por decisão do
+ * dono em 13/09: os MESMOS números já aparecem no badge de cada aba
+ * (`MonitoramentosCount` mostra parados/total, `NovasAcoesBadge` mostra as não
+ * lidas), então o cabeçalho repetia a conta logo acima de onde ela já estava —
+ * e as duas queries que a alimentavam eram cópia das que os badges já fazem.
  */
-function CabecalhoProcessos({
-  saldo,
-  onConsultar,
-  onResumo,
-}: {
-  saldo: number;
-  onConsultar: () => void;
-  onResumo: () => void;
-}) {
-  const { data: monsData } = trpc.processos.meusMonitoramentos.useQuery(
-    { tipoMonitoramento: "movimentacoes" },
-    { retry: false, refetchOnWindowFocus: false },
-  );
-  const { data: novasAcoesData } = trpc.processos.listarNovasAcoes.useQuery(
-    { apenasNaoLidas: true, limite: 1 },
-    { retry: false, refetchInterval: 60000 },
-  );
-
-  const mons = monsData || [];
-  const totalMons = mons.length;
-  const parados = mons.filter((m: any) => !!m.diagnostico).length;
-  const totalNovas = novasAcoesData?.totalNaoLidas ?? 0;
-
+function CabecalhoProcessos() {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -2332,71 +2336,7 @@ function CabecalhoProcessos({
         <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
         </p>
-        <div className="flex flex-wrap gap-2 mt-3">
-          <PastilhaProc valor={totalMons} rotulo={totalMons === 1 ? "monitorado" : "monitorados"} />
-          {parados > 0 && (
-            <PastilhaProc valor={parados} rotulo={parados === 1 ? "parado" : "parados"} tom="alerta" />
-          )}
-          {totalNovas > 0 && (
-            <PastilhaProc
-              valor={totalNovas}
-              rotulo={totalNovas === 1 ? "nova ação" : "novas ações"}
-            />
-          )}
-        </div>
       </div>
-      {/* Sem `flex-wrap`, os três controles (créditos, Consultar CNJ,
-          Resumo diário) somavam 425px e vazavam da tela de 390px. */}
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        <div className="inline-flex items-center gap-2 rounded-[10px] border bg-card px-3 py-1.5">
-          <Coins className="h-4 w-4 text-warning" />
-          <span className="text-corpo font-bold tabular-nums">{saldo}</span>
-          <span className="text-apoio text-muted-foreground">créditos</span>
-        </div>
-        <Button size="sm" variant="outline" onClick={onConsultar}>
-          <Search className="h-4 w-4 mr-1.5" />
-          Consultar CNJ
-        </Button>
-        <Button size="sm" variant="outline" onClick={onResumo}>
-          <Mail className="h-4 w-4 mr-1.5" />
-          Resumo diário
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function PastilhaProc({
-  valor,
-  rotulo,
-  tom = "neutro",
-}: {
-  valor: number;
-  rotulo: string;
-  tom?: "neutro" | "alerta";
-}) {
-  return (
-    <div
-      className={`rounded-[10px] border px-3 py-1.5 flex items-baseline gap-1.5 ${
-        tom === "alerta"
-          ? "bg-danger-bg border-danger/30 dark:border-danger/30"
-          : "bg-card border-border"
-      }`}
-    >
-      <b
-        className={`text-secao font-bold tabular-nums ${
-          tom === "alerta" ? "text-danger-fg" : ""
-        }`}
-      >
-        {valor}
-      </b>
-      <span
-        className={`text-apoio ${
-          tom === "alerta" ? "text-danger-fg" : "text-muted-foreground"
-        }`}
-      >
-        {rotulo}
-      </span>
     </div>
   );
 }
@@ -2410,14 +2350,16 @@ export default function Processos() {
   const tabInicial = (() => {
     if (typeof window === "undefined") return "central";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "movimentacoes" || t === "novas-acoes" || t === "alertas" || t === "cofre" || t === "central"
+    // `alertas` continua na lista de propósito: o link antigo existe solto em
+    // e-mail e histórico de navegador, e a aba saiu em 13/09 — cair na Central
+    // é melhor que a tela abrir numa aba que não existe mais.
+    if (t === "alertas") return "central";
+    return t === "movimentacoes" || t === "novas-acoes" || t === "cofre" || t === "central"
       ? t
       : "central";
   })();
   const [tab, setTab] = useState(tabInicial);
   const utils = trpc.useUtils();
-  const [consultarAberto, setConsultarAberto] = useState(false);
-  const [resumoAberto, setResumoAberto] = useState(false);
   // Compatibilidade com link antigo `?abrirMonitor=1` sem `?tab=`: força
   // ir pra movimentacoes pra que o MonitorarTab abra o modal.
   useEffect(() => {
@@ -2425,9 +2367,6 @@ export default function Processos() {
     const sp = new URLSearchParams(window.location.search);
     if (sp.get("abrirMonitor") === "1" && tab === "central") setTab("movimentacoes");
   }, [tab]);
-  const { data: saldoData } = trpc.processos.saldo.useQuery(undefined, { retry: false });
-  const saldo = saldoData?.saldo ?? 0;
-
   // SSE global de credencial: quando o backend detecta que uma credencial
   // caiu (motor-proprio ou cron-revalidar) emite `credencial_erro`. Sem
   // este listener, o badge "ativa" no cofre + dropdown de credenciais
@@ -2461,18 +2400,7 @@ export default function Processos() {
 
   return (
     <div className="space-y-5">
-      <CabecalhoProcessos
-        saldo={saldo}
-        onConsultar={() => setConsultarAberto(true)}
-        onResumo={() => setResumoAberto(true)}
-      />
-
-      {saldo < 5 && (
-        <div className="flex items-center gap-2 rounded-xl bg-warning-bg border border-warning/30 px-4 py-2.5">
-          <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-          <span className="text-sm text-warning-fg">Saldo baixo. Para comprar mais créditos, entre em contato com o suporte.</span>
-        </div>
-      )}
+      <CabecalhoProcessos />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="!bg-muted !border-0 !rounded-[10px] !p-[3px] !h-auto !inline-flex !w-auto gap-1 flex-wrap">
@@ -2497,13 +2425,6 @@ export default function Processos() {
             <Siren className="h-3.5 w-3.5" />Novas Ações
             <NovasAcoesBadge />
           </TabsTrigger>
-          <TabsTrigger
-            value="alertas"
-            className="gap-1.5 text-xs py-1.5 px-3 !rounded-lg !text-muted-foreground data-[state=active]:!bg-card data-[state=active]:!text-foreground data-[state=active]:!shadow-sm font-semibold"
-          >
-            <Bell className="h-3.5 w-3.5" />Alertas
-            <AlertasBadge />
-          </TabsTrigger>
           {podeCofre && (
             <TabsTrigger
               value="cofre"
@@ -2519,24 +2440,8 @@ export default function Processos() {
           <MonitorarTab onIrAoCofre={podeCofre ? () => setTab("cofre") : undefined} />
         </TabsContent>
         <TabsContent value="novas-acoes" className="mt-5"><NovasAcoesTab /></TabsContent>
-        <TabsContent value="alertas" className="mt-5"><AlertasTab /></TabsContent>
         {podeCofre && <TabsContent value="cofre" className="mt-5"><CofreTab /></TabsContent>}
       </Tabs>
-
-      {/* A consulta avulsa saiu da barra de abas: é tarefa ocasional, não
-          lugar onde se fica. Vira modal aberto pelo botão do cabeçalho. */}
-      <Dialog open={consultarAberto} onOpenChange={(v) => !v && setConsultarAberto(false)}>
-        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Consultar processo</DialogTitle>
-            <DialogDescription>
-              Busca avulsa por CNJ, CPF ou CNPJ — sem colocar em monitoramento.
-            </DialogDescription>
-          </DialogHeader>
-          <ConsultarTab />
-        </DialogContent>
-      </Dialog>
-      <ConfigResumoDiario open={resumoAberto} onClose={() => setResumoAberto(false)} />
     </div>
   );
 }
@@ -2559,255 +2464,6 @@ function CentralBadge() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // BADGE DE NOVAS AÇÕES NÃO LIDAS
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TAB: ALERTAS — Prazos sugeridos detectados em movimentações
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function AlertasTab() {
-  const [aprovarTarget, setAprovarTarget] = useState<any | null>(null);
-  const [ajusteTitulo, setAjusteTitulo] = useState("");
-  const [ajusteData, setAjusteData] = useState("");
-  const utils = trpc.useUtils();
-
-  const { data: sugestoes, refetch, isLoading } = trpc.prazosSugeridos?.listar?.useQuery?.(
-    { status: "pendente", limite: 100 },
-    { retry: false, refetchInterval: 30000 },
-  ) ?? { data: undefined, refetch: () => {}, isLoading: false };
-
-  const aprovarMut = trpc.prazosSugeridos?.aprovar?.useMutation?.({
-    onSuccess: () => {
-      toast.success("Prazo criado na agenda!");
-      setAprovarTarget(null);
-      refetch();
-      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
-    },
-    onError: (e: any) => toast.error("Erro ao criar prazo", { description: e.message }),
-  });
-
-  const descartarMut = trpc.prazosSugeridos?.descartar?.useMutation?.({
-    onSuccess: () => {
-      toast.success("Sugestão descartada");
-      refetch();
-      try { utils.prazosSugeridos?.contador?.invalidate?.(); } catch { /* ignore */ }
-    },
-    onError: (e: any) => toast.error("Erro", { description: e.message }),
-  });
-
-  const abrirAprovar = (sug: any) => {
-    setAprovarTarget(sug);
-    setAjusteTitulo(sug.titulo);
-    const dataLocal = sug.dataSugerida
-      ? new Date(sug.dataSugerida).toISOString().slice(0, 16)
-      : new Date().toISOString().slice(0, 16);
-    setAjusteData(dataLocal);
-  };
-
-  const confirmarAprovar = () => {
-    if (!aprovarTarget) return;
-    aprovarMut.mutate({
-      id: aprovarTarget.id,
-      ajustes: {
-        titulo: ajusteTitulo,
-        dataInicio: new Date(ajusteData).toISOString(),
-      },
-    });
-  };
-
-  const lista = sugestoes ?? [];
-
-  return (
-    <div className="space-y-4">
-      <div className="relative overflow-hidden rounded-2xl border border-warning/30 bg-gradient-to-br from-warning-bg via-warning-bg/40 to-warning-bg/30 p-5 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)]">
-        <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-warning-bg/40 blur-3xl" />
-        <div className="relative flex items-start gap-3">
-          <div className="h-10 w-10 rounded-xl bg-warning flex items-center justify-center shrink-0 shadow-sm">
-            <Bell className="h-5 w-5 text-white" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-semibold text-sm tracking-tight">Alertas detectados nas movimentações</p>
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warning text-warning-on text-micro font-bold uppercase tracking-wider">
-                <Sparkles className="h-2.5 w-2.5" />
-                IA
-              </span>
-            </div>
-            <p className="text-apoio text-warning-fg/75 mt-1 max-w-2xl leading-relaxed">
-              Sistema detecta automaticamente <strong>audiências, intimações, réplica, contestação e recursos</strong>.
-              Aprove pra criar agendamento direto na agenda — ou descarte se for falso positivo.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <Skeleton className="h-32 w-full" />
-      ) : lista.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-gradient-to-br from-muted to-warning-bg/30 py-14 text-center space-y-2">
-          <div className="h-14 w-14 rounded-2xl bg-warning/10 flex items-center justify-center mx-auto mb-1">
-            <Bell className="h-7 w-7 text-warning/70" />
-          </div>
-          <p className="font-semibold text-foreground">Nenhum alerta pendente</p>
-          <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-            Quando o cron detectar prazos ou audiências em movimentações dos seus processos monitorados,
-            vão aparecer aqui pra você aprovar ou descartar com 1 click.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {lista.map((sug: any) => {
-            const isAudiencia = sug.tipo === "audiencia";
-            const isUrgente = sug.prazoDias != null && sug.prazoDias <= 5;
-            // Pala lateral (borda esquerda) + cores baseadas no tipo
-            const palette = isAudiencia
-              ? {
-                  borda: "border-l-info border border-info/30",
-                  iconBg: "bg-info",
-                  badgeBg: "bg-info/15 text-info-fg border-info/30",
-                  tipoLabel: "Audiência",
-                  Icon: Gavel,
-                }
-              : isUrgente
-                ? {
-                    borda: "border-l-danger border border-danger/30",
-                    iconBg: "bg-danger",
-                    badgeBg: "bg-danger/15 text-danger-fg border-danger/30",
-                    tipoLabel: "Prazo urgente",
-                    Icon: AlertTriangle,
-                  }
-                : {
-                    borda: "border-l-warning border border-warning/30",
-                    iconBg: "bg-warning",
-                    badgeBg: "bg-warning/15 text-warning-fg border-warning/30",
-                    tipoLabel: "Prazo",
-                    Icon: Clock,
-                  };
-            const Icon = palette.Icon;
-            return (
-              <div
-                key={sug.id}
-                className={`rounded-xl bg-card p-4 border-l-[3px] ${palette.borda} shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`h-9 w-9 rounded-lg ${palette.iconBg} flex items-center justify-center shrink-0 shadow-sm`}>
-                    <Icon className="h-4 w-4 text-white" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold tracking-tight">{sug.titulo}</p>
-                      <Badge className={`${palette.badgeBg} text-micro`}>{palette.tipoLabel}</Badge>
-                      {sug.tribunal && <Badge variant="outline" className="text-micro">{sug.tribunal}</Badge>}
-                    </div>
-                    <p className="text-micro text-muted-foreground mt-1">
-                      <span className="font-medium text-foreground">{sug.apelidoProcesso}</span>
-                      {sug.cnj && <span className="font-mono"> · {sug.cnj}</span>}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5 text-apoio flex-wrap">
-                      {sug.dataSugerida && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-info-bg border border-info/30 text-info-fg font-medium tabular-nums">
-                          <Clock className="h-3 w-3" />
-                          {formatarDataCalendario(sug.dataSugerida)}
-                        </span>
-                      )}
-                      {sug.prazoDias != null && (
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-micro font-medium border ${
-                          isUrgente
-                            ? "bg-danger-bg border-danger/30 text-danger-fg"
-                            : "bg-muted border-border text-muted-foreground"
-                        }`}>
-                          {sug.prazoDias} {sug.prazoDias === 1 ? "dia" : "dias"}{sug.prazoUteis ? " úteis" : ""}
-                        </span>
-                      )}
-                    </div>
-                    {sug.motivo && (
-                      <p className="text-micro text-muted-foreground mt-1.5 italic">"{sug.motivo}"</p>
-                    )}
-                    {sug.trechoOrigem && (
-                      <details className="mt-1.5 group">
-                        <summary className="text-micro text-muted-foreground cursor-pointer hover:text-foreground inline-flex items-center gap-1 list-none">
-                          <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
-                          Ver trecho original
-                        </summary>
-                        <p className="text-micro text-muted-foreground mt-1.5 bg-muted border border-border/70 rounded-lg p-2.5 leading-relaxed">
-                          {sug.trechoOrigem}
-                        </p>
-                      </details>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <Button
-                      size="sm"
-                      className="h-7 text-micro rounded-lg bg-success shadow-sm"
-                      onClick={() => abrirAprovar(sug)}
-                      disabled={aprovarMut.isPending || descartarMut.isPending}
-                    >
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Aprovar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-micro rounded-lg border-border hover:border-border hover:bg-muted"
-                      onClick={() => descartarMut.mutate({ id: sug.id })}
-                      disabled={aprovarMut.isPending || descartarMut.isPending}
-                    >
-                      <Trash2 className="h-3 w-3 mr-1" />
-                      Descartar
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Modal de aprovação com ajustes */}
-      <Dialog open={!!aprovarTarget} onOpenChange={(open) => !open && setAprovarTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Criar prazo na agenda</DialogTitle>
-            <DialogDescription>
-              Confirme os dados antes de criar o agendamento.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label htmlFor="alerta-titulo">Título</Label>
-              <Input
-                id="alerta-titulo"
-                value={ajusteTitulo}
-                onChange={(e) => setAjusteTitulo(e.target.value)}
-                maxLength={255}
-              />
-            </div>
-            <div>
-              <Label htmlFor="alerta-data">Data e hora</Label>
-              <Input
-                id="alerta-data"
-                type="datetime-local"
-                value={ajusteData}
-                onChange={(e) => setAjusteData(e.target.value)}
-              />
-            </div>
-            {aprovarTarget?.motivo && (
-              <p className="text-xs text-muted-foreground">
-                <span className="font-medium">Detectado:</span> {aprovarTarget.motivo}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAprovarTarget(null)}>Cancelar</Button>
-            <Button onClick={confirmarAprovar} disabled={aprovarMut.isPending}>
-              {aprovarMut.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-              Criar agendamento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
 
 function MonitoramentosCount() {
   const { data } = trpc.processos.meusMonitoramentos.useQuery(
@@ -2842,20 +2498,6 @@ function NovasAcoesBadge() {
   if (count === 0) return null;
   return (
     <span className="ml-1 text-micro bg-danger-bg text-danger-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
-      {count}
-    </span>
-  );
-}
-
-function AlertasBadge() {
-  const { data } = trpc.prazosSugeridos?.contador?.useQuery?.(undefined, {
-    retry: false,
-    refetchInterval: 60000,
-  }) ?? { data: undefined };
-  const count = data?.pendentes ?? 0;
-  if (count === 0) return null;
-  return (
-    <span className="ml-1 text-micro bg-warning-bg text-warning-fg px-1.5 rounded-full tabular-nums font-semibold animate-pulse">
       {count}
     </span>
   );
@@ -2992,7 +2634,7 @@ function NovasAcoesTab() {
   const [atualOperacaoId, setAtualOperacaoId] = useState<string | null>(null);
   const [atualDrawerOpen, setAtualDrawerOpen] = useState(false);
   const [buscaTexto, setBuscaTexto] = useState("");
-  // Detalhes enriquecidos por nova ação (on-demand via consultarCNJSincrono — 1 cred/cnj).
+  // Detalhes enriquecidos por nova ação (on-demand via consultarCNJSincrono).
   // Cards chegam só com cnj+tribunal+data; partes/assunto/valor não são persistidos.
   const [detalhesPorAcaoId, setDetalhesPorAcaoId] = useState<Record<number, any>>({});
   const [carregandoAcaoId, setCarregandoAcaoId] = useState<number | null>(null);
@@ -3121,7 +2763,7 @@ function NovasAcoesTab() {
   const monitorarMut = trpc.processos.criarMonitoramento.useMutation({
     onSuccess: (d: any) => {
       if (avisarSeJaMonitorado(d)) return;
-      toast.success(`Processo agora monitorado (${d?.custoCred ?? 2} cred/mês)`, {
+      toast.success("Processo agora monitorado", {
         description: "As próximas movimentações vão aparecer na aba Movimentações.",
         duration: 6000,
       });
@@ -3356,7 +2998,7 @@ function NovasAcoesTab() {
               className="h-9 rounded-lg border-danger/30 bg-card hover:bg-danger-bg hover:border-danger/30 text-danger-fg"
               disabled={atualizarTodosMut.isPending || progresso?.status === "rodando"}
               onClick={() => atualizarTodosMut.mutate({ monitoramentoIds: idsNovasAcoes })}
-              title="Atualiza todos os monitoramentos de novas ações em paralelo. Sem custo de créditos."
+              title="Atualiza todos os monitoramentos de novas ações em paralelo. Não conta no limite do mês."
             >
               {atualizarTodosMut.isPending || progresso?.status === "rodando" ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
@@ -3897,7 +3539,7 @@ function NovasAcoesTab() {
                             {capa?.daDeteccao && !capa.fonte && (
                               <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-success-bg text-success-fg border border-success/30 text-micro font-semibold">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
-                                Capa lida na detecção — sem crédito extra
+                                Capa lida na detecção — sem consulta extra
                               </span>
                             )}
                           </p>
@@ -4036,7 +3678,7 @@ function NovasAcoesTab() {
                           <Button
                             size="sm"
                             className="h-7 text-apoio rounded-lg bg-info text-info-on shadow-sm"
-                            title="Monitorar movimentações deste processo (2 cred/mês) — resolve o card"
+                            title="Monitorar movimentações deste processo — resolve o card"
                             disabled={monitorarMut.isPending || resolverMut.isPending}
                             onClick={() => handleMonitorarAcao(a)}
                           >
@@ -4189,7 +3831,7 @@ function NovasAcoesTab() {
                 <p>
                   O monitoramento de novas ações é permitido apenas para clientes cadastrados
                   no seu escritório, garantindo que existe relação jurídica legítima para o
-                  tratamento dos dados processuais. Custo: <strong>15 créditos/mês</strong>,
+                  tratamento dos dados processuais.
                   independente dos estados escolhidos.
                 </p>
               </div>
@@ -4315,7 +3957,10 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
   }) ?? { mutate: () => {} };
 
   async function rodarLote() {
-    const alvos = ((q.data?.tribunais ?? []) as any[]).filter((t) => !t.semCobertura);
+    // A MESMA regra que a grade usa pra decidir o que entra na bateria — duas
+    // contas separadas fariam a barra de progresso prometer um total e a fila
+    // rodar outro.
+    const alvos = alvosDaBateria((q.data?.tribunais ?? []) as any[]);
     if (alvos.length === 0 || !validarAsync) return;
     pararRef.current = false;
     setLote({ feitos: 0, total: alvos.length, atual: null });
@@ -4362,7 +4007,7 @@ function GradeDaCredencial({ credencialId }: { credencialId: number }) {
       lote={{
         rodando: lote != null,
         feitos: lote?.feitos ?? 0,
-        total: lote?.total ?? ((q.data.tribunais ?? []) as any[]).filter((t: any) => !t.semCobertura).length,
+        total: lote?.total ?? alvosDaBateria((q.data.tribunais ?? []) as any[]).length,
         atual: lote?.atual ?? null,
         onIniciar: () => { void rodarLote(); },
         onParar: () => { pararRef.current = true; },
@@ -4826,7 +4471,11 @@ function CofreTab() {
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        {/* `max-h` + rolagem é o padrão da casa (41 diálogos usam), e este era
+            a exceção: o conteúdo é alto — apelido, as duas opções de alcance, o
+            seletor de tribunal, CPF, senha e o 2FA — e num notebook a caixa
+            passava da tela, cortando o TÍTULO em cima e os botões embaixo. */}
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Cadastrar credencial</DialogTitle>
             <DialogDescription>
@@ -4918,9 +4567,9 @@ function CofreTab() {
               </button>
             </div>
             <div>
-              <Label>CPF ou OAB *</Label>
+              <Label>CPF *</Label>
               <Input
-                placeholder="12345678900 ou SP123456"
+                placeholder="12345678900"
                 value={form.username}
                 onChange={(e) => setForm({ ...form, username: e.target.value })}
               />

@@ -146,6 +146,23 @@ export function coberturaTribunais(): {
   };
 }
 
+/**
+ * O caminho COM CREDENCIAL deste tribunal nunca foi comprovado em campo?
+ *
+ * Vale pros 24 TRTs, inclusive TRT2 e TRT15: a consulta pública deles está
+ * aberta e funciona, mas o LOGIN do PJe-JT é outro caminho e continua
+ * candidato — o adapter só sabe entrar por SSO do PDPJ e ninguém abriu esses
+ * endereços pra conferir.
+ *
+ * Quem lê isso decide duas coisas distintas: não deixar a falha de um portal
+ * candidato marcar a credencial inteira (a do TJCE é a mesma), e não aceitar
+ * processo desse tribunal antes de um login real ter passado.
+ */
+export function tribunalEmTeste(codigo: string | null | undefined): boolean {
+  if (!codigo) return false;
+  return coberturaTribunais().emTeste.some((t) => t.codigo === codigo);
+}
+
 /** Todos os códigos que o robô aceita vigiar por número (com credencial, sem, ou em teste). */
 export function codigosTribunaisCobertos(): string[] {
   const c = coberturaTribunais();
@@ -234,6 +251,22 @@ export function listaSiglasCobertas(): string {
 /** Mensagem de erro única pra qualquer caminho que recusa tribunal sem motor. */
 export function mensagemTribunalSemMotor(sigla: string): string {
   return `O robô ainda não entra no ${sigla}. Hoje ele cobre: ${listaSiglasCobertas()}.`;
+}
+
+/**
+ * Mensagem de quem pede um tribunal candidato sem prova de que o login funciona.
+ *
+ * Diz o que falta e onde fazer, porque a saída existe: o endereço do PJe-JT foi
+ * derivado do padrão e só um login de verdade responde se ele serve. Aceitar o
+ * processo antes disso enche a tela de erro e, pior, faz a falha do portal
+ * candidato respingar na credencial que o TJCE usa todo dia.
+ */
+export function mensagemTribunalEmTeste(sigla: string): string {
+  return (
+    `O ${sigla} ainda não foi comprovado: o endereço do PJe da Justiça do Trabalho ` +
+    `saiu do padrão e nenhum login real passou por lá. Cadastre a credencial do ${sigla} ` +
+    `em Processos → Cofre e rode o teste de login dele; se passar, o monitoramento libera sozinho.`
+  );
 }
 
 /** "12 estados + 4 TRFs" — alcance da credencial nacional do Cofre. */

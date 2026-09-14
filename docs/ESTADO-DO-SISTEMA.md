@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **5.975 verdes, 400 arquivos** (13/09, com o motor fase 1, a Central de ajuda, a portinha do backoffice e a cor do menu; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.136 verdes, 412 arquivos** (13/09, com a seção 28 e `develop` dentro; 6.119 em 411 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -215,7 +215,7 @@ A coluna **estado** significa:
 | Modelos de Contrato / assinatura | parcial | assinatura eletrônica **sem nenhum controle de permissão** (**D-5**) | sim |
 | Relatórios | não auditado | card "Recebido" tem regra que não soma quinzenas (decisão do dono pendente) | sim |
 | Backup do escritório | parcial | 20 tabelas do escritório ficam fora do backup (**D-2**) | sim |
-| Ponto | não auditado | dados de ponto e RH estão entre as tabelas fora do backup (**D-2**) | sim |
+| Ponto | não auditado | **fora de produção desde 13/09** por decisão do dono — em staging com selo "beta" (seção 23.1); dados de ponto e RH estão entre as tabelas fora do backup (**D-2**) | está na cesta do plano Escala, mas não aparece em produção |
 
 **Módulo que existe só como desenho de banco:** Diário da Justiça Eletrônico.
 As tabelas `dje_documentos` e `dje_publicacoes` estão no schema, completas e bem
@@ -2491,12 +2491,551 @@ da logo e o marinho como cor de ação do conteúdo.
 - As opções A (só a marca) e C (meio-termo) ficaram no comparador
   `mockup-cor-do-menu.html`, caso ele queira voltar atrás.
 
-## 20. Editar plano cabia 2110px numa janela de 1440 — ENTREGUE (13/09)
+---
+
+## 20. Monitoramento voltando erro — ENTREGUE e autorizado pelo dono (13/09)
+
+O dono relatou: *"processos estão retornando erro em monitoramentos, antes
+funcionava mas outra sessão fez alterações e quebrou algo"*, e depois mandou o
+texto do erro:
+
+> O processo apareceu na busca, mas a página dele não abriu.
+> URL: https://pje.tjce.jus.br/pje1grau/Processo/ConsultaProcesso/listView.seam
+
+São **duas causas diferentes** na mesma frente, uma de cada entrega recente. A
+que ele está vendo na tela é a 20.1. As outras três nasceram da entrada dos 24
+TRTs no registro e já estavam envenenando a credencial dele em silêncio.
+
+### 20.1 A guarda de 11/09 recusava página boa (é o erro do print)
+
+Em 11/09 o adapter ganhou uma guarda contra ler a TABELA DE RESULTADOS: quando
+a página do processo não abre, «Classe judicial» e «Polo ativo» estão na tela
+como TÍTULOS DE COLUNA, e o scraper devolvia o título vizinho como valor do
+campo — foi assim que «Polo ativo» virou a natureza da ação num card, e o poll
+regravava `hashUltimasMovs` com o hash de ZERO movimentações, soltando uma
+avalanche de "novas" no ciclo seguinte.
+
+O diagnóstico estava certo; o **mecanismo** estava errado. A guarda decidia por
+sniffing de página (`estaNaPaginaDoProcesso`): *"ainda tem a grade no DOM e
+nenhum marcador de detalhe que eu conheça → desisto"*. Só que o PJe também
+**monta o detalhe na MESMA aba, por AJAX**: não abre aba, a URL continua
+`listView.seam` — é a URL do print — e a grade de resultados fica no DOM. Se o
+painel usa um id fora da lista de marcadores, a guarda recusava uma página que
+TINHA o processo aberto. Antes de 11/09 esse caso funcionava, porque o código
+extraía da página atual sem perguntar.
+
+Pior: a guarda passava **na frente** de uma rede de segurança que já existia
+desde sempre no mesmo arquivo — o `conseguiuExtrair`, que reporta `parse_falhou`
+com diagnóstico rico (tabelas da página, mensagens, estado do RichFaces, forms).
+
+**O que mudou:** a decisão saiu do palpite sobre a página e foi pro RESULTADO da
+extração. O clique que não confirma nada agora só levanta uma bandeira
+(`detalheNaoAbriu`) e tira a foto; o fluxo segue, tenta extrair, e o erro só sai
+se não vier conteúdo. Quem protege contra ler a tabela de resultados continua
+sendo a recusa de rótulo dentro da extração (`ehRotuloDeTabela`), que devolve
+campo nulo — não o sniffing. `orgaoJulgador` entrou na conta de "veio conteúdo"
+junto com classe, partes e movimentações: detalhe que trouxe só a vara é página
+do processo do mesmo jeito.
+
+De passagem, o mesmo clique deixou de torrar o tempo do cron: ele esperava
+`context.waitForEvent("page")` por 15s, **duas vezes**, por uma aba que nunca
+vem quando o PJe resolve na mesma página — 30s por processo. Agora a espera é
+uma corrida entre "abriu aba" e "o marcador apareceu aqui", com
+`primeiroSinal`, que ignora quem falha (um `Promise.race` cru deixaria o null
+ganhar a corrida e matar a espera que ia dar certo). Os marcadores do detalhe
+viraram **uma** constante (`SELETOR_DETALHE_PROCESSO`) usada pela espera e pela
+conferência — duas listas divergindo faria a espera desistir de uma página que a
+conferência aceitaria.
+
+### 20.2 Falha de portal candidato para de falar pela credencial
+
+Medido neste container com `tsx`: o registro do PJe foi de **16 para 40**
+tribunais (12 TJs + 4 TRFs + 24 TRTs), e a grade do Cofre de uma credencial
+nacional foi de **30 para 78 logins reais**, 48 deles TRT. Os endereços dos TRTs
+saíram do padrão histórico do PJe-JT e o próprio comentário de `pdpjTrtConfig`
+diz "CANDIDATOS, sem exceção".
+
+O estrago estava em `atualizarStatusAposLogin` e `marcarCredencialExpirada`:
+as duas escrevem na **linha da credencial**, sem escopo de tribunal. Como os
+TRTs entram no fim da fila de `Object.keys(REGISTRO)` e nenhum tem como
+responder, era **sempre um TRT que dava a palavra final** — a credencial do
+TJCE, que funciona todo dia, terminava a bateria marcada como `erro`. O mesmo
+por outro caminho: qualquer relogin num TRT falhava e marcava a credencial como
+`expirada`, com notificação "credencial caiu" pro dono.
+
+`falhaDerrubaCredencial(tribunal)` (cofre-helpers) é a régua nova: **sucesso
+sempre promove** a credencial — é ele que religa monitoramento preso —, e
+**falha só derruba em caminho comprovado**. O resultado por tribunal continua
+gravado sempre por `registrarTribunal`, inclusive no crash técnico (que antes
+não registrava em tribunal nenhum): a célula do TRT fica vermelha e explicada, e
+nada sai da tela. A de "credencial não pôde ser decriptada" segue global de
+propósito — essa é da credencial, não de portal nenhum.
+
+### 20.3 Os candidatos saem da fila do "Testar tudo", não da tela
+
+O servidor marca cada linha da grade com `emTeste` (pela mesma régua da shared),
+e a bateria roda só caminho comprovado com endereço: **78 → 30 alvos**, medido na
+amarra. Os TRTs ficam numa dobra «Em teste — Justiça do Trabalho», cada um
+testável pelo botão da própria linha, com o texto dizendo por que estão fora.
+
+`alvosDaBateria` é fonte única: a barra de progresso e a fila usam a MESMA
+conta — antes a tela tinha a sua, e prometer um total e rodar outro é o tipo de
+coisa que ninguém nota até o dono ficar olhando a barra.
+
+As contagens do rodapé passaram a falar só do caminho comprovado. Somar os
+candidatos ali diria "48 falharam" sobre portais que ninguém prometeu.
+
+### 20.4 Processo trabalhista só entra com prova de login
+
+Decisão do dono, nas palavras dele: *"processos trabalhistas nega até credencial
+de verdade"*.
+
+`server/processos/tribunal-comprovado.ts`: `tribunalPrecisaDeProva` = é
+candidato **e** depende de credencial (os 22 TRTs; TRT2 e TRT15 têm consulta
+pública aberta e ficam de fora — barrar eles fecharia um caminho que já
+funciona). A prova é objetiva e já estava no banco desde 01/09: uma linha `ativa`
+daquele tribunal em `cofre_credencial_tribunais`, numa credencial não removida do
+escritório. **Passou um login real, o tribunal libera sozinho** — sem mudar uma
+linha de código, que é o ponto: quem decide se a Justiça do Trabalho entra é o
+portal, não a nossa aposta.
+
+O portão está nas quatro portas de processo (`consultarCNJ`,
+`consultarCNJSincrono`, `criarMonitoramento`, `criarMonitoramentoNovasAcoes`) e,
+na importação de planilha, como linha não elegível **com o motivo escrito** — a
+planilha não aborta por causa de um processo trabalhista, e a leitura da prova é
+UMA consulta pro lote inteiro (por linha, 500 processos seriam 500 idas ao
+banco). Na consulta o portão vem **antes de `contarUso`**: consulta que já nasce
+condenada a falhar não gasta consulta do plano.
+
+### 20.5 `linkedom` era devDependency de um import de produção
+
+`server/processos/adapters/parse/dom.ts` importa `linkedom`, e `pnpm build` usa
+`--packages=external` — o pacote não é embutido, é resolvido em runtime. Hoje
+nada de produção chama esse parser, então era uma mina: o dia em que
+`adapters/parse/pje-lista.ts` entrasse no caminho de produção, o servidor
+morreria no import, e o typecheck não vê isso. Movido pra `dependencies`, com
+amarra.
+
+### 20.6 Amarras
+
+`tribunal-candidato-nao-derruba.test.ts` (18) e
+`detalhe-no-lugar-nao-e-falha.test.ts` (10) — **27 mutações, todas vermelhas**
+(`scratchpad/mutar-candidato-e-detalhe.py`). Quatro sobreviveram na primeira
+volta e pelo MESMO motivo, que já é história conhecida da casa: o literal
+continuava de pé em outro lugar do arquivo. As duas leituras de prova têm as
+mesmas três condições (então conferir o arquivo inteiro deixava tirar de uma); os
+dois caminhos de falha do relogin têm a mesma guarda (conferir um deixava o outro
+escapar); e contar o nome da constante de marcadores não impede passar a
+constante pro `evaluate` e procurar um seletor cravado lá dentro.
+
+`cofre-grau.test.ts` teve um `expect` atualizado: a conta de quem entra na
+bateria mudou de lugar (virou `alvosDaBateria`), a regra não.
+
+### 20.7 Os dois resíduos — FECHADOS no mesmo dia ("pode fazer" do dono)
+
+**Consulta pública no `consultarCNJSincrono`.** O `consultarCNJ` ganhou o desvio
+em 12/09 e esta procedure não: ela pedia credencial do Cofre para tribunal que
+não tem login. Ficou pior em 13/09, quando `sistemaCofrePorTribunal` passou a
+devolver a credencial nacional para os 24 TRTs — TRT2 e TRT15, que funcionam
+pela consulta aberta, passaram a tentar o login do PJe-JT, que não responde.
+
+Agora os dois caminhos nascem do MESMO despachante: `consultaPublica =
+!tribunalRequerCredencial(...)`, tudo que é do Cofre (sistema, credencial,
+sessão) vive dentro do ramo que exige credencial, e o scrape é
+`consultarProcesso(codigo, cnj, storageState)` com `storageState` nulo na
+consulta aberta. Cobra igual — o que o tribunal dispensa é o login, não o custo
+de rodar o robô — e cobra **depois** de todas as guardas, inclusive a do
+tribunal candidato. Tribunal do registro sem endereço mapeado continua recusado
+sem cobrar: não é tentativa que falhou, é cobertura que não existe.
+
+**A foto do erro sobrevive ao deploy.** `tirarScreenshotErro` já fotografava a
+tela do tribunal na falha e gravava em
+`scripts/spike-motor-proprio/samples/screenshots/` — disco efêmero do container,
+fora do volume, e nenhuma tela lia o caminho. O robô tirava a prova do que viu e
+a jogava fora; foi exatamente o que faltou no diagnóstico da 20.1, que saiu de
+leitura de código em vez de evidência.
+
+`server/processos/print-do-erro.ts` move o arquivo para
+`./uploads/monitor-erros/escritorio_<id>/` (servido com sessão + checagem de
+escritório, como o resto de `/uploads`) e devolve a URL; a migration 0228 guarda
+ela em `motor_monitoramentos.ultimo_erro_print_url`. A divisão é de propósito: o
+adapter é código de spike e não sabe de tenancy, então quem CONHECE o dono do
+monitoramento é que coloca o arquivo na pasta do escritório — a origem continua
+sendo escrita onde sempre foi, nada mudou lá. Copia e apaga em vez de renomear
+(o volume é outro mount, e `rename` falha entre dispositivos), nunca lança
+(problema de disco não derruba o ciclo do cron) e o nome do arquivo é saneado
+porque entra numa URL e num caminho de disco.
+
+**Sucesso limpa a foto nos quatro caminhos** que limpam o erro — foto de erro
+antigo ao lado de monitoramento saudável manda procurar problema na tela errada.
+É o item 3 do padrão de observabilidade da casa (persistir → mostrar → auto-cura).
+
+Na tela, o único pixel novo: um link «ver a tela do tribunal» ao lado do motivo
+da parada no card do monitoramento, que só aparece quando há erro **e** foto.
+
+Amarra: `consulta-publica-e-print-do-erro.test.ts` (13 testes) — **18 mutações,
+todas vermelhas** (`scratchpad/mutar-publica-e-print.py`).
+
+### 20.8 O que segue anotado e NÃO mexido
+
+- **`sistemaCofrePorTribunal` devolve `pje_*` para trt2 e trt15**, que são
+  consulta pública — o comentário logo abaixo do mapa afirma o contrário
+  ("TRF-5 e demais tribunais de consulta pública NÃO entram aqui"). Com o desvio
+  da 20.7 isso deixou de causar dano no caminho da consulta, mas o mapa continua
+  discordando do próprio comentário.
+- A falha de um TJ comprovado que esteja fora do ar (TJMG, digamos) continua
+  marcando a credencial inteira. É pré-existente e não foi autorizado: a régua
+  entregue trata só o portal candidato.
+- A foto só é guardada no **poll de movimentações**. O laço de novas ações grava
+  as falhas por tribunal em `varreduraJson` e não tem campo para foto — cabe o
+  mesmo tratamento, não foi pedido.
+
+---
+
+## 21. Bloco comercial — ENTREGUE e autorizado pelo dono (13/09)
+
+Ele perguntou o que dá pra melhorar no serviço oferecido. A resposta que deu
+código foram três coisas que estavam **custando venda**, achadas conferindo o
+repo e não de memória. Nenhuma é bug de tela: as três são dinheiro que não
+entrava.
+
+### 21.1 O cupom recusava exatamente os planos que estão à venda
+
+`criarCupom` conferia `planosIds` contra a lista FIXA de
+`server/billing/products.ts` (`free`, `basico`, `intermediario`, `completo`).
+A tela do cupom (`CuponsSection`) lista os planos de
+`admin.listarPlanosEditaveis` — a tabela `planos`, por slug. **A tela oferecia
+o que o servidor recusava**: marcar «Escritório» no diálogo devolvia
+`Plano "escritorio" não existe`. Ou seja, promoção, campanha e desconto de
+fechamento não funcionavam em nenhum dos três planos vendidos desde 09/09.
+
+Agora a conferência é a união catálogo + lista fixa — a fixa fica como reserva
+pra base sem catálogo, mesmo padrão do `planosAtuais`. Nada removido.
+
+### 21.2 Extras avulsos: os upsells anunciados agora têm mecanismo
+
+Usuário a R$ 29, +100 processos a R$ 29, número extra a R$ 49 foram anunciados
+com o pacote de 3 planos e ficaram **sem mecanismo** — o teto vive na linha do
+PLANO, e não havia onde registrar "este cliente comprou 200 processos a mais".
+O upsell mais fácil que existe (cliente dentro, já pagando, já com a dor) não
+era vendável.
+
+**Sem migration**: moram em `escritorio_addons` com produto `extra:<chave>`, a
+MESMA tabela e a mesma semântica dos módulos avulsos. `limiteMensal` guarda a
+QUANTIDADE e `precoCentavos` o preço mensal TOTAL, congelado na concessão.
+
+Por que o preço é o total e não o unitário: ele anunciou "+100 processos por
+R$ 29", que é pacote, não unidade — e negociar "200 por R$ 49 pra fechar o
+cliente" tem que caber. Total congelado deixa a fatura somar a linha como já
+soma a dos módulos, sem multiplicação e sem discutir o que é "um".
+
+**A decisão do dono foi somar** ao que o plano dá: é aditivo, não mexe em quem
+já tem, e revogar é apagar a linha.
+
+**A sutileza que decide a correção** (`shared/extras-avulsos.ts`): os tetos do
+produto **discordam sobre o que significa zero**. Em monitoramentos, `0` e
+`null` querem dizer "sem teto" — `avaliarLimiteMonitoramentos` libera. Em
+conexões de WhatsApp, `0` quer dizer "nenhuma" e bloqueia. Somar sem saber disso
+daria dois erros opostos: transformaria plano ilimitado em plano limitado ao
+extra, e deixaria o número comprado sem efeito em plano sem WhatsApp. Por isso
+cada extra declara `zeroEIlimitado`, e `somarAoTeto` exige a opção explícita no
+lugar de adivinhar.
+
+Enforcement em quatro tetos: processos e CPFs (`limites-monitoramento`),
+colaboradores (`plan-limits`) e conexões de WhatsApp. Neste último a conta
+estava **copiada em três lugares** (a leitura da tela e os dois caminhos que
+criam canal); virou `limiteConexoesWhatsapp`, uma função — extra que valesse só
+num deles faria o número comprado funcionar ou não dependendo de por onde o
+cliente entrou. Cortesia segue acima de qualquer teto.
+
+Na fatura, `ItemFatura.tipo` ganhou `"extra"` e `calcularFatura` um campo
+`extras` opcional — caller antigo sem extras produz a fatura de antes, e o
+desconto do escritório incide sobre o extra também.
+
+No painel, o cartão «Módulos & cobrança» ganhou o botão **Extra**, a lista das
+concessões e o diálogo «Vender um extra» (quantidade + preço mensal + validade
++ observação, com sugestão por tipo). O X cancela zerando a quantidade, e o teto
+volta a ser o do plano. Auditado como `extra.avulso`.
+
+### 21.3 O JurisIA era vendido e a fatura não cobrava
+
+Ele entrou no plano Escala em 09/09 com 200 consultas. Há **dois** caminhos de
+concessão no painel e cada um quebrava de um lado:
+
+- o **cartão do JurisIA** grava o produto `jurisia` seco (é o add-on mais antigo,
+  anterior ao prefixo `modulo:`). A composição da fatura varre `modulo:%`, então
+  nunca o via: o preço digitado era guardado no banco e **jamais cobrado**;
+- o **diálogo de módulos avulsos** grava `modulo:jurisia`. A fatura somava, mas
+  `acessoJurisIA` buscava só o produto seco — **cobrava e não liberava**, e o
+  cliente batia na tela de bloqueio.
+
+Os dois lados foram fechados, aditivamente: a fatura passou a incluir o add-on
+do cartão (`avulsoJurisiaCobravel`) e a leitura de acesso passou a aceitar os
+dois produtos (`addonJurisiaPorQualquerCaminho`). Duas proteções que valem a
+pena registrar: concessão de graça (`precoCentavos <= 0`) não vira linha de
+R$ 0 na fatura, e quando as duas concessões existem e estão vigentes a cobrança
+**não dobra**. Vencido ou suspenso nos dois devolve a linha existente em vez de
+null, pra a decisão pura explicar o motivo certo em vez de "nunca contratou".
+
+### 21.4 Amarra
+
+`bloco-comercial-extras-cupom-jurisia.test.ts` (22 testes) — **24 mutações,
+todas vermelhas** (`scratchpad/mutar-bloco-comercial.py`). Duas sobreviveram na
+primeira volta: a amarra do botão do painel conferia o `onClick` e não o RÓTULO
+(apagar o texto deixava um botão invisível e ela passava), e a do prefixo do
+produto só morreu com um caso que discrimina de verdade — `"modulousuarios"`,
+que tem seis letras antes de uma chave válida, então quem cortasse cego sem
+conferir o prefixo devolveria `usuarios` pra um produto que não é extra.
+
+### 21.5 O que fica anotado, e a pergunta que sobrou
+
+- **`getUserCreditsInfo`, `health.plansCount` e `db.ts` getPlanName/getPlanPrice
+  ainda leem `PLANS`.** O cupom saiu da lista; esses quatro seguem nela e não
+  foram autorizados.
+- **Os extras não aparecem para o cliente.** Ele não vê "você tem +200
+  processos" em lugar nenhum, e não há autoatendimento para comprar — hoje é
+  venda pela conversa e concessão pelo painel, que é como ele descreveu.
+  Mostrar na tela do advogado pede mockup.
+- **O JurisIA segue sem Sentry e sem tela de consumo** (itens A.1/A.6 da fila).
+  A cobrança cruzada — que era o A.1 — está fechada; o resto do A.6 continua:
+  erro da OpenAI vai cru pro advogado e fica gravado no histórico dele, e a
+  tabela `jurisia_uso` não é lida por tela nenhuma.
+- **O maior limite do produto não é conserto, é investimento**: TJSP não tem
+  adapter (é e-SAJ, motor diferente), e é o maior mercado de advocacia do país.
+  Ou o motor cresce para lá, ou a venda se concentra nos estados que funcionam e
+  o site diz isso com clareza. Decisão do dono.
+
+---
+
+## 22. Retorno do teste de uso do dono (13/09)
+
+Ele entrou como cliente pra sentir a experiência e trouxe quatro coisas. Duas
+**não eram defeito** — e explicar isso vale mais que "consertar" o que está
+certo. Duas eram, e foram feitas.
+
+### 22.1 "Os termos para aceite não apareceram" — não é defeito
+
+O modal de termos (`TermosGate`) não aparece em dois casos legítimos, e o teste
+dele caiu num deles:
+
+- **Cadastro pelo site**: `auth.signup` já grava `termosVersaoAceita` porque o
+  aceite acontece NO formulário (caixa de marcar + botão travado). O aceite já
+  foi dado; pedir de novo no primeiro login seria pedir duas vezes.
+- **Impersonação**: `termos.status` devolve `precisaAceitar: false` quando
+  `ctx.user.impersonatedBy` existe. É de propósito — admin entrando na conta de
+  alguém não pode aceitar contrato no lugar do cliente.
+
+Onde o modal É o caminho: conta criada pelo painel (`admin.criarCliente`, que
+**não forja** o aceite) e conta antiga, de antes da v2 dos termos.
+
+**Consequência de produto, que é o que importa aqui**: testar a experiência
+impersonando NÃO mostra a experiência real. O modal de termos some, e qualquer
+coisa que dependa de `impersonatedBy` muda de comportamento. Pra sentir o que o
+cliente sente, tem que entrar pela tela de login com a conta dele.
+
+### 22.2 "Meta API não configurada" ao clicar em Conectar — falta config, e o diagnóstico é mudo
+
+A tela diz "o administrador precisa cadastrar o App Meta". Ela está certa no
+fato e ruim no diagnóstico: `getMetaAppConfig` devolve `null` em QUATRO situações
+diferentes e as quatro viram a mesma frase.
+
+1. `META_APP_ID` e `META_APP_SECRET` no ambiente — exige **os dois**; só um, cai
+   pro banco;
+2. banco: a linha `whatsapp_cloud` de `admin_integracoes`, cujo JSON precisa ter
+   **appId E appSecret**;
+3. decriptação falhando (a `ENCRYPTION_KEY` mudou) — vira `log.warn` e `null`;
+4. sem banco.
+
+O formulário do painel (Admin → Integrações → WhatsApp Cloud) pede os três
+campos e só salva com os três, então quem preencheu por ali está coberto. O que
+**não** cobre: `META_APP_SECRET_EXTRA`, que alimenta o HMAC do webhook, não
+serve pro Embedded Signup — são coisas diferentes, e o registro de 03/09 no
+CLAUDE.md fala do App Secret sem dizer que o **App ID** também precisa estar
+salvo pra o botão Conectar funcionar.
+
+**Gap de produto encontrado de passagem, NÃO corrigido**: o Embedded Signup do
+WhatsApp precisa de um `config_id` da Meta, e o formulário do painel **não tem
+esse campo** — ele só chega por `META_CONFIG_ID` no ambiente. `getMetaAppConfig`
+até lê `config.configId` do banco, mas nada nunca escreve lá: caminho morto. Sem
+ele, o popup abre um Facebook Login genérico em vez do fluxo de onboarding do
+WhatsApp. Proposta (aguardando "pode fazer"): campo Config ID no formulário +
+um diagnóstico no painel dizendo QUAL peça falta, em vez do silêncio de hoje.
+
+### 22.3 Os cards que ensinam a usar saíram do Dashboard — a pedido dele
+
+`PrimeirosPassos` saiu de `Dashboard.tsx`. O Dashboard é a tela de trabalho de
+quem já sabe usar, e o bloco cobrava espaço do dono todo dia.
+
+**Não foi apagado**: o conteúdo vive na Central de ajuda (`/ajuda`, via
+`PrimeirosPassosResumo`), que é onde alguém vai quando tem dúvida. A amarra
+`primeiros-passos` inverteu de lado — antes travava o bloco NO Dashboard, agora
+trava que ele **não volta** e que o conteúdo **continua** em `/ajuda`. Repor é
+uma linha.
+
+**Ficou de fora, esperando a palavra dele**: o `GuiaProcessual`, o outro bloco
+que ensina a usar, na variante processual do Dashboard (plano só-Processos).
+Ele disse "os cards", no plural, mas os dois vivem em painéis mutuamente
+exclusivos e ele só vê o primeiro — tirar o segundo sem confirmar seria remover
+o que ele não olhou.
+
+### 22.4 O diálogo "Cadastrar credencial" não cabia na tela, e pedia OAB
+
+Duas coisas no mesmo diálogo, as duas do print dele.
+
+**Não cabia**: o `DialogContent` não tinha teto de altura nem rolagem, e o
+formulário é alto — apelido, as duas opções de alcance, o seletor de tribunal,
+CPF, senha e o 2FA com dois modos. Num notebook a caixa passava da tela: o
+TÍTULO cortado em cima e os botões «Cancelar» e «Cadastrar e testar login»
+cortados embaixo. "Fora de padrão" tem número: **41 diálogos do client usam
+`overflow-y-auto` e 19 usam `max-h-[90vh]`** — este era a exceção. Agora segue a
+convenção da casa.
+
+**Pedia «CPF ou OAB»**: o login do PJe/PDPJ é o CPF. Oferecer OAB convidava a
+digitar o que o tribunal não aceita, e o erro só apareceria no "testar login",
+depois da senha já preenchida. Virou «CPF», com o exemplo só de CPF.
+
+O manual da Central de ajuda citava «CPF ou OAB» e mudou no MESMO commit — é a
+regra que nasceu em 13/09 (rótulo citado entre «» tem que existir no arquivo da
+tela), e o teste `central-de-ajuda` teria quebrado se eu tivesse esquecido.
+
+Amarras: `dialogo-credencial-cabe-na-tela` (5 testes) e `primeiros-passos`
+(reescrita a seção do client) — **8 mutações, todas vermelhas**
+(`scratchpad/mutar-dialogo-e-dashboard.py`). Uma delas apaga o resumo de
+`/ajuda`: remover da tela de trabalho é diferente de apagar, e o teste separa as
+duas coisas.
+
+---
+
+## 23. Ponto fora de produção e a limpeza da tela de Processos (13/09)
+
+Duas decisões que o dono deu em sequência, no mesmo teste de uso da seção 22.
+Nenhuma das duas é mockup pendente: ele nomeou item por item o que queria fora,
+e remoção de elemento nomeado não tem desenho novo pra aprovar.
+
+### 23.1 O módulo Ponto sai de produção e fica em staging com selo "beta"
+
+Palavras dele: *"esse modulo ponto vamos remover por enquanto de produção e em
+stating vamos deixar com a etiqueta beta"*.
+
+**Não é remoção de código.** Nada do módulo foi apagado — nem tela, nem
+procedure, nem tabela, nem a linha do plano. O que muda é ONDE ele é oferecido.
+
+Uma lista só, em `shared/modulos-por-ambiente.ts` (`MODULOS_BETA`), lida pelas
+**três** portas que decidem se um módulo existe. Três listas divergindo dariam o
+pior resultado possível: item escondido no menu com a API aberta, ou o contrário.
+
+| porta | onde | o que faz |
+|---|---|---|
+| menu | `AppLayout` (`itemVisivelNoMenu`) | o item some em produção; em staging aparece com selo |
+| rota | `ModuloGuard` | tela `ModuloEmTestes` em vez de renderizar o módulo |
+| procedures | `conferirModuloDoPath` (`gate-modulos.ts`) | FORBIDDEN `modulo_em_beta` |
+
+Três decisões de desenho que valem registro, porque cada uma é uma armadilha
+evitada:
+
+1. **Ambiente desconhecido conta como produção.** `moduloRemovidoNoAmbiente`
+   trata `null`/`undefined` como produção: na dúvida sobre onde estamos, mostrar
+   por engano em produção é exatamente o erro que a decisão existe pra evitar.
+2. **No porteiro, a recusa vem ANTES do atalho de admin e ANTES da conta de
+   contrato.** É a única exceção consciente ao fail-open do gate: "tudo liberado
+   por erro nosso" (cesta indeterminada) não pode abrir um módulo que o dono
+   tirou do ar. Mesma ordem na rota, pelo mesmo motivo.
+3. **Cesta `null` continua `null`.** `filtrarModulosDoAmbiente` não transforma o
+   indeterminado em lista vazia — quem decide o bloqueio nesse caso é a porta.
+   Mexer aqui trocaria o fail-open do gate inteiro por efeito colateral da lista.
+
+A resposta de `subscription.modulosContratados` passou a levar o `ambiente`
+junto, inclusive no ramo de admin/impersonação (que recebe `modulos: null`):
+sem ele o client trataria tudo como produção e esconderia o Ponto em staging.
+
+**O que o dono precisa saber, e que não estava no pedido:** o plano **Escala**
+(migration 0217) tem `'ponto'` na cesta, e a lista de vantagens dele vende
+*"Comissões automáticas por colaborador e ponto da equipe"*. A migration não foi
+tocada — quem assina o Escala segue com o módulo na cesta e volta a vê-lo quando
+o beta sair —, mas **em produção o cartão do plano anuncia uma coisa que a conta
+não mostra**. Tirar o texto do cartão é outra remoção e depende dele.
+
+Pra devolver o Ponto a produção: apagar `"ponto"` de `MODULOS_BETA`. Nada mais.
+
+Amarra: `modulo-ponto-fora-de-producao` (16 testes) — inclui o par oposto
+(aparece em staging **e** não aparece em produção), porque esconder nos dois
+seria a remoção que ele não pediu.
+
+### 23.2 Cinco remoções na tela de Processos
+
+Palavras dele, em duas mensagens: *"podemos remover essa aba alertas pq ja pega
+em monitoramento, os creditos pq não usamos mais, resumo diarío também pode
+remover pq construiremos essa função em smartflow e consulta cnj desnecessário"*
+e *"e os cards monitorados, nova ação e parados tambem desnecessário"*.
+
+**A conferência que precedeu a remoção da aba Alertas.** A aba era o painel de
+aprovar prazo sugerido pela IA (`prazosSugeridos.listar/aprovar/descartar`), e no
+client inteiro **só `Processos.tsx`** toca esse namespace. Se a aba fosse o único
+caminho de aprovar, tirá-la deixaria o cron enchendo uma tabela que ninguém lê —
+uma remoção silenciosa de função, que é justamente o que a regra da casa proíbe.
+**Não é**: a timeline do Monitoramento tem o selo «Requer prazo» e o botão
+«＋ Criar prazo» chamando a MESMA `prazosSugeridos.aprovar`. O dono estava certo
+ao dizer "já pega em monitoramento". É esse par que a amarra trava.
+
+**O que ficou sem tela**: `prazosSugeridos.descartar`. O botão «Descartar» era só
+da aba; hoje a sugestão que ninguém aprova fica pendente e mantém o selo na
+movimentação. Não inventei substituto — está anotado aqui pro dono decidir.
+
+As três pastilhas de contagem (monitorados · parados · nova ação) saíram porque
+repetiam o número que já estava logo abaixo: `MonitoramentosCount` mostra
+parados/total no badge da aba Monitoramento e `NovasAcoesBadge` mostra as não
+lidas no badge de Novas Ações. As duas queries que alimentavam as pastilhas eram
+cópia das que os badges já fazem — o cabeçalho fazia 2 chamadas para mostrar de
+novo o que a barra de abas mostrava. `CabecalhoProcessos` ficou sem props e sem
+query: só título e a linha do que a tela faz.
+
+**Link antigo não quebra**: `?tab=alertas` existe solto em e-mail e histórico de
+navegador. Ele cai na Central de Movimentações em vez de abrir uma aba que não
+existe mais.
+
+**O que NÃO foi removido, de propósito:**
+
+- **`ConsultarTab`** — a busca avulsa por CNJ/CPF/CNPJ continua no arquivo, sem
+  porta, com o motivo escrito no topo da função. Ele autorizou tirar o BOTÃO;
+  apagar a consulta é outra decisão. Pra devolver, é montar o componente num
+  Dialog outra vez.
+- **`ConfigResumoDiario`** — vive em `Movimentacoes.tsx`, exportado. Só o mount
+  em Processos saiu. Ele disse que a função será refeita no SmartFlow.
+- **O aviso «Saldo baixo»** (aparece com saldo < 5) e os textos de custo em
+  crédito dentro dos diálogos de monitoramento («2 créditos/mês», «15
+  créditos/mês», «3 créditos base»). São crédito, como a pastilha — mas ele
+  apontou a pastilha, e no print dele o saldo era 5.816, então o aviso nem
+  estava na tela. **Pergunta aberta pro dono**: tiro esses também?
+
+Amarra: `processos-cabecalho-enxuto` (10 testes). Duas amarras existentes foram
+atualizadas para a verdade nova em vez de apagadas: `movimentacoes-na-carteira`
+(a consulta avulsa não tem aba **nem** botão — conferido pelo MECANISMO, estado
+e montagem, porque o rótulo «Consultar CNJ» segue escrito no comentário que
+explica a decisão) e `telas-cabem-no-celular` (a fileira de 425px que vazava no
+celular de 390px não existe mais; quem segura a largura agora é o `flex-wrap` da
+tira de abas). `fuso-telas-usam-helper` perdeu a metade que exigia a pill da aba
+e manteve a que protege: nenhuma data de prazo sugerido volta a ser formatada à
+mão.
+
+**31 mutações, todas vermelhas** (`scratchpad/mutar-ponto-e-processos.py`). Uma
+sobreviveu na 1ª volta pelo motivo de sempre: a amarra do porteiro conferia a
+POSIÇÃO da recusa de ambiente, e dava pra deixar a chamada onde está e desarmar a
+condição (`args.role !== "admin" &&` na frente). Agora ela confere que o `if` é
+incondicional.
+
+Baseline depois destas duas entregas: **6.070 testes verdes em 407 arquivos**
+(**6.075 em 408** na ponta final, depois de trazer `develop` — a cor do menu
+chegou com um arquivo de teste a mais)
+(`pnpm test`), `pnpm check` limpo, `pnpm vite build` passando.
+
+---
+
+## 24. Editar plano cabia 2110px numa janela de 1440 — ENTREGUE (13/09)
 
 Print do dono: *"aqui também está feio. Vamos refazer essa tela"* — o editor
 de plano (`/admin/planos/:slug`) com a coluna da direita cortada.
 
-### 20.1 O que estava acontecendo, medido
+### 24.1 O que estava acontecendo, medido
 
 | Onde | Antes | Depois |
 |---|---|---|
@@ -2505,7 +3044,7 @@ de plano (`/admin/planos/:slug`) com a coluna da direita cortada.
 | Coluna "Geral" | 206px — o aviso do código caía POR CIMA do slug | 300px |
 | Linha do destaque longo | 1531px exigidos, em 1 linha | 3 linhas dentro da coluna |
 
-### 20.2 A causa, que era uma só
+### 24.2 A causa, que era uma só
 
 Na lista "Destaques do cartão" o texto usava `flex-1 truncate`. `truncate` é
 `white-space: nowrap`, e um **item de flex nasce com `min-width: auto`** — os
@@ -2516,7 +3055,7 @@ era larga: era uma linha de texto que se recusava a quebrar.
 Trocar `truncate` por `break-words` sozinho **não** resolveria: sem `min-w-0`
 o item continua com a largura mínima do conteúdo.
 
-### 20.3 O que mudou (quatro classes, nada removido)
+### 24.3 O que mudou (quatro classes, nada removido)
 
 - destaque: `flex-1 truncate` → `min-w-0 flex-1 break-words` (decisão do dono:
   quebrar em linhas, não cortar — é o texto que ele está editando);
@@ -2532,7 +3071,7 @@ Amarra: 3 testes novos em `telas-cabem-no-celular.test.ts` (12 no total) — 6
 mutações novas em `scratchpad/mutar-telas-celular.py`, 21/21 vermelhas.
 Comparador `mockup-editor-plano-e-visual.html`.
 
-### 20.4 O que NÃO entrou (o dono aprovou "a tela editar plano apenas")
+### 24.4 O que NÃO entrou (o dono aprovou "a tela editar plano apenas")
 
 O **piloto da linguagem visual** do mesmo comparador — raio de 12px, elevação
 de verdade no cartão e Poppins nos títulos, tudo em token — ficou de fora.
@@ -2542,14 +3081,125 @@ a foto do tema escuro rendeu: no cartão verde do Financeiro o valor "R$ 10,7
 mil" é verde escuro sobre verde e o vizinho sai violeta — decisão de paleta,
 não de layout.
 
-## 25. Cabeçalho do Dashboard: busca no topo, abas minimalistas (13/09)
+---
+
+## 25. Dois achados do dono em produção, consertados no mesmo dia (13/09)
+
+Os dois vieram de print dele usando o sistema, e os dois foram **reproduzidos no
+app rodando** antes de qualquer linha de código — receita em
+`docs/rodar-o-app-localmente.md`. O "antes" de cada um é foto, não dedução.
+
+### 25.1 A Central escondia movimentação pendente atrás do teto da página
+
+Print: «Nada pendente nos últimos 30 dias · As 80 movimentações do período já
+foram resolvidas», com o badge da aba marcando **11**.
+
+**Causa única.** A lista pede as movimentações do período ordenadas por DATA e
+cortadas em `limite` (80 por padrão; a tela nunca pede mais e não tem "carregar
+mais"). Só depois do corte é que ela separava resolvida de pendente. O
+escritório tinha 91 no período e as 11 pendentes eram mais ANTIGAS que as 80
+que couberam: **caíam fora da consulta**. Não eram só mal contadas — não havia
+como chegar nelas por aquela tela (trocar para 90 dias piora: janela maior,
+mesmo teto; só a busca alcançava, porque ela roda antes do corte).
+
+Os dois números discordavam porque nasciam de lugares diferentes: o badge
+(`contarMovimentacoesNaoLidas`) conta o BANCO, sem teto; a tela contava a
+PÁGINA. O `80` de «Resolvidas (80)» era o tamanho da página, não o total.
+
+Conferido de passagem para não acusar a causa errada: contador e lista filtram
+exatamente o mesmo recorte (movimentação, 30 dias, escritório), e
+`prazos_sugeridos` tem UNIQUE em `evento_id` — o `leftJoin` não duplica linha.
+A única diferença entre os dois era o teto.
+
+**Conserto, em duas garantias que só valem juntas:**
+
+1. **Ordem** — `asc(lido), desc(dataEvento)`: pendente vem primeiro, sempre.
+   É isso que impede o teto de comer trabalho. Nas abas «A resolver» e
+   «Resolvidas» a ordem na tela não muda (a lista já é de um estado só); em
+   «Todas», pendente sobe — que é o que essa aba deveria fazer.
+2. **Janela** — uma contagem à parte, no banco, separada por estado
+   (`aResolverPeriodo` / `resolvidasPeriodo`), viaja em `triar(...).janela`.
+   `contagem` continua descrevendo a PÁGINA e continua encolhendo com o filtro
+   de tipo, como foi decidido quando a tela nasceu; a janela é a régua que diz
+   se a página é tudo.
+
+A tela passou a usar a janela onde antes usava a página: o texto «as N do
+período já foram resolvidas», a decisão entre «nada no período» × «tudo
+resolvido», e o rótulo «Resolvidas (N)» (que volta ao número da página quando
+há filtro de tipo — é o que o seletor promete). E ganhou o aviso que faltava:
+**«Mostrando 69 de 80 resolvidas…»**, só quando falta algo de verdade. Sem ele,
+a mesma mentira voltaria na 81ª pendência.
+
+**Medido no app, mesmo banco, 91 eventos (80 resolvidas recentes + 11 pendentes
+de 20–25 dias atrás):** antes, «Nada pendente» com badge 11; depois, as 11 na
+tela, badge 11, e o aviso correto na aba Resolvidas.
+
+### 25.2 Cliente em teste não tinha como pagar o plano que estava testando
+
+Print: «quando clico em adicionar pagamento não acontece nada». Não era o botão
+— eram **três portas fechadas** ao mesmo tempo, com o servidor pronto do outro
+lado:
+
+1. A faixa do topo mandava para `/configuracoes?tab=meu-plano` — a tela em que
+   ele **já estava**. Navegar para a rota atual é um não-evento.
+2. O bloco do plano atual só oferecia botão para plano **sob consulta**
+   («Fechar valor com a gente») e para **carência de cancelamento**
+   («Reativar»). Para plano de preço fechado em teste: nada — só a frase
+   "Pagamento seguro via Asaas".
+3. O cartão do próprio plano ficava **travado** em «✓ Você está aqui», que é o
+   texto de quem JÁ paga. O rótulo **«Continuar com este plano»**, escrito
+   exatamente para este caso, existia no código e **nunca chegava à tela**.
+
+O servidor nunca foi o problema: `createCheckout` tem o caminho documentado
+("Cenário B: conversão trial → pago", que aproveita a linha do teste e marca
+`trialConvertido`) e não recusa o plano atual. Faltava porta.
+
+O único jeito de pagar era escolher um plano **diferente** — pagar o que não se
+escolheu. Numa véspera de venda, isso é receita parada.
+
+**Conserto:** botão «Adicionar pagamento» no bloco do plano atual, só para
+teste em plano de preço fechado e fora de carência, levando ao checkout do
+PRÓPRIO plano (vira «Ver o pagamento» quando já há cobrança aberta);
+`travadoPorSerOAtual` passou a distinguir quem já paga de quem está testando,
+destravando o cartão e deixando o rótulo antigo aparecer; e a faixa do topo
+ganhou `irPagar()` — de outra tela navega, já em «Meu plano» rola até o botão e
+põe o foco nele.
+
+**Medido no app com conta em teste no Atende:** antes — nenhum botão no bloco,
+cartão travado em «✓ Você está aqui», clique na faixa sem efeito. Depois —
+botão presente, cartão com «Continuar com este plano» **habilitado**, e o
+clique na faixa levando o foco para `#adicionar-pagamento`. (O travamento por
+`billingOk === false` continua valendo: em ambiente sem Asaas conectado os dois
+botões seguem desabilitados, como antes.)
+
+### 25.3 Amarras
+
+`central-nao-esconde-pendente` (12) e `pagar-o-plano-em-teste` (14) —
+**31 mutações vermelhas** (`scratchpad/mutar-pendente-e-pagamento.py`).
+Três sobreviveram na 1ª volta, todas pelo mesmo motivo de sempre: a amarra
+conferia que o NOME existia, não que ele alimentava o número — dava para
+reatribuir a variável à página com o literal de pé em outro lugar do arquivo.
+Ancoradas na atribuição, morreram.
+
+`central-grupos` ganhou dois testes e teve um `expect` de objeto inteiro
+atualizado (o retorno de `triar` cresceu); os 17 de comportamento não foram
+tocados — inclusive o que trava «o filtro de tipo encolhe as contagens de
+estado junto», que é decisão antiga da casa e continua valendo.
+
+Baseline: **6.106 testes verdes em 410 arquivos** na ponta final, depois de
+trazer `develop` (o editor de plano chegou com 3 testes a mais), `pnpm check`
+limpo e `pnpm vite build` passando.
+
+---
+
+## 26. Cabeçalho do Dashboard: busca no topo, abas minimalistas (13/09)
 
 Três pedidos do dono depois de ver o navegável: *"só gostei do buscar ficar
 alinhado com nome do usuário. e pode remover o botão outro período também.
 […] e o navbar geral, comercial, operacional e financeiro podemos refazer
 também o estilo para algo mais minimalista"*.
 
-### 25.1 Busca alinhada com o nome
+### 26.1 Busca alinhada com o nome
 
 `BuscaDoTopo` (em `dashboards/common.tsx`) entra dentro do `PainelTopo`, na
 mesma linha do "Bom dia, <nome>". Abre a **mesma** paleta do ⌘K — não é uma
@@ -2568,13 +3218,13 @@ por **não** conter `⌘K`, para o botão não voltar sem querer.
 Vale para os cinco painéis que usam `PainelTopo` (Geral, Comercial,
 Operacional, Financeiro, Processual) — é o mesmo cabeçalho.
 
-### 25.2 "Ver outros períodos" saiu
+### 26.2 "Ver outros períodos" saiu
 
 Removido do `PainelTopo` do Dashboard Geral, a pedido expresso. `/relatorios`
 continua no menu e é por onde se vê outro período; o comentário do arquivo que
 explicava a ausência de seletor de range continua válido.
 
-### 25.3 Abas em sublinhado
+### 26.3 Abas em sublinhado
 
 `Geral · Comercial · Operacional · Financeiro` deixaram de ser pílulas dentro
 de uma moldura com fundo (`rounded-md border bg-muted p-1.5` + `data-[state=
@@ -2599,11 +3249,224 @@ testes (3 mutações vermelhas).
 navegador com o app rodando, a linha da tira tem exatamente a largura do
 conteúdo — 1132px numa janela de 1440, 1612px em 1920, 2252px em 2560, sempre
 igual ao cartão mais largo da página. O que fazia a linha parecer solta era o
-painel de baixo estar em branco, pela quebra descrita na seção 26.
+painel de baixo estar em branco, pela quebra descrita na seção 29.
 
 Medido depois: 5.987 testes verdes, typecheck limpo, build ok.
 
-## 26. Painel Comercial abria em BRANCO sem setor comercial (13/09)
+Medido depois: 5.983 testes verdes, typecheck limpo, build ok.
+
+---
+
+## 27. A moeda "crédito" saiu do produto (13/09)
+
+Autorização do dono, na mesma mensagem que tirou o Ponto do cartão: *"tudo
+referente a creditos pode excluir caso pois não usaremos mais isso"*.
+
+### 27.1 Por que a remoção era segura — e por que era urgente
+
+**Crédito já não decidia nada desde 11/09.** `consumirCredito`, chamada pelos
+quatro routers de cálculo, por dentro chamava `verificarUso`/`registrarUso` do
+TETO MENSAL e não encostava em saldo nenhum. O nome sobreviveu à troca, e era
+ele que fazia a tela dizer **"Seus créditos acabaram. Adquira mais créditos"** —
+mandando o cliente comprar o que não estava à venda. Virou
+`contarCalculoNoMes`, e a mensagem passou a dizer o que de fato aconteceu.
+
+**O achado grave.** `cobrarMonitoramentosMensais` rodava **a cada 6 horas**, em
+produção: debitava crédito por processo vigiado (2/mês) e por CPF vigiado
+(15/mês) e, quando o saldo não dava, marcava o monitoramento como **`pausado`**
+e notificava "Monitoramento pausado por falta de créditos". O saldo só era
+reposto por outro cron (`resetCotaMensalEscritorios`). Ou seja: a moeda
+continuava viva o bastante para **desligar vigia de processo** por uma conta
+que ninguém mais olhava. Os dois crons saíram juntos — e é por isso que
+remover o mecanismo pela metade seria pior que não remover.
+
+### 27.2 O que saiu
+
+| Camada | O que era | Substituto que já existia |
+|---|---|---|
+| operação avulsa | débito de saldo | teto mensal (`limites-uso`, `contarUso`) |
+| vaga de monitoramento | 2 ou 15 créditos/mês | vaga do plano (`limites-monitoramento`) |
+| "dar créditos" no painel | `concederCreditos` | `aumentarLimiteDoMes` (extra deste mês) |
+| barra do Dashboard | saldo × consumido | `UsoDoMes` |
+
+Módulos apagados: `billing/escritorio-creditos.ts`,
+`processos/custos-creditos.ts`, `billing/migrate-legacy-credits.ts`.
+Procedures: `processos.saldo`, `processos.pacotes`, `processos.transacoes`,
+`processos.adicionarCreditos`, `dashboard.credits`, `admin.concederCreditos`,
+`admin.retirarCreditos`, `admin.migrarCreditosLegacy`. Telas: chip de saldo e
+todos os textos de custo em Processos, "consome 1 crédito" nos cálculos, cartão
+de créditos e botões do painel admin, barra do Dashboard.
+
+**Consequência que vale registrar:** acesso ao app passou a ser **só
+assinatura**. `hasAccess = hasSubscription || hasCredits` era a regra;
+`hasCredits` deixou de existir. Pagante, teste e cortesia têm linha de
+assinatura e não sentem nada — quem entrava **só** por crédito sobrante agora
+cai em "Meu plano". É o comportamento correto e é uma mudança de porta.
+
+### 27.3 O que NÃO saiu, e por quê
+
+1. **`creditosCalculosMes`.** A coluna guardou o nome antigo, mas É o teto
+   mensal de cálculos (`CAMPO_DO_PLANO.calculo`). Apagá-la tiraria o limite.
+   Mudou o RÓTULO na tela do painel: «Créditos cálculo/mês» → «Cálculos por
+   mês».
+2. **As tabelas** `escritorio_creditos` e `escritorio_transacoes`. Histórico não
+   se joga fora por migration — a convenção da casa é ALTER não-destrutivo.
+   Ninguém mais lê. **Se o dono quiser apagar de vez, é decisão dele.**
+3. **"Crédito" no sentido financeiro**: «Cartão de crédito», «Crédito Pessoal»
+   do módulo bancário, `creditoMesDiferente` do Financeiro, «Banco Crédito S/A».
+   Mesma palavra, outro assunto — **uma varredura cega por "crédito" destruiria
+   o módulo de cálculo bancário**, e duas mutações da bateria existem só pra
+   travar essa distinção.
+4. **O rótulo `user.concederCreditos` na Auditoria**, marcado
+   "(descontinuado)": as linhas antigas continuam no banco e alguém precisa
+   conseguir ler o que elas dizem.
+
+### 27.4 O cartão do Escala parou de vender o Ponto
+
+Migration **0229**. O módulo saiu de produção em 13/09 (seção 23) e o cartão
+seguia anunciando "Comissões automáticas por colaborador e ponto da equipe" —
+o cliente assinava lendo isso e não achava o módulo. A **cesta não foi tocada**:
+o Ponto continua contratado e volta sozinho quando sair do beta. A troca é por
+TEXTO EXATO (`JSON_SEARCH`), não por posição: `features` é editável no painel,
+quem já reescreveu a frase não é afetado, e rodar duas vezes não faz nada.
+
+### 27.5 Amarras
+
+`credito-saiu-do-produto` (19 testes) — **28 mutações vermelhas**
+(`scratchpad/mutar-credito-e-cartao.py`). Duas sobreviveram na 1ª volta pelo
+motivo de sempre: o literal de pé em outra ocorrência (o import × a chamada de
+`consumirUso`; o `JSON_SEARCH` do caminho × o do `WHERE`).
+
+Seis amarras existentes foram **atualizadas para a verdade nova em vez de
+apagadas**, e em três delas a metade que ainda protege foi preservada de
+propósito: `lancamento-creditos-limites` perdeu `cotaMensalDoPlano` e manteve
+`limitesDoPlano` (a tabela `planos` como fonte); `admin-excluir-conta-alvo`
+perdeu o caminho de retirar crédito e manteve o de **excluir conta**, que é o
+bloqueador P0-D; `superlancamento-planos` passou a travar a VAGA em vez da
+ordem "vaga antes do crédito". As outras: `creditos-viram-limites`,
+`pacote-3-planos`, `processos-cofre-lancamento`, `novas-acoes-capa` e
+`processos-cabecalho-enxuto` (esta inverteu: o aviso «Saldo baixo» tinha ficado
+de pé em 13/09 porque ele pediu só a PASTILHA — na mensagem seguinte veio a
+moeda inteira).
+
+Baseline: **6.119 testes verdes em 411 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.
+
+---
+
+## 28. O uso só libera depois de escolher plano ou teste (13/09)
+
+**Pedido do dono**, depois de ele descrever o fluxo que quer — *"cadastra >
+confirma e-mail > aceita termos > escolhe plano ou teste > libera uso do
+sistema"* — e perguntar como garantir: *"quero que só libere o uso após
+escolha do plano/teste. resolva logo isso"*.
+
+### 28.1 O que estava garantido e o que era só desenho
+
+Conferido degrau a degrau no código antes de mexer:
+
+| degrau | quem segurava | valia fora da tela? |
+|---|---|---|
+| cadastra | `auth.signup` (exige WhatsApp e aceite, grava `aceites_termos`) | sim |
+| confirma e-mail | o cadastro **não cria sessão**; `login` recusa com `email_nao_confirmado` | sim — sem confirmar não existe cookie, e sem cookie não existe API |
+| aceita termos | `TermosGate` | **não** — diálogo no navegador; nenhum porteiro confere `termosVersaoAceita` |
+| escolhe plano ou teste | `SubscriptionGuard` | **não** — a API respondia tudo |
+| libera uso | consequência do anterior | **não** |
+
+O quarto degrau era o mais frouxo, e por um motivo que não se vê olhando a
+tela: o porteiro de módulos (`gate-modulos.ts`) é **fail-open de propósito** e
+lê "sem assinatura" como "não sei" — então liberava a cesta inteira. Quem
+fechasse a tela e chamasse o servidor direto usava o produto sem plano nenhum.
+
+O terceiro degrau (termos) **continua só na tela** — não foi o que ele pediu, e
+fica registrado aqui como pendência conhecida.
+
+### 28.2 O que entrou
+
+`shared/acesso-sem-plano.ts` (regra pura) + `server/_core/gate-assinatura.ts`
+(o porteiro) + `requirePlanoEscolhido` na corrente do `protectedProcedure`,
+entre `requireUser` e `requireModuloContratado`.
+
+**A régua de quem tem acesso NÃO mudou.** É a mesma
+`getActiveSubscriptionComHeranca` que o `SubscriptionGuard` já consultava —
+cortesia > paga > teste > cancelada dentro do período pago, colaborador
+herdando a do dono. O que mudou é o lugar onde ela é conferida. Por isso a
+mudança é invisível pra quem segue o fluxo: ninguém que entra hoje passa a ser
+barrado, e ninguém que era barrado na tela passa a entrar.
+
+Quatro decisões que valem lembrar:
+
+1. **Deny-by-default, o oposto do porteiro de módulos.** Namespace que ninguém
+   declarou EXIGE plano. Lá o fail-open protege contra derrubar escritório
+   pagante; aqui o mesmo desenho entregaria o produto de graça toda vez que um
+   router novo nascesse sem porteiro. O teste confere a lista contra o
+   `appRouter`, então "desconhecido" só acontece com chamada inventada.
+2. **O caminho de escolher o plano fica aberto** — `auth`, `termos`,
+   `subscription`, `configuracoes`, `permissoes`, `notificacoes`, `push`,
+   `ajuda`. Não é generosidade: o «Meu plano» mora DENTRO de Configurações, que
+   pede escritório e cargos ao montar. Sem esses dois, a pessoa ficaria
+   trancada fora da própria tela de pagamento — exatamente o defeito que ele
+   relatou hoje de manhã ("clico em adicionar pagamento e não acontece nada").
+   Os `admin*` estão na lista por honestidade do teste: passam por
+   `adminProcedure`, que não é `protectedProcedure` e não chega no porteiro.
+3. **O cache guarda o SIM e nunca o NÃO.** Guardar o "não" por 30s faria quem
+   acabou de clicar em «Testar grátis» levar recusa na cara nos segundos
+   seguintes. Quem tem plano custa uma consulta por 30s; quem não tem é
+   re-consultado a cada chamada, e são poucas — a tela dele é uma só.
+4. **Fail-open na indeterminação.** Banco fora, exceção na consulta: passa. Só
+   um "não tem assinatura" explícito bloqueia. Admin da plataforma e
+   impersonação passam sempre — a impersonação é justamente o dono olhando a
+   conta SEM plano.
+
+No client, as três contagens de badge do menu (`movimentacoes.contador`,
+`agenda.contadores`, `crm.contarConversas`) pararam de perguntar sem plano: o
+servidor recusa, o menu já está trancado, e seriam três 403 a cada 2 minutos na
+tela onde a pessoa está escolhendo o plano.
+
+### 28.3 Conferido no app rodando (não deduzido)
+
+Conta com a assinatura apagada do banco, navegador de verdade:
+
+- login cai em `/configuracoes?tab=meu-plano` e **a tela renderiza inteira** —
+  três planos, toggle Mensal/Anual, 4 botões «Testar grátis»;
+- `agenda.contadores` e `movimentacoes.contador` respondem **403** com
+  "Escolha um plano ou comece o teste grátis para usar o JuridFlow.";
+- `subscription.plans`, `configuracoes.meuEscritorio`, `termos.status` e
+  `ajuda.primeirosPassos` respondem **200**;
+- `/clientes` devolve pra Meu plano, como antes;
+- clicar em «Testar grátis» leva ao Dashboard e o produto responde **200 na
+  hora** — sem esperar os 30s do cache. É a decisão 3 valendo na prática.
+
+### 28.4 Efeitos colaterais conscientes
+
+- **Teste vencido e assinatura cancelada fora da carência** param de responder
+  pela API, não só pela tela. É a mesma régua de sempre; a diferença é que
+  agora ela vale nos dois lugares.
+- **Caller de servidor tem path sem namespace.** O cron de relatórios
+  programados (`createCallerFactory` de um router solto) chama
+  `comercialDashboard`, não `relatorios.comercialDashboard` — cai no
+  deny-by-default. Para escritório com plano nada muda; sem plano, o envio
+  grava `ultimoErro` com a frase do porteiro e o cron segue, sem quebrar.
+- **Teste que chama procedure por caller precisa desligar o porteiro**
+  (`vi.mock("../_core/gate-assinatura", …)`): o banco falso desses testes não
+  tem assinatura nenhuma. Cinco arquivos já foram ajustados com o comentário
+  explicando; quem escrever o sexto vai encontrar o mesmo 403.
+
+### 28.5 Amarra
+
+`uso-so-com-plano.test.ts` (17 testes) — **32 mutações vermelhas**
+(`scratchpad/mutar-uso-so-com-plano.py`). Quatro sobreviveram na 1ª volta, três
+pelo motivo de sempre (o literal de pé em outro lugar: o import × a chamada; o
+comentário × o código; a linha que aparece 3× em `subscription.ts`) e uma por
+falta de relógio — a validade do cache só morre com `vi.useFakeTimers` e 31s de
+avanço, senão "plano vencido segue passando pra sempre" passa despercebido.
+`modulos-contratacao` teve só o `expect` da corrente atualizado (a de módulo
+continua sendo o último elo, e é isso que ele guarda).
+
+Baseline: **6.136 testes verdes em 412 arquivos**, `pnpm check` limpo,
+`pnpm vite build` passando.
+
+## 29. Painel Comercial abria em BRANCO sem setor comercial (13/09)
 
 `dashboard.comercial` tem uma saída antecipada para quando nenhum colaborador
 está num setor do tipo Comercial: devolve `modo: "gestor"`, `ranking: []`,
@@ -2629,12 +3492,12 @@ Varrido de passagem: o único outro `!` sobre dado do servidor nos painéis é
 `cashFlow!` no Financeiro, e ele está dentro de um `(cashFlow?.x ?? 0) > 0` —
 não alcança o mesmo buraco.
 
-## 27. Buscar e Ajuda saem do menu; módulo de ajuda removido (13/09)
+## 30. Buscar e Ajuda saem do menu; módulo de ajuda removido (13/09)
 
 Três pedidos seguidos do dono, na ordem em que chegaram:
 
 1. *"remova o buscar no menu lateral"* — saiu o BOTÃO do rodapé da barra
-   lateral. A busca do cabeçalho (seção 25) ficou como única porta visível e o
+   lateral. A busca do cabeçalho (seção 26) ficou como única porta visível e o
    atalho ⌘K/Ctrl+K continua ligado no `AppLayout`.
 2. *"não continua, os cards, se continuar já mandei remover"* — o bloco
    "Primeiros passos" saiu do topo do Dashboard do dono.
@@ -2648,7 +3511,7 @@ decisão é o de "as telas cabem num celular", que trava a régua de abas, e o
 `modulos-contratacao.test.ts`, que quebraria se um router `ajuda` voltasse sem
 se declarar.
 
-## 28. Cofre: o cartão da credencial media 2.566px de altura (13/09)
+## 31. Cofre: o cartão da credencial media 2.566px de altura (13/09)
 
 Print do dono: *"esse card das credenciais está muito comprido, quero que
 redesenhe para ficar mais bonito."* Aprovado com o comparador

@@ -28,6 +28,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Loader2, Package, Pencil, Percent, Plus, Users, X } from "lucide-react";
+import { EXTRAS_AVULSOS } from "@shared/extras-avulsos";
+
+/** O que `cobrancaDoEscritorio` devolve por extra concedido. */
+interface ExtraNaTela {
+  chave: string;
+  rotulo: string;
+  quantidade: number;
+  precoCentavos: number;
+  status: string;
+  expiraEm: string | null;
+  vigente: boolean;
+}
 import { toast } from "sonner";
 
 const fmtBRL = (centavos: number) =>
@@ -65,6 +77,13 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
   const [descontoValidade, setDescontoValidade] = useState("");
   const [descontoObs, setDescontoObs] = useState("");
 
+  const [extraOpen, setExtraOpen] = useState(false);
+  const [extraChave, setExtraChave] = useState("");
+  const [extraQtd, setExtraQtd] = useState("");
+  const [extraPreco, setExtraPreco] = useState("");
+  const [extraValidade, setExtraValidade] = useState("");
+  const [extraObs, setExtraObs] = useState("");
+
   const [aplicarOpen, setAplicarOpen] = useState(false);
   const [atualizarPendentes, setAtualizarPendentes] = useState(false);
   const [cancelandoModulo, setCancelandoModulo] = useState<{ modulo: string; nome: string; preco: number } | null>(null);
@@ -79,6 +98,15 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
       toast.success("Módulos avulsos atualizados");
     },
     onError: (err) => toast.error("Erro ao salvar módulo avulso", { description: err.message }),
+  });
+
+  const salvarExtra = trpc.admin.salvarExtraAvulso.useMutation({
+    onSuccess: () => {
+      invalidar();
+      setExtraOpen(false);
+      toast.success("Extra atualizado");
+    },
+    onError: (err) => toast.error("Erro ao salvar extra", { description: err.message }),
   });
 
   const salvarDesconto = trpc.admin.salvarDescontoEscritorio.useMutation({
@@ -108,6 +136,7 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
   }
 
   const { fatura, avulsos, assinatura } = data;
+  const extras = (data as { extras?: ExtraNaTela[] }).extras ?? [];
   const avulsosVigentes = avulsos.filter((a) => a.vigente);
   const jaCobertos = new Set([...fatura.modulosDoPlano, ...avulsosVigentes.map((a) => a.modulo)]);
   const opcoesAvulso = (catalogo ?? []).filter((m) => !jaCobertos.has(m.id));
@@ -121,6 +150,15 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
     setAvulsoValidade("");
     setAvulsoObs("");
     setAvulsoOpen(true);
+  };
+
+  const abrirDialogExtra = () => {
+    setExtraChave("");
+    setExtraQtd("");
+    setExtraPreco("");
+    setExtraValidade("");
+    setExtraObs("");
+    setExtraOpen(true);
   };
 
   const abrirDialogDesconto = () => {
@@ -156,6 +194,23 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
     });
   };
 
+  const submeterExtra = () => {
+    if (!extraChave) { toast.error("Escolha o que vai a mais"); return; }
+    const qtd = Number.parseInt(extraQtd.replace(/\D/g, ""), 10);
+    if (!Number.isFinite(qtd) || qtd <= 0) { toast.error("Informe a quantidade"); return; }
+    const preco = reaisParaCentavos(extraPreco);
+    if (preco == null) { toast.error("Preço inválido"); return; }
+    salvarExtra.mutate({
+      escritorioId,
+      chave: extraChave,
+      quantidade: qtd,
+      precoCentavos: preco,
+      status: "ativo",
+      expiraEm: paraIso(extraValidade),
+      observacao: extraObs.trim() || null,
+    });
+  };
+
   const submeterDesconto = () => {
     if (descontoTipo === "nenhum") {
       salvarDesconto.mutate({ escritorioId, tipo: null, valor: 0, validoAte: null, observacao: null });
@@ -188,6 +243,9 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
         <div className="flex items-center gap-1.5">
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={abrirDialogAvulso}>
             <Plus className="h-3 w-3 mr-1" /> Módulo avulso
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={abrirDialogExtra}>
+            <Plus className="h-3 w-3 mr-1" /> Extra
           </Button>
           <Button size="sm" variant="outline" className="h-7 text-xs" onClick={abrirDialogDesconto}>
             <Percent className="h-3 w-3 mr-1" /> Desconto
@@ -299,6 +357,109 @@ export default function ModulosCobrancaCard({ escritorioId }: { escritorioId: nu
           ))}
         </div>
       )}
+
+      {/* Extras avulsos: o que o cliente comprou a mais do que o plano dá */}
+      {extras.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {extras.map((e) => (
+            <Badge
+              key={e.chave}
+              variant="outline"
+              className={`text-[10px] gap-1 ${
+                e.vigente && e.quantidade > 0
+                  ? "border-info/30 text-info-fg bg-info/10"
+                  : "text-muted-foreground"
+              }`}
+            >
+              +{e.quantidade} {e.rotulo} · {fmtBRL(e.precoCentavos)}/mês
+              {e.expiraEm && ` · até ${dataBR(e.expiraEm)}`}
+              {!e.vigente && ` (${e.status})`}
+              {e.vigente && e.quantidade > 0 && (
+                <button
+                  type="button"
+                  className="ml-0.5 hover:text-danger-fg"
+                  onClick={() =>
+                    salvarExtra.mutate({
+                      escritorioId,
+                      chave: e.chave,
+                      quantidade: 0,
+                      precoCentavos: 0,
+                      status: "cancelado",
+                      expiraEm: null,
+                      observacao: null,
+                    })
+                  }
+                  aria-label={`Cancelar extra de ${e.rotulo}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog: conceder extra avulso */}
+      <Dialog open={extraOpen} onOpenChange={setExtraOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Vender um extra</DialogTitle>
+            <DialogDescription>
+              Soma ao que o plano já dá. O preço é o total por mês e fica congelado nesta concessão.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label>O que vai a mais</Label>
+              <Select
+                value={extraChave}
+                onValueChange={(v) => {
+                  setExtraChave(v);
+                  const def = EXTRAS_AVULSOS.find((e) => e.chave === v);
+                  if (def) {
+                    setExtraQtd(String(def.passoSugerido));
+                    setExtraPreco((def.precoSugeridoCentavos / 100).toFixed(2).replace(".", ","));
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Escolha o extra" /></SelectTrigger>
+                <SelectContent>
+                  {EXTRAS_AVULSOS.map((e) => (
+                    <SelectItem key={e.chave} value={e.chave}>
+                      {e.rotulo} — sugestão: +{e.passoSugerido} por {fmtBRL(e.precoSugeridoCentavos)}/mês
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Quantos a mais</Label>
+                <Input value={extraQtd} onChange={(e) => setExtraQtd(e.target.value)} inputMode="numeric" placeholder="100" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Preço mensal (R$)</Label>
+                <Input value={extraPreco} onChange={(e) => setExtraPreco(e.target.value)} inputMode="decimal" placeholder="29,00" />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Válido até (opcional)</Label>
+              <Input type="date" value={extraValidade} onChange={(e) => setExtraValidade(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Observação (opcional)</Label>
+              <Input value={extraObs} onChange={(e) => setExtraObs(e.target.value)} maxLength={500} placeholder="Negociado com o cliente em..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setExtraOpen(false)}>Cancelar</Button>
+            <Button onClick={submeterExtra} disabled={salvarExtra.isPending || !extraChave}>
+              {salvarExtra.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Vender extra
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog: conceder módulo avulso */}
       <Dialog open={avulsoOpen} onOpenChange={setAvulsoOpen}>
