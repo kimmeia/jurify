@@ -3868,3 +3868,72 @@ primeira volta e as sete ensinaram algo:
 verdade nova, preservando o que protegem: a exigência de endereço agora
 distingue ementa (busca por termo) de súmula (lista completa), e a frase que
 separa citação de estatística passou a nomear as duas.
+
+
+---
+
+## 34. Notificações push padrão — MOCKUP, aguardando "pode fazer" (14/09)
+
+**Pedido do dono**: *"Pensei em criar uma seção para ativar as notificações push
+padrões do app também. Sentença proferida, Nova ação detectada, Nova conversa
+Iniciada. Como podemos fazer isso? o que faz sentido ter como padrão no
+sistema? Notificações que o dono do escritório ou responsável, deve e quer
+saber na hora."*
+
+Mockup em `mockup-notificacoes-padrao.html` (computador ⟷ celular, a tela
+montada DENTRO do app rodando com os componentes de verdade, na branch
+descartável `descartavel/mockup-notificacoes`, commit `5c5ff584`). **Nada foi
+entregue** — falta o "pode fazer".
+
+### 34.1 O que existe hoje, conferido no código
+
+- Push funciona: VAPID resolvido por env → banco → gerado e persistido;
+  inscrição por APARELHO (`push_subscriptions`), botão "Ativar notificações
+  neste aparelho" no sino e botão de teste.
+- **Não existe preferência nenhuma.** `TIPOS_PUSH` em `sse-notifications.ts` é
+  um `Set` fixo no código: `nova_mensagem`, `novo_lead`, `conversa_atribuida`,
+  `assinatura_concluida`, `movimentacao_processo`, `nova_acao`,
+  `whatsapp_saude`. Quem ativa recebe os sete; quem não quer um deles só pode
+  desligar todos.
+- **O dono recebe TODA mensagem de TODA conversa.** O whatsapp-handler chama
+  `emitirParaResponsaveisEMaster`, que alcança dono, gestores e o atendente da
+  conversa — a cada mensagem que entra.
+- **Movimentação vai para quem CADASTROU o vigia** (`mon.criadoPor` no
+  cron-monitoramento), não para o dono nem para o responsável pelo caso. É
+  exatamente o ponto que ele levantou.
+- **Quatro avisos existem e NÃO chegam no celular** (não estão em `TIPOS_PUSH`):
+  prazo vencendo, pagamento recebido, cobrança vencida e
+  `credencial_erro`/`credencial_recuperada`.
+- **"Sentença proferida" não existe como tipo** — chega como "Nova
+  movimentação" genérica. Mas a matéria-prima existe: `resumir-movimentacao`
+  já classifica cada movimentação em `relevancia` ("relevante" | "rotina") e
+  `desfecho` ("favoravel" | "desfavoravel" | "parcial" | "neutro"), e
+  `classificarGrupo` já separa "exigem ação" de "rotina". A separação que o
+  pedido precisa já está calculada e gravada; falta usá-la no push.
+
+### 34.2 O que o mockup propõe
+
+17 avisos em 5 grupos (Processos, Atendimento, Dinheiro, Documentos, Saúde do
+sistema), cada um com uma frase em português, a chave própria e um selo honesto
+de estado: **já funciona** · **novo** · **hoje não chega no celular**. Mais o
+bloco "Este aparelho" (cada aparelho é separado) e o de silêncio/alcance.
+
+Os padrões seguem duas regras:
+
+1. **Decisão e providência ligadas, rotina desligada.** Rotina é 8 de cada 10
+   movimentações; é ela que transforma o aviso em ruído e faz o advogado
+   desligar tudo.
+2. **"Nova conversa iniciada" no lugar de "toda mensagem".** Quem atende
+   continua recebendo as conversas dele; o dono passa a ser avisado do que é
+   notícia — cliente novo ou cliente que voltou depois de encerrado.
+
+Medido no navegador: 390px no celular, **sem rolagem lateral**, 17 chaves.
+
+### 34.3 As quatro decisões que estão com ele
+
+1. A lista está certa — falta ou sobra algum aviso?
+2. Os padrões marcados são os certos para uma conta nova?
+3. O dono deve poder receber o que é dos colaboradores, ou cada um só recebe o
+   que é seu?
+4. "Cliente esperando há 15 minutos" vale a pena? É o único item sem nada
+   pronto por trás.

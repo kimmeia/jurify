@@ -2079,6 +2079,26 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   leitura é do `<body>`). `jurisprudencia-de-verdade` teve 2 `expect`
   atualizados.
 
+- **Mockup entregue 14/09, aguardando "pode fazer": notificações push padrão**
+  (`mockup-notificacoes-padrao.html`, tela montada DENTRO do app rodando na
+  branch `descartavel/mockup-notificacoes`, commit `5c5ff584`; seção 34 do
+  documento de estado). Pedido dele: "uma seção para ativar as notificações
+  push padrões do app — Sentença proferida, Nova ação detectada, Nova conversa
+  Iniciada… o que faz sentido ter como padrão". O que a conferência achou:
+  push FUNCIONA, mas **não existe preferência nenhuma** (`TIPOS_PUSH` é um Set
+  fixo no código, 7 tipos, tudo-ou-nada por aparelho); o **dono recebe toda
+  mensagem de toda conversa** (`emitirParaResponsaveisEMaster` no
+  whatsapp-handler); **movimentação vai pra quem CADASTROU o vigia**
+  (`mon.criadoPor`), não pro dono nem pro responsável; e **quatro avisos que já
+  existem não chegam no celular** (prazo vencendo, pagamento recebido, cobrança
+  vencida, credencial de tribunal quebrada). "Sentença proferida" não existe
+  como tipo, mas a matéria-prima sim: `resumir-movimentacao` já grava
+  `relevancia` (relevante|rotina) e `desfecho`, e `classificarGrupo` já separa
+  "exigem ação" — falta usar isso no push. Proposta: 17 avisos em 5 grupos, com
+  selo honesto de estado (já funciona · novo · hoje não chega no celular),
+  rotina DESLIGADA por padrão e "nova conversa iniciada" no lugar de "toda
+  mensagem". 4 decisões estão com ele.
+
 ## Fila combinada com o dono (31/08/2026)
 
 Ordem que ele pediu. Não pular sem ele mandar. Estado conferido em 03/09:
