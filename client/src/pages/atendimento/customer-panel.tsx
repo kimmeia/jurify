@@ -534,7 +534,11 @@ export function CustomerPanel({
                 </div>
                 <div className="text-[11px] text-muted-foreground mt-0.5">
                   {contato.origemAnuncio.midiaTipo === "video" ? "Anúncio em vídeo" : "Anúncio"}
-                  {contato.origemAnuncioEm ? ` · ${formatDate(contato.origemAnuncioEm)}` : ""}
+                  {/* "chegou em", não "clique em": a Meta não manda hora de
+                      clique no referral. O que existe é quando a mensagem com o
+                      anúncio caiu aqui — prometer precisão que o dado não tem é
+                      o tipo de rótulo que faz alguém decidir errado depois. */}
+                  {contato.origemAnuncioEm ? ` · chegou em ${formatDate(contato.origemAnuncioEm)}` : ""}
                 </div>
                 {contato.origemAnuncio.sourceUrl && (
                   <a

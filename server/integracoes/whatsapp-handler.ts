@@ -119,7 +119,14 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       const rec = await reconhecerCadastroNaEntrada(dbCadastro, {
         escritorioId, conversaId, contatoId, chatId: msg.chatId, telefone: msg.telefone,
       });
-      if (rec.contatoId && rec.contatoId !== contatoId) contatoId = rec.contatoId;
+      if (rec.contatoId && rec.contatoId !== contatoId) {
+        contatoId = rec.contatoId;
+        // A ficha magra recém-criada foi absorvida por um cadastro que JÁ
+        // existia: quem recebe a mensagem é o cliente antigo, não um lead
+        // novo. Sem isto, "contato novo" continuaria verdadeiro e o cliente
+        // de meses atrás seria carimbado como vindo do anúncio de hoje.
+        contatoFoiCriado = false;
+      }
     }
   } catch (e: any) {
     log.warn({ err: e?.message, conversaId }, "[Cadastro] reconhecimento na entrada falhou — mensagem segue");
@@ -211,7 +218,7 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       await registrarOptInSeAusente(db, contatoId, "iniciou conversa no WhatsApp");
       if (msg.referral) {
         const { registrarOrigemAnuncioSeAusente } = await import("./whatsapp-origem-anuncio");
-        await registrarOrigemAnuncioSeAusente(db, contatoId, msg.referral, msg.timestamp * 1000);
+        await registrarOrigemAnuncioSeAusente(db, contatoId, msg.referral, msg.timestamp * 1000, contatoFoiCriado);
       }
     } catch (e: any) {
       // Idem: o opt-in e a origem são enriquecimento, mas falha muda de ser
