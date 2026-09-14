@@ -5,7 +5,6 @@ import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
-import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -844,7 +843,6 @@ export default function Configuracoes() {
                   <div>
                     <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
                       Equipe
-                      <AjudaDaTela tarefa="convidar-equipe" />
                     </h3>
                     <p className="text-[11px] text-muted-foreground">
                       <b className="text-foreground">{equipeData?.total ?? 0}</b> ativos · limite plano {equipeData?.limite ?? 0}
@@ -1878,7 +1876,6 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         <div>
           <h3 className="text-base font-bold tracking-tight flex items-center gap-1.5">
             Canais de comunicação
-            <AjudaDaTela tarefa="conectar-whatsapp" />
           </h3>
           <p className="text-[11px] text-muted-foreground">
             {canaisPrincipais.length} canais disponíveis ·

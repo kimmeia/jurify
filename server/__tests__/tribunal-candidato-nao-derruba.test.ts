@@ -145,7 +145,11 @@ describe("a grade do Cofre tira o candidato da bateria sem tirar da tela", () =>
   it("o candidato continua na grade, numa dobra, testável um por um", () => {
     expect(grade).toContain("Em teste — Justiça do Trabalho");
     expect(grade).toContain("const candidatos = tribunais.filter((t) => t.emTeste);");
-    expect(grade).toContain("{estadosCandidatos.map((estado) => cartaoDoEstado(estado))}");
+    // `linhaDoEstado` desde 13/09: a grade passou a ser UMA linha por estado
+    // (o cartão media 2.566px). O mesmo desenho serve aos dois caminhos —
+    // é isso que esta amarra guarda, não o nome antigo.
+    expect(grade).toContain("{estadosCandidatos.map((estado) => linhaDoEstado(estado))}");
+    expect(grade).toContain("{estados.map((estado) => linhaDoEstado(estado))}");
   });
 
   it("as contagens do rodapé falam do caminho comprovado — senão diriam '48 falharam'", () => {
