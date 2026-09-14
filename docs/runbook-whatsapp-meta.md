@@ -8,7 +8,7 @@ diagnóstico de recepção) e dos procedimentos que evitam repetir cada erro.
 | Peça | Valor | Papel |
 |---|---|---|
 | App da plataforma | **JuridFlow App — `1295936199370409`** (business Devular `1312369217176044`) | Webhook (`https://juridflow.com.br/api/webhooks/whatsapp`), HMAC, Embedded Signup, tokens de canal |
-| App CRM SaaS | Devular App — `1339360448088196` | OUTRO produto. Não usar aqui |
+| App CRM SaaS | Devular App — `1339360448088196` | OUTRO produto (Devular CRM, devular.com.br). Não usar aqui — tem review próprio, enviado 14/09/2026 com as mesmas 3 permissões. Apps separados de propósito: o strike de um não derruba o outro |
 | App legado | "Juridflow" — `1641836240205895` (BM do cliente Boyadjian) | Sem papel. Remover inscrição dele das WABAs quando possível (evita entrega duplicada futura) |
 | Credenciais do app | **Admin → Integrações → WhatsApp Cloud** (App ID + App Secret + Verify Token) | É o que valida o HMAC do webhook. Env `META_APP_ID`/`META_APP_SECRET` têm prioridade se setadas; `META_CONFIG_ID` (Railway) é do Embedded Signup |
 | Por canal | token + phoneNumberId + wabaId criptografados em `canais_integrados` | Envio + chamadas Graph |
