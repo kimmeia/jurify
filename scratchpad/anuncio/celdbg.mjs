@@ -1,0 +1,10 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, storageState: "scratchpad/anuncio/sessao.json", deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/relatorios", { waitUntil: "networkidle" }).catch(()=>{});
+await p.waitForTimeout(5000);
+console.log("URL:", p.url(), "| H1:", await p.locator("h1").allTextContents());
+const b2 = await p.locator("button").allTextContents();
+console.log("botoes:", b2.filter(Boolean).map(s=>s.trim().slice(0,22)).slice(0,22).join(" | "));
+await b.close();

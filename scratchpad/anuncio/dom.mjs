@@ -1,0 +1,13 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, storageState: "scratchpad/anuncio/sessao.json" });
+const p = await ctx.newPage();
+const erros = [];
+p.on("pageerror", (e) => erros.push("PAGEERROR: " + String(e).slice(0, 200)));
+p.on("console", (m) => { if (m.type() === "error") erros.push("CONSOLE: " + m.text().slice(0, 200)); });
+await p.goto("http://localhost:3000/relatorios", { waitUntil: "networkidle" }).catch(()=>{});
+await p.waitForTimeout(5000);
+console.log("URL:", p.url());
+console.log("H1:", await p.locator("h1").allTextContents());
+console.log("erros:", erros.slice(0, 6).join("\n  "));
+await b.close();
