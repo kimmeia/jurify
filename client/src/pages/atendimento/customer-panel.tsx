@@ -37,7 +37,7 @@ import {
   User, Star, DollarSign, Gavel, TrendingUp, CheckSquare, Calendar,
   StickyNote, PenLine, Plus, Phone, Mail, Loader2, ChevronDown, ChevronRight,
   AlertTriangle, ExternalLink, Copy, Sparkles, RefreshCw, Pencil, X, Check, Bot,
-  Bell, BellOff,
+  Bell, BellOff, Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseValorBR } from "@shared/valor-br";
@@ -501,6 +501,52 @@ export function CustomerPanel({
                 }
               />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Origem: anúncio que trouxe o lead (Click-to-WhatsApp). Só aparece
+          pra quem chegou por anúncio — a Meta manda o bloco na primeira
+          mensagem. Atribuição first-touch: é sempre o anúncio que originou
+          o contato, não o último que ele clicou. ─── */}
+      {contato.origemAnuncio && (
+        <div className="px-4 pt-1">
+          <div className="border-t pt-3">
+            <div className="text-[10.5px] font-bold tracking-wider uppercase text-violet-600 dark:text-violet-400 mb-2">
+              Origem
+            </div>
+            <div className="flex gap-2.5 items-start">
+              <div className="w-14 h-9 rounded-md shrink-0 bg-gradient-to-br from-indigo-950 via-violet-900 to-violet-600 flex items-center justify-center overflow-hidden">
+                {contato.origemAnuncio.thumbnailUrl || contato.origemAnuncio.imagemUrl ? (
+                  <img
+                    src={contato.origemAnuncio.thumbnailUrl || contato.origemAnuncio.imagemUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Megaphone className="h-3.5 w-3.5 text-white" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold leading-snug line-clamp-2">
+                  {contato.origemAnuncio.titulo || "Anúncio sem título"}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  {contato.origemAnuncio.midiaTipo === "video" ? "Anúncio em vídeo" : "Anúncio"}
+                  {contato.origemAnuncioEm ? ` · ${formatDate(contato.origemAnuncioEm)}` : ""}
+                </div>
+                {contato.origemAnuncio.sourceUrl && (
+                  <a
+                    href={contato.origemAnuncio.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[11px] font-semibold text-violet-600 hover:underline inline-flex items-center gap-1 mt-1"
+                  >
+                    ver anúncio <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

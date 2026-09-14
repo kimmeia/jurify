@@ -23,6 +23,28 @@ export interface WhatsappMensagemRecebida {
     id: string;
     titulo: string;
   };
+  /** Preenchido só quando a conversa nasceu de um clique em anúncio (CTWA). */
+  referral?: ReferralAnuncio;
+}
+
+/**
+ * Anúncio que originou a conversa (Click-to-WhatsApp). A Meta manda o bloco
+ * `referral` junto da PRIMEIRA mensagem de quem clicou num anúncio do
+ * Facebook/Instagram com destino WhatsApp. Campos vazios quando a Meta não
+ * envia aquele pedaço — o envelope varia por tipo de criativo e por versão.
+ */
+export interface ReferralAnuncio {
+  sourceId: string;
+  sourceType: string;
+  sourceUrl: string;
+  titulo: string;
+  corpo: string;
+  midiaTipo: string;
+  imagemUrl: string;
+  videoUrl: string;
+  thumbnailUrl: string;
+  /** Identificador do clique — é o que liga a conversa à conversão no anúncio. */
+  ctwaClid: string;
 }
 
 export interface WhatsappMensagemEnviar {

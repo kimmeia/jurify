@@ -741,6 +741,14 @@ export const contatos = mysqlTable("contatos", {
   cpfCnpj: varchar("cpfCnpj", { length: 18 }),
   origem: mysqlEnum("origemContato", ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"]).default("manual").notNull(),
   /**
+   * Anúncio que trouxe o lead (Click-to-WhatsApp), como JSON de `ReferralAnuncio`.
+   * Vem do bloco `referral` da primeira mensagem de quem clicou no anúncio.
+   * JSON e não colunas fixas porque o envelope da Meta varia por criativo e
+   * por versão. Atribuição first-touch: gravado só quando ainda está vazio.
+   */
+  origemAnuncio: text("origemAnuncio"),
+  origemAnuncioEm: timestamp("origemAnuncioEm"),
+  /**
    * Estágio no relacionamento: 'lead' (em atendimento, ainda não fechou
    * contrato) vs 'cliente' (fechou). É o MESMO cadastro mudando de estágio.
    *
