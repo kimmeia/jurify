@@ -251,7 +251,10 @@ describe("amarras no código", () => {
     expect(bloco).toContain("canceladoEm: leads.canceladoEm,\n          motivoCancelamento: leads.motivoCancelamento,");
     expect(bloco).toContain(".where(condCancelados(dataInicio, dataFim))\n        .orderBy(desc(leads.canceladoEm))");
     expect(bloco).toContain("recebidoAntesDeCancelar({");
-    expect(bloco).toMatch(/fechamentosPorOrigem,\s*contratosCancelados,/);
+    // O que protege é a lista estar no payload, não estar COLADA na vizinha:
+    // amarrar a adjacência quebra a cada campo novo entre as duas, e o que
+    // importa é que `contratosCancelados` chegue à tela e ao PDF.
+    expect(bloco).toMatch(/^\s*contratosCancelados,$/m);
     expect(bloco).toContain("contratosFechadosCanceladosDepois,");
   });
 
