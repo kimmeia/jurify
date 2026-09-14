@@ -27,6 +27,7 @@ SCHEMA = "drizzle/schema.ts"
 MIGRATION = "drizzle/0232_contato_data_nascimento.sql"
 CAMPOS = "client/src/components/CamposQualificacaoEndereco.tsx"
 CLIENTES = "client/src/pages/Clientes.tsx"
+CLIENTES_DETALHE = "client/src/pages/clientes/detail-tabs.tsx"
 
 MUTACOES = [
     # ── as regras puras ────────────────────────────────────────────────────
@@ -132,6 +133,43 @@ MUTACOES = [
     ("nascimento entra na lista de campos exigidos pelo contrato", CAMPOS,
      '  { chave: "nacionalidade", label: "Nacionalidade" },',
      '  { chave: "nacionalidade", label: "Nacionalidade" },\n  { chave: "dataNascimento", label: "Data de nascimento" },'),
+
+    # ── obrigatória no cadastro novo, e só nele ────────────────────────────
+    ("o cadastro novo para de cobrar a data", CAMPOS,
+     "  ...CAMPOS_OBRIGATORIOS_QUALIFICACAO,\n  { chave: \"dataNascimento\", label: \"Data de nascimento\" },",
+     "  ...CAMPOS_OBRIGATORIOS_QUALIFICACAO,"),
+
+    ("a exigência VAZA pra edição (a carteira antiga trava)", CAMPOS,
+     "  const lista = opts.exigirNascimento\n    ? CAMPOS_OBRIGATORIOS_CADASTRO\n    : CAMPOS_OBRIGATORIOS_QUALIFICACAO;",
+     "  const lista = CAMPOS_OBRIGATORIOS_CADASTRO;"),
+
+    ("a opção é ignorada e nada é exigido a mais", CAMPOS,
+     "  const lista = opts.exigirNascimento\n    ? CAMPOS_OBRIGATORIOS_CADASTRO\n    : CAMPOS_OBRIGATORIOS_QUALIFICACAO;",
+     "  const lista = CAMPOS_OBRIGATORIOS_QUALIFICACAO;"),
+
+    ("a lista do cadastro vira cópia solta e sai do sincronismo", CAMPOS,
+     "  ...CAMPOS_OBRIGATORIOS_QUALIFICACAO,\n  { chave: \"dataNascimento\", label: \"Data de nascimento\" },",
+     "  { chave: \"profissao\", label: \"Profissão\" },\n  { chave: \"dataNascimento\", label: \"Data de nascimento\" },"),
+
+    ("o asterisco some do campo exigido", CAMPOS,
+     '          <Label className="text-xs">{REQ("Data de nascimento", !!exigirNascimento)}</Label>',
+     '          <Label className="text-xs">Data de nascimento</Label>'),
+
+    ("a tela segue dizendo «Opcional» com o campo exigido", CAMPOS,
+     '                (exigirNascimento\n                  ? "É ela que gera o lembrete do aniversário."\n                  : "Opcional. É ela que gera o lembrete do aniversário.")',
+     '                "Opcional. É ela que gera o lembrete do aniversário."'),
+
+    ("o «Novo cliente» deixa de marcar o componente", CLIENTES_DETALHE,
+     "      obrigatorios\n      exigirNascimento\n      value={qualif}",
+     "      obrigatorios\n      value={qualif}"),
+
+    ("a trava do botão Cadastrar deixa de exigir a data", CLIENTES_DETALHE,
+     "de nascimento entra junto; na edição, não — ver CAMPOS_OBRIGATORIOS_CADASTRO.\n    const qualifFaltando = validarQualificacaoCompleta(qualif, { exigirNascimento: true });",
+     "de nascimento entra junto; na edição, não — ver CAMPOS_OBRIGATORIOS_CADASTRO.\n    const qualifFaltando = validarQualificacaoCompleta(qualif);"),
+
+    ("a EDIÇÃO passa a exigir a data (o que ele recusou)", CLIENTES_DETALHE,
+     "  const qualifFaltando = validarQualificacaoCompleta(qualif);\n  const todosFaltando",
+     "  const qualifFaltando = validarQualificacaoCompleta(qualif, { exigirNascimento: true });\n  const todosFaltando"),
 
     # ── o catálogo de avisos ───────────────────────────────────────────────
     ("o aviso nasce desligado", CATALOGO,
