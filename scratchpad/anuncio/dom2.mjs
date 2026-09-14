@@ -1,0 +1,15 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, storageState: "scratchpad/anuncio/sessao.json", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/relatorios", { waitUntil: "networkidle" }).catch(()=>{});
+await p.waitForTimeout(5000);
+console.log("antes do clique | H1:", await p.locator("h1").allTextContents());
+await p.getByRole("button", { name: "Comercial", exact: true }).first().click();
+await p.waitForTimeout(7000);
+console.log("depois do clique | H1:", await p.locator("h1").allTextContents());
+console.log("URL:", p.url());
+const textos = await p.locator("h3, [class*='CardTitle'], .text-sm.font-semibold").allTextContents();
+console.log("titulos de card:", textos.filter(Boolean).slice(0, 18).join(" | "));
+await p.screenshot({ path: process.argv[2], fullPage: true });
+await b.close();

@@ -1,0 +1,15 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const ctx = await b.newContext({ viewport: { width: Number(process.argv[3]||1440), height: Number(process.argv[4]||900) }, storageState: "scratchpad/anuncio/sessao.json", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/relatorios", { waitUntil: "networkidle" }).catch(()=>{});
+await p.waitForTimeout(4000);
+const tab = p.getByRole("button", { name: "Comercial", exact: true });
+console.log("tabs 'Comercial' encontradas:", await tab.count());
+await tab.first().click();
+await p.waitForTimeout(6000);
+console.log("URL apos clique:", p.url());
+console.log("cartao anuncios:", await p.getByText("De qual anúncio veio o lead").count());
+console.log("cartao origem:", await p.getByText("Fechamentos por origem").count());
+await p.screenshot({ path: process.argv[2], fullPage: true });
+await b.close();
