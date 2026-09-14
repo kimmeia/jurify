@@ -29,6 +29,34 @@ export function parseOrigemAnuncio(json: string | null | undefined): ReferralAnu
   }
 }
 
+/**
+ * Recorte da origem que vai pra LISTA de conversas — o cartão do anúncio e o
+ * selo. Fora daqui ficam `sourceId` e `ctwaClid`: são identificadores de
+ * atribuição, usados no relatório dentro do servidor, e a lista carrega
+ * centenas de linhas. `null` quando o contato não veio de anúncio.
+ */
+export function origemAnuncioParaLista(json: string | null | undefined): {
+  titulo: string;
+  corpo: string;
+  midiaTipo: string;
+  sourceType: string;
+  sourceUrl: string;
+  thumbnailUrl: string;
+  imagemUrl: string;
+} | null {
+  const o = parseOrigemAnuncio(json);
+  if (!o) return null;
+  return {
+    titulo: o.titulo || "",
+    corpo: o.corpo || "",
+    midiaTipo: o.midiaTipo || "",
+    sourceType: o.sourceType || "",
+    sourceUrl: o.sourceUrl || "",
+    thumbnailUrl: o.thumbnailUrl || "",
+    imagemUrl: o.imagemUrl || "",
+  };
+}
+
 export async function registrarOrigemAnuncioSeAusente(
   db: any,
   contatoId: number,

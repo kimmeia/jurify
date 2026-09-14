@@ -345,6 +345,8 @@ export const crmRouter = router({
       busca: z.string().trim().max(120).optional(),
       // Só quem teve o PRIMEIRO contato dentro do período (lead novo).
       somenteNovos: z.boolean().optional(),
+      // Só quem chegou clicando num anúncio (Click-to-WhatsApp).
+      somenteAnuncio: z.boolean().optional(),
       // Como o período conta: "inicio" (default — início do atendimento
       // atual) × "mensagens" (qualquer mensagem na janela, comportamento
       // antigo, mantido como opção).
@@ -383,10 +385,11 @@ export const crmRouter = router({
       arquivadas: z.boolean().optional(),
       // Idem: pills têm que contar o MESMO conjunto que a lista mostra.
       modoPeriodo: z.enum(["inicio", "mensagens"]).optional(),
+      somenteAnuncio: z.boolean().optional(),
     }).optional())
     .query(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "atendimento", "ver");
-      if (!perm.allowed) return { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0 };
+      if (!perm.allowed) return { todos: 0, aguardando: 0, em_atendimento: 0, resolvido: 0, fechado: 0, anuncio: 0 };
       const filtros: any = { ...(input ?? {}) };
       if (!perm.verTodos && perm.verProprios) {
         filtros.atendenteId = perm.colaboradorId;

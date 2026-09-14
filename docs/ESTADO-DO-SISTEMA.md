@@ -4319,3 +4319,76 @@ recomendações do comparador:
 - Baseline na ponta do merge com `develop`: **6.239 testes verdes em 418
   arquivos**, `pnpm check` limpo, `vite build` passando. Sozinha, a entrega
   media 6.203 em 415.
+
+## 39. Origem por anúncio no Inbox: selo, filtro e cartão da conversa (14/09)
+
+Fatia 2 do Click-to-WhatsApp. A fatia 1 (capturar o `referral` da Meta, gravar
+no contato e mostrar na ficha do Customer 360) foi entregue e mergeada mais
+cedo em 14/09, com a migration `0208_contato_origem_anuncio.sql`. Autorização
+desta: *"vamos terminar logo então para deixar redondo"*, sobre o mockup
+`mockup-origem-anuncio.html` que ele já tinha aprovado.
+
+### 36.1 O que entrou
+
+- **Selo `ANÚNCIO`** no cartão da conversa, na lista do Inbox. O título do
+  anúncio vai no `title` do elemento — passar o mouse diz QUAL campanha trouxe
+  a pessoa sem abrir a conversa.
+- **Chip "Anúncio N"** abaixo das abas de status. É um interruptor à parte, não
+  uma quinta aba: compõe com o status, então dá pra ver só quem está
+  **aguardando E** veio de campanha. Some quando o escritório não tem nenhum
+  lead de anúncio na vista — mas continua visível enquanto LIGADO, senão não
+  haveria como desligá-lo caso o filtro zerasse a própria contagem.
+- **Cartão do anúncio no topo da conversa**: miniatura (com marca de play em
+  vídeo), "Chegou por um anúncio", título, texto, tipo de mídia, data do clique
+  e link "ver anúncio". É o que permite responder no assunto em vez de abrir
+  com "como podemos ajudar?".
+
+### 36.2 A decisão que carrega o resto: quem segue o filtro e quem não segue
+
+Os pills de status **seguem** `somenteAnuncio` (o zod de `contarConversas`
+passou a aceitá-lo). Sem isso eles voltariam a descrever o escritório inteiro
+enquanto a lista mostra sete conversas — a mesma divergência que este código já
+corrigiu três vezes, com `canalId`, com `busca` e com a pasta Arquivadas.
+
+O contador do **próprio chip** não segue: é calculado com as condições da vista
+e o filtro de anúncio desligado (`baseSemAnuncio`). Se seguisse, ligado ele
+contaria a si mesmo e o "7 de 2420" viraria "7 de 7" — o número deixaria de
+informar exatamente quando é olhado.
+
+### 36.3 O que a lista NÃO carrega
+
+`origemAnuncioParaLista` corta `sourceId` e `ctwaClid` do recorte que vai pro
+client. São chaves de atribuição, resolvidas no servidor, e a lista busca até
+mil conversas. Continuam gravados no contato para o relatório.
+
+### 36.4 O que a Meta não manda, e o mockup prometia
+
+O mockup desenhou as linhas **Campanha** ("Rescisão · Vídeo 15s") e **Conjunto**
+("Fortaleza 25-50"), e a plataforma de origem ("Facebook · clique em…"). O
+`referral` do webhook **não traz nada disso**: vêm o id do anúncio
+(`source_id`), o tipo (`ad`/`post`), criativo, título, texto e o id do clique.
+Nome de campanha e de conjunto só existem na Marketing API, que exige
+`ads_read`/`ads_management` — permissões que o app **não** tem (o review
+aprovado em 01/09 cobre as três de WhatsApp) e que dependeriam do escritório
+conceder acesso à conta de anúncios.
+
+Por isso o cartão mostra o que existe: tipo de mídia e data do clique. **A
+atribuição por campanha, quando for feita, agrupa por ANÚNCIO** (`sourceId`,
+rotulado pelo título do criativo) — que é a pergunta que importa de qualquer
+forma: qual anúncio traz cliente que fecha.
+
+### 36.5 Fatia 3 — NÃO feita, e por quê
+
+O relatório de atribuição não está em mockup nenhum: o
+`mockup-origem-anuncio.html` cobre só o Atendimento (lista, conversa, painel).
+Tela nova sem desenho aprovado não entra — é a regra do dono, de 19/08.
+
+Amarra: `anuncio-no-inbox.test.ts` (15 testes) — 14 mutações vermelhas em
+`scratchpad/mutar-anuncio-inbox.py`. Uma sobreviveu na 1ª volta pelo motivo de
+sempre: a asserção do filtro varria o arquivo inteiro e casava com o literal
+igual do contador logo abaixo, então passava com a condição invertida; morreu
+depois de ancorar no bloco. `um-numero-um-cadastro` teve **um** `expect`
+trocado: ele travava a linha literal do destructuring da lista, que ganhou dois
+campos — passou a conferir o MECANISMO (os campos crus saem do objeto antes do
+`...r`), conferido por mutação.
+
