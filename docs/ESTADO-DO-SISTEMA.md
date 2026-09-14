@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.239 verdes, 418 arquivos** (14/09, na ponta do merge das três entregas do dia com o `develop`; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.281 verdes, 420 arquivos** (14/09, com o aniversário obrigatório no cadastro novo; 6.239 em 418 na ponta do merge das três entregas do dia; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -4227,9 +4227,8 @@ datas de calendário.
 ### 38.3 O campo, e o achado que só a foto pegou
 
 `CamposQualificacaoEndereco` é um componente só, usado pelo "Novo cliente" e
-pela edição da ficha — o campo nasceu nos dois de uma vez. Ele é **opcional** e
-ficou **fora** de `CAMPOS_OBRIGATORIOS_QUALIFICACAO`: exigir agora travaria a
-geração de contrato pra toda a carteira que já existe.
+pela edição da ficha — o campo nasceu nos dois de uma vez. Ele nasceu opcional
+e virou **obrigatório no cadastro novo** em 14/09 (ver 38.8).
 
 A primeira versão usava `<input type="date">`. Na foto ele saiu **`09/14/1985`**
 — mês antes do dia — porque o campo nativo desenha no idioma do **navegador**.
@@ -4319,6 +4318,55 @@ recomendações do comparador:
 - Baseline na ponta do merge com `develop`: **6.239 testes verdes em 418
   arquivos**, `pnpm check` limpo, `vite build` passando. Sozinha, a entrega
   media 6.203 em 415.
+
+### 38.8 A data virou obrigatória — no cadastro NOVO, e só nele (14/09)
+
+Pedido dele logo depois do merge: *"Colocar o campo aniversário como
+obrigatório."* A pergunta que precisava ser feita antes era **onde**, porque
+`CAMPOS_OBRIGATORIOS_QUALIFICACAO` é UMA lista servindo DUAS telas com efeitos
+opostos:
+
+- **"Novo cliente"** — `validarQualificacaoCompleta` **trava o botão
+  Cadastrar**;
+- **Edição da ficha** — a mesma lista só monta o aviso "Faltam N campos
+  obrigatórios pra gerar contratos"… **e, para cliente (não lead), o
+  `EditarForm` recusa salvar** enquanto houver campo obrigatório vazio.
+
+Ou seja: pôr a data na lista única deixaria a carteira inteira que já existe
+**impedida de salvar qualquer alteração** — trocar um telefone errado — até
+alguém descobrir o aniversário de cada pessoa. **Ele escolheu "só no cadastro
+novo"**, e é isso que está implementado.
+
+Por isso são **duas** listas, e a segunda é derivada da primeira
+(`CAMPOS_OBRIGATORIOS_CADASTRO = [...CAMPOS_OBRIGATORIOS_QUALIFICACAO,
+dataNascimento]`) — cópia solta sai do sincronismo quando alguém acrescenta um
+campo ao contrato, e o cadastro novo pararia de cobrar sem ninguém perceber.
+`validarQualificacaoCompleta(v, { exigirNascimento })` escolhe qual usar, e o
+componente ganhou o prop `exigirNascimento`, separado de `obrigatorios`.
+
+**O detalhe que a foto cobrou**: o texto de apoio do campo dizia "Opcional. É
+ela que gera o lembrete do aniversário." — com o asterisco vermelho em cima,
+a tela se contradiria. No cadastro novo o "Opcional." sai.
+
+**NÃO foi travado no servidor**, de propósito: `contatos` recebe INSERT por
+**nove** caminhos (WhatsApp, importação de processos, webhook e adoção do
+Asaas, Financeiro, escritório descartável do robô…) e nenhum deles tem o
+campo. Exigir em `clientes.criar` não alcançaria nenhum desses e ainda
+arriscaria derrubar criação de contato por caminho que ninguém pediu para
+mexer. A exigência vale no formulário, que é onde ele pediu.
+
+Conferido no app rodando: preencher tudo menos a data e clicar em Cadastrar
+devolve `Faltam: … Data de nascimento`; a mesma ficha, na edição, continua sem
+asterisco e salvando.
+
+Baseline desta fatia: **6.281 testes verdes em 420 arquivos**, `pnpm check`
+limpo, `vite build` passando.
+
+Amarra: 6 testes novos em `aniversario-do-cliente` (33 no total) —
+**51/51 mutações vermelhas**, incluindo a que faz a exigência VAZAR para a
+edição e a que devolve o "Opcional" com o asterisco de pé. Um `expect` antigo
+foi reancorado: ele procurava o texto "Data de nascimento", que agora aparece
+antes, como rótulo dentro da lista nova.
 
 ## 39. Origem por anúncio no Inbox: selo, filtro e cartão da conversa (14/09)
 

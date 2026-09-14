@@ -46,7 +46,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.239 verdes em 14/09/2026 (418 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.281 verdes em 14/09/2026 (420 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -2197,6 +2197,22 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   motivo de sempre — a amarra conferia o NOME e não a CHAMADA — e uma era
   mutante equivalente: a faixa de mês/dia é caminho rápido, quem recusa mês 13
   é a volta pelo `Date`).
+  - **Complemento de 14/09 (pedido dele: "colocar o campo aniversário como
+    obrigatório"), seção 38.8 do documento de estado.** A pergunta que vinha
+    antes era ONDE: `CAMPOS_OBRIGATORIOS_QUALIFICACAO` é UMA lista servindo
+    DUAS telas com efeitos opostos — no "Novo cliente" ela TRAVA o botão; na
+    edição ela monta o aviso "faltam N campos" **e o `EditarForm` recusa salvar
+    quando o contato é cliente (lead não trava)**. Pôr a data na lista única
+    deixaria a carteira que já existe impedida de corrigir o próprio telefone
+    até alguém descobrir o aniversário. **Ele escolheu "só no cadastro novo".**
+    Daí `CAMPOS_OBRIGATORIOS_CADASTRO` DERIVADA da outra (`[...QUALIFICACAO,
+    dataNascimento]` — cópia solta sai do sincronismo em silêncio),
+    `validarQualificacaoCompleta(v, { exigirNascimento })` e o prop
+    `exigirNascimento`, separado de `obrigatorios`. **A foto cobrou um
+    detalhe**: o texto de apoio dizia "Opcional." embaixo do asterisco
+    vermelho — some no cadastro novo. **Servidor NÃO trava**, de propósito:
+    `contatos` recebe INSERT por nove caminhos e nenhum tem o campo. 51/51
+    mutações vermelhas, incluindo a que faz a exigência VAZAR pra edição.
 
 ## Fila combinada com o dono (31/08/2026)
 

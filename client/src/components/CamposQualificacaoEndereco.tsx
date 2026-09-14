@@ -92,6 +92,13 @@ interface Props {
   /** Quando true, marca os campos como obrigatórios (asterisco `*`).
    *  A validação real fica no caller — esse flag é apenas dica visual. */
   obrigatorios?: boolean;
+  /**
+   * A data de nascimento também é exigida.
+   *
+   * Separado de `obrigatorios` de propósito: ela é obrigatória no CADASTRO
+   * NOVO e não na edição. Ver `CAMPOS_OBRIGATORIOS_CADASTRO`.
+   */
+  exigirNascimento?: boolean;
 }
 
 /**
@@ -113,12 +120,35 @@ export const CAMPOS_OBRIGATORIOS_QUALIFICACAO: Array<{
   { chave: "cidade", label: "Cidade" },
 ];
 
+/**
+ * O que o CADASTRO NOVO exige — a lista acima mais a data de nascimento.
+ *
+ * São duas listas, e não uma, porque as duas telas cobram coisas diferentes:
+ * o cadastro novo TRAVA o botão, a edição só AVISA. Pôr a data na lista de
+ * cima colocaria a carteira inteira que já existe em falta de um dado que
+ * ninguém tem em mãos — e, pra cliente (não lead), o `EditarForm` recusa
+ * salvar enquanto houver campo obrigatório vazio. Quem já está cadastrado
+ * ficaria impedido de corrigir o próprio telefone até descobrir o
+ * aniversário.
+ */
+export const CAMPOS_OBRIGATORIOS_CADASTRO: Array<{
+  chave: keyof QualificacaoEndereco;
+  label: string;
+}> = [
+  ...CAMPOS_OBRIGATORIOS_QUALIFICACAO,
+  { chave: "dataNascimento", label: "Data de nascimento" },
+];
+
 /** Retorna labels dos campos obrigatórios que estão vazios. */
 export function validarQualificacaoCompleta(
   v: QualificacaoEndereco,
+  opts: { exigirNascimento?: boolean } = {},
 ): string[] {
+  const lista = opts.exigirNascimento
+    ? CAMPOS_OBRIGATORIOS_CADASTRO
+    : CAMPOS_OBRIGATORIOS_QUALIFICACAO;
   const faltando: string[] = [];
-  for (const campo of CAMPOS_OBRIGATORIOS_QUALIFICACAO) {
+  for (const campo of lista) {
     const valor = v[campo.chave];
     if (!valor || String(valor).trim() === "") {
       faltando.push(campo.label);
@@ -144,7 +174,12 @@ const REQ = (label: string, on: boolean) =>
     label
   );
 
-export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Props) {
+export function CamposQualificacaoEndereco({
+  value,
+  onChange,
+  obrigatorios,
+  exigirNascimento,
+}: Props) {
   const [buscandoCep, setBuscandoCep] = useState(false);
   // O que está no campo enquanto se digita. O filtro só vira valor quando a
   // data fecha — senão "12/0" apagaria o que já estava gravado.
@@ -242,10 +277,10 @@ export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Pr
           />
         </div>
         <div className="space-y-1.5">
-          {/* Fora da lista de obrigatórios de propósito: o contrato sai sem
-              ela, e exigir agora travaria a geração pra toda a carteira que
-              já existe. */}
-          <Label className="text-xs">Data de nascimento</Label>
+          {/* Obrigatória no cadastro NOVO, e fora da lista do contrato de
+              propósito: o contrato sai sem ela, e cobrá-la na edição travaria
+              a carteira que já existe num dado que ninguém tem em mãos. */}
+          <Label className="text-xs">{REQ("Data de nascimento", !!exigirNascimento)}</Label>
           {/* Texto mascarado, não `input type=date`: o campo nativo desenha no
               idioma do NAVEGADOR — num Chrome em inglês "12/03/1985" aparece
               como "03/12/1985". A mesma decisão do filtro de cadastro. */}
@@ -266,7 +301,9 @@ export function CamposQualificacaoEndereco({ value, onChange, obrigatorios }: Pr
             {nascimentoRuim
               ? "Data que não existe — confira o dia e o mês."
               : rotuloDaData(value.dataNascimento) ||
-                "Opcional. É ela que gera o lembrete do aniversário."}
+                (exigirNascimento
+                  ? "É ela que gera o lembrete do aniversário."
+                  : "Opcional. É ela que gera o lembrete do aniversário.")}
           </p>
         </div>
       </div>

@@ -34,6 +34,12 @@ import {
   mascararDataBR,
 } from "@shared/data-calendario";
 import { AVISOS, GRUPOS, avisoDoTipo, padraoDaChave } from "@shared/notificacoes-avisos";
+import {
+  CAMPOS_OBRIGATORIOS_CADASTRO,
+  CAMPOS_OBRIGATORIOS_QUALIFICACAO,
+  validarQualificacaoCompleta,
+  type QualificacaoEndereco,
+} from "../../client/src/components/CamposQualificacaoEndereco";
 
 const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
@@ -197,7 +203,9 @@ describe("a data digitada é lida como brasileiro", () => {
     // O campo nativo desenha no idioma do NAVEGADOR: num Chrome em inglês
     // "12/03/1985" aparece como 03/12/1985. Foi a foto que pegou isso.
     const arq = ler("client/src/components/CamposQualificacaoEndereco.tsx");
-    const bloco = arq.slice(arq.indexOf("Data de nascimento"));
+    // Ancorado no <Label> do campo, não no texto solto: "Data de nascimento"
+    // também é o rótulo dentro de CAMPOS_OBRIGATORIOS_CADASTRO, mais acima.
+    const bloco = arq.slice(arq.indexOf('REQ("Data de nascimento"'));
     const campo = bloco.slice(0, bloco.indexOf("</div>"));
     expect(campo).toContain('placeholder="dd/mm/aaaa"');
     expect(campo).not.toContain('type="date"');
@@ -278,13 +286,84 @@ describe("a fiação", () => {
   });
 
   it("nascimento não entra na lista de campos exigidos pelo contrato", () => {
-    // Exigir agora travaria a geração de contrato pra toda a carteira que já
-    // existe — a data é opcional, e opcional quer dizer opcional.
+    // A lista do CONTRATO fica como sempre foi: cobrá-la na edição travaria a
+    // carteira que já existe num dado que ninguém tem em mãos.
     const arq = ler("client/src/components/CamposQualificacaoEndereco.tsx");
     const lista = arq.slice(
-      arq.indexOf("CAMPOS_OBRIGATORIOS_QUALIFICACAO"),
-      arq.indexOf("validarQualificacaoCompleta"),
+      arq.indexOf("export const CAMPOS_OBRIGATORIOS_QUALIFICACAO"),
+      arq.indexOf("export const CAMPOS_OBRIGATORIOS_CADASTRO"),
     );
     expect(lista).not.toContain("dataNascimento");
+  });
+});
+
+describe("obrigatória no cadastro novo, e só nele", () => {
+  const cheio: QualificacaoEndereco = {
+    profissao: "Engenheira civil",
+    estadoCivil: "casado",
+    nacionalidade: "Brasileira",
+    dataNascimento: "",
+    cep: "60000-000",
+    logradouro: "Rua das Flores",
+    numeroEndereco: "123",
+    complemento: "",
+    bairro: "Centro",
+    cidade: "Fortaleza",
+    uf: "CE",
+  };
+
+  it("o cadastro novo cobra a data; a edição não", () => {
+    // É a diferença inteira entre as duas telas, e a razão de existirem duas
+    // listas: o cadastro TRAVA o botão, a edição só AVISA.
+    expect(validarQualificacaoCompleta(cheio, { exigirNascimento: true })).toEqual([
+      "Data de nascimento",
+    ]);
+    expect(validarQualificacaoCompleta(cheio)).toEqual([]);
+  });
+
+  it("com a data preenchida, nenhum dos dois reclama", () => {
+    const comData = { ...cheio, dataNascimento: "1985-03-12" };
+    expect(validarQualificacaoCompleta(comData, { exigirNascimento: true })).toEqual([]);
+    expect(validarQualificacaoCompleta(comData)).toEqual([]);
+  });
+
+  it("a lista do cadastro é a do contrato MAIS a data — não uma cópia solta", () => {
+    // Cópia solta some do sincronismo: alguém acrescenta um campo ao contrato
+    // e o cadastro novo para de cobrar sem ninguém perceber.
+    expect(CAMPOS_OBRIGATORIOS_CADASTRO.slice(0, -1)).toEqual(
+      CAMPOS_OBRIGATORIOS_QUALIFICACAO,
+    );
+    expect(CAMPOS_OBRIGATORIOS_CADASTRO.at(-1)).toEqual({
+      chave: "dataNascimento",
+      label: "Data de nascimento",
+    });
+  });
+
+  it("os outros obrigatórios continuam sendo cobrados nos dois", () => {
+    const vazio = { ...cheio, profissao: "", cidade: "" };
+    for (const opts of [{}, { exigirNascimento: true }]) {
+      const faltam = validarQualificacaoCompleta(vazio, opts);
+      expect(faltam).toContain("Profissão");
+      expect(faltam).toContain("Cidade");
+    }
+  });
+
+  it("só o «Novo cliente» exige — o formulário de edição não", () => {
+    const arq = ler("client/src/pages/clientes/detail-tabs.tsx");
+    // Duas validações no cadastro novo (a que trava e a do toast) e o
+    // componente marcado; o EditarForm chama sem opção nenhuma.
+    expect(
+      arq.split("validarQualificacaoCompleta(qualif, { exigirNascimento: true })").length - 1,
+    ).toBe(2);
+    expect(arq).toContain("validarQualificacaoCompleta(qualif);");
+    expect(arq.split("exigirNascimento\n").length - 1).toBe(1);
+  });
+
+  it("o campo não diz «Opcional» quando está sendo exigido", () => {
+    // Asterisco em cima e "Opcional" embaixo é a contradição que a tela
+    // mostraria se o texto de apoio fosse fixo.
+    const arq = ler("client/src/components/CamposQualificacaoEndereco.tsx");
+    expect(arq).toContain('REQ("Data de nascimento", !!exigirNascimento)');
+    expect(arq).toContain("exigirNascimento\n                  ? \"É ela que gera o lembrete do aniversário.\"");
   });
 });
