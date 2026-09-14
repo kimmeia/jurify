@@ -21,11 +21,20 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { BookOpen, Database, Download, Loader2, Quote, Scale } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BookOpen, ClipboardPaste, Database, Download, Loader2, Quote, Scale } from "lucide-react";
 import { toast } from "sonner";
 import BaseJuridicaTab from "./BaseJuridicaTab";
 import AdminJurisIa from "./AdminJurisIa";
-import { rotuloCadencia } from "@shared/fontes-oficiais";
+import { rotuloCadencia, rotuloSituacao, type TipoMaterial } from "@shared/fontes-oficiais";
 
 const nf = new Intl.NumberFormat("pt-BR");
 
@@ -35,6 +44,19 @@ const SELO: Record<string, { texto: string; cls: string }> = {
   nunca: { texto: "nunca coletou", cls: "text-muted-foreground bg-muted-foreground/10 border-border/30" },
   erro: { texto: "erro", cls: "text-danger-fg bg-danger/10 border-danger/30" },
   bloqueada: { texto: "bloqueada", cls: "text-danger-fg bg-danger/10 border-danger/30" },
+};
+
+/**
+ * O que a fonte entrega, em uma palavra.
+ *
+ * Súmula fica com o destaque mais forte de propósito: é a citação que não se
+ * discute (o número é a prova), o texto é curto e o conjunto é fechado — o
+ * material mais barato de manter e o mais seguro de usar numa peça.
+ */
+const MATERIAL: Record<TipoMaterial, { rotulo: string; cls: string }> = {
+  sumula: { rotulo: "súmula", cls: "border-success/30 bg-success/10 text-success-fg" },
+  ementa: { rotulo: "ementa", cls: "border-info/30 bg-info/10 text-info-fg" },
+  metadado: { rotulo: "só número", cls: "border-border/40 bg-muted text-muted-foreground" },
 };
 
 function Selo({ estado }: { estado: string }) {
@@ -126,10 +148,95 @@ function EntendimentosRegionais() {
   );
 }
 
+/**
+ * O caminho de colar o texto oficial das súmulas.
+ *
+ * Existe porque "é público" e "o nosso servidor consegue ler" são coisas
+ * diferentes: o STJ publica todas as súmulas aberto e barra a faixa de IP do
+ * servidor. Súmula muda poucas vezes por ano — colar uma vez resolve o ano, e
+ * o texto passa pelo MESMO leitor da coleta automática, então o que entra aqui
+ * é idêntico ao que entraria sozinho.
+ */
+function ColarSumulasDialog({
+  fonte,
+  onFechar,
+}: {
+  fonte: { id: string; nome: string } | null;
+  onFechar: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const [texto, setTexto] = useState("");
+
+  const importar = trpc.admin.jurisiaImportarSumulas.useMutation({
+    onSuccess: (r) => {
+      if (r.status === "ok") {
+        toast.success(
+          r.novas === 1 ? "1 súmula nova no acervo" : `${nf.format(r.novas)} súmulas novas no acervo`,
+          {
+            description: [
+              `Achei ${nf.format(r.buscou)} no texto.`,
+              r.canceladas ? `${r.canceladas} vinham marcadas como canceladas e ficaram de fora.` : "",
+            ]
+              .filter(Boolean)
+              .join(" "),
+          },
+        );
+        setTexto("");
+        onFechar();
+      } else {
+        toast.error("Não deu pra importar", { description: r.erro ?? "" });
+      }
+      utils.admin.jurisiaFontesOficiais.invalidate();
+    },
+    onError: (e) => toast.error("Não deu pra importar", { description: e.message }),
+  });
+
+  return (
+    <Dialog open={Boolean(fonte)} onOpenChange={(aberto) => !aberto && onFechar()}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Colar as súmulas — {fonte?.nome}</DialogTitle>
+          <DialogDescription>
+            Abra a lista oficial de súmulas no seu navegador, selecione tudo (Ctrl+A), copie e cole
+            aqui. Eu separo uma por uma pelo número. Súmula marcada como cancelada não entra.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          rows={14}
+          className="font-mono text-[12px]"
+          placeholder={"Súmula 297 — O Código de Defesa do Consumidor é aplicável às instituições financeiras.\nSúmula 382 — A estipulação de juros remuneratórios superiores a 12% ao ano…"}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          {texto.trim().length > 0
+            ? `${nf.format(texto.trim().length)} caracteres colados.`
+            : "O texto precisa ter o número junto do enunciado — é pelo número que eu separo."}
+        </p>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={onFechar}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={texto.trim().length < 30 || importar.isPending}
+            onClick={() => fonte && importar.mutate({ fonteId: fonte.id, texto })}
+          >
+            {importar.isPending && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+            Importar para o acervo
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function FontesOficiais() {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.admin.jurisiaFontesOficiais.useQuery(undefined, { retry: false });
   const [termo, setTermo] = useState("");
+  const [colando, setColando] = useState<{ id: string; nome: string } | null>(null);
 
   const ligar = trpc.admin.jurisiaLigarFonte.useMutation({
     onSuccess: () => utils.admin.jurisiaFontesOficiais.invalidate(),
@@ -151,17 +258,18 @@ function FontesOficiais() {
 
   if (isLoading) return <Skeleton className="h-64 rounded-xl" />;
   const fontes = data?.fontes ?? [];
-  const comEmenta = fontes.filter((f) => f.material === "ementa");
+  const citaveis = fontes.filter((f) => f.material !== "metadado");
 
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Fontes oficiais</CardTitle>
+        <CardTitle className="text-base">De onde vem a jurisprudência</CardTitle>
         <CardDescription>
-          Ligada, a fonte é visitada sozinha na frequência da coluna e guarda o que for novo. Antes de
-          ligar, <b>rode a sondagem</b> (no fim desta tela): ela confere se a fonte responde{" "}
-          <b>do nosso servidor</b> — tribunal que barra a faixa de IP do servidor responde
-          normalmente no seu computador, e esse verde é falso.
+          Ligada, a fonte é visitada sozinha na frequência da coluna e guarda o que for novo. A
+          coluna <b>"dá pra ler daqui?"</b> é medida, não palpite: a informação é pública, mas
+          isso não garante que o nosso servidor consiga entrar — o STJ publica tudo aberto e
+          barra a nossa faixa de internet. Quando a porta está fechada e o material é súmula,
+          existe o caminho de <b>colar o texto oficial</b> uma vez.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -182,6 +290,7 @@ function FontesOficiais() {
             <TableRow>
               <TableHead>Fonte</TableHead>
               <TableHead>O que ela traz</TableHead>
+              <TableHead>Dá pra ler daqui?</TableHead>
               <TableHead>Volta</TableHead>
               <TableHead className="text-right">No acervo</TableHead>
               <TableHead>Última coleta</TableHead>
@@ -200,32 +309,59 @@ function FontesOficiais() {
                     quebra aqui, a frase invade a coluna vizinha. */}
                 <TableCell className="w-[360px] max-w-[360px] whitespace-normal">
                   <span
-                    className={`mr-1.5 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${
-                      f.material === "ementa"
-                        ? "border-info/30 bg-info/10 text-info-fg"
-                        : "border-border/40 bg-muted text-muted-foreground"
-                    }`}
+                    className={`mr-1.5 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${MATERIAL[f.material].cls}`}
                   >
-                    {f.material === "ementa" ? "ementa" : "só número"}
+                    {MATERIAL[f.material].rotulo}
                   </span>
                   <span className="text-[12px] text-muted-foreground">{f.entrega}</span>
                   {f.ultimoErro && (
                     <span className="mt-1 block text-[11px] text-danger-fg">{f.ultimoErro}</span>
                   )}
                 </TableCell>
+                {/* A situação medida, em português. Sem ela a chave "Ligada"
+                    convida a ligar fonte que não tem como responder — foi o que
+                    aconteceu com o STJ. */}
+                <TableCell className="w-[260px] max-w-[260px] whitespace-normal align-top">
+                  <p
+                    className={`text-[12px] font-semibold ${
+                      f.ligarTemChance ? "text-success-fg" : "text-warning-fg"
+                    }`}
+                  >
+                    {rotuloSituacao(f.situacao).frase}
+                  </p>
+                  {rotuloSituacao(f.situacao).deQuemE && (
+                    <p className="text-[11px] text-muted-foreground">
+                      {rotuloSituacao(f.situacao).deQuemE}
+                    </p>
+                  )}
+                  {f.notaDaSondagem && (
+                    <p className="mt-1 text-[11px] text-muted-foreground">{f.notaDaSondagem}</p>
+                  )}
+                </TableCell>
                 <TableCell className="text-[12px] text-muted-foreground">
                   {rotuloCadencia(f.cadenciaHoras)}
                 </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">
-                  {f.material === "ementa" ? nf.format(f.itens) : "—"}
+                  {f.material === "metadado" ? "—" : nf.format(f.itens)}
                 </TableCell>
                 <TableCell className="text-[12px] text-muted-foreground">{quando(f.ultimaColetaEm)}</TableCell>
                 <TableCell>
                   <Selo estado={f.status} />
                 </TableCell>
                 <TableCell className="text-right">
-                  {f.material === "ementa" ? (
+                  {f.material !== "metadado" ? (
                     <div className="flex items-center justify-end gap-2">
+                      {f.material === "sumula" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-[11px]"
+                          onClick={() => setColando({ id: f.id, nome: f.nome })}
+                        >
+                          <ClipboardPaste className="h-3.5 w-3.5" />
+                          <span className="ml-1">Colar texto oficial</span>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -256,12 +392,14 @@ function FontesOficiais() {
         </Table>
 
         <p className="mt-3 text-[12px] text-muted-foreground">
-          <b className="font-semibold text-foreground">{nf.format(data?.ementas.total ?? 0)}</b> ementas no
-          acervo, vindas de {nf.format(data?.ementas.tribunais ?? 0)} tribunais, em {comEmenta.length} fontes
-          declaradas. O DataJud entra por fora dessa conta: ele não traz texto de decisão, traz o número
-          que vira estatística.
+          <b className="font-semibold text-foreground">{nf.format(data?.ementas.total ?? 0)}</b> textos
+          citáveis no acervo (súmula e ementa), vindos de {nf.format(data?.ementas.tribunais ?? 0)}{" "}
+          tribunais, em {citaveis.length} fontes declaradas. O DataJud entra por fora dessa conta: ele
+          não traz texto de decisão, traz o número que vira estatística.
         </p>
       </CardContent>
+
+      <ColarSumulasDialog fonte={colando} onFechar={() => setColando(null)} />
     </Card>
   );
 }
@@ -279,9 +417,9 @@ export default function ConhecimentoJuridicoTab() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
           icone={<Quote className="h-3 w-3" />}
-          rotulo="Ementas citáveis"
+          rotulo="Súmulas e ementas"
           valor={nf.format(fontesData?.ementas.total ?? 0)}
-          apoio="texto de acórdão, com link pro tribunal"
+          apoio="texto que se cita na peça, com link pro tribunal"
         />
         <Kpi
           icone={<Database className="h-3 w-3" />}

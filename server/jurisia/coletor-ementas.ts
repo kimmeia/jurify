@@ -22,11 +22,15 @@ import { jurisiaEmentas, jurisiaFontesColeta } from "../../drizzle/schema";
 import {
   FONTES_OFICIAIS,
   coletaDevida,
+  enderecoDaFonte,
+  fonteCitavel,
   fonteOficialPorId,
+  ligarTemChance,
   urlDeBusca,
   type FonteOficial,
 } from "@shared/fontes-oficiais";
 import { extrairEmentasDeHtml, extrairEmentasDeJson, type EmentaBruta } from "./extrair-ementas";
+import { colherSumulas, type SumulaBruta } from "./extrair-sumulas";
 import { createLogger } from "../_core/logger";
 
 const log = createLogger("coletor-ementas");
@@ -56,6 +60,8 @@ export interface ResultadoColeta {
   novas: number;
   status: "ok" | "erro" | "bloqueada";
   erro: string | null;
+  /** Súmulas marcadas como canceladas que ficaram de fora, de propósito. */
+  canceladas?: number;
 }
 
 /** Garante a linha de estado da fonte. Idempotente. */
@@ -115,8 +121,8 @@ export function lerEmentas(fonte: FonteOficial, corpo: string, url: string): Eme
 export async function coletarFonte(fonteId: string, opts?: { termos?: string[] }): Promise<ResultadoColeta> {
   const fonte = fonteOficialPorId(fonteId);
   const base: ResultadoColeta = { fonteId, buscou: 0, novas: 0, status: "ok", erro: null };
-  if (!fonte || fonte.material !== "ementa") {
-    return { ...base, status: "erro", erro: "Fonte desconhecida ou que não traz ementa." };
+  if (!fonte || !fonteCitavel(fonte)) {
+    return { ...base, status: "erro", erro: "Fonte desconhecida ou que não traz material citável." };
   }
 
   const db = await getDb();
@@ -128,31 +134,11 @@ export async function coletarFonte(fonteId: string, opts?: { termos?: string[] }
     .set({ status: "coletando", ultimoErro: null })
     .where(eq(jurisiaFontesColeta.fonteId, fonteId));
 
-  const termos = (opts?.termos?.length ? opts.termos : TERMOS_PADRAO).slice(0, 2);
-  let novas = 0;
-  let buscou = 0;
-  let erro: string | null = null;
-  let bloqueada = false;
-
-  for (const termo of termos) {
-    const url = urlDeBusca(fonte, termo);
-    if (!url) {
-      erro = "Fonte sem endereço de busca conhecido — rode a sondagem.";
-      break;
-    }
-    const r = await buscarCorpo(url);
-    if (!r.ok) {
-      // 403/401 é o tribunal recusando QUEM chama, não o que foi pedido: é a
-      // diferença entre "consertar a busca" e "rodar de outro lugar".
-      bloqueada = r.status === 403 || r.status === 401;
-      erro = r.erro;
-      break;
-    }
-    const achadas = lerEmentas(fonte, r.corpo, url);
-    buscou += achadas.length;
-    novas += await gravarEmentas(fonte, achadas);
-    await new Promise((res) => setTimeout(res, PAUSA_ENTRE_FONTES_MS));
-  }
+  const passada =
+    fonte.material === "sumula"
+      ? await colherListaDeSumulas(fonte)
+      : await colherEmentasPorTermo(fonte, opts?.termos);
+  const { buscou, novas, erro, bloqueada, canceladas } = passada;
 
   const status: ResultadoColeta["status"] = bloqueada ? "bloqueada" : erro ? "erro" : "ok";
   const agora = new Date();
@@ -173,7 +159,178 @@ export async function coletarFonte(fonteId: string, opts?: { termos?: string[] }
     .where(eq(jurisiaFontesColeta.fonteId, fonteId));
 
   log.info({ fonteId, buscou, novas, status }, "[coletor] fonte percorrida");
-  return { fonteId, buscou, novas, status, erro };
+  return { fonteId, buscou, novas, status, erro, canceladas };
+}
+
+interface Passada {
+  buscou: number;
+  novas: number;
+  erro: string | null;
+  bloqueada: boolean;
+  canceladas: number;
+}
+
+/** Ementa se busca por termo: o acervo não acaba, então se volta sempre. */
+async function colherEmentasPorTermo(fonte: FonteOficial, termos?: string[]): Promise<Passada> {
+  const lista = (termos?.length ? termos : TERMOS_PADRAO).slice(0, 2);
+  const p: Passada = { buscou: 0, novas: 0, erro: null, bloqueada: false, canceladas: 0 };
+
+  for (const termo of lista) {
+    const url = urlDeBusca(fonte, termo);
+    if (!url) {
+      p.erro = "Fonte sem endereço de busca conhecido — rode a sondagem.";
+      break;
+    }
+    const r = await buscarCorpo(url);
+    if (!r.ok) {
+      // 403/401 é o tribunal recusando QUEM chama, não o que foi pedido: é a
+      // diferença entre "consertar a busca" e "rodar de outro lugar".
+      p.bloqueada = r.status === 403 || r.status === 401;
+      p.erro = r.erro;
+      break;
+    }
+    const achadas = lerEmentas(fonte, r.corpo, url);
+    p.buscou += achadas.length;
+    p.novas += await gravarEmentas(fonte, achadas);
+    await new Promise((res) => setTimeout(res, PAUSA_ENTRE_FONTES_MS));
+  }
+  return p;
+}
+
+/**
+ * Súmula se pega inteira, numa requisição.
+ *
+ * Sem termo de busca de propósito: o conjunto é fechado e cabe todo. Buscar
+ * súmula por palavra traria um pedaço do que caberia completo, e depois
+ * ninguém saberia qual pedaço falta.
+ */
+async function colherListaDeSumulas(fonte: FonteOficial): Promise<Passada> {
+  const p: Passada = { buscou: 0, novas: 0, erro: null, bloqueada: false, canceladas: 0 };
+  const url = enderecoDaFonte(fonte, "");
+  if (!url) {
+    p.erro = "Fonte de súmula sem endereço de lista — rode a sondagem.";
+    return p;
+  }
+  const r = await buscarCorpo(url);
+  if (!r.ok) {
+    p.bloqueada = r.status === 403 || r.status === 401;
+    p.erro = r.erro;
+    return p;
+  }
+
+  const colheita = colherSumulas(r.corpo, fonte.tribunal);
+  p.buscou = colheita.sumulas.length;
+  p.canceladas = colheita.canceladas;
+  p.novas = await gravarSumulas(fonte, colheita.sumulas, url);
+  if (p.buscou === 0) {
+    // Distinguir "a porta abriu e não tinha texto" de "a porta não abriu" é o
+    // que evita trocar o endereço de uma fonte que está viva.
+    p.erro = "A página respondeu, mas não trazia o texto dos enunciados (provavelmente é só o índice).";
+  }
+  return p;
+}
+
+/**
+ * O caminho manual: o texto oficial colado uma vez.
+ *
+ * Existe porque "a informação é pública" e "o nosso servidor consegue ler" são
+ * coisas diferentes — o STJ publica todas as súmulas aberto e barra a faixa de
+ * IP do servidor. Súmula muda poucas vezes por ano; esperar o robô conseguir
+ * entrar seria deixar a base vazia por um detalhe de rede.
+ *
+ * Passa pelo MESMO extrator da coleta automática, então o que entra colado é
+ * idêntico ao que entraria sozinho.
+ */
+export async function importarSumulasDeTexto(opts: {
+  fonteId: string;
+  texto: string;
+}): Promise<ResultadoColeta> {
+  const fonte = fonteOficialPorId(opts.fonteId);
+  const base: ResultadoColeta = { fonteId: opts.fonteId, buscou: 0, novas: 0, status: "ok", erro: null };
+  if (!fonte || fonte.material !== "sumula") {
+    return { ...base, status: "erro", erro: "Essa fonte não é de súmulas." };
+  }
+  const db = await getDb();
+  if (!db) return { ...base, status: "erro", erro: "Base de dados indisponível." };
+
+  const colheita = colherSumulas(opts.texto, fonte.tribunal);
+  if (colheita.sumulas.length === 0) {
+    return {
+      ...base,
+      status: "erro",
+      canceladas: colheita.canceladas,
+      erro: "Não achei nenhum enunciado nesse texto. Ele precisa ter o número junto do texto, como \"Súmula 297 — O Código de Defesa do Consumidor…\".",
+    };
+  }
+
+  const url = fonte.listaCompleta || `https://www.${fonte.tribunal.toLowerCase()}.jus.br/`;
+  const novas = await gravarSumulas(fonte, colheita.sumulas, url);
+
+  await garantirLinha(db, opts.fonteId);
+  const agora = new Date();
+  const [{ total = 0 } = { total: 0 }] = await db
+    .select({ total: sql<number>`COUNT(*)` })
+    .from(jurisiaEmentas)
+    .where(eq(jurisiaEmentas.fonteId, opts.fonteId));
+  await db
+    .update(jurisiaFontesColeta)
+    .set({ status: "ok", ultimaColetaEm: agora, itens: Number(total), ultimoErro: null })
+    .where(eq(jurisiaFontesColeta.fonteId, opts.fonteId));
+
+  log.info(
+    { fonteId: opts.fonteId, achadas: colheita.sumulas.length, novas },
+    "[coletor] súmulas importadas de texto",
+  );
+  return {
+    fonteId: opts.fonteId,
+    buscou: colheita.sumulas.length,
+    novas,
+    status: "ok",
+    erro: null,
+    canceladas: colheita.canceladas,
+  };
+}
+
+/**
+ * Grava súmula no mesmo acervo das ementas.
+ *
+ * Mesma tabela de propósito: quem busca jurisprudência não quer procurar em
+ * dois lugares, e o FULLTEXT que acha ementa acha enunciado. O endereço
+ * gravado é a página oficial de onde o texto saiu — é o que o advogado abre
+ * antes de assinar.
+ */
+async function gravarSumulas(fonte: FonteOficial, sumulas: SumulaBruta[], url: string): Promise<number> {
+  const db = await getDb();
+  if (!db || sumulas.length === 0) return 0;
+
+  let novas = 0;
+  for (const s of sumulas) {
+    try {
+      const [existente] = await db
+        .select({ id: jurisiaEmentas.id })
+        .from(jurisiaEmentas)
+        .where(
+          and(eq(jurisiaEmentas.fonteId, fonte.id), eq(jurisiaEmentas.identificador, s.identificador)),
+        )
+        .limit(1);
+      if (existente) continue;
+
+      await db.insert(jurisiaEmentas).values({
+        fonteId: fonte.id,
+        tribunal: fonte.tribunal,
+        identificador: s.identificador,
+        orgao: s.vinculante ? "Súmula vinculante" : "Súmula",
+        relator: null,
+        julgadoEm: null,
+        ementa: s.texto,
+        url,
+      });
+      novas++;
+    } catch (err) {
+      log.warn({ fonte: fonte.id, err: (err as Error).message }, "[coletor] súmula não gravada");
+    }
+  }
+  return novas;
 }
 
 /**
@@ -237,7 +394,7 @@ export async function rodarColetaDevida(agora = Date.now()): Promise<ResultadoCo
 
   for (const linha of linhas) {
     const fonte = fonteOficialPorId(linha.fonteId);
-    if (!fonte || fonte.material !== "ementa") continue;
+    if (!fonte || !fonteCitavel(fonte)) continue;
     if (!coletaDevida(fonte, linha.ultimaColetaEm, agora)) continue;
     feitos.push(await coletarFonte(linha.fonteId));
   }
@@ -260,6 +417,9 @@ export async function estadoDasFontes() {
       material: f.material,
       entrega: f.entrega,
       cadenciaHoras: f.cadenciaHoras,
+      situacao: f.situacao,
+      notaDaSondagem: f.notaDaSondagem ?? null,
+      ligarTemChance: ligarTemChance(f),
       ligada: l?.ligada ?? false,
       status: l?.status ?? ("nunca" as const),
       ultimaColetaEm: l?.ultimaColetaEm ?? null,
@@ -273,7 +433,7 @@ export async function estadoDasFontes() {
 /** Liga/desliga uma fonte. Ligar não coleta na hora — quem coleta é a cadência. */
 export async function ligarFonte(fonteId: string, ligada: boolean): Promise<void> {
   const fonte = fonteOficialPorId(fonteId);
-  if (!fonte || fonte.material !== "ementa") throw new Error("Fonte desconhecida.");
+  if (!fonte || !fonteCitavel(fonte)) throw new Error("Fonte desconhecida.");
   const db = await getDb();
   if (!db) throw new Error("Base de dados indisponível.");
   await garantirLinha(db, fonteId);

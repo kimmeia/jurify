@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.103 verdes em 14/09/2026 (412 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.138 verdes em 14/09/2026 (413 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -2016,6 +2016,57 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   por fixture fraca: faltava JSON com ementa e sem identificador, e o HTML de
   duas linhas não tinha container). `admin-layout-novo` e
   `jurisia-router-contrato` atualizadas pra verdade nova.
+
+- **Entregue 14/09, súmulas do STJ/STF na base + a sondagem dita em português —
+  origem: ele rodou a sondagem em produção e respondeu "Entendi nada,
+  sinceramente. deveria ter súmulas stj/stf acordãos, resp né n?" e "e buscar
+  isso automático já que é público as informações" (seção 33 do documento de
+  estado).** Duas coisas, e as duas vinham do mesmo erro meu: a tela estava
+  escrita pra mim (`403`, `tls`, `dns`, "é o IP") e o material que ele nomeou —
+  **súmula** — não existia como fonte.
+  - **O que a sondagem de produção mediu**: TJSP, TJMG e TRF4 respondem do
+    nosso servidor (200); STJ (SCON e portal) e DJEN dão **403 que PERSISTE com
+    identificação de navegador** — é faixa de IP, então "é público" não implica
+    "o robô consegue ler"; STF trava em **certificado** (conserto quase sempre
+    nosso); TJRJ 404 e CNJ dados abertos sem DNS. E **200 na página de entrada
+    não prova ementa** — a sondagem bateu no formulário do TJSP, e formulário
+    de tribunal imprime a palavra "ementa" no rótulo do campo. Daí
+    `porta_aberta` ≠ `coleta_liberada` em `shared/fontes-oficiais.ts`.
+  - **Súmula virou material de primeira classe**, com a mecânica que a
+    diferencia: conjunto FECHADO (`listaCompleta` em vez de busca por termo —
+    `enderecoDaFonte` IGNORA o termo) e sem número de processo, por isso
+    extrator próprio (`extrair-sumulas.ts`; o de ementa EXIGE número de
+    processo e devolveria zero, e o zero pareceria "a fonte não serve").
+    `fonteCitavel()` virou a régua única de "entra no acervo" (as 4 comparações
+    com `"ementa"` do coletor viraram uma chamada). **Cancelada não entra**,
+    nos DOIS leitores, e a conta das que ficaram fora volta no resultado.
+    Guardada na MESMA tabela `jurisia_ementas`, sem migration.
+  - **Automático onde a porta abre; colar onde não abre.** As súmulas do STF e
+    o LexML têm `listaCompleta` e o cron passa a visitá-las quando alguém
+    ligar — **nenhuma fonte foi ligada**. Pro STJ existe
+    `jurisiaImportarSumulas`: ele cola o texto oficial e o sistema separa uma
+    por uma, pelo MESMO extrator do robô. Conferido de ponta a ponta no banco
+    local (6 do STJ + 1 do STF, texto vindo de `fontes-revisional.ts` — não
+    inventei enunciado).
+  - **A tela em português**: `shared/sondagem-em-portugues.ts` (puro) devolve
+    `{tom, frase, acao}`; a separação que importa é `conserto` (depende de nós)
+    × `fechado` (só saindo por outra porta) — juntar os dois numa cor fez a
+    tela velha parecer que os tribunais todos fecharam. Linha ordenada pelo
+    tom, resumo antes da tabela, e **o número técnico NÃO foi removido**:
+    desceu pra coluna "Detalhe técnico" (há mutação travando isso). A sondagem
+    passou a contar súmula rodando o extrator de verdade (`temEmenta` procura a
+    PALAVRA "ementa", e página de súmula não usa essa palavra) e a bater no
+    endereço que o ROBÔ usa, tirado da mesma lista do coletor.
+  - **Anotado e NÃO feito**: repetidor com outro IP pro STJ/DJEN (custo, é
+    decisão dele); consertar o certificado do STF; o endereço real do TJCE (o
+    e-SAJ é de São Paulo — daqui o proxy bloqueia os portais); e ligar
+    TJSP/TJMG/TRF4, que é o que vira `porta_aberta` em `coleta_liberada`.
+  Amarra: `sumulas-e-sondagem-em-portugues` (35) — **45 mutações vermelhas**
+  (`scratchpad/mutar-sumulas-portugues.py`; 7 sobreviveram na 1ª volta: a trava
+  de cancelada só existia no leitor de texto, e as fixtures de índice e de
+  script/style estavam fracas — script no `<head>` não prova remoção quando a
+  leitura é do `<body>`). `jurisprudencia-de-verdade` teve 2 `expect`
+  atualizados.
 
 ## Fila combinada com o dono (31/08/2026)
 

@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.103 verdes, 412 arquivos** (14/09, com a seção 32 e `develop` dentro — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.138 verdes, 413 arquivos** (14/09, com a seção 33; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3694,3 +3694,149 @@ Baseline na ponta do merge: **6.103 testes verdes em 412 arquivos**, `pnpm
 check` limpo e `pnpm vite build` passando. O número CAIU em relação aos 6.167
 medidos antes de trazer `develop` porque de lá veio a remoção do módulo de
 ajuda, que levou as amarras dele junto.
+
+---
+
+## 33. Súmulas do STJ/STF na base, e a sondagem dita em português (14/09)
+
+**Origem, nas palavras dele.** Rodou a sondagem em produção, olhou o resultado
+e respondeu: *"Entendi nada, sinceramente. deveria ter súmulas stj/stf
+acordãos, resp né n? isso serve de base para o jurisia e la o adv vai conseguir
+fazer a pesquisa e a peça dele. Ideia é essa. para isso precisamos primeiro
+fazer essa base de conhecimento"*, e em seguida *"e buscar isso automático já
+que é público as informações"*.
+
+As duas frases pedem coisas diferentes e as duas estavam certas: a tela estava
+escrita para mim (`403`, `tls`, `dns`, "é o IP", "responde-json"), e o material
+que ele nomeou — **súmula** — não existia como fonte no sistema.
+
+### 33.1 O que a sondagem de produção mediu (é dado, não palpite)
+
+| Fonte | O que voltou |
+| --- | --- |
+| DataJud (`api_publica_stj`/`_tst`/`_tse`/`_stm`) | 200, JSON, **sem campo de ementa** — confirma o diagnóstico da seção 32 |
+| **TJSP · e-SAJ (2º grau)** | **200**, HTML, 612ms |
+| **TJMG · jurisprudência** | **200**, HTML, 646ms |
+| **TRF4 · jurisprudência** | **200**, HTML, 1180ms |
+| STJ · SCON e portal | **403 que persistiu** com identificação de navegador |
+| DJEN · Comunica API (com e sem filtro) | **403 que persistiu** |
+| STF · busca, portal e dados abertos | erro de **certificado** (2) e **domínio que não resolve** (1) |
+| TJRJ · jurisprudência | **404** |
+| CNJ · dados abertos | domínio não resolve |
+| TJCE · PJe (controle) | 200 — o motor próprio loga aqui todo dia |
+| LexML · SRU explain | 200 |
+
+Duas leituras importam. **403 que persiste com identificação de navegador é
+faixa de IP**: o STJ publica tudo aberto e recusa o nosso servidor, então
+"é público" não implica "o robô consegue ler". E **200 na página de entrada não
+prova ementa**: a sondagem bateu no formulário do TJSP, e formulário de tribunal
+imprime a palavra "ementa" no rótulo do campo de busca. Por isso a lista de
+fontes distingue `porta_aberta` de `coleta_liberada`.
+
+### 33.2 Súmula virou material de primeira classe
+
+Súmula não é ementa, e a diferença é mecânica: **o conjunto é FECHADO** (algumas
+centenas, mudam poucas por ano) e **não tem número de processo**.
+
+- `TipoMaterial` ganhou `"sumula"`; `fonteCitavel()` é a régua única de "entra no
+  acervo de citação" (súmula e ementa sim, metadado não) — as quatro comparações
+  com `"ementa"` espalhadas pelo coletor viraram uma chamada.
+- `listaCompleta` ao lado de `busca`: `enderecoDaFonte()` **ignora o termo** para
+  súmula. Buscar súmula por palavra traria um pedaço do que caberia inteiro, e
+  depois ninguém saberia qual pedaço falta.
+- `server/jurisia/extrair-sumulas.ts` — extrator próprio, porque o de ementa
+  EXIGE número de processo e devolveria zero numa página de súmulas; o zero
+  pareceria "a fonte não serve". Lê texto, HTML e JSON (`colherSumulas` escolhe
+  pelo que o corpo é, não pelo que a fonte prometeu).
+- **Súmula cancelada não entra**, nos dois leitores, e a conta das que ficaram de
+  fora volta no resultado. Quem cita súmula cancelada perde a causa.
+- O enunciado guardado não repete o próprio "Súmula N" — o identificador já vai
+  separado, e a peça receberia a repetição.
+- Mora na MESMA tabela `jurisia_ementas` (sem migration nova): quem procura
+  jurisprudência não quer olhar em dois lugares, e o FULLTEXT que acha ementa
+  acha enunciado. `orgao` guarda "Súmula"/"Súmula vinculante".
+
+### 33.3 O caminho automático, e o caminho de colar
+
+Automático onde a porta abre: as súmulas do STF e o LexML estão declarados com
+`listaCompleta`, e o cron de hora em hora passa a visitá-los quando alguém liga
+— **nenhuma fonte foi ligada**; isso é decisão dele no painel.
+
+Onde a porta está fechada existe `jurisiaImportarSumulas`: ele abre a lista
+oficial no navegador **dele**, seleciona tudo, cola no diálogo e o sistema
+separa uma por uma. Passa pelo MESMO extrator da coleta automática, então o que
+entra colado é idêntico ao que entraria sozinho. É o que resolve o STJ hoje, e
+súmula muda poucas vezes por ano — colar uma vez resolve o ano.
+
+Conferido de ponta a ponta no banco local, pelo caminho de verdade: as súmulas
+que já estavam curadas em `fontes-revisional.ts` entraram pela procedure (6 do
+STJ, 1 do STF).
+
+### 33.4 A tela dita em português
+
+`shared/sondagem-em-portugues.ts` (puro) traduz cada resultado em `{tom, frase,
+acao}`. Quatro tons, e a separação que importa é entre **`conserto`** (depende
+de nós: endereço errado, certificado, filtro de cabeçalho) e **`fechado`**
+(depende de sair por outra porta). Juntar os dois numa cor só foi o que fez a
+tela velha parecer que os tribunais todos tinham fechado a porta.
+
+- A linha da sondagem virou frase + o que fazer; a tabela **ordena pelo tom**
+  (o que dá pra ligar hoje em cima) e um resumo de 1 a 4 linhas vem antes dela.
+- **O número técnico não foi removido** — desceu para a coluna "Detalhe
+  técnico" (`403 · 612ms · HTML · UA persistiu`) e para a dobra da linha. Há
+  mutação travando isso nas duas.
+- A sondagem passou a contar **quantas súmulas o corpo entrega de fato**,
+  rodando o extrator de verdade: `temEmenta` procura a PALAVRA "ementa", e
+  página de súmula não usa essa palavra — sem a contagem, a fonte do material
+  mais forte que existe apareceria como "não traz nada".
+- Os candidatos da sondagem passaram a sair da MESMA lista que o coletor lê
+  (`enderecoDaFonte`), então o que se mede é a porta que o robô vai usar.
+  Entraram também dois outros hosts do STJ: "o tribunal barra" e "aquele
+  servidor barra" levam a decisões diferentes.
+- A tabela de fontes ganhou a coluna **"Dá pra ler daqui?"** com a situação
+  medida e a nota da sondagem. A chave de ligar **continua clicável de
+  propósito**: medida velha não decide para sempre, e tribunal desbloqueia.
+
+Na resposta do JurisIA, súmula e ementa contam separado (`contarCitacoes`,
+`rotuloCitacoes`): "2 súmulas e 1 ementa". Dizer "5 ementas" quando duas são
+súmula é impreciso onde mais importa.
+
+### 33.5 O que ficou anotado e NÃO foi feito
+
+- **STJ e DJEN seguem sem caminho automático.** Sair por outra porta (um
+  repetidor com outro endereço de internet) não foi feito nem proposto em
+  mockup — é decisão dele, e envolve custo.
+- **O certificado do STF não foi consertado.** A sondagem diz que a trava é de
+  certificado, o que quase sempre é do nosso lado; qual dos três problemas de
+  certificado é exige ver o código do erro, que agora está na dobra da linha.
+- **TJCE segue com endereço deduzido e errado** (`endereco_a_corrigir`): o
+  e-SAJ é de São Paulo. O portal real do TJCE não pôde ser descoberto daqui (o
+  proxy do ambiente bloqueia os portais).
+- **TJSP/TJMG/TRF4 não foram ligados.** A porta responde; se a página de
+  resultado devolve ementa, só a primeira coleta dirá — e é ela que muda a
+  situação de `porta_aberta` para `coleta_liberada`.
+- Segue valendo o que a seção 32.5 já listava: nada de varredura com credencial
+  de advogado, e busca por semelhança sobre as ementas continua fora.
+
+### 33.6 Amarra
+
+`sumulas-e-sondagem-em-portugues.test.ts` (35 testes) — **45 mutações
+vermelhas** (`scratchpad/mutar-sumulas-portugues.py`). Sete sobreviveram na
+primeira volta e as sete ensinaram algo:
+
+- súmula cancelada só estava travada no leitor de TEXTO (o de JSON passava);
+- o índice de fixture tinha corpo VAZIO entre os números, então baixar o
+  mínimo de texto não mudava nada — o sumário real tem "Súmula 1 ..... 12";
+- `<script>`/`<style>` estavam no `<head>` da fixture, e a leitura é do
+  `<body>`: a remoção só se prova com script DENTRO do corpo;
+- o resumo com um grupo só era o caso que faltava para provar que grupo vazio
+  não vira linha;
+- e duas eram o motivo de sempre — a amarra olhava um literal que existe em
+  outro lugar do arquivo (o resumo também aparece no toast; `{f.notaDaSondagem}`
+  continua escrito dentro do bloco quando a condição é desarmada). As duas
+  passaram a olhar a guarda e o bloco certos.
+
+`jurisprudencia-de-verdade.test.ts` teve DOIS `expect` atualizados para a
+verdade nova, preservando o que protegem: a exigência de endereço agora
+distingue ementa (busca por termo) de súmula (lista completa), e a frase que
+separa citação de estatística passou a nomear as duas.
