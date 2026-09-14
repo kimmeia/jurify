@@ -52,11 +52,17 @@ describe("ementa × metadado — a fronteira que o produto vende", () => {
     expect(comEmenta).toContain("stj-scon");
     expect(comEmenta).toContain("tjce-jurisprudencia");
     expect(comEmenta).not.toContain("datajud");
-    // Toda fonte de ementa precisa de endereço de busca e de sigla de
+    // Toda fonte de EMENTA precisa de endereço de busca e de sigla de
     // tribunal — sem os dois ela não coleta nem entra no entendimento regional.
+    // Súmula não busca por termo (conjunto fechado: pega-se a lista inteira),
+    // então o que ela precisa é do endereço da lista.
     for (const f of fontesQueTrazemEmenta()) {
-      expect(f.busca, `${f.id} sem endereço`).toMatch(/^https:\/\//);
-      expect(f.tribunal, `${f.id} sem tribunal`).not.toBe("");
+      if (f.material === "ementa") {
+        expect(f.busca, `${f.id} sem endereço`).toMatch(/^https:\/\//);
+        expect(f.tribunal, `${f.id} sem tribunal`).not.toBe("");
+      } else {
+        expect(f.listaCompleta, `${f.id} sem lista`).toMatch(/^https:\/\//);
+      }
     }
   });
 
@@ -280,11 +286,14 @@ describe("a resposta separa o que fundamenta do que só mede", () => {
     expect(ler("server/jurisia/router-jurisia.ts")).toContain("jurisprudencia: r.jurisprudencia,");
   });
 
-  it("o texto que separa ementa de estatística está na tela", () => {
+  it("o texto que separa o que fundamenta do que só mede está na tela", () => {
     const tela = ler("client/src/pages/JurisIa.tsx");
-    expect(tela).toContain("O que os tribunais decidiram");
-    expect(tela).toMatch(/Ementa é acórdão publicado — entra na peça/);
-    expect(tela).toMatch(/estatística: diz como\s+costuma terminar, não fundamenta/);
+    expect(tela).toContain("O que sustenta a resposta");
+    // A fronteira é o que este teste guarda, não a redação: súmula e ementa
+    // entram na peça; o painel de número, não.
+    expect(tela).toMatch(/Súmula é entendimento firmado do tribunal e ementa é acórdão publicado/);
+    expect(tela).toMatch(/as duas\s+entram na peça/);
+    expect(tela).toMatch(/estatística: diz como costuma terminar, não\s+fundamenta/);
   });
 
   it("falha na busca de ementa não derruba a conversa", () => {

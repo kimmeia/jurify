@@ -15,6 +15,8 @@
 
 import { chaveDataJud } from "./datajud-client";
 import { repararMojibake } from "../../shared/texto-mojibake";
+import { colherSumulas } from "./extrair-sumulas";
+import { enderecoDaFonte, fontesQueTrazemEmenta } from "@shared/fontes-oficiais";
 
 const PAUSA_PADRAO_MS = 1_500;
 const TIMEOUT_MS = 25_000;
@@ -109,6 +111,15 @@ export interface ResultadoSonda {
   forma: string;
   /** Achou algo que pareça ementa/teor? null quando nem deu pra olhar. */
   temEmenta: boolean | null;
+  /**
+   * Quantos enunciados de súmula o corpo entrega de fato.
+   *
+   * `temEmenta` procura a PALAVRA "ementa", e página de súmula não usa essa
+   * palavra — sem esta contagem, a fonte que traz o material mais forte que
+   * existe apareceria como "não traz nada". Aqui o extrator de verdade é
+   * rodado no corpo: o número é quantas súmulas entrariam no acervo.
+   */
+  sumulasNoCorpo: number | null;
   erro: string | null;
   /** Começo do corpo cru. É daqui que sai o formato real dos campos. */
   amostra: string;
@@ -274,6 +285,48 @@ export async function candidatosPadrao(termo: string): Promise<CandidatoSonda[]>
     },
   );
 
+  // Subdomínios do STJ que podem não estar atrás do mesmo porteiro.
+  //
+  // O 403 medido em 14/09 foi no `scon` e no `www`. Vale uma batida em outros
+  // hosts do mesmo tribunal antes de concluir que o STJ inteiro está fechado
+  // pra gente: "o tribunal barra" e "aquele servidor barra" levam a decisões
+  // diferentes, e a diferença custa um pedido.
+  lista.push(
+    {
+      fonte: "STJ",
+      nome: "portal de dados abertos",
+      url: "https://dadosabertos.stj.jus.br/",
+      pergunta: "outro host do STJ responde? (o SCON barrou o nosso IP)",
+    },
+    {
+      fonte: "STJ",
+      nome: "consulta processual",
+      url: "https://processo.stj.jus.br/processo/pesquisa/",
+      pergunta: "outro host do STJ responde? (o SCON barrou o nosso IP)",
+    },
+  );
+
+  // A porta que o ROBÔ vai usar, não a porta de entrada do site.
+  //
+  // Sondar a página do formulário e ligar a coleta na página de RESULTADO são
+  // coisas diferentes — foi por isso que "TJSP traz ementa" ficou provado
+  // demais na primeira leitura: a página do formulário imprime a palavra
+  // "ementa" no rótulo do campo de busca. Estes candidatos saem da MESMA lista
+  // que o coletor usa, então o que a sondagem mede é o que o robô vai fazer.
+  for (const f of fontesQueTrazemEmenta()) {
+    const url = enderecoDaFonte(f, termo);
+    if (!url || lista.some((c) => c.url === url)) continue;
+    lista.push({
+      fonte: f.tribunal || f.orgao,
+      nome: `${f.nome} — endereço da coleta`,
+      url,
+      pergunta:
+        f.material === "sumula"
+          ? "a lista de súmulas abre daqui? o texto do enunciado vem nela?"
+          : "a busca por termo devolve ementa? é este endereço que o robô usa",
+    });
+  }
+
   return lista;
 }
 
@@ -353,6 +406,7 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
     veredito: "erro",
     forma: "",
     temEmenta: null,
+    sumulasNoCorpo: null,
     erro: null,
     amostra: "",
     causa: null,
@@ -384,6 +438,14 @@ export async function sondarUm(c: CandidatoSonda): Promise<ResultadoSonda> {
     if (!texto.trim()) {
       r.veredito = "vazio";
       return r;
+    }
+
+    // Roda o extrator de verdade, não uma heurística: o que vale saber é
+    // quantas súmulas ENTRARIAM no acervo se esta porta fosse ligada.
+    try {
+      r.sumulasNoCorpo = colherSumulas(texto, "").sumulas.length;
+    } catch {
+      r.sumulasNoCorpo = null;
     }
 
     // Content-type mente com frequência em portal de tribunal; tenta parsear.
@@ -461,6 +523,8 @@ export interface SondagemCompleta {
   termo: string;
   bloqueioDeRede: boolean;
   comEmenta: string[];
+  /** Fontes cujo corpo já entregou enunciado de súmula, com quantos. */
+  comSumula: Array<{ fonte: string; quantas: number }>;
 }
 
 export async function sondarFontes(opts?: {
@@ -491,5 +555,8 @@ export async function sondarFontes(opts?: {
     termo,
     bloqueioDeRede: pareceBloqueioDeRede(resultados),
     comEmenta: resultados.filter((r) => r.temEmenta).map((r) => `${r.fonte}/${r.nome}`),
+    comSumula: resultados
+      .filter((r) => (r.sumulasNoCorpo ?? 0) > 0)
+      .map((r) => ({ fonte: `${r.fonte}/${r.nome}`, quantas: r.sumulasNoCorpo ?? 0 })),
   };
 }
