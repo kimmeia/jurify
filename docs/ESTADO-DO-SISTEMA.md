@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.167 verdes, 413 arquivos** (14/09, com a seção 29; 6.136 em 412 antes; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.103 verdes, 412 arquivos** (14/09, com a seção 32 e `develop` dentro — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3690,5 +3690,7 @@ mutante que pega "o bloco de fora" era equivalente. `admin-layout-novo` e
 o que elas protegem (que os dois painéis continuam montados, e o contrato de
 procedures da tela).
 
-Baseline: **6.167 testes verdes em 413 arquivos**, `pnpm check` limpo,
-`pnpm vite build` passando.
+Baseline na ponta do merge: **6.103 testes verdes em 412 arquivos**, `pnpm
+check` limpo e `pnpm vite build` passando. O número CAIU em relação aos 6.167
+medidos antes de trazer `develop` porque de lá veio a remoção do módulo de
+ajuda, que levou as amarras dele junto.
