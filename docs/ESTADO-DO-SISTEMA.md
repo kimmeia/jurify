@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.203 verdes, 415 arquivos** (14/09, com a seção 35; 6.176 em 414 na seção 34; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.239 verdes, 418 arquivos** (14/09, na ponta do merge das três entregas do dia com o `develop`; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3695,9 +3695,191 @@ check` limpo e `pnpm vite build` passando. O número CAIU em relação aos 6.167
 medidos antes de trazer `develop` porque de lá veio a remoção do módulo de
 ajuda, que levou as amarras dele junto.
 
+## 33. As marcas dos cards passaram a ser as REAIS (13/09)
+
+Pedido do dono, com todas as letras: *"esse card conexão simplificada acho que
+pode remover pq ja podemos conectar com 1 clique. Tambem quero que use as logos
+reais nos cards (whatsapp, facebool, instagram) em canais e app externos. nada
+de parecido, quero icones reais."*
+
+### 32.1 As marcas
+
+`client/src/components/logos-marcas.tsx` (padrão do `IconeTwilio`, que já
+existia): SVG embutido, traçado do Simple Icons (dados em CC0), cor da MARCA e
+não do tema — `currentColor` faria um WhatsApp roxo no dia em que a paleta
+mudar. Cinco: WhatsApp (#25D366), Instagram (degradê oficial — chapado ele
+deixa de ser a marca que se reconhece), Messenger (#0866FF), OpenAI (preta, com
+`dark:fill-white` pra não sumir no tema escuro) e Claude (#D97757).
+
+Saíram da tela os emojis 💬 📸 💙 🤖 🦾.
+
+**O ladrilho mudou junto, e precisava:** ele era um degradê CHEIO da cor do
+canal, desenhado para um emoji branco por cima. Marca verde sobre ladrilho
+verde some. Agora é claro, com borda; o degradê sobrou só no cartão
+"+ Adicionar outro", que não tem marca.
+
+**Uma escolha dita na cara:** o card é "Facebook Messenger", então leva a marca
+do **Messenger** — o "f" azul é o Facebook, que é outro produto.
+
+**O Asaas entrou na segunda rodada** (*"só o ícone do asaas que não tem nada a
+ver"*, e ele tinha razão: era um saco de dinheiro). A marca não está no Simple
+Icons e o proxy do ambiente bloqueia o site deles, mas o registro do npm passa
+— o traçado veio do pacote `@asaasbr/n8n-nodes-asaas`, o nó de integração com a
+Asaas, **copiado do arquivo, não redesenhado**. É a única das seis que é um
+QUADRADO (azul #0030B9 com o desenho vazado em branco): é o ícone de aplicativo
+deles, e é assim que a Asaas se apresenta — por isso entra no card com canto
+arredondado, e não como glifo solto.
+
+Lição que fica pro ambiente: quando um CDN de ícone estiver bloqueado, o
+**registro do npm não está** (`registry.npmjs.org` é exceção no proxy). Marca de
+serviço costuma viajar dentro do pacote de integração dele.
+
+### 32.2 O banner saiu — e o que ele carregava, não
+
+O banner azul "conexão simplificada" saiu: os cards já conectam com 1 clique e
+o texto repetia isso.
+
+**O cuidado que valeu:** dentro dele morava a ÚNICA porta do **cadastro manual
+do WhatsApp Cloud** — o caminho de quando o OAuth não roda (App Review
+pendente, Tech Provider não aprovado, BM dona do app). Tirar o banner inteiro
+levaria junto uma função que ninguém mandou remover. Ela virou uma linha
+discreta embaixo dos cards, com o mesmo clique.
+
+O aviso "Instagram e Messenger: em breve", que o banner também dava, continua
+na descrição de cada card, no pill ao lado do nome e no botão travado — o teste
+`instagram-em-breve` foi ajustado para conferir esses três em vez do banner.
+
+Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 10 mutações vermelhas
+em `scratchpad/mutar-logos-reais.py`.
+
+## 34. Cartões do topo fora dos painéis; busca na linha das abas (13/09)
+
+Pedido do dono: *"vamos remover esses cards superiores dos dashboards
+comercial, operacional e financeiro. Opção de buscar vamos alinhar junto do
+menu com as quatro opções na extremidade da direita."* Aprovado com *"pode
+fazer"*; comparador `mockup-paineis-cards-e-busca.html`.
+
+### 34.1 A faixa de cartões saiu dos três painéis
+
+`<FaixaAcoes>` com os `<AcaoCard>` saiu de `DashboardComercial`,
+`DashboardOperacional` e `DashboardFinanceiro` (o `DashboardGeral` já tinha
+perdido a dele em 12/09). **Nenhum dado foi apagado** — os cartões eram atalhos:
+
+| o cartão dizia | onde o número continua |
+|---|---|
+| clientes com cobrança vencida | Financeiro → Clientes, chip "inadimplentes"; e "Vencido no período", em dinheiro, no bloco principal do próprio painel |
+| cobranças vencidas no período | Financeiro |
+| abaixo da meta · sem meta | ranking do painel Comercial e Configurações → Equipe |
+| contratos fechados sem pagamento | Financeiro |
+| tarefas e compromissos atrasados | Tarefas e Agenda, que já mostram o atraso na lista |
+
+**Os componentes `FaixaAcoes` e `AcaoCard` continuam em `dashboards/common.tsx`,
+agora sem nenhum usuário.** Apagá-los não foi autorizado; a amarra guarda a
+decisão (nenhum painel volta a montá-los), não o código.
+
+O que se perdeu de fato, e está dito no comparador: o aviso passivo. "341
+clientes vencidos" aparecia sem abrir o Financeiro. A recomendação registrada
+é NÃO trazer os cartões de volta e sim usar o sino de notificações, que já
+existe e é o lugar certo pra "alguém precisa de você".
+
+### 34.2 A busca subiu pra régua de abas
+
+`BuscaDoTopo` deixou de ser privada de `common.tsx` e passou a ser montada pelo
+`DashboardComTabs`, na ponta direita da fileira das abas. Três detalhes:
+
+- **A linha agora é da FILEIRA**, não da tira de abas: o `border-b` saiu do
+  invólucro das abas e foi pro `div` que contém abas + busca. É a resposta ao
+  que o dono estranhou na entrega anterior ("essa linha só dura do tamanho do
+  menu") — na época a medida mostrou que a linha tinha a largura do conteúdo,
+  mas ela de fato parava antes da borda direita do bloco.
+- **`BuscaJaNoTopo`** (contexto, default `false`) é o que evita DUAS buscas:
+  `PainelTopo` só desenha a sua quando ninguém desenhou acima. Quem não tem
+  abas — colaborador de um setor só, variante processual — continua com a busca
+  no título do painel, como antes.
+- **No celular** a busca leva `w-full sm:w-auto` e cai pra linha de baixo, em
+  vez de espremer as quatro abas em 190px. `max-w-full overflow-x-auto` seguem
+  no invólucro das abas.
+
+Amarra: 2 testes novos em `telas-cabem-no-celular.test.ts` — 8 mutações
+vermelhas em `scratchpad/mutar-busca-nas-abas.py`.
+
+### 34.3 Anotado e NÃO corrigido
+
+No celular o painel Financeiro rola **8px** de lado (398px num aparelho de 390).
+Medido nas duas versões, antes e depois: **não veio desta mudança**. É o bloco
+do gráfico.
+
+## 35. Kanban: filtrar pela data de CONCLUSÃO, não só pela de criação (13/09)
+
+Pergunta do dono: *"filtro so permite buscar por data de criação do card, quero
+saber também por data de conclusão. como podemos fazer?"* — recomendação dada,
+aprovada com *"pode fazer como recomendou"*.
+
+### 35.1 Por que não dava pra filtrar
+
+O card sempre soube em QUAL coluna está (`colunaId`), mas nunca soube QUANDO
+chegou nela. `updatedAt` não serve: muda em qualquer edição. Então não existia
+data de conclusão pra comparar — daí o filtro só oferecer "Criado em".
+
+**Mas o passado existia.** Cada movimento de card já era registrado em
+`kanban_movimentacoes` (card, coluna de origem, coluna de destino, quando, por
+quem), desde sempre. O filtro não precisava nascer vazio.
+
+### 35.2 O que foi feito
+
+- **`kanban_cards.concluidoEm`** (migration 0231, aditiva, nasce NULL, índice
+  `(escritorioId, concluidoEm)`). Gravada em `moverCard` quando o destino é
+  coluna de conclusão e **zerada quando o destino é coluna normal**; e em
+  `criarCard`, pro card que nasce direto numa coluna de conclusão e por isso
+  nunca passaria pelo `moverCard`.
+- **A regra, escolhida pelo dono**: vale a ÚLTIMA conclusão, e a data some se o
+  card voltar pro fluxo. Guardar a primeira faria o filtro dizer "concluído em
+  agosto" sobre card que hoje está em produção.
+- **O passado**, na mesma migration: `MAX(createdAt)` das movimentações cujo
+  destino é coluna de conclusão, só pra card que está AGORA concluído; card sem
+  histórico (nasceu na conclusão) cai na data de criação. A migration zera
+  antes quem não está concluído, então pode rodar de novo sem deixar data velha
+  — o executor repassa migrations quando alguma falha.
+- **O filtro** (`condicoesCards`, compartilhado pelo quadro e pelo PDF) ganhou
+  `campoData: "criado" | "concluido"`. Ausente = criado, como sempre foi. Em
+  "concluido", card sem data fica fora explicitamente (`IS NOT NULL`) — em SQL
+  `NULL > data` é desconhecido, não falso, e a condição existe pra valer também
+  quando o usuário abre só uma ponta do período, e pra deixar a intenção
+  escrita. Sem período nenhum, `campoData` não vira filtro.
+- **A tela**: o popover do período ganhou "Contar pela data de" ANTES dos
+  campos De/Até — o mesmo "01 a 31" devolve listas diferentes nas duas datas, e
+  quem digita as datas primeiro erra de qual estava falando. O rótulo do botão
+  vira "Concluído em", e o aviso diz que só entram cards em coluna de conclusão.
+- **O PDF veio junto** (usa o mesmo `condicoesCards`) e o rótulo do arquivo
+  passou a dizer "(por conclusão)" ou "(por criação)": o mesmo intervalo gera
+  listas diferentes, e o impresso precisa contar qual é.
+
+### 35.3 Conferido de ponta a ponta, no app rodando
+
+Banco povoado com os quatro casos que importam, e o filtro dirigido por
+Playwright na tela de verdade:
+
+| card | situação | `concluidoEm` |
+|---|---|---|
+| concluído em 05/09, com histórico de 2 movimentos | em coluna de conclusão | 05/09 16:30 |
+| concluído 02/09, voltou, concluído de novo 10/09 | em coluna de conclusão | **10/09** (a última) |
+| criado direto na conclusão, sem histórico | em coluna de conclusão | data de criação |
+| foi concluído 04/09 e voltou pro fluxo | em coluna normal | **vazio** |
+
+Filtro por conclusão 01→06/09 devolveu só o primeiro; 01→30/09 devolveu os três
+concluídos; por criação, os seis. Sem erro de console.
+
+Amarra: `kanban-filtro-concluido-em.test.ts` (19 testes; a regra SQL é
+renderizada com `MySqlDialect` porque banco falso engole `isNull`) — 14 mutações
+vermelhas em `scratchpad/mutar-kanban-concluido.py`. A do `tipo` da coluna só
+morreu depois de a amarra recortar o `criarCard`: o `moverCard` faz a MESMA
+consulta, e olhar o arquivo inteiro deixava passar.
+
 ---
 
-## 33. Súmulas do STJ/STF na base, e a sondagem dita em português (14/09)
+---
+
+## 36. Súmulas do STJ/STF na base, e a sondagem dita em português (14/09)
 
 **Origem, nas palavras dele.** Rodou a sondagem em produção, olhou o resultado
 e respondeu: *"Entendi nada, sinceramente. deveria ter súmulas stj/stf
@@ -3710,7 +3892,7 @@ As duas frases pedem coisas diferentes e as duas estavam certas: a tela estava
 escrita para mim (`403`, `tls`, `dns`, "é o IP", "responde-json"), e o material
 que ele nomeou — **súmula** — não existia como fonte no sistema.
 
-### 33.1 O que a sondagem de produção mediu (é dado, não palpite)
+### 36.1 O que a sondagem de produção mediu (é dado, não palpite)
 
 | Fonte | O que voltou |
 | --- | --- |
@@ -3733,7 +3915,7 @@ prova ementa**: a sondagem bateu no formulário do TJSP, e formulário de tribun
 imprime a palavra "ementa" no rótulo do campo de busca. Por isso a lista de
 fontes distingue `porta_aberta` de `coleta_liberada`.
 
-### 33.2 Súmula virou material de primeira classe
+### 36.2 Súmula virou material de primeira classe
 
 Súmula não é ementa, e a diferença é mecânica: **o conjunto é FECHADO** (algumas
 centenas, mudam poucas por ano) e **não tem número de processo**.
@@ -3756,7 +3938,7 @@ centenas, mudam poucas por ano) e **não tem número de processo**.
   jurisprudência não quer olhar em dois lugares, e o FULLTEXT que acha ementa
   acha enunciado. `orgao` guarda "Súmula"/"Súmula vinculante".
 
-### 33.3 O caminho automático, e o caminho de colar
+### 36.3 O caminho automático, e o caminho de colar
 
 Automático onde a porta abre: as súmulas do STF e o LexML estão declarados com
 `listaCompleta`, e o cron de hora em hora passa a visitá-los quando alguém liga
@@ -3772,7 +3954,7 @@ Conferido de ponta a ponta no banco local, pelo caminho de verdade: as súmulas
 que já estavam curadas em `fontes-revisional.ts` entraram pela procedure (6 do
 STJ, 1 do STF).
 
-### 33.4 A tela dita em português
+### 36.4 A tela dita em português
 
 `shared/sondagem-em-portugues.ts` (puro) traduz cada resultado em `{tom, frase,
 acao}`. Quatro tons, e a separação que importa é entre **`conserto`** (depende
@@ -3801,7 +3983,7 @@ Na resposta do JurisIA, súmula e ementa contam separado (`contarCitacoes`,
 `rotuloCitacoes`): "2 súmulas e 1 ementa". Dizer "5 ementas" quando duas são
 súmula é impreciso onde mais importa.
 
-### 33.4.1 Duas coisas que só a FOTO pegou
+### 36.4.1 Duas coisas que só a FOTO pegou
 
 O comparador é `comparador-sumulas-e-portugues.html` — as duas versões do
 sistema rodando ao mesmo tempo (uma em cada porta, ligadas no MESMO banco) com
@@ -3819,7 +4001,7 @@ comparações, 5 fotos, o "Piscar" alterando a tela de verdade.
    largura do cartão, não a da tela) — e a célula da tabela nasce
    `whitespace-nowrap`, então o nome da fonte sozinho empurrava o resto.
 
-### 33.4.2 A última coleta vence a medida antiga
+### 36.4.2 A última coleta vence a medida antiga
 
 `situacaoVigente(declarada, statusDaColeta)`: a situação escrita no código é uma
 medida com data; a coleta é o robô batendo na porta hoje. Coleta `bloqueada`
@@ -3829,7 +4011,7 @@ rebaixa para "o tribunal barra o nosso servidor" e coleta `ok` promove para
 isso a tela afirmava "o site responde" logo embaixo de um erro de recusa, o que
 a primeira foto mostrou.
 
-### 33.5 O que ficou anotado e NÃO foi feito
+### 36.5 O que ficou anotado e NÃO foi feito
 
 - **STJ e DJEN seguem sem caminho automático.** Sair por outra porta (um
   repetidor com outro endereço de internet) não foi feito nem proposto em
@@ -3846,7 +4028,7 @@ a primeira foto mostrou.
 - Segue valendo o que a seção 32.5 já listava: nada de varredura com credencial
   de advogado, e busca por semelhança sobre as ementas continua fora.
 
-### 33.6 Amarra
+### 36.6 Amarra
 
 `sumulas-e-sondagem-em-portugues.test.ts` (36 testes) — **48 mutações
 vermelhas** (`scratchpad/mutar-sumulas-portugues.py`). Sete sobreviveram na
@@ -3872,7 +4054,7 @@ separa citação de estatística passou a nomear as duas.
 
 ---
 
-## 34. Notificações push que o dono escolhe — ENTREGUE (14/09)
+## 37. Notificações push que o dono escolhe — ENTREGUE (14/09)
 
 **Pedido do dono**: *"Pensei em criar uma seção para ativar as notificações push
 padrões do app também. Sentença proferida, Nova ação detectada, Nova conversa
@@ -3885,7 +4067,7 @@ Aprovado com **"Bora fazer"** no mockup `mockup-notificacoes-padrao.html`
 de verdade). Entregue inteiro: os 17 avisos, os padrões, o silêncio e o
 alcance.
 
-### 34.1 O que existe hoje, conferido no código
+### 37.1 O que existe hoje, conferido no código
 
 - Push funciona: VAPID resolvido por env → banco → gerado e persistido;
   inscrição por APARELHO (`push_subscriptions`), botão "Ativar notificações
@@ -3911,7 +4093,7 @@ alcance.
   `classificarGrupo` já separa "exigem ação" de "rotina". A separação que o
   pedido precisa já está calculada e gravada; falta usá-la no push.
 
-### 34.2 O que o mockup propõe
+### 37.2 O que o mockup propõe
 
 17 avisos em 5 grupos (Processos, Atendimento, Dinheiro, Documentos, Saúde do
 sistema), cada um com uma frase em português, a chave própria e um selo honesto
@@ -3929,7 +4111,7 @@ Os padrões seguem duas regras:
 
 Medido no navegador: 390px no celular, **sem rolagem lateral**, 17 chaves.
 
-### 34.3 Como ficou
+### 37.3 Como ficou
 
 - **`shared/notificacoes-avisos.ts`** — o catálogo: 17 avisos em 5 grupos, o
   padrão de cada um, quem vê (todos · financeiro · dono) e `avisoDoTipo`, que
@@ -3952,7 +4134,7 @@ usuário sem linha — tudo passa. O único "não" é o explícito. Sem isso, es
 entrega seria um apagão silencioso de avisos, que não dá erro e só se descobre
 quando alguém perde um prazo.
 
-### 34.4 O que passou a existir de fato
+### 37.4 O que passou a existir de fato
 
 | Aviso | O que mudou |
 | --- | --- |
@@ -3965,7 +4147,7 @@ quando alguém perde um prazo.
 | Cliente esperando 15 min | Cron novo (`cron-cliente-esperando.ts`). Espera = conversa `aguardando` cuja ÚLTIMA mensagem é de entrada, com teto de 72h (backlog não é urgência) e um toque por espera. |
 | Alcance | `donoQueQuerTudo`: o aviso de movimentação sempre foi só pra quem CADASTROU o vigia. A chave nasce desligada — ligar é decisão dele. |
 
-### 34.5 Medido
+### 37.5 Medido
 
 - Tela: **17 chaves**, 390px no celular, **sem rolagem lateral**.
 - Prova de ponta a ponta no app rodando: liga "Movimentação de rotina",
@@ -3975,7 +4157,7 @@ quando alguém perde um prazo.
 - Baseline: **6.176 testes verdes em 414 arquivos**, `pnpm check` limpo,
   `vite build` passando.
 
-### 34.6 Anotado e NÃO feito
+### 37.6 Anotado e NÃO feito
 
 - **O silêncio é 21h–7h fixo**, sem campo de horário — é o que o mockup
   prometia. Campo editável pede tela nova.
@@ -3985,7 +4167,7 @@ quando alguém perde um prazo.
   (dinheiro, cliente esperando) alcançam **dono e gestores**, não um cargo
   configurável. Filtro por cargo personalizado não foi pedido.
 
-### 34.7 As quatro decisões da proposta, resolvidas no padrão
+### 37.7 As quatro decisões da proposta, resolvidas no padrão
 
 Ele respondeu "Bora fazer" sem escolher item a item, então valeram as
 recomendações do mockup: a lista inteira entrou; os padrões marcados viraram os
@@ -3995,14 +4177,14 @@ padrão.
 
 ---
 
-## 35. Data de nascimento no cadastro, e o lembrete do aniversário — ENTREGUE (14/09)
+## 38. Data de nascimento no cadastro, e o lembrete do aniversário — ENTREGUE (14/09)
 
 **Pedido do dono**: *"Quero um campo no cadastro do cliente para colocar sua
 data de nascimento para me lembrar do seu aniversário."* Aprovado com **"pode
 fazer"** no comparador `comparador-aniversario-cliente.html` — quatro
 comparações, anel medido no navegador, conferido por Playwright.
 
-### 35.1 Por que um campo de verdade, e não um campo personalizado
+### 38.1 Por que um campo de verdade, e não um campo personalizado
 
 O mecanismo de campos extras já existia (Configurações → Campos de cliente,
 tipo "data", `camposPersonalizadosCliente` + `contatos.camposPersonalizados`).
@@ -4021,7 +4203,7 @@ gerada, e na escala de uma carteira de escritório a conta é barata.
 depois das 21h —, que é exatamente o defeito corrigido em 03/09 nas outras
 datas de calendário.
 
-### 35.2 As regras, num lugar só
+### 38.2 As regras, num lugar só
 
 `shared/aniversario.ts` é puro e é a fonte única da tela, do filtro e do cron:
 
@@ -4042,7 +4224,7 @@ datas de calendário.
   dia 14.
 - **Idade só aparece quando o ano é conhecido.**
 
-### 35.3 O campo, e o achado que só a foto pegou
+### 38.3 O campo, e o achado que só a foto pegou
 
 `CamposQualificacaoEndereco` é um componente só, usado pelo "Novo cliente" e
 pela edição da ficha — o campo nasceu nos dois de uma vez. Ele é **opcional** e
@@ -4057,7 +4239,7 @@ motivo escrito no código. O campo virou texto mascarado `dd/mm/aaaa`
 (`mascararDataBR`/`brParaIsoData`/`isoParaBrData` em `shared/data-calendario.ts`),
 e data que não existe fica em vermelho **sem gravar**.
 
-### 35.4 Onde o aniversário aparece
+### 38.4 Onde o aniversário aparece
 
 - **Ficha**: `SeloAniversarioHero` na linha de contato do cabeçalho. Sem data
   gravada **não existe selo nenhum** — a linha fica como sempre foi. A 7 dias
@@ -4071,10 +4253,10 @@ e data que não existe fica em vermelho **sem gravar**.
   isso, tocar a notificação no celular cairia na lista inteira e o aviso estaria
   prometendo o que a tela não faz.
 
-### 35.5 O lembrete
+### 38.5 O lembrete
 
 Aviso novo `clientes.aniversario` num grupo novo **Clientes** no catálogo de
-`shared/notificacoes-avisos.ts` — entra na tela de Notificações da seção 34 com
+`shared/notificacoes-avisos.ts` — entra na tela de Notificações da seção 37 com
 a mesma mecânica: **ligado de fábrica**, desligável, e só o que diverge do
 padrão fica gravado.
 
@@ -4107,7 +4289,7 @@ no mesmo dia geraram **um** aviso ("José Ribamar e Maria Aparecida fazem
 aniversário hoje"), a segunda volta do cron não duplicou, e a ficha com serviço
 encerrado não entrou.
 
-### 35.6 As quatro decisões da proposta, resolvidas no padrão
+### 38.6 As quatro decisões da proposta, resolvidas no padrão
 
 Ele respondeu "pode fazer" sem escolher item a item, então valeram as
 recomendações do comparador:
@@ -4122,7 +4304,7 @@ recomendações do comparador:
 4. **Empresa fica em branco.** CNPJ não tem nascimento; data de fundação seria
    outro campo.
 
-### 35.7 Anotado e NÃO feito
+### 38.7 Anotado e NÃO feito
 
 - **`cliente.dataNascimento` não entrou nas variáveis de contrato**
   (`shared/modelos-contrato-variaveis.ts`), onde profissão, estado civil e
@@ -4134,5 +4316,6 @@ recomendações do comparador:
   preenche no computador, o lembrete chega no celular normalmente.
 - A busca do filtro varre as fichas com data do escritório a cada consulta.
   Barato na escala de hoje; se crescer, vira coluna gerada com índice.
-- Baseline: **6.203 testes verdes em 415 arquivos**, `pnpm check` limpo,
-  `vite build` passando.
+- Baseline na ponta do merge com `develop`: **6.239 testes verdes em 418
+  arquivos**, `pnpm check` limpo, `vite build` passando. Sozinha, a entrega
+  media 6.203 em 415.

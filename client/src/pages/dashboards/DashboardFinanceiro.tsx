@@ -25,10 +25,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import {
-  AcaoCard,
   BlocoPrincipal,
   COR_SERIE,
-  FaixaAcoes,
   LinhaNumero,
   LinhaValor,
   ListaCard,
@@ -95,36 +93,11 @@ export default function DashboardFinanceiro() {
         }
       />
 
-      {(data.clientesInadimplentes > 0 || cobrancasVencidas > 0) && (
-        <FaixaAcoes>
-          {data.clientesInadimplentes > 0 && (
-            <AcaoCard
-              icone={AlertTriangle}
-              valor={data.clientesInadimplentes}
-              label={
-                data.clientesInadimplentes === 1
-                  ? "cliente com cobrança vencida"
-                  : "clientes com cobrança vencida"
-              }
-              critico
-              onClick={() => nav("/financeiro?tab=clientes&chip=inadimplentes")}
-            />
-          )}
-          {cobrancasVencidas > 0 && (
-            <AcaoCard
-              icone={Clock}
-              valor={cobrancasVencidas}
-              label={
-                cobrancasVencidas === 1
-                  ? "cobrança vencida no período"
-                  : "cobranças vencidas no período"
-              }
-              onClick={() => nav("/financeiro")}
-            />
-          )}
-        </FaixaAcoes>
-      )}
-
+      {/* A faixa de cartões de ação saiu daqui a pedido do dono (13/09).
+          Os dois números continuam no sistema: inadimplentes em
+          /financeiro?tab=clientes&chip=inadimplentes e vencidas no próprio
+          Financeiro — e o "Vencido no período" segue no bloco principal
+          abaixo, em dinheiro. */}
       <div className="grid gap-3.5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <BlocoPrincipal

@@ -13,8 +13,10 @@
  *  1. DISJUNTOR (circuit breaker). Ao detectar restrição/spam da Meta — síncrono
  *     no envio, assíncrono no webhook `failed`, OU no webhook `account_update` de
  *     restrição de conta — marca o canal como restrito (`canais_integrados.
- *     restritoMeta`) e PAUSA os envios. Auto-cura: envio bem-sucedido ou
- *     reativação manual limpa a flag. Aplicado a TODO envio.
+ *     restritoMeta`) e PAUSA os envios. Aplicado a TODO envio. Só sai da
+ *     restrição com sinal real de saúde: `metaChannels.testConnection`,
+ *     reconexão pelo Embedded Signup ou liberação manual — um 200 da Meta não
+ *     serve (conta restrita aceita o POST e mata a entrega depois).
  *
  *  2. TETO DIÁRIO (persistido). Contador por canal alinhado ao messaging tier da
  *     Meta (250/1k/10k/100k por 24h). Sobrevive a restart/multi-instância — é a
@@ -442,9 +444,14 @@ export async function podeDispararTemplate(opts: {
 }
 
 /**
- * Pós-envio bem-sucedido: registra o disparo nos tetos (só se proativo) e, se o
- * canal estava restrito, rearma o disjuntor (a Meta voltou a aceitar). Chamado
- * só em sucesso.
+ * Pós-envio bem-sucedido: registra o disparo nos tetos (só se proativo).
+ *
+ * NÃO rearma o disjuntor. Conta restrita continua aceitando o POST e devolvendo
+ * 200 com id de mensagem — a Meta só mata a entrega depois, no webhook `failed`.
+ * Tratar esse 200 como "voltou a funcionar" desarmava a restrição no primeiro
+ * inbound seguinte, e o sistema seguia enviando contra conta bloqueada até virar
+ * ban. Sair da restrição exige sinal real: `metaChannels.testConnection`
+ * (consulta a saúde do número na Graph API) ou liberação manual do operador.
  */
 export async function registrarSucessoEnvio(opts: {
   db: any;
@@ -458,7 +465,6 @@ export async function registrarSucessoEnvio(opts: {
     registrarDisparoRate(opts.canalId, agoraMs);
     await incrementarDisparoDia(opts.db, opts.canalId, agoraMs);
   }
-  await limparCanalRestrito(opts.db, opts.canalId);
 }
 
 /** Compat: sucesso de template (sempre proativo). */

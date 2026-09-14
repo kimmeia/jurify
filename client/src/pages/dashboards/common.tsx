@@ -10,7 +10,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, TrendingUp, TrendingDown, Info, Search } from "lucide-react";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { moedaBR, moedaCurtaBR } from "@shared/formato-numero";
 import { useAbrirPaleta } from "@/components/paleta-comandos-contexto";
 
@@ -422,20 +422,27 @@ export function AvisoBanner({
 export const COR_SERIE = "var(--viz-1)";
 
 /**
- * Busca do cabeçalho: abre a MESMA paleta do ⌘K, na linha do nome de quem está
- * logado. A do rodapé do menu continua onde estava — esta é um segundo caminho
- * para a mesma porta, no lugar onde o olho já está quando a tela abre.
+ * Busca do cabeçalho: abre a MESMA paleta do ⌘K. Desde 13/09 ela mora na LINHA
+ * DAS ABAS (Geral · Comercial · Operacional · Financeiro), na ponta direita —
+ * pedido do dono. Continua sendo o mesmo componente, só que montado lá em
+ * cima; a do rodapé do menu foi removida no mesmo dia.
  *
- * Sem AppLayout em volta (login, assinatura) o contexto é nulo e o botão
- * simplesmente não existe.
+ * Quem NÃO tem abas (colaborador de um setor só, variante processual) continua
+ * vendo a busca no `PainelTopo`: `BuscaJaNoTopo` é o que evita as duas ao mesmo
+ * tempo — a régua de abas avisa que já desenhou a sua.
+ *
+ * Sem AppLayout em volta (login, assinatura) o contexto da paleta é nulo e o
+ * botão simplesmente não existe.
  */
-function BuscaDoTopo() {
+export const BuscaJaNoTopo = createContext(false);
+
+export function BuscaDoTopo({ className = "" }: { className?: string }) {
   const abrir = useAbrirPaleta();
   if (!abrir) return null;
   return (
     <button
       onClick={abrir}
-      className="flex h-9 min-w-[190px] items-center gap-2 rounded-lg border bg-card px-3 text-[12.5px] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+      className={`flex h-9 min-w-[190px] items-center gap-2 rounded-lg border bg-card px-3 text-[12.5px] text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground ${className}`}
     >
       <Search className="h-3.5 w-3.5 shrink-0" />
       <span className="flex-1 text-left">Buscar</span>
@@ -453,6 +460,7 @@ export function PainelTopo({
   subtitulo?: ReactNode;
   acao?: ReactNode;
 }) {
+  const buscaLaEmCima = useContext(BuscaJaNoTopo);
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -460,7 +468,8 @@ export function PainelTopo({
         {subtitulo && <p className="mt-0.5 text-[12.5px] text-muted-foreground">{subtitulo}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <BuscaDoTopo />
+        {/* Só quando a régua de abas não desenhou a busca lá em cima. */}
+        {!buscaLaEmCima && <BuscaDoTopo />}
         {acao}
       </div>
     </div>

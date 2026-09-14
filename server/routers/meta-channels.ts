@@ -580,6 +580,14 @@ export const metaChannelsRouter = router({
             telefone: telefone || existente.telefone,
             nome: nomeVerificado ? `WhatsApp (${nomeVerificado})` : existente.nome,
             mensagemErro: null,
+            // Reconectar é reautorizar na Meta com credencial nova: o disjuntor
+            // tem que cair junto. Sem isto o canal voltava verde na tela e TODO
+            // envio seguia bloqueado por `restritoMeta` — e, desde que o sucesso
+            // de envio parou de rearmar o disjuntor, não havia mais nenhum
+            // caminho natural de saída (só "Testar conexão" ou liberação manual).
+            restritoMeta: false,
+            restritoMotivo: null,
+            restritoEm: null,
             // CoEx (pareado por QR) e número que a Meta já reporta CLOUD_API
             // saem registrados — sem isso a UI pedia PIN indevidamente.
             ...(registro.jaRegistrado ? { registradoCloudApi: true } : {}),

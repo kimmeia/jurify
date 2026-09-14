@@ -412,9 +412,11 @@ export const kanbanRouter = router({
       tag: z.string().max(64).optional(),
       // Filtros de prazo: "vencidos" / "hoje" / "7dias" / "sem_prazo"
       prazoFiltro: z.enum(["vencidos", "hoje", "7dias", "sem_prazo"]).optional(),
-      // Filtros de data de criação (range YYYY-MM-DD)
+      // Filtro de período (range YYYY-MM-DD). `campoData` escolhe QUAL data:
+      // a de criação (padrão, como sempre foi) ou a de conclusão.
       dataInicio: z.string().optional(),
       dataFim: z.string().optional(),
+      campoData: z.enum(["criado", "concluido"]).optional(),
       // Cards arquivados ficam OCULTOS por default (default false).
       mostrarArquivados: z.boolean().optional(),
     }))
@@ -558,7 +560,7 @@ export const kanbanRouter = router({
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
 
       const [colunaAlvo] = await db
-        .select({ id: kanbanColunas.id })
+        .select({ id: kanbanColunas.id, tipo: kanbanColunas.tipo })
         .from(kanbanColunas)
         .innerJoin(kanbanFunis, eq(kanbanColunas.funilId, kanbanFunis.id))
         .where(and(eq(kanbanColunas.id, input.colunaId), eq(kanbanFunis.escritorioId, perm.escritorioId)))
@@ -616,6 +618,10 @@ export const kanbanRouter = router({
       const [r] = await db.insert(kanbanCards).values({
         escritorioId: perm.escritorioId,
         colunaId: input.colunaId,
+        // Card nascido DIRETO numa coluna de conclusão nunca é movido, então
+        // nunca passaria pelo `moverCard` que grava a data. Sem isto ele
+        // ficaria fora do filtro "Concluído em" pra sempre.
+        concluidoEm: colunaAlvo.tipo === "conclusao" ? new Date() : null,
         titulo: input.titulo,
         descricao: input.descricao || null,
         cnj: input.cnj || null,
@@ -858,8 +864,14 @@ export const kanbanRouter = router({
         ordemFinal = (maior?.ordem ?? 0) + 1;
       }
 
+      // Data de conclusão: vale a ÚLTIMA vez que o card entrou numa coluna de
+      // conclusão, e volta a NULL quando ele sai pro fluxo (decisão do dono).
+      // Sem o segundo lado, o filtro diria "concluído em agosto" sobre card
+      // que hoje está em produção.
+      const concluidoEm = destino.tipo === "conclusao" ? new Date() : null;
+
       await db.update(kanbanCards)
-        .set({ colunaId: input.colunaDestinoId, ordem: ordemFinal, atrasado })
+        .set({ colunaId: input.colunaDestinoId, ordem: ordemFinal, atrasado, concluidoEm })
         .where(and(eq(kanbanCards.id, input.cardId), eq(kanbanCards.escritorioId, perm.escritorioId)));
 
       // Registrar movimentação (pra métricas de tempo por etapa)
@@ -1812,6 +1824,7 @@ export const kanbanRouter = router({
         prazoFiltro: z.enum(["vencidos", "hoje", "7dias", "sem_prazo"]).optional(),
         dataInicio: z.string().optional(),
         dataFim: z.string().optional(),
+        campoData: z.enum(["criado", "concluido"]).optional(),
         tag: z.string().max(64).optional(),
         busca: z.string().max(120).optional(),
         mostrarArquivados: z.boolean().optional(),
@@ -1923,8 +1936,12 @@ export const kanbanRouter = router({
           ? (mapResp.get(filtros.responsavelId) ?? `#${filtros.responsavelId}`)
           : "Todos";
       const br = (d?: string) => (d ? d.split("-").reverse().join("/") : null);
+      // O rótulo diz QUAL data foi filtrada: o mesmo intervalo em "criado" e em
+      // "concluído" devolve listas diferentes, e o PDF impresso tem que contar
+      // qual das duas ele é.
       const periodoLabel = filtros.dataInicio || filtros.dataFim
         ? [br(filtros.dataInicio) ?? "início", br(filtros.dataFim) ?? "hoje"].join(" a ")
+          + (filtros.campoData === "concluido" ? " (por conclusão)" : " (por criação)")
         : "Todo o período";
 
       const { gerarKanbanCardsPdf } = await import("./kanban-cards-pdf");

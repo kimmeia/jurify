@@ -15,10 +15,8 @@ import { useLocation } from "wouter";
 import { AlertTriangle, ArrowRight, CalendarDays, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  AcaoCard,
   BarraMeta,
   BlocoPrincipal,
-  FaixaAcoes,
   LinhaNumero,
   LinhaRanking,
   ListaCard,
@@ -91,36 +89,9 @@ export default function DashboardOperacional() {
         }
       />
 
-      {(tarefas.atrasadas > 0 || agenda.atrasadas > 0 || acumulando > 0) && (
-        <FaixaAcoes>
-          {tarefas.atrasadas > 0 && (
-            <AcaoCard
-              icone={AlertTriangle}
-              valor={tarefas.atrasadas}
-              label={tarefas.atrasadas === 1 ? "tarefa atrasada" : "tarefas atrasadas"}
-              critico
-              onClick={() => nav("/tarefas")}
-            />
-          )}
-          {agenda.atrasadas > 0 && (
-            <AcaoCard
-              icone={CalendarDays}
-              valor={agenda.atrasadas}
-              label={agenda.atrasadas === 1 ? "compromisso atrasado" : "compromissos atrasados"}
-              onClick={() => nav("/agenda")}
-            />
-          )}
-          {isGestor && acumulando > 0 && (
-            <AcaoCard
-              icone={Users}
-              valor={acumulando}
-              label={`${acumulando === 1 ? "pessoa" : "pessoas"} com ${ATRASOS_CRITICOS}+ atrasos`}
-              onClick={() => nav("/tarefas")}
-            />
-          )}
-        </FaixaAcoes>
-      )}
-
+      {/* A faixa de cartões de ação saiu daqui a pedido do dono (13/09).
+          Tarefa atrasada continua em /tarefas, compromisso atrasado na
+          Agenda, e quem acumula atraso segue no ranking deste painel. */}
       <div className="grid gap-3.5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <BlocoPrincipal

@@ -15,7 +15,7 @@ import { canaisIntegrados, adminIntegracoes } from "../../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { processarMensagemRecebida } from "./whatsapp-handler";
 import { decryptConfig } from "../escritorio/crypto-utils";
-import type { WhatsappMensagemRecebida } from "../../shared/whatsapp-types";
+import type { WhatsappMensagemRecebida, ReferralAnuncio } from "../../shared/whatsapp-types";
 import { createLogger } from "../_core/logger";
 import { verificarAssinaturaMeta } from "./meta-signature";
 const log = createLogger("integracoes-whatsapp-cloud-webhook");
@@ -285,6 +285,36 @@ export interface MensagemCloudParseada {
   mediaId: string;
   nomeOriginalArquivo: string | undefined;
   interactiveReply: { tipo: "button" | "list"; id: string; titulo: string } | undefined;
+  referral: ReferralAnuncio | undefined;
+}
+
+/**
+ * Extrai o anúncio de origem (Click-to-WhatsApp) do `message.referral`.
+ *
+ * Shape defensivo de propósito: a Meta varia o envelope conforme o criativo
+ * (imagem, vídeo, post orgânico) e entre versões da API — campo ausente vira
+ * string vazia em vez de quebrar o parse da mensagem inteira. Retorna
+ * `undefined` quando não há referral, que é o caso da esmagadora maioria das
+ * mensagens (só a PRIMEIRA de quem clicou no anúncio traz o bloco).
+ */
+export function extrairReferralAnuncio(message: any): ReferralAnuncio | undefined {
+  const r = message?.referral;
+  if (!r || typeof r !== "object") return undefined;
+  const txt = (v: unknown) => (v == null ? "" : String(v));
+  const ref: ReferralAnuncio = {
+    sourceId: txt(r.source_id),
+    sourceType: txt(r.source_type),
+    sourceUrl: txt(r.source_url),
+    titulo: txt(r.headline),
+    corpo: txt(r.body),
+    midiaTipo: txt(r.media_type),
+    imagemUrl: txt(r.image_url),
+    videoUrl: txt(r.video_url),
+    thumbnailUrl: txt(r.thumbnail_url),
+    ctwaClid: txt(r.ctwa_clid),
+  };
+  // Envelope sem nenhum campo reconhecido não vira origem vazia na ficha.
+  return Object.values(ref).some((v) => v !== "") ? ref : undefined;
 }
 
 /**
@@ -399,7 +429,7 @@ export function parseMensagemCloud(message: any, telefone: string): MensagemClou
       tipo = "texto";
   }
 
-  return { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply };
+  return { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply, referral: extrairReferralAnuncio(message) };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -722,7 +752,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
 
               // Parsing isolado em parseMensagemCloud (testável). mediaUrl fica
               // aqui porque é preenchido só depois, pelo download da mídia.
-              const { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply } =
+              const { conteudo, tipo, mediaId, nomeOriginalArquivo, interactiveReply, referral } =
                 parseMensagemCloud(message, telefone);
               let mediaUrl = "";
 
@@ -749,6 +779,7 @@ export function registerWhatsAppCloudWebhook(app: Express) {
                 tipo,
                 mediaUrl,
                 interactiveReply,
+                referral,
                 timestamp: parseInt(message.timestamp) || Math.floor(Date.now() / 1000),
                 messageId: message.id,
                 isGroup: false,

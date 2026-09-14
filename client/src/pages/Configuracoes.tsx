@@ -24,6 +24,14 @@ import {
   Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope, MessageSquare,
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
+import {
+  LogoAsaas,
+  LogoClaude,
+  LogoInstagram,
+  LogoMessenger,
+  LogoOpenAI,
+  LogoWhatsApp,
+} from "@/components/logos-marcas";
 import Plans from "./Plans";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -1789,7 +1797,9 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     dialog: { type: "whatsapp" | "instagram" | "messenger"; canalId?: number };
     nome: string;
     descricao: string;
-    logo: string;
+    /** A marca REAL do serviço (`components/logos-marcas`), não um emoji. */
+    logo: React.ReactNode;
+    /** Cor de apoio do quadrado — a marca entra por cima, em cor própria. */
     cor: string;
     canal: any;
     conectado: boolean;
@@ -1805,7 +1815,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
     dialog: { type: "whatsapp", canalId: c.id },
     nome: "WhatsApp Business",
     descricao: c.telefone ? `Número: ${c.telefone}` : "Conectado",
-    logo: "💬",
+    logo: <LogoWhatsApp className="h-8 w-8" />,
     cor: "from-success to-success",
     canal: c,
     conectado: true,
@@ -1819,7 +1829,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       dialog: { type: "whatsapp", canalId: e.id },
       nome: "WhatsApp Business",
       descricao: e.telefone || "Sem número",
-      logo: "💬",
+      logo: <LogoWhatsApp className="h-8 w-8" />,
       cor: "from-success to-success",
       canal: e,
       conectado: false,
@@ -1837,7 +1847,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       whatsappCanais.length === 0
         ? "Conecte seu WhatsApp com 1 clique via Facebook. API oficial, sem risco de banimento."
         : "Conecte mais um número WhatsApp Business neste escritório.",
-    logo: "💬",
+    logo: <LogoWhatsApp className="h-8 w-8" />,
     cor: "from-success to-success",
     canal: undefined,
     conectado: false,
@@ -1854,7 +1864,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       descricao: canalEmBreve("instagram")
         ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
         : "DMs do Instagram Business no Inbox. Conecte via Facebook Login.",
-      logo: "📸",
+      logo: <LogoInstagram className="h-8 w-8" />,
       cor: "from-danger to-danger",
       canal: instagramCanal,
       conectado: instagramCanal?.status === "conectado",
@@ -1868,7 +1878,7 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
       descricao: canalEmBreve("facebook")
         ? "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login."
         : "Mensagens da sua página do Facebook direto no Inbox.",
-      logo: "💙",
+      logo: <LogoMessenger className="h-8 w-8" />,
       cor: "from-info to-info",
       canal: facebookCanal,
       conectado: facebookCanal?.status === "conectado",
@@ -1896,35 +1906,12 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         </div>
       </div>
 
-      {/* Banner explicativo */}
-      <div className="rounded-xl border border-info/30 bg-gradient-to-r from-info-bg to-info-bg/50 p-4 mb-4">
-        <div className="flex items-start gap-3">
-          <div className="h-8 w-8 rounded-lg bg-[#1877F2] flex items-center justify-center text-white shrink-0">
-            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-            </svg>
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-info-fg">
-              Conexão simplificada via Facebook
-            </p>
-            <p className="text-xs text-info-fg mt-1">
-              O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar
-              pelo Facebook Login. Instagram e Messenger: em breve.
-            </p>
-            {/* Fallback pra quando OAuth não roda (App Review pendente,
-                Tech Provider não aprovado, BM dona do app = dos números).
-                Pequeno e discreto pra não competir com o caminho padrão. */}
-            <button
-              onClick={() => setManualWhatsappOpen(true)}
-              className="text-[11px] text-info-fg hover:text-info-fg hover:underline mt-2 inline-flex items-center gap-1"
-            >
-              <span>📥</span> Ou cadastrar WhatsApp Cloud manualmente (avançado)
-            </button>
-          </div>
-        </div>
-      </div>
-
+      {/* O banner azul que explicava a conexão em 1 clique saiu a pedido do
+          dono (13/09): os próprios cards já conectam assim, e o texto repetia
+          isso. O que o banner carregava junto — e ninguém pediu pra tirar —
+          era a ÚNICA porta do cadastro manual do WhatsApp Cloud, o caminho de
+          quando o OAuth não roda (App Review pendente, Tech Provider não
+          aprovado, BM dona do app). Ele continua aqui embaixo, discreto. */}
       {/* Cards principais */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {canaisPrincipais.map((canal) => (
@@ -1948,9 +1935,14 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
           >
             <CardContent className="p-5">
               <div className="flex items-start gap-4">
+                {/* Quadrado claro, não mais o degradê cheio da cor do canal:
+                    a marca real vem COLORIDA, e verde sobre verde sumia. A cor
+                    do canal ficou na borda, que é onde ela ainda informa. */}
                 <div
-                  className={`h-14 w-14 rounded-2xl bg-gradient-to-br ${canal.cor} flex items-center justify-center text-2xl shadow-md shrink-0 ${
-                    canal.isAdicionar ? "opacity-60" : ""
+                  className={`h-14 w-14 rounded-2xl border bg-card flex items-center justify-center text-2xl shadow-sm shrink-0 ${
+                    canal.isAdicionar
+                      ? `bg-gradient-to-br ${canal.cor} border-transparent opacity-60 text-white`
+                      : "border-border"
                   }`}
                 >
                   {canal.isAdicionar ? "+" : canal.logo}
@@ -2074,6 +2066,16 @@ function CanaisTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean }) {
         ))}
       </div>
 
+      {/* O caminho manual, herdado do banner que saiu. Discreto de propósito:
+          é o plano B de quem não consegue autorizar pelo Facebook. */}
+      <button
+        onClick={() => setManualWhatsappOpen(true)}
+        className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+      >
+        <Plug className="h-3 w-3" />
+        Ou cadastrar WhatsApp Cloud manualmente (avançado)
+      </button>
+
       {/* Dialog unificado para WhatsApp/Instagram/Messenger */}
       {metaDialog && (
         <MetaConnectDialog
@@ -2148,8 +2150,8 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       nome: "Asaas",
       descricao: "Cobranças por boleto, Pix e cartão",
       categoria: "Financeiro",
-      logo: "💰",
-      bgIcon: "bg-info-bg border-info/30",
+      logo: <LogoAsaas className="h-9 w-9 rounded-lg" />,
+      bgIcon: "bg-card border-border",
       conectado: asaasStatus?.conectado || false,
     },
     {
@@ -2157,8 +2159,8 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       nome: "ChatGPT",
       descricao: "OpenAI · GPT-4o · GPT-4o-mini",
       categoria: "IA",
-      logo: "🤖",
-      bgIcon: "bg-success-bg border-success/30",
+      logo: <LogoOpenAI className="h-7 w-7" />,
+      bgIcon: "bg-muted border-border",
       conectado: chatgptCanal?.status === "conectado",
     },
     {
@@ -2166,7 +2168,7 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       nome: "Claude",
       descricao: "Anthropic · Claude Sonnet / Haiku",
       categoria: "IA",
-      logo: "🦾",
+      logo: <LogoClaude className="h-7 w-7" />,
       bgIcon: "bg-warning-bg border-warning/30",
       conectado: claudeCanal?.status === "conectado",
     },

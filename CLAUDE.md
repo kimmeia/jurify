@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.176 verdes em 14/09/2026 (414 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.239 verdes em 14/09/2026 (418 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1616,6 +1616,27 @@ vista). Detalhe na seção 31 do documento de estado. Amarras: teste novo em
 `telas-cabem-no-celular.test.ts` + `cofre-erros.test.ts` atualizado, 6 mutações
 vermelhas.
 
+### Entregue 13/09 — Kanban filtra pela data de conclusão
+
+Pergunta do dono: *"filtro so permite buscar por data de criação do card, quero
+saber também por data de conclusão."* O card sabia em QUAL coluna estava, nunca
+QUANDO chegou nela (`updatedAt` muda em qualquer edição). **Mas o passado
+existia**: `kanban_movimentacoes` registra cada movimento desde sempre, então a
+migration 0231 recuperou a data de conclusão de todo card já concluído — o
+filtro não nasceu vazio.
+
+Campo novo `kanban_cards.concluidoEm`, gravado no `moverCard` e no `criarCard`.
+**Regra escolhida pelo dono: vale a ÚLTIMA conclusão e a data SOME se o card
+voltar pro fluxo** — guardar a primeira faria o filtro dizer "concluído em
+agosto" sobre card que hoje está em produção. `condicoesCards` ganhou
+`campoData` (quadro e PDF compartilham) e o popover do período ganhou "Contar
+pela data de" ANTES dos campos De/Até.
+
+Regra que fica: **antes de dizer que um dado histórico não existe, procurar a
+tabela de log** — aqui ela transformou "o filtro só vale daqui pra frente" em
+"o filtro já vem com o passado inteiro". Detalhe na seção 35 do documento de
+estado; amarra `kanban-filtro-concluido-em.test.ts`, 14 mutações vermelhas.
+
 ### Raio-X do design em produção (13/09)
 
 `docs/raio-x-design-2026-09-13.md` — 11 telas medidas no navegador, contando o
@@ -2020,7 +2041,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
 - **Entregue 14/09, súmulas do STJ/STF na base + a sondagem dita em português —
   origem: ele rodou a sondagem em produção e respondeu "Entendi nada,
   sinceramente. deveria ter súmulas stj/stf acordãos, resp né n?" e "e buscar
-  isso automático já que é público as informações" (seção 33 do documento de
+  isso automático já que é público as informações" (seção 36 do documento de
   estado).** Duas coisas, e as duas vinham do mesmo erro meu: a tela estava
   escrita pra mim (`403`, `tls`, `dns`, "é o IP") e o material que ele nomeou —
   **súmula** — não existia como fonte.
@@ -2080,7 +2101,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   atualizados.
 
 - **Entregue 14/09, notificações push que o dono escolhe — "Bora fazer" dele no
-  mockup `mockup-notificacoes-padrao.html` (seção 34 do documento de estado).**
+  mockup `mockup-notificacoes-padrao.html` (seção 37 do documento de estado).**
   Pedido: "uma seção para ativar as notificações push padrões do app — Sentença
   proferida, Nova ação detectada, Nova conversa Iniciada… o que faz sentido ter
   como padrão".
@@ -2125,7 +2146,7 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
 
 - **Entregue 14/09, data de nascimento no cadastro + lembrete de aniversário —
   "pode fazer" do dono no comparador `comparador-aniversario-cliente.html`
-  (seção 35 do documento de estado).** Pedido: *"Quero um campo no cadastro do
+  (seção 38 do documento de estado).** Pedido: *"Quero um campo no cadastro do
   cliente para colocar sua data de nascimento para me lembrar do seu
   aniversário."*
   - **Por que campo de verdade e não campo personalizado**: o mecanismo de
@@ -2540,14 +2561,25 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    (opt-out ampliado, opt-in em envio frio manual, executarManual
    sanitizado, bot se identifica). Vetores automáticos conferidos em 23/08:
    SmartFlow gate ok (`exigirOptin: !veioDeMensagem`), lembretes WhatsApp
-   nem existem, resumo diário vai só pro dono. Hipótese principal:
-   denúncias atrasadas de envios pré-19/08 e/ou conteúdo de disparos com
-   opt-in que ainda soa anúncio. Plano: 14 dias SEM disparo frio (WhatsApp
-   só reativo/1:1), NÃO clicar "solicitar análise" antes disso; lembrete
-   26/08 atualizado (`trig_01Tg9mU9aGhgVWKbC7ShfuHw`). Aguardando do dono:
-   print do "Ver detalhes" do aviso 2 + Quality Rating no WhatsApp Manager.
-   **03/09: o dono deu o assunto Meta por resolvido — não cobrar print nem
-   Quality Rating de novo; só reabrir se chegar aviso novo.**
+   nem existem, resumo diário vai só pro dono. O dono tinha dado o assunto
+   por resolvido em 03/09; a restrição de 14/09 reabriu — e dessa vez com
+   causa, não hipótese.
+   **CAUSA RAIZ ENCONTRADA em 14/09** (a WABA do Boyadjian virou restrição
+   de 30 dias): o portfólio DO ESCRITÓRIO tinha a BM **banida** do próprio
+   cliente pendurada em Parceiros — ativo novo ligado a negócio punido herda
+   o enforcement. Assinatura do caso: conta restrita + número "Conectado"
+   com qualidade **ALTA** e ZERO mensagem iniciada pela empresa (denúncia
+   derrubaria a qualidade). As hipóteses de agosto (denúncia atrasada,
+   conteúdo de disparo) e a de volume (40 leads/dia gerando denúncia) estão
+   REFUTADAS pelos dados da própria Meta. Vínculo removido e análise
+   solicitada em 14/09 (prazo até 13/12). Detalhes e regra de onboarding em
+   `docs/runbook-whatsapp-meta.md` ("Contaminação por parceiro banido").
+   Bug real corrigido no caminho (`4b0792e`): `registrarSucessoEnvio`
+   limpava `restritoMeta` em QUALQUER 200 da Meta — e conta restrita aceita
+   o POST, matando a entrega depois no webhook `failed`. O disjuntor se
+   desarmava no primeiro inbound e o sistema voltava a enviar contra conta
+   bloqueada; era o que transformava aviso em restrição. Sair da restrição
+   agora exige testConnection (consulta a Graph API) ou liberação manual.
    Aviso 2 é o gatilho descrito pros itens em STAND-BY (tela de evidência
    de conformidade + botão "cliente autorizou WhatsApp") — dono foi
    lembrado em 23/08; segue sem implementar até ele pedir.
