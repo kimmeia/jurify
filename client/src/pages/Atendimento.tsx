@@ -2448,7 +2448,10 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
             ) : (
               <Megaphone className="h-4 w-4 text-hero-fg" />
             )}
-            {ehVideo && (
+            {/* A marca de play só entra SOBRE a capa. Sem capa, ela empilha em
+                cima do megafone e os dois ícones viram borrão — defeito que
+                nenhum teste acusa e só a foto do app rodando mostrou. */}
+            {ehVideo && capa && (
               <span className="absolute inset-0 flex items-center justify-center bg-black/25">
                 <Play className="h-3.5 w-3.5 text-white fill-white" />
               </span>

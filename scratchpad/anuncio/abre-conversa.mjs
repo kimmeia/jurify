@@ -1,0 +1,12 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const b = await chromium.launch({ executablePath: process.env.CHROME });
+const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, storageState: "scratchpad/anuncio/sessao.json", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto("http://localhost:3000/atendimento", { waitUntil: "networkidle" }).catch(() => {});
+await p.waitForTimeout(3500);
+await p.getByText("Tirzah Barbosa", { exact: false }).first().click();
+await p.waitForTimeout(3500);
+const cartao = await p.locator('[data-testid="cartao-origem-anuncio"]').count();
+console.log("cartão de origem presente:", cartao);
+await p.screenshot({ path: process.argv[2], fullPage: false });
+await b.close();
