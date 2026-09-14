@@ -3631,3 +3631,60 @@ na descrição de cada card, no pill ao lado do nome e no botão travado — o t
 
 Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 10 mutações vermelhas
 em `scratchpad/mutar-logos-reais.py`.
+
+## 33. Cartões do topo fora dos painéis; busca na linha das abas (13/09)
+
+Pedido do dono: *"vamos remover esses cards superiores dos dashboards
+comercial, operacional e financeiro. Opção de buscar vamos alinhar junto do
+menu com as quatro opções na extremidade da direita."* Aprovado com *"pode
+fazer"*; comparador `mockup-paineis-cards-e-busca.html`.
+
+### 33.1 A faixa de cartões saiu dos três painéis
+
+`<FaixaAcoes>` com os `<AcaoCard>` saiu de `DashboardComercial`,
+`DashboardOperacional` e `DashboardFinanceiro` (o `DashboardGeral` já tinha
+perdido a dele em 12/09). **Nenhum dado foi apagado** — os cartões eram atalhos:
+
+| o cartão dizia | onde o número continua |
+|---|---|
+| clientes com cobrança vencida | Financeiro → Clientes, chip "inadimplentes"; e "Vencido no período", em dinheiro, no bloco principal do próprio painel |
+| cobranças vencidas no período | Financeiro |
+| abaixo da meta · sem meta | ranking do painel Comercial e Configurações → Equipe |
+| contratos fechados sem pagamento | Financeiro |
+| tarefas e compromissos atrasados | Tarefas e Agenda, que já mostram o atraso na lista |
+
+**Os componentes `FaixaAcoes` e `AcaoCard` continuam em `dashboards/common.tsx`,
+agora sem nenhum usuário.** Apagá-los não foi autorizado; a amarra guarda a
+decisão (nenhum painel volta a montá-los), não o código.
+
+O que se perdeu de fato, e está dito no comparador: o aviso passivo. "341
+clientes vencidos" aparecia sem abrir o Financeiro. A recomendação registrada
+é NÃO trazer os cartões de volta e sim usar o sino de notificações, que já
+existe e é o lugar certo pra "alguém precisa de você".
+
+### 33.2 A busca subiu pra régua de abas
+
+`BuscaDoTopo` deixou de ser privada de `common.tsx` e passou a ser montada pelo
+`DashboardComTabs`, na ponta direita da fileira das abas. Três detalhes:
+
+- **A linha agora é da FILEIRA**, não da tira de abas: o `border-b` saiu do
+  invólucro das abas e foi pro `div` que contém abas + busca. É a resposta ao
+  que o dono estranhou na entrega anterior ("essa linha só dura do tamanho do
+  menu") — na época a medida mostrou que a linha tinha a largura do conteúdo,
+  mas ela de fato parava antes da borda direita do bloco.
+- **`BuscaJaNoTopo`** (contexto, default `false`) é o que evita DUAS buscas:
+  `PainelTopo` só desenha a sua quando ninguém desenhou acima. Quem não tem
+  abas — colaborador de um setor só, variante processual — continua com a busca
+  no título do painel, como antes.
+- **No celular** a busca leva `w-full sm:w-auto` e cai pra linha de baixo, em
+  vez de espremer as quatro abas em 190px. `max-w-full overflow-x-auto` seguem
+  no invólucro das abas.
+
+Amarra: 2 testes novos em `telas-cabem-no-celular.test.ts` — 8 mutações
+vermelhas em `scratchpad/mutar-busca-nas-abas.py`.
+
+### 33.3 Anotado e NÃO corrigido
+
+No celular o painel Financeiro rola **8px** de lado (398px num aparelho de 390).
+Medido nas duas versões, antes e depois: **não veio desta mudança**. É o bloco
+do gráfico.
