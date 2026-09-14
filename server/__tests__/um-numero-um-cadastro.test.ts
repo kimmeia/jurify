@@ -510,7 +510,13 @@ describe("amarras no código", () => {
     expect(resolve).toBeGreaterThan(-1);
     expect(reconhece).toBeGreaterThan(resolve);
     expect(salva).toBeGreaterThan(reconhece);
-    expect(handler).toContain("if (rec.contatoId && rec.contatoId !== contatoId) contatoId = rec.contatoId;");
+    // Confere o MECANISMO, não a formatação: a condição e a reatribuição. A
+    // linha virou bloco quando a unificação passou a derrubar também o sinal
+    // de "contato novo" (origem por anúncio) — o que protege é o contato
+    // devolvido passar a valer, não caber numa linha só.
+    const iRec = handler.indexOf("if (rec.contatoId && rec.contatoId !== contatoId)");
+    expect(iRec).toBeGreaterThan(0);
+    expect(handler.slice(iRec, iRec + 400)).toContain("contatoId = rec.contatoId;");
   });
 
   it("a resposta manual conta a janela de 24h por cliente e canal, como o “Nova conversa” já fazia", () => {

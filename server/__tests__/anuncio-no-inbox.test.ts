@@ -25,6 +25,7 @@ const raiz = join(__dirname, "..", "..");
 const dbCrm = readFileSync(join(raiz, "server", "escritorio", "db-crm.ts"), "utf8");
 const routerCrm = readFileSync(join(raiz, "server", "escritorio", "router-crm.ts"), "utf8");
 const atendimento = readFileSync(join(raiz, "client", "src", "pages", "Atendimento.tsx"), "utf8");
+const painel = readFileSync(join(raiz, "client", "src", "pages", "atendimento", "customer-panel.tsx"), "utf8");
 
 const REFERRAL_COMPLETO = JSON.stringify({
   sourceId: "120210000000000000",
@@ -134,24 +135,42 @@ describe("tela do Inbox", () => {
     expect(atendimento).toMatch(/counts\.anuncio > 0 \|\| somenteAnuncio/);
   });
 
-  it("o cartão da conversa mostra título, texto e link do anúncio", () => {
-    const i = atendimento.indexOf('data-testid="cartao-origem-anuncio"');
+  it("a conversa NÃO desenha o bloco do anúncio — ele vive no painel do cliente", () => {
+    // Removido a pedido do dono em 14/09: no topo da conversa o bloco empurrava
+    // as mensagens pra baixo e, em conversa antiga, lia como se AQUELE
+    // atendimento tivesse nascido do anúncio. A amarra inverteu: trava que ele
+    // não volta sozinho e que a origem continua existindo onde foi combinado.
+    expect(atendimento).not.toContain('data-testid="cartao-origem-anuncio"');
+    // O criativo (título, corpo, link) não é mais desenhado na conversa. A
+    // frase "Chegou por um anúncio" SOBREVIVE no tooltip do selo da lista, e
+    // é por isso que a asserção olha o desenho do bloco, não o texto solto.
+    expect(atendimento).not.toContain("ad.corpo");
+    expect(atendimento).not.toContain("ad.sourceUrl");
+  });
+
+  it("a origem continua no painel do cliente, com o rótulo honesto", () => {
+    const i = painel.indexOf("contato.origemAnuncio &&");
     expect(i).toBeGreaterThan(0);
-    const cartao = atendimento.slice(i, i + 2200);
-    expect(cartao).toContain("Chegou por um anúncio");
-    expect(cartao).toContain("ad.titulo");
-    expect(cartao).toContain("ad.corpo");
-    expect(cartao).toContain("ad.sourceUrl");
+    const secao = painel.slice(i, i + 2200);
+    expect(secao).toContain("Origem");
+    expect(secao).toContain("origemAnuncio.titulo");
+    expect(secao).toContain("origemAnuncio.sourceUrl");
+    // A Meta não manda hora de CLIQUE — só dá pra afirmar quando a mensagem
+    // com o anúncio chegou.
+    // Ancorado no que é RENDERIZADO: o comentário ao lado explica a decisão e
+    // cita o rótulo antigo, então procurar o texto solto casaria com ele.
+    expect(secao).toContain("` · chegou em ${formatDate(contato.origemAnuncioEm)}`");
+    expect(secao).not.toMatch(/`[^`]*clique em \$\{/);
   });
 
   it("o filtro do chip chega ao backend", () => {
     expect(atendimento).toMatch(/somenteAnuncio\)\s*f\.somenteAnuncio = true/);
   });
 
-  it("a cor do bloco sai do tema, não da paleta crua", () => {
-    const i = atendimento.indexOf('data-testid="cartao-origem-anuncio"');
-    const cartao = atendimento.slice(i, i + 2200);
-    expect(cartao).not.toMatch(/(bg|text|border)-(violet|purple|indigo)-[0-9]/);
-    expect(cartao).toContain("accent-purple");
+  it("a cor da seção de origem sai do tema, não da paleta crua", () => {
+    const i = painel.indexOf("contato.origemAnuncio &&");
+    const secao = painel.slice(i, i + 2200);
+    expect(secao).not.toMatch(/(bg|text|border)-(violet|purple|indigo)-[0-9]/);
+    expect(secao).toContain("accent-purple");
   });
 });
