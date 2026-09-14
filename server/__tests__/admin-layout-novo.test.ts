@@ -55,13 +55,20 @@ describe("amarras do admin novo (menu enxuto + editor de planos)", () => {
     }
     const ia = ler("client/src/pages/admin/AdminIA.tsx");
     expect(ia).toContain("<AdminAgentesIA />");
-    expect(ia).toContain("<AdminJurisIa />");
+    // Base Jurídica e JurisIA viraram uma aba só em 14/09; os dois painéis
+    // continuam montados, um nível mais fundo. É a montagem que importa —
+    // "nada some do painel" vale onde quer que a tela passe a morar.
+    expect(ia).toContain("<ConhecimentoJuridicoTab />");
+    const conhecimento = ler("client/src/pages/admin/ConhecimentoJuridicoTab.tsx");
+    expect(conhecimento).toContain("<AdminJurisIa />");
+    expect(conhecimento).toContain("<BaseJuridicaTab />");
   });
 
-  it("hub IA tem 3 abas e a Base Jurídica mora na aba própria, não nos Agentes", () => {
+  it("hub IA tem 2 abas e o link antigo das duas continua chegando", () => {
     const ia = ler("client/src/pages/admin/AdminIA.tsx");
-    expect(ia).toContain('["agentes", "base", "jurisia"]');
-    expect(ia).toContain("<BaseJuridicaTab />");
+    expect(ia).toContain('["agentes", "conhecimento"]');
+    // Link salvo por alguém não pode cair na primeira aba.
+    expect(ia).toContain('if (aba === "base" || aba === "jurisia") return "conhecimento";');
 
     // A aba nova carrega TUDO que saiu de Agentes IA — nada some do painel.
     const base = ler("client/src/pages/admin/BaseJuridicaTab.tsx");
@@ -103,8 +110,7 @@ describe("amarras do admin novo (menu enxuto + editor de planos)", () => {
     // escritórios" e alimentava a confusão que o dono reclamou.
     expect(ia).not.toContain("dos escritórios");
     expect(ia).toContain("Robôs de conversa da plataforma");
-    expect(ia).toContain("A biblioteca do Agente Jurídico");
-    expect(ia).toContain("acervo de jurisprudência");
+    expect(ia).toContain("Tudo que a JurisIA sabe");
 
     // Subir decisão virou dialog — o formulário sempre aberto era a
     // poluição nº 1 da aba.

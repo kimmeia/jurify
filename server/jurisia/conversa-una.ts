@@ -35,7 +35,7 @@ import { recorteDoCaso } from "../juridico/prova-acervo";
 import { gerarEmbedding } from "../juridico/embeddings";
 import { recuperarFontes } from "../juridico/base";
 import { resolverAPIKey } from "../integracoes/router-agentes-ia";
-import type { ConsultaFeita } from "../../shared/jurisia-una";
+import type { ConsultaFeita, EmentaCitada } from "../../shared/jurisia-una";
 import {
   contemNumeroInventado,
   descreverFiltro,
@@ -337,6 +337,8 @@ export function montarMensagens(
 export interface RespostaUna {
   texto: string;
   erro: string | null;
+  /** Ementas de acórdão que sustentam o texto, com o endereço oficial. */
+  jurisprudencia: EmentaCitada[];
   prova: ProvaGravada | null;
   consulta: ConsultaFeita;
   naoLidos: string[];
@@ -425,6 +427,46 @@ export async function responderUna(
     }
   }
 
+  /**
+   * Ementas coletadas dos tribunais — o que a resposta CITA.
+   *
+   * Entram na mesma lista da base do escritório porque, pro modelo, as duas
+   * são material citável; o que muda é a origem. Vão também separadas no
+   * retorno, com o link oficial, porque é a tela que mostra "ver no tribunal"
+   * — e citação que não se confere não entra em petição.
+   *
+   * O tribunal do recorte manda na ordem: entendimento regional é o que muda
+   * a peça. Nunca lança — sem ementa a conversa segue com o número.
+   */
+  let ementas: EmentaCitada[] = [];
+  try {
+    const { buscarEmentas } = await import("./busca-ementas");
+    const achadas = await buscarEmentas({
+      pergunta: [args.pergunta, medido?.filtro?.assuntoTermo, medido?.filtro?.classeTermo]
+        .filter(Boolean)
+        .join(" "),
+      tribunalPreferido: medido?.filtro?.tribunal ?? null,
+      limite: 3,
+    });
+    ementas = achadas.map((e) => ({
+      identificador: e.identificador,
+      orgao: e.orgao,
+      data: e.data,
+      ementa: e.ementa,
+      url: e.url,
+    }));
+    jurisprudencia = [
+      ...ementas.map((e) => ({
+        identificador: e.identificador,
+        titulo: `${e.orgao}${e.data ? ` · ${e.data}` : ""}`,
+        texto: e.ementa,
+      })),
+      ...jurisprudencia,
+    ];
+  } catch (err) {
+    log.warn({ err: String(err) }, "Falha ao buscar ementas do acervo");
+  }
+
   const [escRow] = await db
     .select({
       nome: escritorios.nome,
@@ -459,6 +501,7 @@ export async function responderUna(
     movimentacoes: movimentacao ? movimentacao.split("\n").filter((l) => l.trim()).length : 0,
     fontesEscritorio: jurisprudencia.length,
     acervo: medido?.prova.comResultado ?? 0,
+    ementas: ementas.length,
   };
   const caso = dossie
     ? {
@@ -478,6 +521,7 @@ export async function responderUna(
     return {
       texto: "",
       erro: r.erro || "A IA não respondeu. Tente de novo ou troque o modelo.",
+      jurisprudencia: ementas,
       prova,
       consulta,
       naoLidos: docs.notas,
@@ -503,5 +547,5 @@ export async function responderUna(
     log.warn({ escritorioId: args.escritorioId, avisos }, "Checagem da conversa única acusou");
   }
 
-  return { texto: r.texto, erro: null, prova, consulta, naoLidos: docs.notas, avisos, caso };
+  return { texto: r.texto, erro: null, jurisprudencia: ementas, prova, consulta, naoLidos: docs.notas, avisos, caso };
 }
