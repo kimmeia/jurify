@@ -39,6 +39,7 @@ import {
   fonteOficialPorId,
   ligarTemChance,
   rotuloSituacao,
+  situacaoVigente,
   urlDeBusca,
 } from "../../shared/fontes-oficiais";
 import {
@@ -332,8 +333,9 @@ describe("a tela diz o que aconteceu em português", () => {
     // desaparece — ancorado no `<ul>` porque o literal existe nos dois lugares.
     const lista = tela.slice(tela.indexOf('<ul className="space-y-1'), tela.indexOf("</ul>"));
     expect(lista).toContain("resumoDaSondagem(s.resultados).map((frase) => (");
-    // O número técnico não foi removido da tela — desceu pra coluna do lado.
-    expect(tela).toContain("Detalhe técnico");
+    // O número técnico não foi removido da tela — desceu pra linha de apoio,
+    // embaixo do recado.
+    expect(tela).toContain("O que aconteceu · Detalhe técnico");
     expect(tela).toContain("{r.status ?? \"—\"} · {r.ms}ms · {v.rotulo}");
   });
 });
@@ -369,9 +371,25 @@ describe("o que a sondagem mediu está gravado na lista de fontes", () => {
     expect(ligarTemChance(f)).toBe(false);
   });
 
+  it("a última coleta vence a medida antiga", () => {
+    // `situacao` é medida com data, escrita no código; a coleta é o robô
+    // batendo na porta hoje. A tela afirmando "o site responde" embaixo de um
+    // erro de recusa foi o que apareceu na primeira foto.
+    expect(situacaoVigente("porta_aberta", "bloqueada")).toBe("recusa_nosso_servidor");
+    // E é o que promove sozinho a fonte no dia em que a coleta traz material.
+    expect(situacaoVigente("porta_aberta", "ok")).toBe("coleta_liberada");
+    // Sem coleta, ou com coleta que só falhou, vale o que foi medido.
+    expect(situacaoVigente("porta_aberta", null)).toBe("porta_aberta");
+    expect(situacaoVigente("porta_aberta", "erro")).toBe("porta_aberta");
+    expect(situacaoVigente("recusa_nosso_servidor", "nunca")).toBe("recusa_nosso_servidor");
+
+    const coletor = ler("server/jurisia/coletor-ementas.ts");
+    expect(coletor).toContain("situacao: situacaoVigente(f.situacao, l?.status),");
+  });
+
   it("a tela mostra a situação e o aviso de quem é o conserto", () => {
     const tela = ler("client/src/pages/admin/ConhecimentoJuridicoTab.tsx");
-    expect(tela).toContain("Dá pra ler daqui?");
+    expect(tela).toContain("O que ela traz, e se dá pra ler daqui");
     expect(tela).toContain("rotuloSituacao(f.situacao).frase");
     // A guarda, não a interpolação: `{f.notaDaSondagem}` continua escrito
     // dentro do bloco mesmo quando a condição é desarmada.

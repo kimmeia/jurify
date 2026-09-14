@@ -26,6 +26,7 @@ import {
   fonteCitavel,
   fonteOficialPorId,
   ligarTemChance,
+  situacaoVigente,
   urlDeBusca,
   type FonteOficial,
 } from "@shared/fontes-oficiais";
@@ -417,9 +418,11 @@ export async function estadoDasFontes() {
       material: f.material,
       entrega: f.entrega,
       cadenciaHoras: f.cadenciaHoras,
-      situacao: f.situacao,
+      // A situação que vale é a de agora: o que a última coleta fez vence o
+      // que a sondagem mediu antes.
+      situacao: situacaoVigente(f.situacao, l?.status),
       notaDaSondagem: f.notaDaSondagem ?? null,
-      ligarTemChance: ligarTemChance(f),
+      ligarTemChance: ligarTemChance({ ...f, situacao: situacaoVigente(f.situacao, l?.status) }),
       ligada: l?.ligada ?? false,
       status: l?.status ?? ("nunca" as const),
       ultimaColetaEm: l?.ultimaColetaEm ?? null,

@@ -289,8 +289,7 @@ function FontesOficiais() {
           <TableHeader>
             <TableRow>
               <TableHead>Fonte</TableHead>
-              <TableHead>O que ela traz</TableHead>
-              <TableHead>Dá pra ler daqui?</TableHead>
+              <TableHead>O que ela traz, e se dá pra ler daqui</TableHead>
               <TableHead>Volta</TableHead>
               <TableHead className="text-right">No acervo</TableHead>
               <TableHead>Última coleta</TableHead>
@@ -307,35 +306,38 @@ function FontesOficiais() {
                 </TableCell>
                 {/* A célula da tabela nasce `whitespace-nowrap`: sem soltar a
                     quebra aqui, a frase invade a coluna vizinha. */}
-                <TableCell className="w-[360px] max-w-[360px] whitespace-normal">
+                {/* O que ela traz e se dá pra ler moram na MESMA célula de
+                    propósito: em coluna separada, a tabela passou de oito
+                    colunas e espremeu a frase num fio de dez caracteres — a
+                    largura de um cartão de lista não é a largura da tela. */}
+                <TableCell className="w-[440px] max-w-[440px] whitespace-normal align-top">
                   <span
                     className={`mr-1.5 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${MATERIAL[f.material].cls}`}
                   >
                     {MATERIAL[f.material].rotulo}
                   </span>
                   <span className="text-[12px] text-muted-foreground">{f.entrega}</span>
-                  {f.ultimoErro && (
-                    <span className="mt-1 block text-[11px] text-danger-fg">{f.ultimoErro}</span>
-                  )}
-                </TableCell>
-                {/* A situação medida, em português. Sem ela a chave "Ligada"
-                    convida a ligar fonte que não tem como responder — foi o que
-                    aconteceu com o STJ. */}
-                <TableCell className="w-[260px] max-w-[260px] whitespace-normal align-top">
+                  {/* A situação medida, em português. Sem ela a chave "Ligada"
+                      convida a ligar fonte que não tem como responder — foi o
+                      que aconteceu com o STJ. */}
                   <p
-                    className={`text-[12px] font-semibold ${
+                    className={`mt-1.5 text-[12px] font-semibold ${
                       f.ligarTemChance ? "text-success-fg" : "text-warning-fg"
                     }`}
                   >
                     {rotuloSituacao(f.situacao).frase}
+                    {rotuloSituacao(f.situacao).deQuemE && (
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        — {rotuloSituacao(f.situacao).deQuemE}
+                      </span>
+                    )}
                   </p>
-                  {rotuloSituacao(f.situacao).deQuemE && (
-                    <p className="text-[11px] text-muted-foreground">
-                      {rotuloSituacao(f.situacao).deQuemE}
-                    </p>
-                  )}
                   {f.notaDaSondagem && (
-                    <p className="mt-1 text-[11px] text-muted-foreground">{f.notaDaSondagem}</p>
+                    <p className="text-[11px] text-muted-foreground">{f.notaDaSondagem}</p>
+                  )}
+                  {f.ultimoErro && (
+                    <span className="mt-1 block text-[11px] text-danger-fg">{f.ultimoErro}</span>
                   )}
                 </TableCell>
                 <TableCell className="text-[12px] text-muted-foreground">

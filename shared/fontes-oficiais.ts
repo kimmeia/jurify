@@ -310,6 +310,26 @@ export function urlDeBusca(fonte: FonteOficial, termo: string): string | null {
 }
 
 /**
+ * A situação que vale AGORA: o que a última coleta fez vence o que a sondagem
+ * mediu antes.
+ *
+ * `situacao` é uma medida com data, escrita no código; a coleta é o robô
+ * batendo na porta hoje. Quando as duas discordam, quem tem razão é a que
+ * aconteceu por último — senão a tela afirma "o site responde" embaixo de um
+ * erro de recusa, que foi exatamente o que apareceu na primeira foto. É também
+ * o que promove sozinho `porta_aberta` a `coleta_liberada` no dia em que a
+ * primeira coleta traz material.
+ */
+export function situacaoVigente(
+  declarada: SituacaoFonte,
+  statusDaColeta?: string | null,
+): SituacaoFonte {
+  if (statusDaColeta === "bloqueada") return "recusa_nosso_servidor";
+  if (statusDaColeta === "ok") return "coleta_liberada";
+  return declarada;
+}
+
+/**
  * Vale a pena ligar esta fonte hoje?
  *
  * Não bloqueia nada — a chave continua clicável, porque medida velha não pode

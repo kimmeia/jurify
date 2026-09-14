@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.138 verdes em 14/09/2026 (413 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.139 verdes em 14/09/2026 (413 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -2061,7 +2061,18 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
     decisão dele); consertar o certificado do STF; o endereço real do TJCE (o
     e-SAJ é de São Paulo — daqui o proxy bloqueia os portais); e ligar
     TJSP/TJMG/TRF4, que é o que vira `porta_aberta` em `coleta_liberada`.
-  Amarra: `sumulas-e-sondagem-em-portugues` (35) — **45 mutações vermelhas**
+  - **Duas coisas que só a FOTO pegou** (comparador
+    `comparador-sumulas-e-portugues.html`, as duas versões rodando ao mesmo
+    tempo no MESMO banco, conferido por Playwright): a coluna nova levou a
+    tabela de fontes a OITO colunas e espremeu a descrição num fio de dez
+    caracteres (virou uma célula só); e o cartão da sondagem mora numa grade de
+    dois, então a tabela de três colunas empurrou o recado pra FORA do cartão e
+    a coluna do meio saiu vazia (virou duas colunas, com o número técnico como
+    terceira linha) — mesma lição da seção 31, mais o `whitespace-nowrap` que a
+    célula de tabela traz de fábrica. E `situacaoVigente`: coleta de hoje vence
+    medida de ontem, senão a tela afirma "o site responde" embaixo de um erro
+    de recusa.
+  Amarra: `sumulas-e-sondagem-em-portugues` (36) — **48 mutações vermelhas**
   (`scratchpad/mutar-sumulas-portugues.py`; 7 sobreviveram na 1ª volta: a trava
   de cancelada só existia no leitor de texto, e as fixtures de índice e de
   script/style estavam fracas — script no `<head>` não prova remoção quando a

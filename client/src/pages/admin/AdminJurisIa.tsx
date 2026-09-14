@@ -457,9 +457,11 @@ function PainelSondagem() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  {/* Duas colunas, não quatro: este cartão mora numa grade de
+                      dois, então a largura dele é METADE da tela — coluna fixa
+                      aqui empurra o texto pra fora do cartão. */}
                   <TableHead>Fonte</TableHead>
-                  <TableHead>O que aconteceu</TableHead>
-                  <TableHead className="text-right">Detalhe técnico</TableHead>
+                  <TableHead>O que aconteceu · Detalhe técnico</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -478,13 +480,16 @@ function PainelSondagem() {
                         className="cursor-pointer"
                         onClick={() => setAberto(aberto === i ? null : i)}
                       >
-                        <TableCell className="align-top">
+                        {/* `whitespace-normal`: a célula da tabela nasce
+                            `nowrap`, e o nome da fonte sozinho empurrava a
+                            coluna do recado pra fora do cartão. */}
+                        <TableCell className="w-[200px] max-w-[200px] whitespace-normal align-top">
                           <p className="text-[13px] font-semibold">
                             {r.fonte} · {r.nome}
                           </p>
                           <p className="text-[11px] text-muted-foreground">{r.pergunta}</p>
                         </TableCell>
-                        <TableCell className="w-[460px] max-w-[460px] whitespace-normal align-top">
+                        <TableCell className="min-w-0 whitespace-normal align-top">
                           <span
                             className={`mr-1.5 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tom.cls}`}
                           >
@@ -496,16 +501,19 @@ function PainelSondagem() {
                               {recado.acao}
                             </span>
                           )}
-                        </TableCell>
-                        <TableCell className="text-right align-top text-[11px] tabular-nums text-muted-foreground">
-                          {r.status ?? "—"} · {r.ms}ms · {v.rotulo}
-                          {r.causa ? ` · ${r.causa}` : ""}
-                          {r.retryNavegador ? ` · UA ${r.retryNavegador}` : ""}
+                          {/* O número técnico continua na tela — embaixo do
+                              recado, que é onde ele serve de prova e não de
+                              obstáculo. */}
+                          <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground/80">
+                            {r.status ?? "—"} · {r.ms}ms · {v.rotulo}
+                            {r.causa ? ` · ${r.causa}` : ""}
+                            {r.retryNavegador ? ` · UA ${r.retryNavegador}` : ""}
+                          </span>
                         </TableCell>
                       </TableRow>
                       {aberto === i && (
                         <TableRow>
-                          <TableCell colSpan={3} className="bg-muted/40">
+                          <TableCell colSpan={2} className="bg-muted/40">
                             {r.erro && (
                               <p className="mb-2 text-xs text-danger-fg">erro: {r.erro}</p>
                             )}

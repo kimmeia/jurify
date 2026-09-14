@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.138 verdes, 413 arquivos** (14/09, com a seção 33; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.139 verdes, 413 arquivos** (14/09, com a seção 33; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3801,6 +3801,34 @@ Na resposta do JurisIA, súmula e ementa contam separado (`contarCitacoes`,
 `rotuloCitacoes`): "2 súmulas e 1 ementa". Dizer "5 ementas" quando duas são
 súmula é impreciso onde mais importa.
 
+### 33.4.1 Duas coisas que só a FOTO pegou
+
+O comparador é `comparador-sumulas-e-portugues.html` — as duas versões do
+sistema rodando ao mesmo tempo (uma em cada porta, ligadas no MESMO banco) com
+os dados que a sondagem mediu em produção. Conferido por Playwright: 3
+comparações, 5 fotos, o "Piscar" alterando a tela de verdade.
+
+1. **A coluna nova espremeu a frase.** "Dá pra ler daqui?" como coluna própria
+   levou a tabela de fontes a oito colunas, e a descrição de cada fonte ficou
+   num fio de dez caracteres. As duas coisas viraram uma célula só — o que ela
+   traz e se dá pra ler pertencem à mesma pergunta.
+2. **A sondagem mora numa grade de dois.** O cartão tem METADE da largura da
+   tela, então a tabela de três colunas empurrou o recado para fora do cartão e
+   a tela ficou com a coluna do meio VAZIA. Duas colunas, e o número técnico
+   como terceira linha do recado. É a mesma lição da seção 31 (a grade herda a
+   largura do cartão, não a da tela) — e a célula da tabela nasce
+   `whitespace-nowrap`, então o nome da fonte sozinho empurrava o resto.
+
+### 33.4.2 A última coleta vence a medida antiga
+
+`situacaoVigente(declarada, statusDaColeta)`: a situação escrita no código é uma
+medida com data; a coleta é o robô batendo na porta hoje. Coleta `bloqueada`
+rebaixa para "o tribunal barra o nosso servidor" e coleta `ok` promove para
+"funciona e já traz material" — é o que transforma `porta_aberta` em
+`coleta_liberada` sozinho, no dia em que a primeira coleta traz ementa. Sem
+isso a tela afirmava "o site responde" logo embaixo de um erro de recusa, o que
+a primeira foto mostrou.
+
 ### 33.5 O que ficou anotado e NÃO foi feito
 
 - **STJ e DJEN seguem sem caminho automático.** Sair por outra porta (um
@@ -3820,7 +3848,7 @@ súmula é impreciso onde mais importa.
 
 ### 33.6 Amarra
 
-`sumulas-e-sondagem-em-portugues.test.ts` (35 testes) — **45 mutações
+`sumulas-e-sondagem-em-portugues.test.ts` (36 testes) — **48 mutações
 vermelhas** (`scratchpad/mutar-sumulas-portugues.py`). Sete sobreviveram na
 primeira volta e as sete ensinaram algo:
 
