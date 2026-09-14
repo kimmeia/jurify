@@ -4516,3 +4516,74 @@ o por grupo também). O conserto foi simplificar o código, não engordar o test
 `cancelar-contrato` teve UM `expect` trocado: ele travava a adjacência de dois
 campos no payload e passou a conferir que a lista está lá, conferido por
 mutação.
+
+## 41. Origem de anúncio só de quem CHEGOU pelo anúncio (14/09)
+
+Origem: o dono testou em produção e trouxe dois casos — cliente antigo
+("cadastro reconhecido") e conversa de 24 de agosto — os dois com o bloco
+"CHEGOU POR UM ANÚNCIO" no topo. Depois mandou uma mensagem **à mão** e ela
+também virou anúncio.
+
+### 41.1 Não era invenção nossa, e tinha um segundo caminho que era
+
+O link «ver anúncio» só é desenhado quando `source_url` vem preenchido, e
+nós não fabricamos URL em lugar nenhum. **A Meta anexa o bloco `referral`
+também a mensagens de quem já conversava com a empresa** por uma thread que
+um dia veio de campanha — inclusive texto digitado, meses depois. O laço do
+webhook foi auditado: `referral` é lido por mensagem, dentro do `for`, sem
+variável compartilhada. Não há contaminação entre contatos.
+
+**O caminho que era nosso**: `reconhecerCadastroNaEntrada` troca o
+`contatoId` quando a ficha magra é absorvida por um cadastro existente — e
+isso acontece DEPOIS de `contatoFoiCriado` ser definido. Cliente de meses
+atrás herdava o "sou novo" da ficha que acabou de morrer. É o caso do selo
+"✓ cadastro reconhecido".
+
+### 41.2 A regra, proposta pelo dono
+
+Grava origem **só quando o contato nasce daquela mensagem**. Assim "chegou
+por um anúncio" vira literal, e o relatório para de contar como lead novo
+quem o escritório já tinha.
+
+**O preço, escolhido de olhos abertos**: cliente antigo que clicar num
+anúncio de verdade não é contabilizado. Como não há como separar "clicou de
+novo" de "a Meta carimbou a thread", não registrar é o padrão honesto —
+perde-se um caso, não se afirma um que não houve.
+
+`contatoNovo === false` barra; `undefined` NÃO barra. Caller que ainda não
+passa o sinal continua gravando, em vez de parar em silêncio.
+
+### 41.3 O bloco saiu da conversa — decisão do dono
+
+*"Pode remover o bloco da conversa por enquanto, deixe apenas em origem."*
+A origem vive na seção **Origem** do painel do cliente. O selo ANÚNCIO da
+lista e o chip continuam. A amarra inverteu: trava que o bloco não volta
+sozinho e que a origem continua existindo no painel.
+
+O rótulo virou **"chegou em"**: a Meta não manda hora de clique no
+`referral`, só existe a hora em que a mensagem chegou. "clique em" prometia
+precisão que o dado não tem.
+
+### 41.4 Limpeza do que foi carimbado errado
+
+Migration 0233. Critério objetivo, sem palpite: origem gravada **depois** da
+criação do contato (folga de 5 minutos para o lead que nasce e é carimbado
+no mesmo atendimento). Apaga **só as duas colunas**; nenhum contato,
+conversa, mensagem, lead ou cobrança é tocado.
+
+Registrado porque o dono perguntou: **excluir o usuário seria pior** — o
+contato voltaria a ser criado na próxima mensagem e, sob a regra nova,
+seria carimbado de novo, agora com convicção.
+
+### 41.5 Observabilidade, que faltava
+
+`registrarOrigemAnuncioSeAusente` engolia o erro sem registrar: "a Meta não
+mandou referral" e "a gravação falhou" tinham a mesma cara — nenhuma linha
+de log. Agora a chegada do referral é registrada ANTES da gravação e fora do
+try, e o catch diz o motivo.
+
+Amarras: `anuncio-so-de-quem-chegou.test.ts` (11) e `anuncio-no-inbox.test.ts`
+(16, dois `it` invertidos) — **9/9 mutações vermelhas** em
+`scratchpad/mutar-anuncio-so-novos.py`. `um-numero-um-cadastro` teve UM
+`expect` trocado: travava a linha literal da unificação, que virou bloco;
+passou a conferir o mecanismo, conferido por mutação.

@@ -57,12 +57,31 @@ export function origemAnuncioParaLista(json: string | null | undefined): {
   };
 }
 
+/**
+ * Grava a origem SÓ quando o contato nasceu desta mensagem.
+ *
+ * A Meta anexa o bloco `referral` também a mensagens de quem JÁ conversava
+ * com a empresa por uma thread que um dia veio de anúncio — inclusive a texto
+ * digitado à mão, meses depois. Aceitar isso carimbava cliente antigo como
+ * "chegou por um anúncio" e inflava o relatório com gente que a campanha não
+ * trouxe. Como não há como distinguir "clicou de novo" de "a Meta carimbou a
+ * thread", não registrar é o padrão honesto: perde-se o re-clique real, não se
+ * afirma o que não aconteceu.
+ */
 export async function registrarOrigemAnuncioSeAusente(
   db: any,
   contatoId: number,
   referral: ReferralAnuncio,
   quandoMs?: number,
+  contatoNovo?: boolean,
 ): Promise<void> {
+  if (contatoNovo === false) {
+    log.info(
+      { contatoId, sourceId: referral.sourceId },
+      "[OrigemAnuncio] referral em contato que já existia — não registrado (thread antiga de anúncio)",
+    );
+    return;
+  }
   try {
     const [row] = await db
       .select({ atual: contatos.origemAnuncio })

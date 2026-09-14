@@ -66,7 +66,7 @@ import { CliqueEmBotao, OpcoesEnviadas } from "./atendimento/opcoes-interativas"
 import { useChamadaWhatsapp } from "@/hooks/whatsapp-call-context";
 import { useBotToggle, botStatusInfo } from "./atendimento/use-bot-toggle";
 import { IconeTwilio } from "@/components/IconeTwilio";
-import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot, Megaphone, Play, ExternalLink as ExternalLinkIcon } from "lucide-react";
+import { Sparkles, ScrollText, Bot, MoreVertical, SquarePen, ChevronDown, CircleDot, Megaphone } from "lucide-react";
 
 /** "2 conversas, 1 cobrança" — o que a unificação levou junto, em palavras. */
 function resumoContagens(c: { conversas: number; cobrancas: number; processos: number; leads: number; arquivos: number }): string {
@@ -2422,69 +2422,12 @@ function ChatArea({ cid, convs, onUpdate, onLeadUpdate, onWA, onTel, onDeleted, 
       </div>
     </div>
     )}
-    {/* De onde a pessoa veio, no topo da conversa: o atendente abre já sabendo
-        qual anúncio ela clicou e o que ele prometia — é o que permite responder
-        no assunto em vez de perguntar "como podemos ajudar?". A Meta manda esse
-        bloco na primeira mensagem do clique; campos que ela não envia somem. */}
-    {(conv as any)?.origemAnuncio && (() => {
-      const ad = (conv as any).origemAnuncio;
-      const capa = ad.thumbnailUrl || ad.imagemUrl;
-      const ehVideo = ad.midiaTipo === "video";
-      const quando = (() => {
-        const iso = (conv as any).origemAnuncioEm;
-        if (!iso) return "";
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return "";
-        return `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
-      })();
-      return (
-        <div
-          data-testid="cartao-origem-anuncio"
-          className="mx-3 mt-2 flex gap-3 rounded-lg border border-accent-purple/30 bg-accent-purple-bg/50 px-3 py-2.5"
-        >
-          <div className="fundo-hero relative w-16 h-12 rounded-md shrink-0 overflow-hidden flex items-center justify-center">
-            {capa ? (
-              <img src={capa} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <Megaphone className="h-4 w-4 text-hero-fg" />
-            )}
-            {/* A marca de play só entra SOBRE a capa. Sem capa, ela empilha em
-                cima do megafone e os dois ícones viram borrão — defeito que
-                nenhum teste acusa e só a foto do app rodando mostrou. */}
-            {ehVideo && capa && (
-              <span className="absolute inset-0 flex items-center justify-center bg-black/25">
-                <Play className="h-3.5 w-3.5 text-white fill-white" />
-              </span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-micro font-bold uppercase tracking-wider text-accent-purple-fg">
-              Chegou por um anúncio
-            </p>
-            {ad.titulo && (
-              <p className="text-corpo font-semibold leading-snug mt-1 line-clamp-2">{ad.titulo}</p>
-            )}
-            {ad.corpo && (
-              <p className="text-apoio text-muted-foreground leading-snug mt-0.5 line-clamp-2">{ad.corpo}</p>
-            )}
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap text-apoio text-muted-foreground">
-              <span>{ehVideo ? "Anúncio em vídeo" : "Anúncio"}</span>
-              {quando && <span>· clique em {quando}</span>}
-              {ad.sourceUrl && (
-                <a
-                  href={ad.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-accent-purple-fg hover:underline inline-flex items-center gap-1"
-                >
-                  ver anúncio <ExternalLinkIcon className="h-3 w-3" />
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    })()}
+    {/* A origem por anúncio NÃO é desenhada aqui — decisão do dono, 14/09.
+        Ela vive na seção "Origem" do painel do cliente (Customer 360), onde há
+        espaço e onde se consulta com calma. No topo da conversa o bloco
+        empurrava as mensagens pra baixo e, em conversa antiga, lia como se
+        AQUELE atendimento tivesse nascido do anúncio. Os dados continuam
+        chegando na lista (selo e chip); o que saiu foi o desenho. */}
 
     {/* Aberta por link, por aviso de número repetido ou pela pasta Arquivadas:
         a conversa existe e está inteira, mas o recorte atual do Inbox não a
