@@ -99,6 +99,31 @@ Como o sistema implementa:
 - Operacional (escritório): cláusula de consentimento WhatsApp no contrato
   padrão + rodapé "Responda SAIR para não receber avisos" nos templates.
 
+## Contaminação por parceiro banido (causa raiz das restrições em série)
+
+Três WABAs de clientes (titulares DIFERENTES) foram restritas por "Sending
+spam" entre jul e set/2026, sempre 15-30 dias após conectar, sempre com
+número novo e **sem nenhuma mensagem iniciada pela empresa** — não havia
+cenário SmartFlow ativo nem disparo. Causa encontrada em 14/09: a lista de
+**Parceiros** do portfólio da Devular tinha uma BM **banida**
+(`BM2 - Boyadjian Advogados`) conectada. Ativo novo ligado a um portfólio
+com parceiro banido é lido pela Meta como tentativa de contornar o
+enforcement, e herda a punição.
+
+Regras que saem disso:
+- **Nunca** manter BM banida/restrita na lista de Parceiros. Auditar a lista
+  antes de cada onboarding.
+- Com acesso avançado aprovado (01/09), o cliente conecta pelo Embedded
+  Signup a partir do BM dele — **não é mais preciso atribuir a Devular como
+  parceira/admin do BM do cliente**. O modelo de parceria do onboarding
+  manual só vale como plano B, e cobra esse preço.
+- Enquanto a apelação da conta banida seguir aberta, qualquer ativo novo do
+  mesmo cliente tende a ser restrito de novo — resolver o caso antigo vem
+  antes de conectar número novo.
+- Sintoma que identifica o caso: restrição por spam **sem** volume de saída.
+  Se o escritório não dispara e mesmo assim é restrito, procure o vínculo,
+  não o envio.
+
 ## Bloqueio do APP (Login "Recurso indisponível") — prevenção
 
 - **Data Use Checkup é ANUAL** — não responder = Login suspenso (foi o que
