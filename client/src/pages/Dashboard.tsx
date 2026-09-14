@@ -26,7 +26,7 @@ import DashboardComercial from "./dashboards/DashboardComercial";
 import DashboardFinanceiro from "./dashboards/DashboardFinanceiro";
 import DashboardOperacional from "./dashboards/DashboardOperacional";
 import DashboardProcessual from "./dashboards/DashboardProcessual";
-import { AvisoBanner } from "./dashboards/common";
+import { AvisoBanner, BuscaDoTopo, BuscaJaNoTopo } from "./dashboards/common";
 import { useModulosContratados } from "@/components/ModuloGuard";
 import { pacoteProcessualPuro } from "@shared/modulos-contratacao";
 
@@ -165,33 +165,45 @@ function DashboardComTabs({
   const [aba, setAba] = useState<Aba>(abaDefault);
 
   return (
-    <div className="space-y-4">
+    // A régua avisa às telas de dentro que a busca já foi desenhada aqui em
+    // cima — senão apareceriam duas: uma na linha das abas e outra no título
+    // de cada painel.
+    <BuscaJaNoTopo.Provider value>
+      <div className="space-y-4">
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)} className="w-full">
         {/* Cores por token, não por `slate-*`/`bg-card` fixos: no tema escuro
             a aba ativa ficava branca com texto branco por cima — sumia — e as
             inativas viravam cinza sobre cinza. */}
-        {/* `max-w-full` + rolagem própria: as 4 abas somam 430px e numa tela
-            de 390px empurravam a PÁGINA inteira de lado. Agora quem rola é a
-            tira, e o resto da tela fica parado. */}
-        <div className="max-w-full overflow-x-auto border-b">
-          <TabsList className="h-auto gap-6 rounded-none bg-transparent p-0">
-            {ABAS.map(({ valor, rotulo, icone: Icone }) => (
-              <TabsTrigger
-                key={valor}
-                value={valor}
-                /* `border-0 border-b-2` e `border-b-foreground` (não
-                   `border-foreground`): o TabsTrigger da casa já traz
-                   `border border-transparent` nos quatro lados, então pintar
-                   "a borda" no estado ativo desenhava um RETÂNGULO em volta
-                   do rótulo — 1px em cima e nas laterais além do sublinhado.
-                   Aqui só o lado de baixo existe e só ele ganha cor. */
-                className="gap-1.5 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 pb-2.5 pt-0 text-[13px] text-muted-foreground shadow-none outline-none transition-colors focus-visible:ring-0 data-[state=active]:border-b-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
-              >
-                <Icone className="h-3.5 w-3.5" />
-                {rotulo}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+        {/* A busca entra NA LINHA das abas, na ponta direita (pedido do dono,
+            13/09). A linha de baixo passou a ser da FILEIRA inteira, e não só
+            da tira de abas: antes ela terminava onde as abas terminavam.
+            No celular a busca ocupa a largura toda e cai pra linha de baixo
+            (`w-full sm:w-auto`) em vez de espremer as abas em 190px. */}
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b">
+          {/* `max-w-full` + rolagem própria: as 4 abas somam 430px e numa tela
+              de 390px empurravam a PÁGINA inteira de lado. Agora quem rola é a
+              tira, e o resto da tela fica parado. */}
+          <div className="max-w-full min-w-0 flex-1 overflow-x-auto">
+            <TabsList className="h-auto gap-6 rounded-none bg-transparent p-0">
+              {ABAS.map(({ valor, rotulo, icone: Icone }) => (
+                <TabsTrigger
+                  key={valor}
+                  value={valor}
+                  /* `border-0 border-b-2` e `border-b-foreground` (não
+                     `border-foreground`): o TabsTrigger da casa já traz
+                     `border border-transparent` nos quatro lados, então pintar
+                     "a borda" no estado ativo desenhava um RETÂNGULO em volta
+                     do rótulo — 1px em cima e nas laterais além do sublinhado.
+                     Aqui só o lado de baixo existe e só ele ganha cor. */
+                  className="gap-1.5 rounded-none border-0 border-b-2 border-transparent bg-transparent px-0 pb-2.5 pt-0 text-[13px] text-muted-foreground shadow-none outline-none transition-colors focus-visible:ring-0 data-[state=active]:border-b-foreground data-[state=active]:bg-transparent data-[state=active]:font-semibold data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                >
+                  <Icone className="h-3.5 w-3.5" />
+                  {rotulo}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <BuscaDoTopo className="mb-2 w-full sm:w-auto" />
         </div>
 
         <TabsContent value="geral" className="mt-5">
@@ -213,6 +225,7 @@ function DashboardComTabs({
           Seu setor: <span className="font-medium">{setorNome}</span>
         </p>
       )}
-    </div>
+      </div>
+    </BuscaJaNoTopo.Provider>
   );
 }

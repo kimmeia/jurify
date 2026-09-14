@@ -15,10 +15,8 @@ import { useLocation } from "wouter";
 import { AlertTriangle, ArrowRight, Handshake, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  AcaoCard,
   BarraMeta,
   BlocoPrincipal,
-  FaixaAcoes,
   LinhaNumero,
   LinhaRanking,
   ListaCard,
@@ -114,36 +112,11 @@ export default function DashboardComercial() {
         }
       />
 
-      {isGestor && (emAtencao > 0 || semMeta.length > 0 || semPagamento > 0) && (
-        <FaixaAcoes>
-          {emAtencao > 0 && (
-            <AcaoCard
-              icone={AlertTriangle}
-              valor={emAtencao}
-              label={`abaixo de ${PISO_ATENCAO}% da meta`}
-              critico
-              onClick={() => nav("/configuracoes?tab=equipe")}
-            />
-          )}
-          {semMeta.length > 0 && (
-            <AcaoCard
-              icone={Target}
-              valor={semMeta.length}
-              label={semMeta.length === 1 ? "colaborador sem meta definida" : "colaboradores sem meta definida"}
-              onClick={() => nav("/configuracoes?tab=equipe")}
-            />
-          )}
-          {semPagamento > 0 && (
-            <AcaoCard
-              icone={Handshake}
-              valor={semPagamento}
-              label="contratos fechados sem pagamento"
-              onClick={() => nav("/financeiro")}
-            />
-          )}
-        </FaixaAcoes>
-      )}
-
+      {/* A faixa de cartões de ação saiu daqui a pedido do dono (13/09,
+          "vamos remover esses cards superiores"). O número não some do
+          sistema: quem está abaixo da meta continua no ranking do painel,
+          colaborador sem meta aparece em Configurações → Equipe, e contrato
+          fechado sem pagamento, no Financeiro. */}
       <div className="grid gap-3.5 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <BlocoPrincipal
