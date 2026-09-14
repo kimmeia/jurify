@@ -32,8 +32,6 @@
  *  - `permissoes`: Configurações pede os cargos ao montar — sem isso a tela
  *    onde se escolhe o plano não renderiza;
  *  - `notificacoes`/`push`: sino e registro do navegador, não são o produto;
- *  - `ajuda`: a Central de ajuda fica FORA do guard de assinatura de
- *    propósito (quem ainda não escolheu plano pode ler o manual);
  *  - `admin*`: passam por `adminProcedure`, que não é `protectedProcedure` —
  *    não chegam nem no porteiro. Estão na lista pra o teste de completude
  *    ficar honesto, não pra liberar nada.
@@ -46,7 +44,6 @@ export const NAMESPACES_LIBERADOS_SEM_PLANO: readonly string[] = [
   "permissoes",
   "notificacoes",
   "push",
-  "ajuda",
 
   // painel da plataforma — cercado pelo adminProcedure
   "admin",

@@ -24,7 +24,6 @@ const raiz = join(__dirname, "..", "..");
 const ler = (p: string) => readFileSync(join(raiz, p), "utf8");
 
 const processos = ler("client/src/pages/Processos.tsx");
-const manual = ler("client/src/pages/ajuda/tarefas.ts");
 
 /** O trecho do diálogo de cadastrar credencial, do container até o rodapé. */
 function blocoDoDialogo(): string {
@@ -69,12 +68,7 @@ describe("o login do tribunal é CPF", () => {
     expect(bloco).not.toMatch(/placeholder="[^"]*SP123456/);
   });
 
-  it("o manual da Central de ajuda cita o MESMO rótulo da tela", () => {
-    // A regra da casa: rótulo citado entre «» tem que existir no arquivo da
-    // tela. Trocar um e esquecer o outro é o que este par impede — foi por isso
-    // que os dois mudaram no mesmo commit.
-    const passo = manual.slice(manual.indexOf("Em Processos, abra a aba «Cofre»"));
-    expect(passo.slice(0, 400)).toContain("informe «CPF» e «Senha»");
-    expect(manual).not.toContain("«CPF ou OAB»");
-  });
+  // O par "rótulo da tela × rótulo do manual" saiu junto com o módulo de
+  // ajuda, removido por inteiro em 13/09 a pedido do dono (os vídeos vão
+  // ocupar o lugar). O que ficou é o rótulo da tela, conferido acima.
 });

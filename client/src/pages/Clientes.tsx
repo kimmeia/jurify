@@ -19,7 +19,6 @@ import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -702,7 +701,6 @@ export default function Clientes() {
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Clientes
                     </p>
-                    <AjudaDaTela tarefa="cadastrar-cliente" />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Cadastro · histórico · documentos · financeiro
