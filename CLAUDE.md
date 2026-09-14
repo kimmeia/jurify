@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.139 verdes em 14/09/2026 (413 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.176 verdes em 14/09/2026 (414 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -2079,25 +2079,49 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   leitura é do `<body>`). `jurisprudencia-de-verdade` teve 2 `expect`
   atualizados.
 
-- **Mockup entregue 14/09, aguardando "pode fazer": notificações push padrão**
-  (`mockup-notificacoes-padrao.html`, tela montada DENTRO do app rodando na
-  branch `descartavel/mockup-notificacoes`, commit `5c5ff584`; seção 34 do
-  documento de estado). Pedido dele: "uma seção para ativar as notificações
-  push padrões do app — Sentença proferida, Nova ação detectada, Nova conversa
-  Iniciada… o que faz sentido ter como padrão". O que a conferência achou:
-  push FUNCIONA, mas **não existe preferência nenhuma** (`TIPOS_PUSH` é um Set
-  fixo no código, 7 tipos, tudo-ou-nada por aparelho); o **dono recebe toda
-  mensagem de toda conversa** (`emitirParaResponsaveisEMaster` no
-  whatsapp-handler); **movimentação vai pra quem CADASTROU o vigia**
-  (`mon.criadoPor`), não pro dono nem pro responsável; e **quatro avisos que já
-  existem não chegam no celular** (prazo vencendo, pagamento recebido, cobrança
-  vencida, credencial de tribunal quebrada). "Sentença proferida" não existe
-  como tipo, mas a matéria-prima sim: `resumir-movimentacao` já grava
-  `relevancia` (relevante|rotina) e `desfecho`, e `classificarGrupo` já separa
-  "exigem ação" — falta usar isso no push. Proposta: 17 avisos em 5 grupos, com
-  selo honesto de estado (já funciona · novo · hoje não chega no celular),
-  rotina DESLIGADA por padrão e "nova conversa iniciada" no lugar de "toda
-  mensagem". 4 decisões estão com ele.
+- **Entregue 14/09, notificações push que o dono escolhe — "Bora fazer" dele no
+  mockup `mockup-notificacoes-padrao.html` (seção 34 do documento de estado).**
+  Pedido: "uma seção para ativar as notificações push padrões do app — Sentença
+  proferida, Nova ação detectada, Nova conversa Iniciada… o que faz sentido ter
+  como padrão".
+  - **O que existia**: push funcionava, mas **sem preferência nenhuma**
+    (`TIPOS_PUSH` era um Set fixo, 7 tipos, tudo-ou-nada por aparelho); o dono
+    recebia **toda mensagem de toda conversa**; movimentação ia só pra quem
+    CADASTROU o vigia (`mon.criadoPor`); e 4 avisos existiam sem chegar no
+    celular (prazo, pagamento, cobrança vencida, credencial quebrada).
+  - **A regra que protege tudo**: `avisoDoTipo` devolve `null` pro que o
+    catálogo não conhece, e **null quer dizer ENVIA**. Banco fora, erro de
+    leitura, usuário sem linha — tudo passa; o único "não" é o explícito. Sem
+    isso a entrega seria um apagão silencioso de avisos, que não dá erro e só
+    aparece quando alguém perde prazo.
+  - **Só o que DIVERGE do padrão é gravado** (`notificacao_preferencias`,
+    migration 0231): voltar ao padrão APAGA a linha, e é isso que deixa mudar
+    um padrão depois e alcançar quem nunca mexeu. Conferido no banco: tabela
+    vazia depois de ligar e desligar de volta.
+  - **`decidirPush` é pura** (aviso, mapa, hora local) e `pushPermitido` é a
+    casca com banco e cache de 60s. **Desligado vence silêncio** — trocar a
+    ordem faria o log mentir sobre por que o celular não tocou. E o silêncio
+    cala o CELULAR, não o sino: SSE e notificação saem de qualquer jeito.
+  - **Sentença proferida** virou a classe da movimentação: o cron manda
+    `classe` calculada por `classificarGrupo`, o MESMO classificador da
+    Central. Movimentação SEM classe cai em **decisão**, nunca em rotina —
+    silenciar o que a IA não conseguiu ler seria o pior default. **Nova
+    conversa** sai de `conversaNova` no handler, com a mesma régua que já
+    re-carimba o início do atendimento.
+  - **Passaram a chegar no celular**: prazo vencendo (depois da dedup de 12h),
+    pagamento recebido e cobrança vencida (depois da dedup do evento do Asaas,
+    que retenta 2–3×), contrato fechado (em try/catch: aviso que falha não
+    desfaz venda) e credencial de tribunal. **Cliente esperando 15 min** é cron
+    novo — espera = conversa `aguardando` cuja ÚLTIMA mensagem é de entrada,
+    teto de 72h, um toque por espera.
+  - **Anotado**: silêncio é 21h–7h fixo (campo editável pede tela nova);
+    `novo_lead` segue em `TIPOS_PUSH` sem ninguém emitir (tirar é remoção); os
+    avisos de dinheiro alcançam dono e gestores, não cargo configurável.
+  Amarra: `notificacoes-que-o-dono-escolhe` (37) — **51 mutações vermelhas**
+  (`scratchpad/mutar-notificacoes.py`; 6 sobreviveram na 1ª volta e ensinaram:
+  quatro eram mutante equivalente ou literal desatualizado, e DUAS mostraram
+  que o silêncio só estava guardado por texto — daí `decidirPush` virar pura e
+  ganhar teste de comportamento de verdade).
 
 ## Fila combinada com o dono (31/08/2026)
 

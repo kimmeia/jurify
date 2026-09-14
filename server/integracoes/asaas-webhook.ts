@@ -32,6 +32,7 @@ import { mesclarCadastroDoAsaas } from "./asaas-cadastro-merge";
 import { mapearFormaPagamento } from "./asaas-forma-pagamento";
 import { gerarDespesaTaxaAsaas } from "./asaas-despesas-auto";
 import { dataHojeBR } from "../../shared/escritorio-types";
+import { moedaBR } from "@shared/formato-numero";
 const log = createLogger("integracoes-asaas-webhook");
 
 interface AsaasWebhookPayload {
@@ -330,6 +331,42 @@ export function registerAsaasWebhook(app: Express) {
               },
             });
           log.info(`[Asaas Webhook] Cobrança ${payment.id} upsert aplicado`);
+
+          // Dinheiro que entra e cobrança que vence eram registro que só
+          // aparecia se alguém abrisse o Financeiro. Sai DEPOIS da dedup do
+          // evento, então é um aviso por cobrança e não por retentativa do
+          // Asaas.
+          try {
+            const pago =
+              payment.status === "RECEIVED" ||
+              payment.status === "CONFIRMED" ||
+              payment.status === "RECEIVED_IN_CASH";
+            const venceu = payment.status === "OVERDUE" || body.event === "PAYMENT_OVERDUE";
+            if (pago || venceu) {
+              const { emitirParaResponsaveisEMaster } = await import("../_core/sse-notifications");
+              const quem = vinculo?.nome || payment.customer || "Cliente";
+              const valor = moedaBR(Number(payment.value) || 0);
+              await emitirParaResponsaveisEMaster(
+                escritorioId,
+                configPai?.atendenteId ?? atendenteInferido ?? null,
+                pago
+                  ? {
+                      tipo: "pagamento_recebido",
+                      titulo: "Pagamento recebido",
+                      mensagem: `${quem} pagou ${valor}.`,
+                      dados: { paymentId: payment.id, contatoId: vinculo?.contatoId ?? null },
+                    }
+                  : {
+                      tipo: "cobranca_vencida",
+                      titulo: "Cobrança venceu sem pagamento",
+                      mensagem: `${quem} — ${valor}, vencida em ${payment.dueDate}.`,
+                      dados: { paymentId: payment.id, contatoId: vinculo?.contatoId ?? null },
+                    },
+              );
+            }
+          } catch (err: any) {
+            log.warn({ err: err?.message, paymentId: payment.id }, "[Asaas Webhook] aviso não emitido");
+          }
         }
 
         // SmartFlow: disparar cenário "pagamento_recebido" se pagamento confirmado.

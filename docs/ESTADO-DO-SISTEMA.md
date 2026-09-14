@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.139 verdes, 413 arquivos** (14/09, com a seção 33; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.176 verdes, 414 arquivos** (14/09, com a seção 34; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3872,7 +3872,7 @@ separa citação de estatística passou a nomear as duas.
 
 ---
 
-## 34. Notificações push padrão — MOCKUP, aguardando "pode fazer" (14/09)
+## 34. Notificações push que o dono escolhe — ENTREGUE (14/09)
 
 **Pedido do dono**: *"Pensei em criar uma seção para ativar as notificações push
 padrões do app também. Sentença proferida, Nova ação detectada, Nova conversa
@@ -3880,10 +3880,10 @@ Iniciada. Como podemos fazer isso? o que faz sentido ter como padrão no
 sistema? Notificações que o dono do escritório ou responsável, deve e quer
 saber na hora."*
 
-Mockup em `mockup-notificacoes-padrao.html` (computador ⟷ celular, a tela
-montada DENTRO do app rodando com os componentes de verdade, na branch
-descartável `descartavel/mockup-notificacoes`, commit `5c5ff584`). **Nada foi
-entregue** — falta o "pode fazer".
+Aprovado com **"Bora fazer"** no mockup `mockup-notificacoes-padrao.html`
+(computador ⟷ celular, a tela montada DENTRO do app rodando com os componentes
+de verdade). Entregue inteiro: os 17 avisos, os padrões, o silêncio e o
+alcance.
 
 ### 34.1 O que existe hoje, conferido no código
 
@@ -3929,11 +3929,66 @@ Os padrões seguem duas regras:
 
 Medido no navegador: 390px no celular, **sem rolagem lateral**, 17 chaves.
 
-### 34.3 As quatro decisões que estão com ele
+### 34.3 Como ficou
 
-1. A lista está certa — falta ou sobra algum aviso?
-2. Os padrões marcados são os certos para uma conta nova?
-3. O dono deve poder receber o que é dos colaboradores, ou cada um só recebe o
-   que é seu?
-4. "Cliente esperando há 15 minutos" vale a pena? É o único item sem nada
-   pronto por trás.
+- **`shared/notificacoes-avisos.ts`** — o catálogo: 17 avisos em 5 grupos, o
+  padrão de cada um, quem vê (todos · financeiro · dono) e `avisoDoTipo`, que
+  traduz o tipo interno da notificação no aviso que a pessoa escolhe.
+- **`notificacao_preferencias`** (migration 0231) guarda **só o que diverge do
+  padrão**: voltar ao padrão APAGA a linha. É o que deixa mudar um padrão
+  depois e alcançar quem nunca mexeu, sem sobrescrever quem mexeu. Conferido no
+  banco: a tabela fica VAZIA depois de ligar e desligar de volta.
+- **`server/_core/preferencias-notificacao.ts`** — `decidirPush` é PURA (aviso,
+  mapa de escolhas, hora local) e `pushPermitido` é a casca com banco e cache
+  de 60s. A ordem é o desenho: **desligado vence silêncio**, senão o log diria
+  "silêncio" para quem simplesmente não quer o aviso.
+- **`emitirNotificacao`** consulta a preferência antes do push. O SSE e o sino
+  saem de qualquer jeito: desligar um aviso é "não me toque", nunca "esconda de
+  mim".
+
+**A regra que protege tudo**: `avisoDoTipo` devolve `null` para o que o
+catálogo não conhece, e null quer dizer **envia**. Banco fora, erro de leitura,
+usuário sem linha — tudo passa. O único "não" é o explícito. Sem isso, esta
+entrega seria um apagão silencioso de avisos, que não dá erro e só se descobre
+quando alguém perde um prazo.
+
+### 34.4 O que passou a existir de fato
+
+| Aviso | O que mudou |
+| --- | --- |
+| Decisão · providência · rotina | O cron passou a mandar a **classe** da movimentação, calculada por `classificarGrupo` — o MESMO classificador que a Central usa pra separar o feed. Movimentação sem classe cai em **decisão**, nunca em rotina: silenciar o que a IA não conseguiu ler seria o pior default possível. |
+| Nova conversa × toda mensagem | O handler marca `conversaNova` com a MESMA régua que já re-carimba o início do atendimento (contato novo, ou cliente que volta depois de encerrado). |
+| Prazo vencendo | `notificarPrazos` só escrevia no sino. Agora emite — **depois** da dedup de 12h, senão tocaria a cada ciclo de 5 minutos. |
+| Pagamento recebido · cobrança vencida | Saem do webhook do Asaas, **depois** da dedup do evento (o Asaas retenta 2–3×). |
+| Contrato fechado | Emitido em `registrarFechamento`, em try/catch: um aviso que falha não pode desfazer uma venda registrada. |
+| Credencial de tribunal | Existia e não chegava no celular. Entrou em `TIPOS_PUSH`. |
+| Cliente esperando 15 min | Cron novo (`cron-cliente-esperando.ts`). Espera = conversa `aguardando` cuja ÚLTIMA mensagem é de entrada, com teto de 72h (backlog não é urgência) e um toque por espera. |
+| Alcance | `donoQueQuerTudo`: o aviso de movimentação sempre foi só pra quem CADASTROU o vigia. A chave nasce desligada — ligar é decisão dele. |
+
+### 34.5 Medido
+
+- Tela: **17 chaves**, 390px no celular, **sem rolagem lateral**.
+- Prova de ponta a ponta no app rodando: liga "Movimentação de rotina",
+  recarrega, a escolha continua lá; desliga de volta e a linha some do banco.
+- Amarra `notificacoes-que-o-dono-escolhe.test.ts` (**37 testes**) —
+  **51 mutações vermelhas** (`scratchpad/mutar-notificacoes.py`).
+- Baseline: **6.176 testes verdes em 414 arquivos**, `pnpm check` limpo,
+  `vite build` passando.
+
+### 34.6 Anotado e NÃO feito
+
+- **O silêncio é 21h–7h fixo**, sem campo de horário — é o que o mockup
+  prometia. Campo editável pede tela nova.
+- **`novo_lead` continua em `TIPOS_PUSH` e ninguém o emite**: tipo declarado
+  sem emissor. Tirar é remoção; fica anotado.
+- Os seis avisos que iam para o dono por `emitirParaResponsaveisEMaster`
+  (dinheiro, cliente esperando) alcançam **dono e gestores**, não um cargo
+  configurável. Filtro por cargo personalizado não foi pedido.
+
+### 34.7 As quatro decisões da proposta, resolvidas no padrão
+
+Ele respondeu "Bora fazer" sem escolher item a item, então valeram as
+recomendações do mockup: a lista inteira entrou; os padrões marcados viraram os
+de fábrica; o dono PODE receber o que é dos colaboradores (chave desligada, na
+mão dele); e "cliente esperando 15 minutos" foi construído, desligado por
+padrão.

@@ -725,6 +725,27 @@ export const clientesRouter = router({
         .set({ estagio: "cliente" })
         .where(and(eq(contatos.id, input.contatoId), eq(contatos.escritorioId, perm.escritorioId)));
 
+      // Contrato fechado é a notícia que o dono quer na hora e que antes só
+      // aparecia no relatório do dia seguinte. Best-effort: um aviso que falha
+      // não pode desfazer uma venda registrada.
+      try {
+        const { emitirParaResponsaveisEMaster } = await import("../_core/sse-notifications");
+        const { moedaBR } = await import("@shared/formato-numero");
+        const valor = input.valorFechamento ? ` — ${moedaBR(Number(input.valorFechamento) || 0)}` : "";
+        await emitirParaResponsaveisEMaster(
+          perm.escritorioId,
+          input.responsavelId ?? contato.responsavelId ?? perm.colaboradorId,
+          {
+            tipo: "contrato_fechado",
+            titulo: "Contrato fechado",
+            mensagem: `Novo contrato registrado${valor}.`,
+            dados: { contatoId: input.contatoId, leadId },
+          },
+        );
+      } catch {
+        /* aviso é best-effort */
+      }
+
       return { leadId };
     }),
 

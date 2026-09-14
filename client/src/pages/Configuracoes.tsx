@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useModulosContratados } from "@/components/ModuloGuard";
 import { contratoLibera } from "@shared/modulos-contratacao";
 import { EditorJornada } from "./configuracoes/editor-jornada";
+import NotificacoesTab from "./configuracoes/NotificacoesTab";
 import { normalizarJornada, type JornadaSemanal } from "@shared/jornada";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Settings, Building2, Users, Loader2, Plus, Trash2, Mail,
-  Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2,
+  Copy, CheckCircle, AlertTriangle, Shield, UserPlus, Clock, Link2, Bell,
   MessageCircle, Instagram, Phone, Facebook, Wifi, WifiOff, Eye, X, Send,
   ChevronDown, ChevronUp, Calendar, DollarSign, Plug, Tag as TagIcon, Sparkles,
   Database, CreditCard as CreditCardIcon, Megaphone, Pencil, Stethoscope, MessageSquare,
@@ -475,6 +476,12 @@ export default function Configuracoes() {
                 >
                   <Shield className="h-4 w-4" /> <span className="flex-1 text-left">Permissões</span>
                 </TabsTrigger>
+                <TabsTrigger
+                  value="notificacoes"
+                  className="w-full !justify-start gap-2.5 text-[12.5px] px-3 py-2 rounded-lg !text-muted-foreground hover:bg-muted data-[state=active]:!bg-gradient-to-r data-[state=active]:!from-info-bg data-[state=active]:!to-info-bg data-[state=active]:!text-info-fg data-[state=active]:font-semibold data-[state=active]:!shadow-none data-[state=active]:border-l-[3px] data-[state=active]:border-l-info data-[state=active]:pl-[9px]"
+                >
+                  <Bell className="h-4 w-4" /> <span className="flex-1 text-left">Notificações</span>
+                </TabsTrigger>
 
                 {temCadastros && (
                   <p className="text-[9.5px] uppercase tracking-wider font-bold text-muted-foreground/70 px-3 py-2 mt-2 self-start">Cadastros</p>
@@ -552,6 +559,10 @@ export default function Configuracoes() {
           {/* ─── CONTEÚDO DAS ABAS ────────────────────────────────────── */}
           <div className="min-w-0">
         {/* ─── Perfil — sections collapsibles ───────────────────────── */}
+        <TabsContent value="notificacoes" className="space-y-3">
+          <NotificacoesTab />
+        </TabsContent>
+
         <TabsContent value="perfil" className="space-y-3">
           {canEdit && !editMode && (
             <div className="flex justify-end">

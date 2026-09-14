@@ -4049,6 +4049,30 @@ export type InsertEmailLog = typeof emailLog.$inferInsert;
  * user autorizou a receber notificações. `endpoint` é único (o browser
  * reusa o mesmo) — upsert por endpoint. Removida em 404/410 (expirada).
  */
+/**
+ * O que cada pessoa quer receber no celular.
+ *
+ * Guarda SÓ o que diverge do padrão de fábrica (`shared/notificacoes-avisos.ts`):
+ * linha ausente = "como veio de fábrica". É o que deixa mudar um padrão depois
+ * sem sobrescrever quem já escolheu.
+ */
+export const notificacaoPreferencias = mysqlTable(
+  "notificacao_preferencias",
+  {
+    id: int("idNotifPref").autoincrement().primaryKey(),
+    userId: int("userIdNotifPref").notNull(),
+    /** Id do aviso ("processos.decisao") ou de um ajuste ("ajuste.silencio-noturno"). */
+    chave: varchar("chaveNotifPref", { length: 60 }).notNull(),
+    ligado: boolean("ligadoNotifPref").default(true).notNull(),
+    createdAt: timestamp("createdAtNotifPref").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAtNotifPref").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => ({
+    uq: uniqueIndex("uq_notif_pref").on(t.userId, t.chave),
+    idxUser: index("idx_notif_pref_user").on(t.userId),
+  }),
+);
+
 export const pushSubscriptions = mysqlTable(
   "push_subscriptions",
   {
