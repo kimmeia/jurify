@@ -1,6 +1,6 @@
 # Estado do sistema — JuridFlow
 
-**Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
+**Última conferência: 14/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
 terminar.** Se você tem trinta segundos, leia "O retrato em dezesseis linhas". Se tem
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.103 verdes, 412 arquivos** (14/09, com a seção 32 e `develop` dentro — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.239 verdes, 418 arquivos** (14/09, na ponta do merge das três entregas do dia com o `develop`; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3874,3 +3874,521 @@ renderizada com `MySqlDialect` porque banco falso engole `isNull`) — 14 mutaç
 vermelhas em `scratchpad/mutar-kanban-concluido.py`. A do `tipo` da coluna só
 morreu depois de a amarra recortar o `criarCard`: o `moverCard` faz a MESMA
 consulta, e olhar o arquivo inteiro deixava passar.
+
+---
+
+---
+
+## 36. Súmulas do STJ/STF na base, e a sondagem dita em português (14/09)
+
+**Origem, nas palavras dele.** Rodou a sondagem em produção, olhou o resultado
+e respondeu: *"Entendi nada, sinceramente. deveria ter súmulas stj/stf
+acordãos, resp né n? isso serve de base para o jurisia e la o adv vai conseguir
+fazer a pesquisa e a peça dele. Ideia é essa. para isso precisamos primeiro
+fazer essa base de conhecimento"*, e em seguida *"e buscar isso automático já
+que é público as informações"*.
+
+As duas frases pedem coisas diferentes e as duas estavam certas: a tela estava
+escrita para mim (`403`, `tls`, `dns`, "é o IP", "responde-json"), e o material
+que ele nomeou — **súmula** — não existia como fonte no sistema.
+
+### 36.1 O que a sondagem de produção mediu (é dado, não palpite)
+
+| Fonte | O que voltou |
+| --- | --- |
+| DataJud (`api_publica_stj`/`_tst`/`_tse`/`_stm`) | 200, JSON, **sem campo de ementa** — confirma o diagnóstico da seção 32 |
+| **TJSP · e-SAJ (2º grau)** | **200**, HTML, 612ms |
+| **TJMG · jurisprudência** | **200**, HTML, 646ms |
+| **TRF4 · jurisprudência** | **200**, HTML, 1180ms |
+| STJ · SCON e portal | **403 que persistiu** com identificação de navegador |
+| DJEN · Comunica API (com e sem filtro) | **403 que persistiu** |
+| STF · busca, portal e dados abertos | erro de **certificado** (2) e **domínio que não resolve** (1) |
+| TJRJ · jurisprudência | **404** |
+| CNJ · dados abertos | domínio não resolve |
+| TJCE · PJe (controle) | 200 — o motor próprio loga aqui todo dia |
+| LexML · SRU explain | 200 |
+
+Duas leituras importam. **403 que persiste com identificação de navegador é
+faixa de IP**: o STJ publica tudo aberto e recusa o nosso servidor, então
+"é público" não implica "o robô consegue ler". E **200 na página de entrada não
+prova ementa**: a sondagem bateu no formulário do TJSP, e formulário de tribunal
+imprime a palavra "ementa" no rótulo do campo de busca. Por isso a lista de
+fontes distingue `porta_aberta` de `coleta_liberada`.
+
+### 36.2 Súmula virou material de primeira classe
+
+Súmula não é ementa, e a diferença é mecânica: **o conjunto é FECHADO** (algumas
+centenas, mudam poucas por ano) e **não tem número de processo**.
+
+- `TipoMaterial` ganhou `"sumula"`; `fonteCitavel()` é a régua única de "entra no
+  acervo de citação" (súmula e ementa sim, metadado não) — as quatro comparações
+  com `"ementa"` espalhadas pelo coletor viraram uma chamada.
+- `listaCompleta` ao lado de `busca`: `enderecoDaFonte()` **ignora o termo** para
+  súmula. Buscar súmula por palavra traria um pedaço do que caberia inteiro, e
+  depois ninguém saberia qual pedaço falta.
+- `server/jurisia/extrair-sumulas.ts` — extrator próprio, porque o de ementa
+  EXIGE número de processo e devolveria zero numa página de súmulas; o zero
+  pareceria "a fonte não serve". Lê texto, HTML e JSON (`colherSumulas` escolhe
+  pelo que o corpo é, não pelo que a fonte prometeu).
+- **Súmula cancelada não entra**, nos dois leitores, e a conta das que ficaram de
+  fora volta no resultado. Quem cita súmula cancelada perde a causa.
+- O enunciado guardado não repete o próprio "Súmula N" — o identificador já vai
+  separado, e a peça receberia a repetição.
+- Mora na MESMA tabela `jurisia_ementas` (sem migration nova): quem procura
+  jurisprudência não quer olhar em dois lugares, e o FULLTEXT que acha ementa
+  acha enunciado. `orgao` guarda "Súmula"/"Súmula vinculante".
+
+### 36.3 O caminho automático, e o caminho de colar
+
+Automático onde a porta abre: as súmulas do STF e o LexML estão declarados com
+`listaCompleta`, e o cron de hora em hora passa a visitá-los quando alguém liga
+— **nenhuma fonte foi ligada**; isso é decisão dele no painel.
+
+Onde a porta está fechada existe `jurisiaImportarSumulas`: ele abre a lista
+oficial no navegador **dele**, seleciona tudo, cola no diálogo e o sistema
+separa uma por uma. Passa pelo MESMO extrator da coleta automática, então o que
+entra colado é idêntico ao que entraria sozinho. É o que resolve o STJ hoje, e
+súmula muda poucas vezes por ano — colar uma vez resolve o ano.
+
+Conferido de ponta a ponta no banco local, pelo caminho de verdade: as súmulas
+que já estavam curadas em `fontes-revisional.ts` entraram pela procedure (6 do
+STJ, 1 do STF).
+
+### 36.4 A tela dita em português
+
+`shared/sondagem-em-portugues.ts` (puro) traduz cada resultado em `{tom, frase,
+acao}`. Quatro tons, e a separação que importa é entre **`conserto`** (depende
+de nós: endereço errado, certificado, filtro de cabeçalho) e **`fechado`**
+(depende de sair por outra porta). Juntar os dois numa cor só foi o que fez a
+tela velha parecer que os tribunais todos tinham fechado a porta.
+
+- A linha da sondagem virou frase + o que fazer; a tabela **ordena pelo tom**
+  (o que dá pra ligar hoje em cima) e um resumo de 1 a 4 linhas vem antes dela.
+- **O número técnico não foi removido** — desceu para a coluna "Detalhe
+  técnico" (`403 · 612ms · HTML · UA persistiu`) e para a dobra da linha. Há
+  mutação travando isso nas duas.
+- A sondagem passou a contar **quantas súmulas o corpo entrega de fato**,
+  rodando o extrator de verdade: `temEmenta` procura a PALAVRA "ementa", e
+  página de súmula não usa essa palavra — sem a contagem, a fonte do material
+  mais forte que existe apareceria como "não traz nada".
+- Os candidatos da sondagem passaram a sair da MESMA lista que o coletor lê
+  (`enderecoDaFonte`), então o que se mede é a porta que o robô vai usar.
+  Entraram também dois outros hosts do STJ: "o tribunal barra" e "aquele
+  servidor barra" levam a decisões diferentes.
+- A tabela de fontes ganhou a coluna **"Dá pra ler daqui?"** com a situação
+  medida e a nota da sondagem. A chave de ligar **continua clicável de
+  propósito**: medida velha não decide para sempre, e tribunal desbloqueia.
+
+Na resposta do JurisIA, súmula e ementa contam separado (`contarCitacoes`,
+`rotuloCitacoes`): "2 súmulas e 1 ementa". Dizer "5 ementas" quando duas são
+súmula é impreciso onde mais importa.
+
+### 36.4.1 Duas coisas que só a FOTO pegou
+
+O comparador é `comparador-sumulas-e-portugues.html` — as duas versões do
+sistema rodando ao mesmo tempo (uma em cada porta, ligadas no MESMO banco) com
+os dados que a sondagem mediu em produção. Conferido por Playwright: 3
+comparações, 5 fotos, o "Piscar" alterando a tela de verdade.
+
+1. **A coluna nova espremeu a frase.** "Dá pra ler daqui?" como coluna própria
+   levou a tabela de fontes a oito colunas, e a descrição de cada fonte ficou
+   num fio de dez caracteres. As duas coisas viraram uma célula só — o que ela
+   traz e se dá pra ler pertencem à mesma pergunta.
+2. **A sondagem mora numa grade de dois.** O cartão tem METADE da largura da
+   tela, então a tabela de três colunas empurrou o recado para fora do cartão e
+   a tela ficou com a coluna do meio VAZIA. Duas colunas, e o número técnico
+   como terceira linha do recado. É a mesma lição da seção 31 (a grade herda a
+   largura do cartão, não a da tela) — e a célula da tabela nasce
+   `whitespace-nowrap`, então o nome da fonte sozinho empurrava o resto.
+
+### 36.4.2 A última coleta vence a medida antiga
+
+`situacaoVigente(declarada, statusDaColeta)`: a situação escrita no código é uma
+medida com data; a coleta é o robô batendo na porta hoje. Coleta `bloqueada`
+rebaixa para "o tribunal barra o nosso servidor" e coleta `ok` promove para
+"funciona e já traz material" — é o que transforma `porta_aberta` em
+`coleta_liberada` sozinho, no dia em que a primeira coleta traz ementa. Sem
+isso a tela afirmava "o site responde" logo embaixo de um erro de recusa, o que
+a primeira foto mostrou.
+
+### 36.5 O que ficou anotado e NÃO foi feito
+
+- **STJ e DJEN seguem sem caminho automático.** Sair por outra porta (um
+  repetidor com outro endereço de internet) não foi feito nem proposto em
+  mockup — é decisão dele, e envolve custo.
+- **O certificado do STF não foi consertado.** A sondagem diz que a trava é de
+  certificado, o que quase sempre é do nosso lado; qual dos três problemas de
+  certificado é exige ver o código do erro, que agora está na dobra da linha.
+- **TJCE segue com endereço deduzido e errado** (`endereco_a_corrigir`): o
+  e-SAJ é de São Paulo. O portal real do TJCE não pôde ser descoberto daqui (o
+  proxy do ambiente bloqueia os portais).
+- **TJSP/TJMG/TRF4 não foram ligados.** A porta responde; se a página de
+  resultado devolve ementa, só a primeira coleta dirá — e é ela que muda a
+  situação de `porta_aberta` para `coleta_liberada`.
+- Segue valendo o que a seção 32.5 já listava: nada de varredura com credencial
+  de advogado, e busca por semelhança sobre as ementas continua fora.
+
+### 36.6 Amarra
+
+`sumulas-e-sondagem-em-portugues.test.ts` (36 testes) — **48 mutações
+vermelhas** (`scratchpad/mutar-sumulas-portugues.py`). Sete sobreviveram na
+primeira volta e as sete ensinaram algo:
+
+- súmula cancelada só estava travada no leitor de TEXTO (o de JSON passava);
+- o índice de fixture tinha corpo VAZIO entre os números, então baixar o
+  mínimo de texto não mudava nada — o sumário real tem "Súmula 1 ..... 12";
+- `<script>`/`<style>` estavam no `<head>` da fixture, e a leitura é do
+  `<body>`: a remoção só se prova com script DENTRO do corpo;
+- o resumo com um grupo só era o caso que faltava para provar que grupo vazio
+  não vira linha;
+- e duas eram o motivo de sempre — a amarra olhava um literal que existe em
+  outro lugar do arquivo (o resumo também aparece no toast; `{f.notaDaSondagem}`
+  continua escrito dentro do bloco quando a condição é desarmada). As duas
+  passaram a olhar a guarda e o bloco certos.
+
+`jurisprudencia-de-verdade.test.ts` teve DOIS `expect` atualizados para a
+verdade nova, preservando o que protegem: a exigência de endereço agora
+distingue ementa (busca por termo) de súmula (lista completa), e a frase que
+separa citação de estatística passou a nomear as duas.
+
+
+---
+
+## 37. Notificações push que o dono escolhe — ENTREGUE (14/09)
+
+**Pedido do dono**: *"Pensei em criar uma seção para ativar as notificações push
+padrões do app também. Sentença proferida, Nova ação detectada, Nova conversa
+Iniciada. Como podemos fazer isso? o que faz sentido ter como padrão no
+sistema? Notificações que o dono do escritório ou responsável, deve e quer
+saber na hora."*
+
+Aprovado com **"Bora fazer"** no mockup `mockup-notificacoes-padrao.html`
+(computador ⟷ celular, a tela montada DENTRO do app rodando com os componentes
+de verdade). Entregue inteiro: os 17 avisos, os padrões, o silêncio e o
+alcance.
+
+### 37.1 O que existe hoje, conferido no código
+
+- Push funciona: VAPID resolvido por env → banco → gerado e persistido;
+  inscrição por APARELHO (`push_subscriptions`), botão "Ativar notificações
+  neste aparelho" no sino e botão de teste.
+- **Não existe preferência nenhuma.** `TIPOS_PUSH` em `sse-notifications.ts` é
+  um `Set` fixo no código: `nova_mensagem`, `novo_lead`, `conversa_atribuida`,
+  `assinatura_concluida`, `movimentacao_processo`, `nova_acao`,
+  `whatsapp_saude`. Quem ativa recebe os sete; quem não quer um deles só pode
+  desligar todos.
+- **O dono recebe TODA mensagem de TODA conversa.** O whatsapp-handler chama
+  `emitirParaResponsaveisEMaster`, que alcança dono, gestores e o atendente da
+  conversa — a cada mensagem que entra.
+- **Movimentação vai para quem CADASTROU o vigia** (`mon.criadoPor` no
+  cron-monitoramento), não para o dono nem para o responsável pelo caso. É
+  exatamente o ponto que ele levantou.
+- **Quatro avisos existem e NÃO chegam no celular** (não estão em `TIPOS_PUSH`):
+  prazo vencendo, pagamento recebido, cobrança vencida e
+  `credencial_erro`/`credencial_recuperada`.
+- **"Sentença proferida" não existe como tipo** — chega como "Nova
+  movimentação" genérica. Mas a matéria-prima existe: `resumir-movimentacao`
+  já classifica cada movimentação em `relevancia` ("relevante" | "rotina") e
+  `desfecho` ("favoravel" | "desfavoravel" | "parcial" | "neutro"), e
+  `classificarGrupo` já separa "exigem ação" de "rotina". A separação que o
+  pedido precisa já está calculada e gravada; falta usá-la no push.
+
+### 37.2 O que o mockup propõe
+
+17 avisos em 5 grupos (Processos, Atendimento, Dinheiro, Documentos, Saúde do
+sistema), cada um com uma frase em português, a chave própria e um selo honesto
+de estado: **já funciona** · **novo** · **hoje não chega no celular**. Mais o
+bloco "Este aparelho" (cada aparelho é separado) e o de silêncio/alcance.
+
+Os padrões seguem duas regras:
+
+1. **Decisão e providência ligadas, rotina desligada.** Rotina é 8 de cada 10
+   movimentações; é ela que transforma o aviso em ruído e faz o advogado
+   desligar tudo.
+2. **"Nova conversa iniciada" no lugar de "toda mensagem".** Quem atende
+   continua recebendo as conversas dele; o dono passa a ser avisado do que é
+   notícia — cliente novo ou cliente que voltou depois de encerrado.
+
+Medido no navegador: 390px no celular, **sem rolagem lateral**, 17 chaves.
+
+### 37.3 Como ficou
+
+- **`shared/notificacoes-avisos.ts`** — o catálogo: 17 avisos em 5 grupos, o
+  padrão de cada um, quem vê (todos · financeiro · dono) e `avisoDoTipo`, que
+  traduz o tipo interno da notificação no aviso que a pessoa escolhe.
+- **`notificacao_preferencias`** (migration 0231) guarda **só o que diverge do
+  padrão**: voltar ao padrão APAGA a linha. É o que deixa mudar um padrão
+  depois e alcançar quem nunca mexeu, sem sobrescrever quem mexeu. Conferido no
+  banco: a tabela fica VAZIA depois de ligar e desligar de volta.
+- **`server/_core/preferencias-notificacao.ts`** — `decidirPush` é PURA (aviso,
+  mapa de escolhas, hora local) e `pushPermitido` é a casca com banco e cache
+  de 60s. A ordem é o desenho: **desligado vence silêncio**, senão o log diria
+  "silêncio" para quem simplesmente não quer o aviso.
+- **`emitirNotificacao`** consulta a preferência antes do push. O SSE e o sino
+  saem de qualquer jeito: desligar um aviso é "não me toque", nunca "esconda de
+  mim".
+
+**A regra que protege tudo**: `avisoDoTipo` devolve `null` para o que o
+catálogo não conhece, e null quer dizer **envia**. Banco fora, erro de leitura,
+usuário sem linha — tudo passa. O único "não" é o explícito. Sem isso, esta
+entrega seria um apagão silencioso de avisos, que não dá erro e só se descobre
+quando alguém perde um prazo.
+
+### 37.4 O que passou a existir de fato
+
+| Aviso | O que mudou |
+| --- | --- |
+| Decisão · providência · rotina | O cron passou a mandar a **classe** da movimentação, calculada por `classificarGrupo` — o MESMO classificador que a Central usa pra separar o feed. Movimentação sem classe cai em **decisão**, nunca em rotina: silenciar o que a IA não conseguiu ler seria o pior default possível. |
+| Nova conversa × toda mensagem | O handler marca `conversaNova` com a MESMA régua que já re-carimba o início do atendimento (contato novo, ou cliente que volta depois de encerrado). |
+| Prazo vencendo | `notificarPrazos` só escrevia no sino. Agora emite — **depois** da dedup de 12h, senão tocaria a cada ciclo de 5 minutos. |
+| Pagamento recebido · cobrança vencida | Saem do webhook do Asaas, **depois** da dedup do evento (o Asaas retenta 2–3×). |
+| Contrato fechado | Emitido em `registrarFechamento`, em try/catch: um aviso que falha não pode desfazer uma venda registrada. |
+| Credencial de tribunal | Existia e não chegava no celular. Entrou em `TIPOS_PUSH`. |
+| Cliente esperando 15 min | Cron novo (`cron-cliente-esperando.ts`). Espera = conversa `aguardando` cuja ÚLTIMA mensagem é de entrada, com teto de 72h (backlog não é urgência) e um toque por espera. |
+| Alcance | `donoQueQuerTudo`: o aviso de movimentação sempre foi só pra quem CADASTROU o vigia. A chave nasce desligada — ligar é decisão dele. |
+
+### 37.5 Medido
+
+- Tela: **17 chaves**, 390px no celular, **sem rolagem lateral**.
+- Prova de ponta a ponta no app rodando: liga "Movimentação de rotina",
+  recarrega, a escolha continua lá; desliga de volta e a linha some do banco.
+- Amarra `notificacoes-que-o-dono-escolhe.test.ts` (**37 testes**) —
+  **51 mutações vermelhas** (`scratchpad/mutar-notificacoes.py`).
+- Baseline: **6.176 testes verdes em 414 arquivos**, `pnpm check` limpo,
+  `vite build` passando.
+
+### 37.6 Anotado e NÃO feito
+
+- **O silêncio é 21h–7h fixo**, sem campo de horário — é o que o mockup
+  prometia. Campo editável pede tela nova.
+- **`novo_lead` continua em `TIPOS_PUSH` e ninguém o emite**: tipo declarado
+  sem emissor. Tirar é remoção; fica anotado.
+- Os seis avisos que iam para o dono por `emitirParaResponsaveisEMaster`
+  (dinheiro, cliente esperando) alcançam **dono e gestores**, não um cargo
+  configurável. Filtro por cargo personalizado não foi pedido.
+
+### 37.7 As quatro decisões da proposta, resolvidas no padrão
+
+Ele respondeu "Bora fazer" sem escolher item a item, então valeram as
+recomendações do mockup: a lista inteira entrou; os padrões marcados viraram os
+de fábrica; o dono PODE receber o que é dos colaboradores (chave desligada, na
+mão dele); e "cliente esperando 15 minutos" foi construído, desligado por
+padrão.
+
+---
+
+## 38. Data de nascimento no cadastro, e o lembrete do aniversário — ENTREGUE (14/09)
+
+**Pedido do dono**: *"Quero um campo no cadastro do cliente para colocar sua
+data de nascimento para me lembrar do seu aniversário."* Aprovado com **"pode
+fazer"** no comparador `comparador-aniversario-cliente.html` — quatro
+comparações, anel medido no navegador, conferido por Playwright.
+
+### 38.1 Por que um campo de verdade, e não um campo personalizado
+
+O mecanismo de campos extras já existia (Configurações → Campos de cliente,
+tipo "data", `camposPersonalizadosCliente` + `contatos.camposPersonalizados`).
+Ele **guardaria** a data e **não serviria** pro pedido: o valor mora num JSON
+serializado em `TEXT`, e nenhuma consulta alcança o que está lá dentro. Dava
+pra escrever a data e não dava pra ser lembrado dela — que é o pedido inteiro.
+
+Daí a coluna própria `contatos.dataNascimento` (migration 0232, `DATE NULL`),
+ao lado de profissão/estado civil/nacionalidade, que é onde a qualificação
+civil já mora. Índice `idx_contato_nascimento` cobre o recorte
+(escritório + tem data); `MONTH()`/`DAY()` não são indexáveis sem coluna
+gerada, e na escala de uma carteira de escritório a conta é barata.
+
+**`mode: "string"` no schema, de propósito.** A coluna entra e sai como
+`"YYYY-MM-DD"`. Virar `Date` faria o dia passear de fuso — 12/03 vira 11/03
+depois das 21h —, que é exatamente o defeito corrigido em 03/09 nas outras
+datas de calendário.
+
+### 38.2 As regras, num lugar só
+
+`shared/aniversario.ts` é puro e é a fonte única da tela, do filtro e do cron:
+
+- `partesDaData` **recusa** o que não existe em vez de normalizar: o `Date`
+  empurra 31 de fevereiro pra março sozinho, e data que "existe" errada é pior
+  do que data recusada.
+- `validarNascimento` separa três motivos — formato, ano anterior a 1900,
+  data no futuro —, e o "hoje" entra por parâmetro.
+- `proximoAniversario` trata **o aniversário de hoje como o próximo**, não como
+  o do ano que vem; `diasAte` atravessa a virada do ano contando dias.
+- **29 de fevereiro é comemorado em 28** nos anos sem o dia 29
+  (`diaComemoradoNoAno`). A alternativa, 1º de março, atrasa e muda de mês.
+- `rotuloAniversario` é a MESMA frase na ficha e na lista: perto conta os dias
+  ("Faz 41 anos em 3 dias"), longe mostra a data e a idade ("12 de março ·
+  41 anos"). `JANELA_PROXIMO_DIAS = 7` é a régua do destaque e do rótulo.
+- `passaNoFiltro` responde os três recortes. **"Neste mês" é o mês do
+  calendário**, não os próximos 30 dias: quem fez dia 2 continua aparecendo no
+  dia 14.
+- **Idade só aparece quando o ano é conhecido.**
+
+### 38.3 O campo, e o achado que só a foto pegou
+
+`CamposQualificacaoEndereco` é um componente só, usado pelo "Novo cliente" e
+pela edição da ficha — o campo nasceu nos dois de uma vez. Ele é **opcional** e
+ficou **fora** de `CAMPOS_OBRIGATORIOS_QUALIFICACAO`: exigir agora travaria a
+geração de contrato pra toda a carteira que já existe.
+
+A primeira versão usava `<input type="date">`. Na foto ele saiu **`09/14/1985`**
+— mês antes do dia — porque o campo nativo desenha no idioma do **navegador**.
+Num cadastro jurídico isso é risco: quem digita "03/04" não sabe se marcou 3 de
+abril ou 4 de março. O repo já tinha aprendido isso no filtro "Cadastro", com o
+motivo escrito no código. O campo virou texto mascarado `dd/mm/aaaa`
+(`mascararDataBR`/`brParaIsoData`/`isoParaBrData` em `shared/data-calendario.ts`),
+e data que não existe fica em vermelho **sem gravar**.
+
+### 38.4 Onde o aniversário aparece
+
+- **Ficha**: `SeloAniversarioHero` na linha de contato do cabeçalho. Sem data
+  gravada **não existe selo nenhum** — a linha fica como sempre foi. A 7 dias
+  ou menos o selo ganha fundo e o atalho «mandar parabéns», que abre `wa.me`
+  com `mensagemParabens` (primeiro nome) no WhatsApp **de quem clicou**.
+- **Lista**: filtro "Aniversário" entre "Cadastro" e "Mais", com hoje ·
+  próximos 7 dias · neste mês. O servidor aplica `passaNoFiltro` — a MESMA
+  função da tela — sobre as fichas com data, do jeito que o filtro
+  `conferencia` já fazia: regra em JS, `inArray` no WHERE.
+- **`/clientes?aniversario=hoje`** é lido na inicialização dos filtros. Sem
+  isso, tocar a notificação no celular cairia na lista inteira e o aviso estaria
+  prometendo o que a tela não faz.
+
+### 38.5 O lembrete
+
+Aviso novo `clientes.aniversario` num grupo novo **Clientes** no catálogo de
+`shared/notificacoes-avisos.ts` — entra na tela de Notificações da seção 37 com
+a mesma mecânica: **ligado de fábrica**, desligável, e só o que diverge do
+padrão fica gravado.
+
+`rodarLembretesDeAniversario` (`server/escritorio/cron-aniversarios.ts`) roda de
+hora em hora e decide por escritório. Quatro decisões carregam o resto:
+
+1. **Um aviso por dia, por pessoa, com todos os aniversariantes dentro.** Cinco
+   aniversários não podem virar cinco toques — é assim que a pessoa desliga o
+   aviso inteiro e perde junto o que importava. `resumoDoDia` monta o texto e
+   corta em três nomes ("e mais 2").
+2. **Quem guarda "já mandei hoje" é o BANCO, não a memória do processo.** Um
+   redeploy às 8h zeraria um `Set` em memória e o aviso sairia de novo. A
+   pergunta é feita ao `notificacoes` pelo prefixo do título
+   (`PREFIXO_TITULO_ANIVERSARIO`), que é o registro que sobrevive ao restart.
+3. **`>=` a hora, não `===`.** Com igualdade, o processo reiniciando às 8h em
+   ponto custaria o dia inteiro. Com `>=` o primeiro ciclo depois disso entrega,
+   e a dedup garante uma vez só.
+4. **Quem recebe é o responsável pelo cadastro**, mais o dono quando ligou
+   "quero receber também o que é dos meus colaboradores" (`donoQueQuerTudo`, a
+   mesma régua da movimentação). Ficha sem responsável vai pro dono de qualquer
+   jeito — senão o aniversário não alcançaria ninguém. `somarNomes` junta em vez
+   de sobrescrever: o dono costuma ser responsável por parte da carteira **e**
+   ter o alcance ligado.
+
+Serviço **encerrado, cancelado ou rescindido** fica de fora. Parabenizar quem
+rescindiu é pior do que não parabenizar.
+
+Conferido no app rodando, com banco de verdade: duas fichas fazendo aniversário
+no mesmo dia geraram **um** aviso ("José Ribamar e Maria Aparecida fazem
+aniversário hoje"), a segunda volta do cron não duplicou, e a ficha com serviço
+encerrado não entrou.
+
+### 38.6 As quatro decisões da proposta, resolvidas no padrão
+
+Ele respondeu "pode fazer" sem escolher item a item, então valeram as
+recomendações do comparador:
+
+1. **Parabéns manual.** O botão abre o WhatsApp **dele** com o texto pronto.
+   Disparo automático pelo número do escritório é mensagem proativa da
+   plataforma — o padrão por trás dos dois avisos da Meta de agosto — e fica
+   como pedido à parte, com modelo aprovado e gatilho novo no SmartFlow (hoje
+   `GatilhoSmartflow` não tem nada de data).
+2. **8h da manhã**, no fuso do escritório, no próprio dia.
+3. **Responsável + dono com a chave de alcance ligada.**
+4. **Empresa fica em branco.** CNPJ não tem nascimento; data de fundação seria
+   outro campo.
+
+### 38.7 Anotado e NÃO feito
+
+- **`cliente.dataNascimento` não entrou nas variáveis de contrato**
+  (`shared/modelos-contrato-variaveis.ts`), onde profissão, estado civil e
+  nacionalidade já moram. É adição natural e não foi pedida.
+- **Lead entra no lembrete** junto com cliente — é o mesmo cadastro, mesma
+  tabela. Se virar ruído, o corte é por `estagio`.
+- **No celular a tela de Clientes leva pro Atendimento** (`isMobile &&
+  !mobileCompleto` no AppLayout). É de antes e não foi mexido: o campo se
+  preenche no computador, o lembrete chega no celular normalmente.
+- A busca do filtro varre as fichas com data do escritório a cada consulta.
+  Barato na escala de hoje; se crescer, vira coluna gerada com índice.
+- Baseline na ponta do merge com `develop`: **6.239 testes verdes em 418
+  arquivos**, `pnpm check` limpo, `vite build` passando. Sozinha, a entrega
+  media 6.203 em 415.
+
+## 39. Origem por anúncio no Inbox: selo, filtro e cartão da conversa (14/09)
+
+Fatia 2 do Click-to-WhatsApp. A fatia 1 (capturar o `referral` da Meta, gravar
+no contato e mostrar na ficha do Customer 360) foi entregue e mergeada mais
+cedo em 14/09, com a migration `0208_contato_origem_anuncio.sql`. Autorização
+desta: *"vamos terminar logo então para deixar redondo"*, sobre o mockup
+`mockup-origem-anuncio.html` que ele já tinha aprovado.
+
+### 36.1 O que entrou
+
+- **Selo `ANÚNCIO`** no cartão da conversa, na lista do Inbox. O título do
+  anúncio vai no `title` do elemento — passar o mouse diz QUAL campanha trouxe
+  a pessoa sem abrir a conversa.
+- **Chip "Anúncio N"** abaixo das abas de status. É um interruptor à parte, não
+  uma quinta aba: compõe com o status, então dá pra ver só quem está
+  **aguardando E** veio de campanha. Some quando o escritório não tem nenhum
+  lead de anúncio na vista — mas continua visível enquanto LIGADO, senão não
+  haveria como desligá-lo caso o filtro zerasse a própria contagem.
+- **Cartão do anúncio no topo da conversa**: miniatura (com marca de play em
+  vídeo), "Chegou por um anúncio", título, texto, tipo de mídia, data do clique
+  e link "ver anúncio". É o que permite responder no assunto em vez de abrir
+  com "como podemos ajudar?".
+
+### 36.2 A decisão que carrega o resto: quem segue o filtro e quem não segue
+
+Os pills de status **seguem** `somenteAnuncio` (o zod de `contarConversas`
+passou a aceitá-lo). Sem isso eles voltariam a descrever o escritório inteiro
+enquanto a lista mostra sete conversas — a mesma divergência que este código já
+corrigiu três vezes, com `canalId`, com `busca` e com a pasta Arquivadas.
+
+O contador do **próprio chip** não segue: é calculado com as condições da vista
+e o filtro de anúncio desligado (`baseSemAnuncio`). Se seguisse, ligado ele
+contaria a si mesmo e o "7 de 2420" viraria "7 de 7" — o número deixaria de
+informar exatamente quando é olhado.
+
+### 36.3 O que a lista NÃO carrega
+
+`origemAnuncioParaLista` corta `sourceId` e `ctwaClid` do recorte que vai pro
+client. São chaves de atribuição, resolvidas no servidor, e a lista busca até
+mil conversas. Continuam gravados no contato para o relatório.
+
+### 36.4 O que a Meta não manda, e o mockup prometia
+
+O mockup desenhou as linhas **Campanha** ("Rescisão · Vídeo 15s") e **Conjunto**
+("Fortaleza 25-50"), e a plataforma de origem ("Facebook · clique em…"). O
+`referral` do webhook **não traz nada disso**: vêm o id do anúncio
+(`source_id`), o tipo (`ad`/`post`), criativo, título, texto e o id do clique.
+Nome de campanha e de conjunto só existem na Marketing API, que exige
+`ads_read`/`ads_management` — permissões que o app **não** tem (o review
+aprovado em 01/09 cobre as três de WhatsApp) e que dependeriam do escritório
+conceder acesso à conta de anúncios.
+
+Por isso o cartão mostra o que existe: tipo de mídia e data do clique. **A
+atribuição por campanha, quando for feita, agrupa por ANÚNCIO** (`sourceId`,
+rotulado pelo título do criativo) — que é a pergunta que importa de qualquer
+forma: qual anúncio traz cliente que fecha.
+
+### 36.5 Fatia 3 — NÃO feita, e por quê
+
+O relatório de atribuição não está em mockup nenhum: o
+`mockup-origem-anuncio.html` cobre só o Atendimento (lista, conversa, painel).
+Tela nova sem desenho aprovado não entra — é a regra do dono, de 19/08.
+
+Amarra: `anuncio-no-inbox.test.ts` (15 testes) — 14 mutações vermelhas em
+`scratchpad/mutar-anuncio-inbox.py`. Uma sobreviveu na 1ª volta pelo motivo de
+sempre: a asserção do filtro varria o arquivo inteiro e casava com o literal
+igual do contador logo abaixo, então passava com a condição invertida; morreu
+depois de ancorar no bloco. `um-numero-um-cadastro` teve **um** `expect`
+trocado: ele travava a linha literal do destructuring da lista, que ganhou dois
+campos — passou a conferir o MECANISMO (os campos crus saem do objeto antes do
+`...r`), conferido por mutação.
+

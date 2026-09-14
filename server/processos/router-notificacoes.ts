@@ -18,7 +18,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
-import { notificacoes, eventosProcesso, motorMonitoramentos, prazosSugeridos } from "../../drizzle/schema";
+import { notificacoes, eventosProcesso, motorMonitoramentos, prazosSugeridos, notificacaoPreferencias } from "../../drizzle/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { createLogger } from "../_core/logger";
 const log = createLogger("processos-router-notificacoes");
@@ -58,6 +58,104 @@ export async function criarNotificacao(params: {
 // ============================================================
 
 export const notificacoesRouter = router({
+  /**
+   * O que esta pessoa recebe no celular, e o que ela já escolheu.
+   *
+   * A lista sai do catálogo, não do banco: o banco guarda só as divergências.
+   * Quem vê cada grupo é filtrado aqui — Dinheiro só com acesso ao Financeiro,
+   * Saúde do sistema só pro dono — porque oferecer a chave de um aviso que a
+   * pessoa nunca vai receber é prometer o que não acontece.
+   */
+  preferencias: protectedProcedure.query(async ({ ctx }) => {
+    const { AVISOS, GRUPOS, AJUSTE_SILENCIO, AJUSTE_ALCANCE, padraoDaChave } = await import(
+      "@shared/notificacoes-avisos"
+    );
+    const db = await getDb();
+
+    const escolhas = new Map<string, boolean>();
+    if (db) {
+      const linhas = await db
+        .select({
+          chave: notificacaoPreferencias.chave,
+          ligado: notificacaoPreferencias.ligado,
+        })
+        .from(notificacaoPreferencias)
+        .where(eq(notificacaoPreferencias.userId, ctx.user.id));
+      for (const l of linhas) escolhas.set(l.chave, Boolean(l.ligado));
+    }
+
+    const { getEscritorioPorUsuario } = await import("../escritorio/db-escritorio");
+    const vinculo = await getEscritorioPorUsuario(ctx.user.id);
+    const ehDono = vinculo?.colaborador?.cargo === "dono";
+
+    const { checkPermission } = await import("../escritorio/check-permission");
+    let veFinanceiro = false;
+    try {
+      veFinanceiro = (await checkPermission(ctx.user.id, "financeiro", "ver")).allowed;
+    } catch {
+      /* sem permissão resolvida, o grupo não aparece — é o lado seguro */
+    }
+
+    const podeVer = (quem: string) =>
+      quem === "todos" || (quem === "dono" && ehDono) || (quem === "financeiro" && veFinanceiro);
+
+    const resolver = (chave: string) => escolhas.get(chave) ?? padraoDaChave(chave);
+
+    return {
+      grupos: GRUPOS.filter((g) => podeVer(g.quemVe)).map((g) => ({
+        ...g,
+        avisos: AVISOS.filter((a) => a.grupo === g.id && podeVer(a.quemVe)).map((a) => ({
+          id: a.id,
+          titulo: a.titulo,
+          explica: a.explica,
+          padrao: a.padrao,
+          ligado: resolver(a.id),
+        })),
+      })),
+      ajustes: {
+        silencioNoturno: resolver(AJUSTE_SILENCIO),
+        tudoDoEscritorio: resolver(AJUSTE_ALCANCE),
+      },
+      ehDono,
+    };
+  }),
+
+  /**
+   * Liga ou desliga um aviso. Grava SÓ o que diverge do padrão: quem volta
+   * pro padrão tem a linha APAGADA, e assim herda mudanças futuras de fábrica.
+   */
+  salvarPreferencia: protectedProcedure
+    .input(z.object({ chave: z.string().min(3).max(60), ligado: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const { chaveConhecida, padraoDaChave } = await import("@shared/notificacoes-avisos");
+      if (!chaveConhecida(input.chave)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Aviso desconhecido." });
+      }
+
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Base de dados indisponível" });
+
+      if (input.ligado === padraoDaChave(input.chave)) {
+        await db
+          .delete(notificacaoPreferencias)
+          .where(
+            and(
+              eq(notificacaoPreferencias.userId, ctx.user.id),
+              eq(notificacaoPreferencias.chave, input.chave),
+            ),
+          );
+      } else {
+        await db
+          .insert(notificacaoPreferencias)
+          .values({ userId: ctx.user.id, chave: input.chave, ligado: input.ligado })
+          .onDuplicateKeyUpdate({ set: { ligado: input.ligado } });
+      }
+
+      const { esquecerPreferencias } = await import("../_core/preferencias-notificacao");
+      esquecerPreferencias(ctx.user.id);
+      return { ok: true };
+    }),
+
   /**
    * Listar notificações do utilizador (mais recentes primeiro).
    * SEGURANÇA: filtra por ctx.user.id

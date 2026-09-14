@@ -256,6 +256,12 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
   // o controle; sobrescrever fazia o bot voltar a responder na próxima msg do
   // cliente, mesmo depois do atendente ter intervindo).
   const statusAtual = await pegarStatusConversa(conversaId);
+  // Começo de conversa é: contato que nunca existiu, ou cliente que volta
+  // depois de um atendimento ENCERRADO. É a mesma régua que já re-carimba o
+  // início do atendimento logo abaixo — reaproveitar é o que garante que o
+  // aviso e o filtro de período do Inbox contem a mesma coisa.
+  const conversaNova =
+    contatoFoiCriado || statusAtual === "resolvido" || statusAtual === "fechado";
   if (statusAtual !== "em_atendimento") {
     await atualizarConversa(conversaId, escritorioId, { status: "aguardando" });
     // Cliente voltou depois de um atendimento ENCERRADO = novo atendimento.
@@ -279,9 +285,11 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       atendenteId,
       {
         tipo: "nova_mensagem",
-        titulo: "Nova mensagem",
+        titulo: conversaNova ? "Nova conversa" : "Nova mensagem",
         mensagem: `${msg.nome || msg.telefone}: ${(msg.conteudo || "").slice(0, 80)}`,
-        dados: { conversaId, contatoId, canal: "whatsapp" },
+        // `conversaNova` separa notícia de ruído: quem escolheu receber só o
+        // começo de conversa não é acordado pela segunda mensagem dela.
+        dados: { conversaId, contatoId, canal: "whatsapp", conversaNova },
       },
     );
   } catch { /* SSE indisponível */ }

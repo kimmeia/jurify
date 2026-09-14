@@ -18,6 +18,7 @@ import { syncTodosEscritorios, validarConexoesAsaasPendentes } from "../integrac
 import { processarSyncHistorico } from "../integracoes/asaas-sync-historico";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { createLogger } from "./logger";
+import { emitirNotificacao } from "./sse-notifications";
 const log = createLogger("_core-cron-jobs");
 
 /** Marca assinaturas expiradas */
@@ -118,6 +119,10 @@ export async function notificarPrazos() {
         mensagem,
         tipo: "sistema",
       });
+      // Isto aqui só existia no sino: prazo vencendo nunca chegava no celular.
+      // Sai DEPOIS da dedup de 12h, então é um toque por prazo, não por ciclo
+      // de 5 minutos.
+      emitirNotificacao(userId, { tipo: "prazo_vencendo", titulo, mensagem });
       notificadas++;
     };
 
@@ -583,6 +588,27 @@ export function iniciarJobs() {
 
   // A cada 5 minutos: verificar prazos e notificar
   setInterval(() => notificarPrazos(), 5 * 60 * 1000);
+
+  // A cada 5 minutos: cliente que escreveu e ficou sem resposta.
+  setInterval(async () => {
+    try {
+      const { avisarClientesEsperando } = await import("../escritorio/cron-cliente-esperando");
+      await avisarClientesEsperando();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] avisarClientesEsperando falhou");
+    }
+  }, 5 * 60 * 1000);
+
+  // De hora em hora: aniversário de cliente. Sem horário fixo aqui de
+  // propósito — quem decide a hora é o fuso de cada escritório.
+  setInterval(async () => {
+    try {
+      const { rodarLembretesDeAniversario } = await import("../escritorio/cron-aniversarios");
+      await rodarLembretesDeAniversario();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] aniversários falhou");
+    }
+  }, 60 * 60 * 1000);
 
   // A cada 1 minuto: dispara lembretes pré-evento (15min/30min/1h/1d antes).
   // Granularidade fina pra não atrasar o "30min antes" que o usuário configurou.

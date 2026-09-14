@@ -279,6 +279,27 @@ export const adminRouter = router({
     }),
 
   /**
+   * As súmulas colocadas de uma vez, pelo texto oficial.
+   *
+   * Existe porque o STJ publica tudo aberto e ainda assim barra a faixa de IP
+   * do nosso servidor: esperar a coleta automática conseguir entrar deixaria a
+   * base sem a citação mais forte que existe, por um detalhe de rede. Súmula é
+   * conjunto fechado que muda poucas vezes por ano — colar uma vez resolve o
+   * ano. O texto passa pelo MESMO extrator da coleta automática.
+   */
+  jurisiaImportarSumulas: adminProcedure
+    .input(
+      z.object({
+        fonteId: z.string().min(2).max(40),
+        texto: z.string().min(30).max(2_000_000),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { importarSumulasDeTexto } = await import("../jurisia/coletor-ementas");
+      return importarSumulasDeTexto(input);
+    }),
+
+  /**
    * O que cada tribunal vem decidindo, no acervo que já temos.
    *
    * O número nacional não ajuda a escolher a tese: o que muda a peça é o que a

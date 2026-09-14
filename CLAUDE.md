@@ -32,7 +32,12 @@
 >   (migration 0221, `escritorio_uso_mensal`). A última troca uma regra de
 >   negócio central e não tem uma linha aqui.
 > - **Duas migrations numeradas 0220** coexistem (`0220_assinatura_comprovante_erro`
->   e `0220_lead_cancelamento`).
+>   e `0220_lead_cancelamento`), e desde 14/09 **duas 0231**
+>   (`0231_kanban_concluido_em` e `0231_notificacao_preferencias`), de sessões
+>   diferentes que numeraram ao mesmo tempo. Não quebra: o executor guarda o
+>   NOME do arquivo, não o número — conferido no boot depois do merge
+>   (240 arquivos, 2 aplicadas, 0 com erro). A numeração é convenção; quem
+>   chegar depois pega o próximo número LIVRE.
 > - **Anti-pattern "hardcode `cargo === 'dono'`"** está na prática limpo: as 13
 >   ocorrências são o resolvedor da matriz, proteção do registro do dono,
 >   governança deliberada e um fallback documentado. Não gastar tempo aqui.
@@ -41,7 +46,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.103 verdes em 14/09/2026 (412 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.239 verdes em 14/09/2026 (418 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -2037,6 +2042,161 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   por fixture fraca: faltava JSON com ementa e sem identificador, e o HTML de
   duas linhas não tinha container). `admin-layout-novo` e
   `jurisia-router-contrato` atualizadas pra verdade nova.
+
+- **Entregue 14/09, súmulas do STJ/STF na base + a sondagem dita em português —
+  origem: ele rodou a sondagem em produção e respondeu "Entendi nada,
+  sinceramente. deveria ter súmulas stj/stf acordãos, resp né n?" e "e buscar
+  isso automático já que é público as informações" (seção 36 do documento de
+  estado).** Duas coisas, e as duas vinham do mesmo erro meu: a tela estava
+  escrita pra mim (`403`, `tls`, `dns`, "é o IP") e o material que ele nomeou —
+  **súmula** — não existia como fonte.
+  - **O que a sondagem de produção mediu**: TJSP, TJMG e TRF4 respondem do
+    nosso servidor (200); STJ (SCON e portal) e DJEN dão **403 que PERSISTE com
+    identificação de navegador** — é faixa de IP, então "é público" não implica
+    "o robô consegue ler"; STF trava em **certificado** (conserto quase sempre
+    nosso); TJRJ 404 e CNJ dados abertos sem DNS. E **200 na página de entrada
+    não prova ementa** — a sondagem bateu no formulário do TJSP, e formulário
+    de tribunal imprime a palavra "ementa" no rótulo do campo. Daí
+    `porta_aberta` ≠ `coleta_liberada` em `shared/fontes-oficiais.ts`.
+  - **Súmula virou material de primeira classe**, com a mecânica que a
+    diferencia: conjunto FECHADO (`listaCompleta` em vez de busca por termo —
+    `enderecoDaFonte` IGNORA o termo) e sem número de processo, por isso
+    extrator próprio (`extrair-sumulas.ts`; o de ementa EXIGE número de
+    processo e devolveria zero, e o zero pareceria "a fonte não serve").
+    `fonteCitavel()` virou a régua única de "entra no acervo" (as 4 comparações
+    com `"ementa"` do coletor viraram uma chamada). **Cancelada não entra**,
+    nos DOIS leitores, e a conta das que ficaram fora volta no resultado.
+    Guardada na MESMA tabela `jurisia_ementas`, sem migration.
+  - **Automático onde a porta abre; colar onde não abre.** As súmulas do STF e
+    o LexML têm `listaCompleta` e o cron passa a visitá-las quando alguém
+    ligar — **nenhuma fonte foi ligada**. Pro STJ existe
+    `jurisiaImportarSumulas`: ele cola o texto oficial e o sistema separa uma
+    por uma, pelo MESMO extrator do robô. Conferido de ponta a ponta no banco
+    local (6 do STJ + 1 do STF, texto vindo de `fontes-revisional.ts` — não
+    inventei enunciado).
+  - **A tela em português**: `shared/sondagem-em-portugues.ts` (puro) devolve
+    `{tom, frase, acao}`; a separação que importa é `conserto` (depende de nós)
+    × `fechado` (só saindo por outra porta) — juntar os dois numa cor fez a
+    tela velha parecer que os tribunais todos fecharam. Linha ordenada pelo
+    tom, resumo antes da tabela, e **o número técnico NÃO foi removido**:
+    desceu pra coluna "Detalhe técnico" (há mutação travando isso). A sondagem
+    passou a contar súmula rodando o extrator de verdade (`temEmenta` procura a
+    PALAVRA "ementa", e página de súmula não usa essa palavra) e a bater no
+    endereço que o ROBÔ usa, tirado da mesma lista do coletor.
+  - **Anotado e NÃO feito**: repetidor com outro IP pro STJ/DJEN (custo, é
+    decisão dele); consertar o certificado do STF; o endereço real do TJCE (o
+    e-SAJ é de São Paulo — daqui o proxy bloqueia os portais); e ligar
+    TJSP/TJMG/TRF4, que é o que vira `porta_aberta` em `coleta_liberada`.
+  - **Duas coisas que só a FOTO pegou** (comparador
+    `comparador-sumulas-e-portugues.html`, as duas versões rodando ao mesmo
+    tempo no MESMO banco, conferido por Playwright): a coluna nova levou a
+    tabela de fontes a OITO colunas e espremeu a descrição num fio de dez
+    caracteres (virou uma célula só); e o cartão da sondagem mora numa grade de
+    dois, então a tabela de três colunas empurrou o recado pra FORA do cartão e
+    a coluna do meio saiu vazia (virou duas colunas, com o número técnico como
+    terceira linha) — mesma lição da seção 31, mais o `whitespace-nowrap` que a
+    célula de tabela traz de fábrica. E `situacaoVigente`: coleta de hoje vence
+    medida de ontem, senão a tela afirma "o site responde" embaixo de um erro
+    de recusa.
+  Amarra: `sumulas-e-sondagem-em-portugues` (36) — **48 mutações vermelhas**
+  (`scratchpad/mutar-sumulas-portugues.py`; 7 sobreviveram na 1ª volta: a trava
+  de cancelada só existia no leitor de texto, e as fixtures de índice e de
+  script/style estavam fracas — script no `<head>` não prova remoção quando a
+  leitura é do `<body>`). `jurisprudencia-de-verdade` teve 2 `expect`
+  atualizados.
+
+- **Entregue 14/09, notificações push que o dono escolhe — "Bora fazer" dele no
+  mockup `mockup-notificacoes-padrao.html` (seção 37 do documento de estado).**
+  Pedido: "uma seção para ativar as notificações push padrões do app — Sentença
+  proferida, Nova ação detectada, Nova conversa Iniciada… o que faz sentido ter
+  como padrão".
+  - **O que existia**: push funcionava, mas **sem preferência nenhuma**
+    (`TIPOS_PUSH` era um Set fixo, 7 tipos, tudo-ou-nada por aparelho); o dono
+    recebia **toda mensagem de toda conversa**; movimentação ia só pra quem
+    CADASTROU o vigia (`mon.criadoPor`); e 4 avisos existiam sem chegar no
+    celular (prazo, pagamento, cobrança vencida, credencial quebrada).
+  - **A regra que protege tudo**: `avisoDoTipo` devolve `null` pro que o
+    catálogo não conhece, e **null quer dizer ENVIA**. Banco fora, erro de
+    leitura, usuário sem linha — tudo passa; o único "não" é o explícito. Sem
+    isso a entrega seria um apagão silencioso de avisos, que não dá erro e só
+    aparece quando alguém perde prazo.
+  - **Só o que DIVERGE do padrão é gravado** (`notificacao_preferencias`,
+    migration 0231): voltar ao padrão APAGA a linha, e é isso que deixa mudar
+    um padrão depois e alcançar quem nunca mexeu. Conferido no banco: tabela
+    vazia depois de ligar e desligar de volta.
+  - **`decidirPush` é pura** (aviso, mapa, hora local) e `pushPermitido` é a
+    casca com banco e cache de 60s. **Desligado vence silêncio** — trocar a
+    ordem faria o log mentir sobre por que o celular não tocou. E o silêncio
+    cala o CELULAR, não o sino: SSE e notificação saem de qualquer jeito.
+  - **Sentença proferida** virou a classe da movimentação: o cron manda
+    `classe` calculada por `classificarGrupo`, o MESMO classificador da
+    Central. Movimentação SEM classe cai em **decisão**, nunca em rotina —
+    silenciar o que a IA não conseguiu ler seria o pior default. **Nova
+    conversa** sai de `conversaNova` no handler, com a mesma régua que já
+    re-carimba o início do atendimento.
+  - **Passaram a chegar no celular**: prazo vencendo (depois da dedup de 12h),
+    pagamento recebido e cobrança vencida (depois da dedup do evento do Asaas,
+    que retenta 2–3×), contrato fechado (em try/catch: aviso que falha não
+    desfaz venda) e credencial de tribunal. **Cliente esperando 15 min** é cron
+    novo — espera = conversa `aguardando` cuja ÚLTIMA mensagem é de entrada,
+    teto de 72h, um toque por espera.
+  - **Anotado**: silêncio é 21h–7h fixo (campo editável pede tela nova);
+    `novo_lead` segue em `TIPOS_PUSH` sem ninguém emitir (tirar é remoção); os
+    avisos de dinheiro alcançam dono e gestores, não cargo configurável.
+  Amarra: `notificacoes-que-o-dono-escolhe` (37) — **51 mutações vermelhas**
+  (`scratchpad/mutar-notificacoes.py`; 6 sobreviveram na 1ª volta e ensinaram:
+  quatro eram mutante equivalente ou literal desatualizado, e DUAS mostraram
+  que o silêncio só estava guardado por texto — daí `decidirPush` virar pura e
+  ganhar teste de comportamento de verdade).
+
+- **Entregue 14/09, data de nascimento no cadastro + lembrete de aniversário —
+  "pode fazer" do dono no comparador `comparador-aniversario-cliente.html`
+  (seção 38 do documento de estado).** Pedido: *"Quero um campo no cadastro do
+  cliente para colocar sua data de nascimento para me lembrar do seu
+  aniversário."*
+  - **Por que campo de verdade e não campo personalizado**: o mecanismo de
+    campos extras já existia e **guardaria** a data sem servir pro pedido — o
+    valor mora num JSON em `TEXT` e nenhuma consulta alcança o que está lá
+    dentro. Dava pra escrever a data e não dava pra ser lembrado dela. Daí a
+    coluna `contatos.dataNascimento` (migration 0232, `DATE NULL`), ao lado da
+    qualificação civil. **`mode: "string"` no schema**: vira `Date` e o dia
+    passeia de fuso — 12/03 vira 11/03 depois das 21h.
+  - **Regras puras em `shared/aniversario.ts`**, fonte única da tela, do filtro
+    e do cron: `partesDaData` RECUSA 31 de fevereiro em vez de deixar o `Date`
+    empurrar pra março; o aniversário de HOJE é o próximo, não o do ano que vem;
+    **29 de fevereiro é comemorado em 28** nos anos sem o dia 29; "neste mês" é
+    o mês do CALENDÁRIO, não os próximos 30 dias; idade só aparece com o ano
+    conhecido.
+  - **O achado que só a FOTO pegou**: a 1ª versão usava `<input type="date">` e
+    saiu **`09/14/1985`** — o campo nativo desenha no idioma do NAVEGADOR. O
+    repo já sabia disso no filtro "Cadastro", com o motivo escrito no código.
+    Virou texto mascarado `dd/mm/aaaa` (`mascararDataBR`/`brParaIsoData`/
+    `isoParaBrData` na shared), e data que não existe fica vermelha SEM gravar.
+  - **Tela**: campo em `CamposQualificacaoEndereco` (um componente, duas telas)
+    e **fora** de `CAMPOS_OBRIGATORIOS_QUALIFICACAO` — exigir travaria contrato
+    pra carteira inteira; `SeloAniversarioHero` na ficha (sem data, sem selo) com
+    «mandar parabéns» por `wa.me`; filtro "Aniversário" na lista, com o servidor
+    usando `passaNoFiltro`, a MESMA função da tela; e `?aniversario=hoje` lido na
+    inicialização — senão o push cairia na lista inteira.
+  - **Cron** `rodarLembretesDeAniversario`: de hora em hora, por escritório.
+    **Um aviso por dia com todos dentro** (cinco aniversários viram cinco toques
+    = a pessoa desliga tudo); **quem guarda "já mandei" é o BANCO**, pelo
+    prefixo do título — memória de processo morre em redeploy e o aviso sairia
+    de novo; **`>=` a hora e não `===`**, senão reiniciar às 8h em ponto custa o
+    dia; responsável + dono com a chave de alcance (`somarNomes` junta, não
+    sobrescreve). Encerrado/cancelado/rescindido ficam fora.
+  - **Decisão do dono que fica registrada**: os parabéns são MANUAIS, pelo
+    WhatsApp dele. Disparo automático pelo número do escritório é mensagem
+    proativa da plataforma — o padrão dos avisos da Meta — e seria pedido à
+    parte (hoje `GatilhoSmartflow` não tem gatilho de data).
+  - **Anotado e NÃO feito**: `cliente.dataNascimento` não entrou nas variáveis
+    de contrato; lead entra no lembrete junto com cliente; no celular a tela de
+    Clientes já leva pro Atendimento (de antes, não mexido).
+  Amarra: `aniversario-do-cliente` (27 testes) — **42 mutações vermelhas**
+  (`scratchpad/mutar-aniversario.py`; 8 sobreviveram na 1ª volta, sete pelo
+  motivo de sempre — a amarra conferia o NOME e não a CHAMADA — e uma era
+  mutante equivalente: a faixa de mês/dia é caminho rápido, quem recusa mês 13
+  é a volta pelo `Date`).
 
 ## Fila combinada com o dono (31/08/2026)
 

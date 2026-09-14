@@ -92,6 +92,34 @@ export interface ConversaUnaGravada {
   caso: { nome: string | null; processo: string | null } | null;
 }
 
+/**
+ * Súmula e ementa contam separado na tela.
+ *
+ * As duas entram pela mesma lista porque as duas se citam e as duas moram no
+ * mesmo acervo, mas dizer "5 ementas" quando 2 são súmula é impreciso onde mais
+ * importa: súmula é entendimento consolidado do tribunal, ementa é um julgado.
+ * O identificador é o que separa, e quem o escreve é o extrator.
+ */
+export function contarCitacoes(lista: EmentaCitada[] | undefined): {
+  sumulas: number;
+  ementas: number;
+} {
+  let sumulas = 0;
+  for (const e of lista ?? []) {
+    if (/^s[úu]mula\b/i.test(e.identificador)) sumulas++;
+  }
+  return { sumulas, ementas: (lista?.length ?? 0) - sumulas };
+}
+
+/** "2 súmulas e 3 ementas" · "1 súmula" · "4 ementas". */
+export function rotuloCitacoes(lista: EmentaCitada[] | undefined): string {
+  const { sumulas, ementas } = contarCitacoes(lista);
+  const partes: string[] = [];
+  if (sumulas > 0) partes.push(sumulas === 1 ? "1 súmula" : `${sumulas} súmulas`);
+  if (ementas > 0) partes.push(ementas === 1 ? "1 ementa" : `${ementas} ementas`);
+  return partes.join(" e ");
+}
+
 /** Discrimina o formato novo do `PesquisaGravada` antigo, sem chutar pela forma. */
 export function ehConversaUna(r: unknown): r is ConversaUnaGravada {
   return !!r && typeof r === "object" && (r as { tipo?: unknown }).tipo === "una";
