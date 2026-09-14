@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { BackupDialog } from "./configuracoes/backup-dialog";
 import {
+  LogoAsaas,
   LogoClaude,
   LogoInstagram,
   LogoMessenger,
@@ -2138,8 +2139,8 @@ function IntegracaoTab({ canEdit, isDono }: { canEdit: boolean; isDono: boolean 
       nome: "Asaas",
       descricao: "Cobranças por boleto, Pix e cartão",
       categoria: "Financeiro",
-      logo: "💰",
-      bgIcon: "bg-info-bg border-info/30",
+      logo: <LogoAsaas className="h-9 w-9 rounded-lg" />,
+      bgIcon: "bg-card border-border",
       conectado: asaasStatus?.conectado || false,
     },
     {

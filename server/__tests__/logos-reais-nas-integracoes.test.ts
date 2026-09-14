@@ -10,9 +10,9 @@
  * amarra confere as duas pontas: nenhum `logo:` de card é literal de texto, e
  * os desenhos vêm do arquivo único das marcas.
  *
- * O Asaas fica de fora de propósito: a marca não está no Simple Icons nem em
- * pacote que este ambiente alcance, e desenhar "parecido" é o que ele pediu
- * pra não fazer. Quando o SVG oficial entrar, esta lista cresce.
+ * O Asaas entrou depois ("só o ícone do asaas que não tem nada a ver"): a
+ * marca não está no Simple Icons, mas está no pacote do nó n8n de integração
+ * com eles — de lá saiu o traçado, copiado, não redesenhado.
  */
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -28,15 +28,12 @@ describe("as marcas dos cards são reais", () => {
   it("nenhum card de canal ou de app externo leva emoji como logo", () => {
     // Pega `logo: "..."` — literal de texto. JSX (`logo: <Logo… />`) não casa.
     const literais = [...tela.matchAll(/\blogo:\s*"([^"]*)"/g)].map((m) => m[1]);
-    expect(
-      literais.filter((x) => x !== "💰"),
-      `logo em texto (emoji?) nos cards: ${literais.join(" ")}`,
-    ).toEqual([]);
+    expect(literais, `logo em texto (emoji?) nos cards: ${literais.join(" ")}`).toEqual([]);
   });
 
   it("os quatro canais e as duas IAs apontam pro arquivo das marcas", () => {
     expect(tela).toContain('from "@/components/logos-marcas"');
-    for (const logo of ["LogoWhatsApp", "LogoInstagram", "LogoMessenger", "LogoOpenAI", "LogoClaude"]) {
+    for (const logo of ["LogoWhatsApp", "LogoInstagram", "LogoMessenger", "LogoOpenAI", "LogoClaude", "LogoAsaas"]) {
       expect(tela, `${logo} não é usado na tela`).toContain(`<${logo} `);
       expect(marcas, `${logo} não é exportado`).toContain(`export function ${logo}(`);
     }
@@ -50,10 +47,11 @@ describe("as marcas dos cards são reais", () => {
     // último é curto porque a marca dele É simples (bolha + raio), por isso o
     // piso fica em 400 e não na média.
     const paths = [...marcas.matchAll(/\sd="([^"]+)"/g)].map((m) => m[1]);
-    expect(paths.length, "faltou marca no arquivo").toBe(5);
+    // 7: o Asaas tem duas demãos (o quadrado azul e o desenho branco).
+    expect(paths.length, "faltou marca no arquivo").toBe(7);
     for (const d of paths) expect(d.length).toBeGreaterThan(400);
-    expect(paths.filter((d) => d.length > 1000).length, "3 das 5 são traçados longos")
-      .toBeGreaterThanOrEqual(3);
+    expect(paths.filter((d) => d.length > 1000).length, "5 das 7 são traçados longos")
+      .toBeGreaterThanOrEqual(5);
   });
 
   it("a cor é a da marca, não a do tema", () => {
@@ -63,6 +61,7 @@ describe("as marcas dos cards são reais", () => {
     expect(marcas).toContain('fill="#25D366"'); // WhatsApp
     expect(marcas).toContain('fill="#0866FF"'); // Messenger (azul da Meta)
     expect(marcas).toContain('fill="#D97757"'); // Claude
+    expect(marcas).toContain('fill="#0030B9"'); // azul da Asaas
     expect(marcas).toContain('fill="url(#marca-instagram)"'); // degradê oficial
     expect(marcas).toContain("dark:fill-white"); // OpenAI no tema escuro
     expect(marcas, "marca com cor do tema deixa de ser a marca").not.toContain(

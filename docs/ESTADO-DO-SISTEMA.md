@@ -3598,11 +3598,21 @@ canal, desenhado para um emoji branco por cima. Marca verde sobre ladrilho
 verde some. Agora é claro, com borda; o degradê sobrou só no cartão
 "+ Adicionar outro", que não tem marca.
 
-**Duas escolhas ditas na cara:** o card é "Facebook Messenger", então leva a
-marca do **Messenger** — o "f" azul é o Facebook, que é outro produto. E o
-**Asaas continua com o ícone antigo**: a marca não está no Simple Icons nem em
-pacote que este ambiente alcance, e desenhar "parecido" é exatamente o que ele
-pediu pra não fazer. Entra quando o SVG oficial entrar no repositório.
+**Uma escolha dita na cara:** o card é "Facebook Messenger", então leva a marca
+do **Messenger** — o "f" azul é o Facebook, que é outro produto.
+
+**O Asaas entrou na segunda rodada** (*"só o ícone do asaas que não tem nada a
+ver"*, e ele tinha razão: era um saco de dinheiro). A marca não está no Simple
+Icons e o proxy do ambiente bloqueia o site deles, mas o registro do npm passa
+— o traçado veio do pacote `@asaasbr/n8n-nodes-asaas`, o nó de integração com a
+Asaas, **copiado do arquivo, não redesenhado**. É a única das seis que é um
+QUADRADO (azul #0030B9 com o desenho vazado em branco): é o ícone de aplicativo
+deles, e é assim que a Asaas se apresenta — por isso entra no card com canto
+arredondado, e não como glifo solto.
+
+Lição que fica pro ambiente: quando um CDN de ícone estiver bloqueado, o
+**registro do npm não está** (`registry.npmjs.org` é exceção no proxy). Marca de
+serviço costuma viajar dentro do pacote de integração dele.
 
 ### 32.2 O banner saiu — e o que ele carregava, não
 
@@ -3619,5 +3629,5 @@ O aviso "Instagram e Messenger: em breve", que o banner também dava, continua
 na descrição de cada card, no pill ao lado do nome e no botão travado — o teste
 `instagram-em-breve` foi ajustado para conferir esses três em vez do banner.
 
-Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 8 mutações vermelhas
+Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 10 mutações vermelhas
 em `scratchpad/mutar-logos-reais.py`.

@@ -5,6 +5,8 @@ MUT=[
  (C,'logo: <LogoWhatsApp className="h-8 w-8" />','logo: "💬"',"volta o emoji do WhatsApp"),
  (C,'logo: <LogoInstagram className="h-8 w-8" />','logo: "📸"',"volta o emoji do Instagram"),
  (C,'logo: <LogoOpenAI className="h-7 w-7" />','logo: "🤖"',"volta o emoji do ChatGPT"),
+ (C,'logo: <LogoAsaas className="h-9 w-9 rounded-lg" />','logo: "💰"',"volta o emoji do Asaas"),
+ (M,'fill="#0030B9"','fill="#1e40af"',"muda o azul da Asaas"),
  (C,'Ou cadastrar WhatsApp Cloud manualmente (avançado)','Ou cadastrar manualmente',"muda o texto do caminho manual"),
  (C,'onClick={() => setManualWhatsappOpen(true)}','onClick={() => {}}',"tira o clique do caminho manual"),
  (C,'border bg-card flex items-center justify-center text-2xl shadow-sm','bg-gradient-to-br from-success to-success flex items-center justify-center text-2xl shadow-md',"volta o ladrilho degrade por cima da marca"),
