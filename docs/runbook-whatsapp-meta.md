@@ -122,9 +122,11 @@ Regras que saem disso:
 - Enquanto a apelação da conta banida seguir aberta, qualquer ativo novo do
   mesmo cliente tende a ser restrito de novo — resolver o caso antigo vem
   antes de conectar número novo.
-- Sintoma que identifica o caso: restrição por spam **sem** volume de saída.
-  Se o escritório não dispara e mesmo assim é restrito, procure o vínculo,
-  não o envio.
+- Assinatura que identifica o caso, e separa vínculo de comportamento:
+  **conta restrita + número "Conectado" com qualidade ALTA** (WhatsApp
+  Manager → a WABA → Phone numbers). Denúncia de destinatário derruba a
+  qualidade; qualidade alta com conta punida significa que a Meta puniu a
+  entidade, não o envio. Nesse caso procure o vínculo, não o disparo.
 
 ## Bloqueio do APP (Login "Recurso indisponível") — prevenção
 
