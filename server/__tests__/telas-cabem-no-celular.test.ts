@@ -48,6 +48,54 @@ describe("as telas cabem num celular de 390px", () => {
     expect(inv![1], "sem max-w-full a tira cresce além da tela").toContain("max-w-full");
   });
 
+  it("Dashboard: a aba ativa é sublinhado, não retângulo em volta do rótulo", () => {
+    // O `TabsTrigger` da casa já traz `border border-transparent` nos quatro
+    // lados. Pintar `data-[state=active]:border-foreground` colore os quatro
+    // e desenha uma caixa preta em volta da aba — foi o que o dono viu na
+    // tela. Só o lado de baixo pode existir, e só ele ganha cor.
+    const src = tela("Dashboard.tsx");
+    const i = src.indexOf("<TabsTrigger");
+    expect(i, "as abas do Dashboard sumiram").toBeGreaterThan(-1);
+    const classes = src.slice(i, src.indexOf("/>", i)).match(/className="([^"]*)"/);
+    expect(classes, "className do TabsTrigger não encontrado").toBeTruthy();
+    const c = classes![1];
+    expect(c, "as bordas laterais/superior voltaram").toContain("border-0");
+    expect(c, "o sublinhado da aba sumiu").toContain("border-b-2");
+    expect(c, "a aba ativa tem que colorir só a borda DE BAIXO").toContain(
+      "data-[state=active]:border-b-foreground",
+    );
+    expect(c, "border-foreground pinta os quatro lados — é o retângulo").not.toMatch(
+      /data-\[state=active\]:border-foreground/,
+    );
+  });
+
+  it("Cofre: a grade de tribunais é uma linha por estado e a credencial nacional ocupa a fileira", () => {
+    // O cartão media 2.566px de altura porque a grade dos 78 pares vivia num
+    // cartão de 1/3 da largura (335px úteis, 800px vazios ao lado). Duas
+    // classes seguram o conserto.
+    const grade = readFileSync(
+      join(__dirname, "..", "..", "client", "src", "components", "GradeTribunais.tsx"),
+      "utf8",
+    );
+    expect(grade, "a grade voltou a empilhar caixa por grau").not.toContain(
+      "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+    );
+    // Ancorado na CONSTANTE de classes, não no arquivo inteiro: o comentário
+    // acima dela cita `[&>*]:min-w-0`, e olhar o arquivo todo deixava a
+    // mutação que apaga a classe passar verde.
+    const classes = grade.match(/const CLASSES_GRADE =\s*\n?\s*"([^"]*)"/);
+    expect(classes, "a constante CLASSES_GRADE sumiu").toBeTruthy();
+    expect(classes![1], "a grade perdeu as colunas que se ajustam sozinhas").toMatch(
+      /grid-cols-\[repeat\(auto-fill,minmax\(\d+px,1fr\)\)\]/,
+    );
+    expect(classes![1], "sem [&>*]:min-w-0 a sigla estica a coluna").toContain("[&>*]:min-w-0");
+
+    const proc = tela("Processos.tsx");
+    const i = proc.indexOf("SISTEMA_NACIONAL ?");
+    expect(i, "a regra de largura do cartão nacional sumiu").toBeGreaterThan(-1);
+    expect(proc.slice(i, i + 120)).toContain("lg:col-span-3");
+  });
+
   it("Financeiro: abas rolam e as duas tabelas rolam dentro da moldura", () => {
     const src = tela("Financeiro.tsx");
     // A régua principal da tela (7 abas). A outra TabsList do arquivo é a

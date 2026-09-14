@@ -101,7 +101,6 @@ describe("a lista de quem responde sem plano", () => {
       "permissoes.minhasPermissoes",
       "notificacoes.listar",
       "push.registrar",
-      "ajuda.primeirosPassos",
     ]) {
       expect(precisaDePlano(path), `${path} não pode exigir plano`).toBe(false);
     }

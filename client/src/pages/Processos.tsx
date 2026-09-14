@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AjudaDaTela } from "@/components/AjudaDaTela";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
@@ -2333,7 +2332,6 @@ function CabecalhoProcessos() {
       <div>
         <h1 className="text-pagina font-bold tracking-tight leading-none flex items-center gap-2">
           Processos
-          <AjudaDaTela tarefa="vigiar-processo" />
         </h1>
         <p className="text-corpo text-muted-foreground mt-1.5">
           O robô entra nos tribunais todo dia e avisa o que mudou nos seus processos
@@ -4338,7 +4336,13 @@ function CofreTab() {
             return (
               <div
                 key={c.id}
-                className="rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] transition-all"
+                /* Credencial nacional ocupa a fileira inteira: a grade dos
+                   estados mora dentro dela, e num terço da largura ela media
+                   2.143px de altura com 800px vazios ao lado. A credencial de
+                   um tribunal só continua no cartão de 1/3. */
+                className={`rounded-2xl border border-border bg-card p-4 shadow-[0_1px_2px_0_rgb(0,0,0,0.04)] transition-all hover:shadow-[0_4px_12px_-2px_rgb(0,0,0,0.06)] ${
+                  c.sistema === SISTEMA_NACIONAL ? "md:col-span-2 lg:col-span-3" : ""
+                }`}
               >
                 <div className="flex items-start gap-2.5">
                   <div className="h-10 w-10 rounded-xl bg-info flex items-center justify-center shrink-0 shadow-sm">
