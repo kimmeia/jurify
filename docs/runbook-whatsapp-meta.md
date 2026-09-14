@@ -8,7 +8,7 @@ diagnóstico de recepção) e dos procedimentos que evitam repetir cada erro.
 | Peça | Valor | Papel |
 |---|---|---|
 | App da plataforma | **JuridFlow App — `1295936199370409`** (business Devular `1312369217176044`) | Webhook (`https://juridflow.com.br/api/webhooks/whatsapp`), HMAC, Embedded Signup, tokens de canal |
-| App CRM SaaS | Devular App — `1339360448088196` | OUTRO produto. Não usar aqui |
+| App CRM SaaS | Devular App — `1339360448088196` | OUTRO produto (Devular CRM, devular.com.br). Não usar aqui — tem review próprio, enviado 14/09/2026 com as mesmas 3 permissões. Apps separados de propósito: o strike de um não derruba o outro |
 | App legado | "Juridflow" — `1641836240205895` (BM do cliente Boyadjian) | Sem papel. Remover inscrição dele das WABAs quando possível (evita entrega duplicada futura) |
 | Credenciais do app | **Admin → Integrações → WhatsApp Cloud** (App ID + App Secret + Verify Token) | É o que valida o HMAC do webhook. Env `META_APP_ID`/`META_APP_SECRET` têm prioridade se setadas; `META_CONFIG_ID` (Railway) é do Embedded Signup |
 | Por canal | token + phoneNumberId + wabaId criptografados em `canais_integrados` | Envio + chamadas Graph |
@@ -99,6 +99,42 @@ Como o sistema implementa:
 - Operacional (escritório): cláusula de consentimento WhatsApp no contrato
   padrão + rodapé "Responda SAIR para não receber avisos" nos templates.
 
+## Contaminação por parceiro banido (causa raiz das restrições em série)
+
+Três WABAs de clientes (titulares DIFERENTES) foram restritas por "Sending
+spam" entre jul e set/2026, sempre 15-30 dias após conectar, sempre com
+número novo e **sem nenhuma mensagem iniciada pela empresa** — não havia
+cenário SmartFlow ativo nem disparo. Causa encontrada em 14/09: a lista de
+**Parceiros do portfólio DO ESCRITÓRIO** (não o da Devular) tinha a BM
+**banida** do próprio cliente (`BM2 - Boyadjian Advogados`) conectada. O
+escritório abriu BM nova depois do ban e pendurou a antiga como parceira;
+ativo novo ligado a negócio banido é lido pela Meta como tentativa de
+contornar o enforcement, e herda a punição.
+
+Regras que saem disso:
+- **Auditar a lista de Parceiros do BM DO CLIENTE antes de conectar o
+  número** — é lá que mora o vínculo, e é o passo que faltava no onboarding.
+  Nenhuma BM banida/restrita pode estar pendurada ali.
+- Com acesso avançado aprovado (01/09), o cliente conecta pelo Embedded
+  Signup a partir do BM dele — **não é mais preciso atribuir a Devular como
+  parceira/admin do BM do cliente**. O modelo de parceria do onboarding
+  manual só vale como plano B, e cobra esse preço.
+- **Nunca entrar como admin pessoal no BM do cliente.** A conexão do
+  Boyadjian foi feita assim (02/09, restrição em 14/09). Uma conta pessoal
+  administrando o BM de toda a carteira vira denominador comum: um cliente
+  banido dá à Meta um laço entre ele e todos os outros. O Embedded Signup
+  existe pra evitar isso — o cliente conecta com a conta dele e a plataforma
+  recebe token limitado àquela WABA. Se o caminho manual for inevitável,
+  entre, faça e **saia** do BM.
+- Enquanto a apelação da conta banida seguir aberta, qualquer ativo novo do
+  mesmo cliente tende a ser restrito de novo — resolver o caso antigo vem
+  antes de conectar número novo.
+- Assinatura que identifica o caso, e separa vínculo de comportamento:
+  **conta restrita + número "Conectado" com qualidade ALTA** (WhatsApp
+  Manager → a WABA → Phone numbers). Denúncia de destinatário derruba a
+  qualidade; qualidade alta com conta punida significa que a Meta puniu a
+  entidade, não o envio. Nesse caso procure o vínculo, não o disparo.
+
 ## Bloqueio do APP (Login "Recurso indisponível") — prevenção
 
 - **Data Use Checkup é ANUAL** — não responder = Login suspenso (foi o que
@@ -148,10 +184,26 @@ simultaneamente na Cloud API. Ground truth: `is_on_biz_app` do
   dias, abrir o app a cada ~14 dias, throughput reduzido, broadcast
   read-only, grupos indisponíveis na API.
 
-## Pendências externas (estado em 14/jul/2026)
+## Pendências externas (estado em 26/ago/2026)
 
-- [ ] Acesso avançado do app `1295...` (Análise do App) — destrava o 1-clique.
-- [ ] Access Verification (após aprovação, ~5 dias úteis).
+- [x] Acesso avançado do app `1295...` (Análise do App) — **APROVADO em
+      01/09/2026** ("Envio aprovado", as 3 permissões Approved). O Embedded
+      Signup de 1 clique passou a funcionar pra QUALQUER conta Facebook
+      (a restrição "só conta atrelada à Devular" era o acesso padrão).
+      Data Use Checkup anual também dado como concluído em 01/09.
+      Pacote enviado em 26/08: `whatsapp_business_messaging` +
+      `whatsapp_business_management` + `public_profile` (manage_app_solution
+      e whatsapp_business_manage_events foram removidos do pedido — sem uso
+      no código). Evidências: 2 screencasts (envio de mensagem; criação de
+      template) + conta demo `demo@juridflow.com.br` (SEM dados reais;
+      manter cortesia/ativa ≥1 ano — exigência do formulário). Tratamento
+      de dados declarado: operadores Railway/Backblaze/OpenAI/Anthropic/
+      Sentry (categoria "Soluções e serviços de TI", EUA), responsável =
+      Harkan Assessoria e Corretora de Seguros Ltda (CNPJ
+      62.658.285/0001-00) + política de resposta a autoridades adotada.
+      Resposta chega na Caixa de Entrada de alertas do app.
+- [ ] Access Verification (após aprovação, ~5 dias úteis) — pedirá
+      evidência de que a empresa presta serviço a clientes (site + CNPJ).
 - [ ] Apelação da conta antiga banida — protocolo `#2655121:WBxP-849705580-840938876`.
       NÃO clicar "Já resolvi" no banner até a Meta reinstaurar.
 - [ ] Remover inscrição do app legado `1641...` das WABAs.

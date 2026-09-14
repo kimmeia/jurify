@@ -170,16 +170,29 @@ describe("registrarFalhaTemplate (tripa o disjuntor)", () => {
   });
 });
 
-describe("registrarSucessoTemplate (rearma o disjuntor)", () => {
+describe("registrarSucessoTemplate (conta o disparo, NÃO rearma o disjuntor)", () => {
   beforeEach(() => _resetRateLimit());
 
-  it("registra o disparo e limpa a restrição do canal", async () => {
-    let captured: any = null;
-    const db = fakeDb({ onUpdate: (v) => (captured = v) });
+  it("registra o disparo no rate limit", async () => {
+    const db = fakeDb();
     await registrarSucessoTemplate({ db, canalId: 9, agoraMs: 5000 });
-    expect(captured.restritoMeta).toBe(false);
-    // disparo entrou no rate limit
     expect(verificarRateLimit(9, 5000)).toBeTruthy();
+  });
+
+  /**
+   * Regressão do incidente de set/2026: conta restrita ACEITA o POST e devolve
+   * 200 com id de mensagem — a Meta mata a entrega depois, no webhook `failed`.
+   * Enquanto o sucesso limpava `restritoMeta`, o primeiro inbound após a
+   * restrição desarmava o disjuntor e o sistema voltava a enviar contra conta
+   * bloqueada. Sair da restrição exige sinal real (testConnection consulta a
+   * Graph API) ou liberação manual.
+   */
+  it("sucesso de envio não limpa a restrição do canal", async () => {
+    const updates: any[] = [];
+    const db = fakeDb({ onUpdate: (v) => updates.push(v) });
+    await registrarSucessoTemplate({ db, canalId: 9, agoraMs: 5000 });
+    await registrarSucessoEnvio({ db, canalId: 9, proativo: false, agoraMs: 5000 });
+    expect(updates.some((u) => u.restritoMeta === false)).toBe(false);
   });
 });
 
