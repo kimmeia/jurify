@@ -1,0 +1,20 @@
+import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
+const [OUT, PORTA] = process.argv.slice(2);
+const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
+const ctx = await b.newContext({ viewport: { width: 1600, height: 1400 }, storageState: "/home/user/jurify/scratchpad/comp-sumulas/sessao-dono.json", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto(`http://localhost:${PORTA}/clientes`, { waitUntil: "domcontentloaded" });
+await p.waitForTimeout(3500);
+await p.locator("text=Maria Aparecida Nogueira de Sousa").first().click();
+await p.waitForTimeout(3500);
+const ok = await p.evaluate(() => {
+  const h2 = [...document.querySelectorAll("h2")].find((h) => /Maria Aparecida/.test(h.textContent || ""));
+  let el = h2;
+  while (el && !/Gerar contrato/.test(el.textContent || "")) el = el.parentElement;
+  if (el) el.setAttribute("data-alvo-foto", "1");
+  return !!el;
+});
+console.log("marcado?", ok);
+await p.locator("[data-alvo-foto]").first().screenshot({ path: `${OUT}/ficha.png` });
+console.log("ficha.png ok");
+await b.close();
