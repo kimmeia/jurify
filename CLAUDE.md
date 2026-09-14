@@ -32,7 +32,12 @@
 >   (migration 0221, `escritorio_uso_mensal`). A última troca uma regra de
 >   negócio central e não tem uma linha aqui.
 > - **Duas migrations numeradas 0220** coexistem (`0220_assinatura_comprovante_erro`
->   e `0220_lead_cancelamento`).
+>   e `0220_lead_cancelamento`), e desde 14/09 **duas 0231**
+>   (`0231_kanban_concluido_em` e `0231_notificacao_preferencias`), de sessões
+>   diferentes que numeraram ao mesmo tempo. Não quebra: o executor guarda o
+>   NOME do arquivo, não o número — conferido no boot depois do merge
+>   (240 arquivos, 2 aplicadas, 0 com erro). A numeração é convenção; quem
+>   chegar depois pega o próximo número LIVRE.
 > - **Anti-pattern "hardcode `cargo === 'dono'`"** está na prática limpo: as 13
 >   ocorrências são o resolvedor da matriz, proteção do registro do dono,
 >   governança deliberada e um fallback documentado. Não gastar tempo aqui.
