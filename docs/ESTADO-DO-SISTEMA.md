@@ -4392,3 +4392,79 @@ trocado: ele travava a linha literal do destructuring da lista, que ganhou dois
 campos — passou a conferir o MECANISMO (os campos crus saem do objeto antes do
 `...r`), conferido por mutação.
 
+
+
+## 40. Atribuição por anúncio no Relatório Comercial — ENTREGUE (14/09)
+
+Fatia 3 do Click-to-WhatsApp, aprovada no comparador
+`mockup-relatorio-anuncio.html` (&ldquo;ok, faça&rdquo;). Não é aba nova nem tela nova:
+é um cartão dentro do Comercial, abaixo de &ldquo;Fechamentos por origem&rdquo;.
+
+### 40.1 A decisão que carrega o resto: uma definição de receita só
+
+O `recebido` por anúncio **não é recalculado**. Ele chega pronto de
+`atribuirRecebidoAosFechamentos` — a mesma distribuição que alimenta o card
+Recebido do topo e o agrupamento por origem. Uma segunda conta na mesma tela
+daria dois números certos que não conversam, e quem confere relatório somando
+com a mão perde a confiança no conjunto inteiro.
+
+O total do cartão é a **parte do Recebido que veio de anúncio**; o resto
+continua no total de cima, que também conta indicação, Google e o que houver.
+
+### 40.2 O período conta pelo CLIQUE
+
+`agruparPorAnuncio` recebe os contatos cujo `origemAnuncioEm` caiu na janela.
+Contar pelo fechamento responderia outra pergunta e silenciaria exatamente o
+anúncio que traz muito lead e converte pouco — que é o que o relatório existe
+para expor.
+
+### 40.3 Agrupa por ANÚNCIO porque campanha não existe no que a Meta manda
+
+O `referral` do webhook traz `source_id`, o criativo e o texto. Nome de
+campanha e de conjunto só vivem na Marketing API, que exige `ads_read` —
+permissão que o app não tem (o review aprovado em 01/09 cobre as três de
+WhatsApp) e que ainda dependeria do escritório liberar a conta de anúncios.
+A chave é o `source_id`; sem ele, o título serve. **Sem nenhum dos dois a
+linha é descartada**, porque um balde vazio fundiria anúncios diferentes numa
+linha só e o número mentiria.
+
+### 40.4 PDF e e-mail
+
+Seção 9 em `gerarComercialPdf`, antes da nota de metodologia, e o campo
+declarado em `ComercialDashboardData` como **opcional** (relatório programado
+gravado antes desta entrega não tem o campo). O título passa por
+`textoParaPdfWinAnsi`: é texto do anunciante, criativo com emoji é comum, e as
+14 fontes padrão do PDF só escrevem WinAnsi — sem o filtro o pdfkit imprime
+glifo errado. **O envio programado não precisou de nada**: ele chama a MESMA
+`exportarComercialPdf`, então a seção entra sozinha (há teste travando isso,
+para o dia em que alguém trocar por geração própria e o e-mail passar a ter
+uma seção a menos que o papel baixado).
+
+### 40.5 Duas correções que só a foto pegou
+
+O mockup foi capturado do app rodando, e a captura pagou na hora:
+
+- **No celular a coluna do título comia a tela** e nenhum número aparecia.
+  `min-w-[560px]` na tabela + `max-w-[220px]` no título: agora ela rola dentro
+  da moldura com as colunas legíveis.
+- **Na conversa, sem miniatura, a marca de play empilhava sobre o megafone** e
+  os dois viravam borrão. A marca só entra sobre a capa.
+
+### 40.6 O que o ambiente local exige (e me custou tempo)
+
+Registrado em `scratchpad/anuncio/LEIA-ME.md`: `--default-character-set=utf8mb4`
+no `povoar.sql` (sem ele o acento quebra e os vínculos por nome falham), setor
+do tipo `comercial` com colaboradores (sem isso a aba renderiza VAZIA — é a
+seção 29), e `comissionavelOverrideAsaasCob = 1` nas cobranças (com categoria
+e override nulos elas caem em &ldquo;indefinido&rdquo; e somem do Recebido).
+
+Amarra: `relatorio-por-anuncio.test.ts` (21 testes, dois deles carimbando PDF
+de verdade — um com criativo cheio de emoji, outro com zero lead para provar
+que a taxa não divide por zero) — **19/19 mutações vermelhas** em
+`scratchpad/mutar-relatorio-anuncio.py`. Três sobreviveram na primeira volta,
+todas pelo mesmo motivo: **guardas redundantes que se mascaravam** (a recusa de
+array e a guarda da chave cobriam o mesmo caso; o arredondamento por contato e
+o por grupo também). O conserto foi simplificar o código, não engordar o teste.
+`cancelar-contrato` teve UM `expect` trocado: ele travava a adjacência de dois
+campos no payload e passou a conferir que a lista está lá, conferido por
+mutação.
