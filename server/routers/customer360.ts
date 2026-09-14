@@ -34,6 +34,7 @@ import {
   clienteProcessos,
 } from "../../drizzle/schema";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
+import { parseOrigemAnuncio } from "../integracoes/whatsapp-origem-anuncio";
 import { createLogger } from "../_core/logger";
 import { toIsoString } from "../_core/dates";
 
@@ -367,6 +368,8 @@ export const customer360Router = router({
             observacoes: contato.observacoes,
             optOutWhatsapp: !!contato.optOutWhatsapp,
             optOutWhatsappEm: toIsoString(contato.optOutWhatsappEm),
+            origemAnuncio: parseOrigemAnuncio(contato.origemAnuncio),
+            origemAnuncioEm: toIsoString(contato.origemAnuncioEm),
             createdAt: toIsoString(contato.createdAt) ?? "",
           },
           financeiro,

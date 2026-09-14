@@ -191,6 +191,10 @@ export async function processarMensagemRecebida(canalId: number, escritorioId: n
       if (!db) return;
       const { registrarOptInSeAusente } = await import("./whatsapp-optout");
       await registrarOptInSeAusente(db, contatoId, "iniciou conversa no WhatsApp");
+      if (msg.referral) {
+        const { registrarOrigemAnuncioSeAusente } = await import("./whatsapp-origem-anuncio");
+        await registrarOrigemAnuncioSeAusente(db, contatoId, msg.referral, msg.timestamp * 1000);
+      }
     } catch { /* best-effort */ }
   })();
 

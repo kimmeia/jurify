@@ -2406,14 +2406,25 @@ de lá tem o estado conferido no código em 03/09 (bloco "Estado em
    (opt-out ampliado, opt-in em envio frio manual, executarManual
    sanitizado, bot se identifica). Vetores automáticos conferidos em 23/08:
    SmartFlow gate ok (`exigirOptin: !veioDeMensagem`), lembretes WhatsApp
-   nem existem, resumo diário vai só pro dono. Hipótese principal:
-   denúncias atrasadas de envios pré-19/08 e/ou conteúdo de disparos com
-   opt-in que ainda soa anúncio. Plano: 14 dias SEM disparo frio (WhatsApp
-   só reativo/1:1), NÃO clicar "solicitar análise" antes disso; lembrete
-   26/08 atualizado (`trig_01Tg9mU9aGhgVWKbC7ShfuHw`). Aguardando do dono:
-   print do "Ver detalhes" do aviso 2 + Quality Rating no WhatsApp Manager.
-   **03/09: o dono deu o assunto Meta por resolvido — não cobrar print nem
-   Quality Rating de novo; só reabrir se chegar aviso novo.**
+   nem existem, resumo diário vai só pro dono. O dono tinha dado o assunto
+   por resolvido em 03/09; a restrição de 14/09 reabriu — e dessa vez com
+   causa, não hipótese.
+   **CAUSA RAIZ ENCONTRADA em 14/09** (a WABA do Boyadjian virou restrição
+   de 30 dias): o portfólio DO ESCRITÓRIO tinha a BM **banida** do próprio
+   cliente pendurada em Parceiros — ativo novo ligado a negócio punido herda
+   o enforcement. Assinatura do caso: conta restrita + número "Conectado"
+   com qualidade **ALTA** e ZERO mensagem iniciada pela empresa (denúncia
+   derrubaria a qualidade). As hipóteses de agosto (denúncia atrasada,
+   conteúdo de disparo) e a de volume (40 leads/dia gerando denúncia) estão
+   REFUTADAS pelos dados da própria Meta. Vínculo removido e análise
+   solicitada em 14/09 (prazo até 13/12). Detalhes e regra de onboarding em
+   `docs/runbook-whatsapp-meta.md` ("Contaminação por parceiro banido").
+   Bug real corrigido no caminho (`4b0792e`): `registrarSucessoEnvio`
+   limpava `restritoMeta` em QUALQUER 200 da Meta — e conta restrita aceita
+   o POST, matando a entrega depois no webhook `failed`. O disjuntor se
+   desarmava no primeiro inbound e o sistema voltava a enviar contra conta
+   bloqueada; era o que transformava aviso em restrição. Sair da restrição
+   agora exige testConnection (consulta a Graph API) ou liberação manual.
    Aviso 2 é o gatilho descrito pros itens em STAND-BY (tela de evidência
    de conformidade + botão "cliente autorizou WhatsApp") — dono foi
    lembrado em 23/08; segue sem implementar até ele pedir.
