@@ -105,14 +105,16 @@ Três WABAs de clientes (titulares DIFERENTES) foram restritas por "Sending
 spam" entre jul e set/2026, sempre 15-30 dias após conectar, sempre com
 número novo e **sem nenhuma mensagem iniciada pela empresa** — não havia
 cenário SmartFlow ativo nem disparo. Causa encontrada em 14/09: a lista de
-**Parceiros** do portfólio da Devular tinha uma BM **banida**
-(`BM2 - Boyadjian Advogados`) conectada. Ativo novo ligado a um portfólio
-com parceiro banido é lido pela Meta como tentativa de contornar o
-enforcement, e herda a punição.
+**Parceiros do portfólio DO ESCRITÓRIO** (não o da Devular) tinha a BM
+**banida** do próprio cliente (`BM2 - Boyadjian Advogados`) conectada. O
+escritório abriu BM nova depois do ban e pendurou a antiga como parceira;
+ativo novo ligado a negócio banido é lido pela Meta como tentativa de
+contornar o enforcement, e herda a punição.
 
 Regras que saem disso:
-- **Nunca** manter BM banida/restrita na lista de Parceiros. Auditar a lista
-  antes de cada onboarding.
+- **Auditar a lista de Parceiros do BM DO CLIENTE antes de conectar o
+  número** — é lá que mora o vínculo, e é o passo que faltava no onboarding.
+  Nenhuma BM banida/restrita pode estar pendurada ali.
 - Com acesso avançado aprovado (01/09), o cliente conecta pelo Embedded
   Signup a partir do BM dele — **não é mais preciso atribuir a Devular como
   parceira/admin do BM do cliente**. O modelo de parceria do onboarding
