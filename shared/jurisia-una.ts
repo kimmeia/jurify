@@ -56,11 +56,33 @@ export interface ConsultaFeita {
   fontesEscritorio: number;
   /** Processos já decididos no recorte medido. */
   acervo: number;
+  /** Ementas de acórdão que entraram no contexto. Ausente = conversa antiga. */
+  ementas?: number;
+}
+
+/**
+ * Uma ementa que a resposta citou, com o endereço oficial dela.
+ *
+ * O link não é enfeite: é o que separa citação de invenção. A ementa entra na
+ * peça, então o advogado tem que conseguir abrir o acórdão no site do tribunal
+ * antes de assinar.
+ */
+export interface EmentaCitada {
+  identificador: string;
+  orgao: string;
+  data: string;
+  ementa: string;
+  url: string;
 }
 
 export interface ConversaUnaGravada {
   tipo: "una";
   texto: string;
+  /**
+   * Ementas que sustentam o texto. Ausente/vazio = a resposta não citou
+   * nenhuma — conversa antiga não tem o campo, e é assim que se distingue.
+   */
+  jurisprudencia?: EmentaCitada[];
   prova: ProvaGravada | null;
   consulta: ConsultaFeita;
   /** Documentos que existem no caso e não puderam ser lidos, com o motivo. */

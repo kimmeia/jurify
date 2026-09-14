@@ -41,7 +41,7 @@
 
 ```bash
 pnpm check              # typecheck + lint
-pnpm test               # vitest (server/**/*.test.ts) — 6.136 verdes em 13/09/2026 (412 arquivos, ~2min)
+pnpm test               # vitest (server/**/*.test.ts) — 6.103 verdes em 14/09/2026 (412 arquivos, ~2min)
 pnpm test:e2e           # Playwright. Robôs sob demanda: ROBO_ACAO=1 (ação) · ROBO_JORNADA=1 (rotas)
 pnpm vitest run <file>  # roda 1 teste específico
 pnpm dev                # dev server local
@@ -1975,6 +1975,47 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   literal de pé em outro lugar e uma por falta de relógio — a validade do cache
   só morre com `vi.useFakeTimers`). `modulos-contratacao` teve só o `expect` da
   corrente atualizado.
+
+- **Entregue 14/09, jurisprudência de verdade + Base Jurídica e JurisIA num
+  módulo só — "pode fazer" do dono no comparador `comparador-conhecimento-
+  juridico.html` (seção 32 do documento de estado).** Origem: ele perguntou se
+  juntar os dois não faria mais sentido e pediu "uma IA que busca de tempos em
+  tempos todo o material nos sites oficiais".
+  - **O diagnóstico**: o acervo do DataJud não tem UMA LINHA de texto de
+    decisão — classe, vara e movimento, e o desfecho é deduzido do movimento.
+    Por isso a JurisIA media e não citava. Jurisprudência é acórdão publicado,
+    que é público por desenho e mora nos portais dos tribunais.
+  - **Migration 0230**: `jurisia_ementas` (fonte, tribunal, identificador,
+    órgão, relator, data, ementa, URL; UNIQUE por fonte+identificador,
+    **FULLTEXT** na ementa) e `jurisia_fontes_coleta` (estado por fonte).
+    **Sem COLLATE explícito, de propósito**: fixar `unicode_ci` fez o MySQL
+    recusar comparar a sigla do tribunal com a do acervo (general_ci) — mesmo
+    tropeço da 0196. A contagem de ementa por tribunal virou 2ª consulta casada
+    em JS, pra não depender disso nunca mais.
+  - `shared/fontes-oficiais.ts` (a lista declarada, com `material:
+    "ementa" | "metadado"` e cadência), `extrair-ementas.ts` (extração pura de
+    JSON e HTML), `coletor-ementas.ts` (a passada, o estado e a rodada do
+    cron), `busca-ementas.ts` (FULLTEXT booleano).
+  - **Cinco decisões que carregam o resto**: (1) ementa vem ANTES do número na
+    resposta, com a frase que separa os dois; (2) **fonte nasce DESLIGADA** e
+    ligar não coleta na hora — quem coleta é a cadência, e o cron só visita o
+    que foi ligado à mão; (3) **ementa sem URL não entra** (coluna NOT NULL);
+    (4) a busca é por TEXTO, não por semelhança — "capitalização" tem que achar
+    capitalização —, e o tribunal do caso ORDENA em vez de filtrar; (5) o
+    extrator é genérico porque daqui não dá pra ver o corpo real de nenhum
+    portal, e parser escrito às cegas é ficção.
+  - **Nenhuma fonte foi ligada**: depende da sondagem, que só roda em produção
+    e diz quais portais respondem DO SERVIDOR e quais devolvem ementa.
+  - **Credencial de tribunal continua fora**, de propósito: ela só abre o que é
+    do escritório, e varrer em volume com login de advogado arrisca a OAB.
+  - Painel: as duas abas viraram **Conhecimento jurídico** (fontes oficiais +
+    entendimentos por região + a biblioteca + o painel do DataJud numa dobra —
+    **nada foi removido**, e `?aba=base`/`?aba=jurisia` continuam chegando lá).
+  Amarra: `jurisprudencia-de-verdade` (31) — **39 mutações vermelhas**
+  (`scratchpad/mutar-jurisprudencia.py`; 2 sobreviveram na 1ª volta, as duas
+  por fixture fraca: faltava JSON com ementa e sem identificador, e o HTML de
+  duas linhas não tinha container). `admin-layout-novo` e
+  `jurisia-router-contrato` atualizadas pra verdade nova.
 
 ## Fila combinada com o dono (31/08/2026)
 

@@ -1,14 +1,16 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
 import AdminAgentesIA from "./AdminAgentesIA";
-import AdminJurisIa from "./AdminJurisIa";
-import BaseJuridicaTab from "./BaseJuridicaTab";
+import ConhecimentoJuridicoTab from "./ConhecimentoJuridicoTab";
 
-const ABAS_VALIDAS = ["agentes", "base", "jurisia"] as const;
+const ABAS_VALIDAS = ["agentes", "conhecimento"] as const;
 type Aba = (typeof ABAS_VALIDAS)[number];
 
 function abaInicial(): Aba {
   const aba = new URLSearchParams(window.location.search).get("aba");
+  // "base" e "jurisia" viraram uma aba só: link antigo continua chegando no
+  // lugar certo em vez de cair no primeiro item.
+  if (aba === "base" || aba === "jurisia") return "conhecimento";
   return ABAS_VALIDAS.includes(aba as Aba) ? (aba as Aba) : "agentes";
 }
 
@@ -72,8 +74,7 @@ export default function AdminIA() {
       <Tabs value={aba} onValueChange={(v) => setAba(v as Aba)}>
         <TabsList>
           <TabsTrigger value="agentes">🤖 Agentes IA</TabsTrigger>
-          <TabsTrigger value="base">⚖️ Base Jurídica</TabsTrigger>
-          <TabsTrigger value="jurisia">🛰️ JurisIA</TabsTrigger>
+          <TabsTrigger value="conhecimento">⚖️ Conhecimento jurídico</TabsTrigger>
         </TabsList>
 
         <TabsContent value="agentes" className="mt-4">
@@ -89,30 +90,18 @@ export default function AdminIA() {
           />
           <AdminAgentesIA />
         </TabsContent>
-        <TabsContent value="base" className="mt-4">
+        <TabsContent value="conhecimento" className="mt-4">
           <ContextoAba
             icone="⚖️"
-            titulo="A biblioteca do Agente Jurídico"
-            resto="leis e súmulas que ele consulta pra redigir peças. Vale pra todos os escritórios."
+            titulo="Tudo que a JurisIA sabe"
+            resto="o robô busca sozinho nos sites oficiais, guarda a ementa e mede como cada tribunal decide."
             passos={[
-              { rotulo: "Alimentar", desc: "subir decisão ou criar fonte na mão" },
-              { rotulo: "Manter indexada", desc: "o Reindexar quando algo ficar pendente" },
-              { rotulo: "Pronto", desc: "o agente passa a citar a fonte nas peças" },
+              { rotulo: "Buscar", desc: "o robô volta nas fontes ligadas, na frequência de cada uma" },
+              { rotulo: "Guardar", desc: "ementa citável e número que vira estatística" },
+              { rotulo: "Responder", desc: "o advogado pergunta e recebe os dois juntos" },
             ]}
           />
-          <BaseJuridicaTab />
-        </TabsContent>
-        <TabsContent value="jurisia" className="mt-4">
-          <ContextoAba
-            icone="🛰️"
-            titulo="O robô que monta o acervo de jurisprudência"
-            resto="baixa decisões dos tribunais; é o que o add-on JurisIA vende."
-            passos={[
-              { rotulo: "Acompanhar", desc: "os números dizem se o acervo está crescendo" },
-              { rotulo: "Destravar", desc: "ferramentas técnicas, só quando o robô parar" },
-            ]}
-          />
-          <AdminJurisIa />
+          <ConhecimentoJuridicoTab />
         </TabsContent>
       </Tabs>
     </div>

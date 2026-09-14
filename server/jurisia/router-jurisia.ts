@@ -279,6 +279,13 @@ export const jurisiaRouter = router({
     return composicaoDoAcervo();
   }),
 
+  /** Quantas ementas existem pra citar. Público como o acervo: é o mesmo dado. */
+  ementas: protectedProcedure.query(async ({ ctx }) => {
+    await contexto(ctx.user.id);
+    const { contarEmentas } = await import("./busca-ementas");
+    return contarEmentas();
+  }),
+
   renomearPesquisa: protectedProcedure
     .input(z.object({
       conversaId: z.number().int().positive(),
@@ -455,6 +462,7 @@ export const jurisiaRouter = router({
         : {
           tipo: "una",
           texto: r.texto,
+          jurisprudencia: r.jurisprudencia,
           prova: r.prova,
           consulta: r.consulta,
           naoLidos: r.naoLidos,
