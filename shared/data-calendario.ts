@@ -66,6 +66,37 @@ export function diaSemanaCalendario(valor: EntradaDataCalendario): string {
   return d.toLocaleDateString("pt-BR", { weekday: "long", timeZone: "UTC" });
 }
 
+/**
+ * Data digitada à mão, no formato do Brasil.
+ *
+ * `<input type="date">` desenha no idioma do NAVEGADOR: num Chrome em inglês
+ * o campo mostra `09/14/1985` e quem digita "03/04" não sabe se marcou 3 de
+ * abril ou 4 de março. Num sistema jurídico isso é risco, não estética — por
+ * isso data que a pessoa digita vem por campo de texto mascarado.
+ */
+export function mascararDataBR(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 8);
+  if (d.length > 4) return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  if (d.length > 2) return `${d.slice(0, 2)}/${d.slice(2)}`;
+  return d;
+}
+
+/** "12/03/1985" → "1985-03-12". Vazio quando o dia não existe (31/02). */
+export function brParaIsoData(br: string): string {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(br);
+  if (!m) return "";
+  const [, dd, mm, aaaa] = m;
+  const d = new Date(Date.UTC(Number(aaaa), Number(mm) - 1, Number(dd)));
+  return d.getUTCDate() === Number(dd) && d.getUTCMonth() + 1 === Number(mm)
+    ? `${aaaa}-${mm}-${dd}`
+    : "";
+}
+
+/** "1985-03-12" → "12/03/1985". */
+export function isoParaBrData(iso: string): string {
+  return iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "";
+}
+
 /** "Hoje" pelo relógio LOCAL, como `YYYY-MM-DD`. `agora` é injetável pra teste. */
 export function dataLocalHoje(agora: Date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");

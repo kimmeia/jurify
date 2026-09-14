@@ -36,7 +36,14 @@ import {
   Download, Filter, DollarSign, Star, Calendar, Send, Siren, CheckCircle2,
   Scale, Radar, Copy, Link2, MoreVertical, X, RotateCcw, Trello, Pencil,
   MapPin, AlertTriangle, Briefcase, UserPlus, Ban, Lock, Check, ChevronDown, ClipboardCheck,
+  Cake,
 } from "lucide-react";
+import { dataCalendarioISO, dataLocalHoje } from "@shared/data-calendario";
+import {
+  estaProximo, mensagemParabens, proximoAniversario, rotuloAniversario,
+  FILTRO_ANIVERSARIO_ROTULO, type FiltroAniversario,
+} from "@shared/aniversario";
+import { telefoneParaWaMe } from "@shared/telefone";
 import { CancelarContratoDialog, type AlvoCancelamento } from "./atendimento/cancelar-contrato-dialog";
 import { descricaoCancelamento } from "@shared/cancelamento-contrato";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -398,6 +405,13 @@ export default function Clientes() {
     // Dashboard linka pra `/clientes?aguardandoDocs=1` quando clica
     // no card "Aguardando documentação" — abre filtrado direto.
     const params = new URLSearchParams(window.location.search);
+    // O lembrete de aniversário abre `/clientes?aniversario=hoje`. Sem ler
+    // isto aqui, tocar a notificação no celular cairia na lista inteira e o
+    // aviso estaria prometendo o que a tela não faz.
+    const aniv = params.get("aniversario") ?? "";
+    if (aniv in FILTRO_ANIVERSARIO_ROTULO) {
+      return { ...FILTROS_VAZIOS, aniversario: aniv as FiltroAniversario };
+    }
     return params.get("aguardandoDocs") === "1"
       ? { ...FILTROS_VAZIOS, marcas: ["docs"] }
       : FILTROS_VAZIOS;
@@ -526,6 +540,7 @@ export default function Clientes() {
     cadastroDe: filtros.cadastroDe || undefined,
     cadastroAte: filtros.cadastroAte || undefined,
     conferencia: conferencia ?? undefined,
+    aniversario: filtros.aniversario || undefined,
   });
 
   // Nomes pro filtro "Responsável" — a mesma procedure dos outros filtros do
@@ -1082,10 +1097,13 @@ export type FiltrosClientes = {
   marcas: Array<"vip" | "docs" | "semResp" | "inativo" | "suspenso" | "encerrado">;
   cadastroDe: string;
   cadastroAte: string;
+  /** "" = sem filtro de aniversário. */
+  aniversario: FiltroAniversario | "";
 };
 
 export const FILTROS_VAZIOS: FiltrosClientes = {
   responsaveis: [], cobranca: [], origens: [], marcas: [], cadastroDe: "", cadastroAte: "",
+  aniversario: "",
 };
 
 const OPCOES_COBRANCA: Array<[FiltrosClientes["cobranca"][number], string]> = [
@@ -1139,7 +1157,8 @@ function mascararData(v: string) {
 function contarFiltros(f: FiltrosClientes) {
   return (f.responsaveis.length ? 1 : 0) + (f.cobranca.length ? 1 : 0)
     + (f.origens.length ? 1 : 0) + (f.marcas.length ? 1 : 0)
-    + (f.cadastroDe || f.cadastroAte ? 1 : 0);
+    + (f.cadastroDe || f.cadastroAte ? 1 : 0)
+    + (f.aniversario ? 1 : 0);
 }
 
 function BotaoFiltro({
@@ -1360,6 +1379,28 @@ function FiltroClientes({
       </BotaoFiltro>
 
       <BotaoFiltro
+        rotulo="Aniversário"
+        valor={filtros.aniversario ? FILTRO_ANIVERSARIO_ROTULO[filtros.aniversario] : null}
+        aberto={aberto === "aniversario"}
+        onAberto={(v) => setAberto(v ? "aniversario" : null)}
+      >
+        {(Object.keys(FILTRO_ANIVERSARIO_ROTULO) as FiltroAniversario[]).map((id) => (
+          <OpcaoMarcavel
+            key={id}
+            marcado={filtros.aniversario === id}
+            onToggle={() =>
+              onFiltros({ ...filtros, aniversario: filtros.aniversario === id ? "" : id })
+            }
+          >
+            {FILTRO_ANIVERSARIO_ROTULO[id]}
+          </OpcaoMarcavel>
+        ))}
+        <p className="border-t px-2 pb-1 pt-2 text-apoio leading-snug text-muted-foreground">
+          Só entra quem tem a data de nascimento preenchida.
+        </p>
+      </BotaoFiltro>
+
+      <BotaoFiltro
         rotulo="Mais"
         valor={filtros.marcas.length ? String(filtros.marcas.length) : null}
         aberto={aberto === "marcas"}
@@ -1384,6 +1425,44 @@ function SeloHero({ children }: { children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-[3px] border border-white/25 bg-white/15 px-2 py-0.5 text-apoio font-semibold">
       {children}
+    </span>
+  );
+}
+
+/**
+ * O aniversário na linha de contato da ficha.
+ *
+ * Sem data gravada não existe selo nenhum — a linha fica como sempre foi.
+ * Perto do dia o selo muda de cor e ganha o atalho dos parabéns, que abre o
+ * WhatsApp de quem clicou com o texto pronto pra editar (`wa.me`), e não
+ * dispara nada pela plataforma.
+ */
+function SeloAniversarioHero({ cliente }: { cliente: any }) {
+  const aniv = proximoAniversario(
+    dataCalendarioISO(cliente?.dataNascimento),
+    dataLocalHoje(),
+  );
+  if (!aniv) return null;
+  const perto = estaProximo(aniv);
+  const tel = cliente?.telefone ? telefoneParaWaMe(cliente.telefone) : "";
+  return (
+    <span
+      className={`flex items-center gap-1.5 rounded-[3px] px-1.5 py-0.5 ${
+        perto ? "bg-white/20 font-semibold text-hero-fg" : ""
+      }`}
+    >
+      <Cake className="h-3.5 w-3.5" />
+      {rotuloAniversario(aniv)}
+      {perto && tel && (
+        <a
+          href={`https://wa.me/${tel}?text=${encodeURIComponent(mensagemParabens(cliente.nome))}`}
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-2 hover:no-underline"
+        >
+          mandar parabéns
+        </a>
+      )}
     </span>
   );
 }
@@ -3663,6 +3742,7 @@ function ClienteDetalhe({
                 {cliente.cpfCnpj && (
                   <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5" />{cliente.cpfCnpj}</span>
                 )}
+                <SeloAniversarioHero cliente={cliente} />
                 {(cliente as any).cidade && (
                   <span className="flex items-center gap-1.5">
                     <MapPin className="h-3.5 w-3.5" />

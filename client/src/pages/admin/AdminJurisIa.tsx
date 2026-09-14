@@ -28,6 +28,12 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { naturezaDoGrau } from "@shared/jurisia-grau";
+import {
+  ORDEM_DO_TOM,
+  recadoDaSonda,
+  resumoDaSondagem,
+  type TomDoRecado,
+} from "@shared/sondagem-em-portugues";
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   fila: { label: "na fila", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
@@ -44,6 +50,19 @@ const VEREDITO: Record<string, { rotulo: string; cls: string }> = {
   bloqueado: { rotulo: "bloqueado", cls: "text-danger-fg bg-danger/10 border-danger/30" },
   vazio: { rotulo: "vazio", cls: "text-muted-foreground bg-muted-foreground/10 border-border/20" },
   erro: { rotulo: "erro", cls: "text-danger-fg bg-danger/10 border-danger/30" },
+};
+
+/**
+ * O recado em cor e uma palavra.
+ *
+ * `VEREDITO` acima continua existindo e continua na tela — ele é o detalhe
+ * técnico, que desceu pra coluna da direita. Este mapa é o que o dono lê.
+ */
+const TOM: Record<TomDoRecado, { rotulo: string; cls: string }> = {
+  funciona: { rotulo: "serve", cls: "text-success-fg bg-success/10 border-success/30" },
+  conserto: { rotulo: "conserto nosso", cls: "text-warning-fg bg-warning/10 border-warning/30" },
+  quase: { rotulo: "responde, sem texto", cls: "text-info-fg bg-info/10 border-info/30" },
+  fechado: { rotulo: "porta fechada", cls: "text-danger-fg bg-danger/10 border-danger/30" },
 };
 
 const STATUS_TAREFA: Record<string, { label: string; cls: string }> = {
@@ -359,12 +378,13 @@ function PainelSondagem() {
 
   const sondar = trpc.admin.sondarFontesJuris.useMutation({
     onSuccess: (s) => {
-      const json = s.resultados.filter((r) => r.veredito === "responde-json").length;
-      toast.success(`${json} de ${s.resultados.length} responderam JSON`, {
-        description: s.comEmenta.length
-          ? `Com ementa aparente: ${s.comEmenta.join(", ")}`
-          : "Nenhuma fonte trouxe ementa no payload.",
-      });
+      const servem = s.resultados.filter((r) => recadoDaSonda(r).tom === "funciona").length;
+      toast.success(
+        servem === 1
+          ? "1 fonte pode ser ligada agora"
+          : `${servem} de ${s.resultados.length} fontes podem ser ligadas agora`,
+        { description: resumoDaSondagem(s.resultados).slice(1).join(" ") || undefined },
+      );
     },
     onError: (e) => toast.error("Sondagem falhou", { description: e.message }),
   });
@@ -375,10 +395,12 @@ function PainelSondagem() {
     <Card>
       <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
         <div>
-          <CardTitle className="text-base">Sondagem de fontes públicas</CardTitle>
+          <CardTitle className="text-base">Quais fontes o robô consegue ler</CardTitle>
           <CardDescription>
-            Bate uma vez em cada fonte (STF, STJ, DJEN, LexML, DataJud) e conta o que voltou.
-            Roda daqui, do servidor — que é a rede que o coletor vai usar.
+            Bate uma vez em cada site oficial e diz, em português, se dá pra ligar a coleta. Roda
+            daqui de dentro do servidor de propósito: a informação é pública, mas isso não
+            garante que o NOSSO servidor consegue entrar — o STJ, por exemplo, publica tudo
+            aberto e barra a nossa faixa de internet.
           </CardDescription>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -422,74 +444,76 @@ function PainelSondagem() {
               </p>
             )}
 
+            {/* O resumo antes da tabela: é o que responde "e agora?" sem ler
+                linha por linha. */}
+            <ul className="space-y-1 rounded-lg border bg-muted/30 px-3 py-2">
+              {resumoDaSondagem(s.resultados).map((frase) => (
+                <li key={frase} className="text-[12.5px]">
+                  {frase}
+                </li>
+              ))}
+            </ul>
+
             <Table>
               <TableHeader>
                 <TableRow>
+                  {/* Duas colunas, não quatro: este cartão mora numa grade de
+                      dois, então a largura dele é METADE da tela — coluna fixa
+                      aqui empurra o texto pra fora do cartão. */}
                   <TableHead>Fonte</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                  <TableHead className="text-right">Tempo</TableHead>
-                  <TableHead>Resposta</TableHead>
-                  <TableHead>Ementa</TableHead>
-                  <TableHead>Diagnóstico</TableHead>
+                  <TableHead>O que aconteceu · Detalhe técnico</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {s.resultados.map((r, i) => {
+                {/* Ordenado pelo recado, não pela ordem em que foram batidas: o
+                    que dá pra ligar hoje tem que estar em cima. */}
+                {[...s.resultados]
+                  .map((r, i) => ({ r, i }))
+                  .sort((a, b) => ORDEM_DO_TOM[recadoDaSonda(a.r).tom] - ORDEM_DO_TOM[recadoDaSonda(b.r).tom])
+                  .map(({ r, i }) => {
                   const v = VEREDITO[r.veredito] ?? VEREDITO.erro;
+                  const recado = recadoDaSonda(r);
+                  const tom = TOM[recado.tom];
                   return (
                     <Fragment key={i}>
                       <TableRow
                         className="cursor-pointer"
                         onClick={() => setAberto(aberto === i ? null : i)}
                       >
-                        <TableCell>
+                        {/* `whitespace-normal`: a célula da tabela nasce
+                            `nowrap`, e o nome da fonte sozinho empurrava a
+                            coluna do recado pra fora do cartão. */}
+                        <TableCell className="w-[200px] max-w-[200px] whitespace-normal align-top">
                           <p className="text-[13px] font-semibold">
                             {r.fonte} · {r.nome}
                           </p>
                           <p className="text-[11px] text-muted-foreground">{r.pergunta}</p>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {r.status ?? "—"}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">
-                          {r.ms}ms
-                        </TableCell>
-                        <TableCell>
+                        <TableCell className="min-w-0 whitespace-normal align-top">
                           <span
-                            className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-semibold ${v.cls}`}
+                            className={`mr-1.5 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${tom.cls}`}
                           >
-                            {v.rotulo}
+                            {tom.rotulo}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          {r.temEmenta === null ? (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          ) : r.temEmenta ? (
-                            <span className="text-xs font-semibold text-success-fg">sim</span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">não</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {r.retryNavegador === "passou" && (
-                            <span className="text-xs font-semibold text-warning-fg">
-                              é o cabeçalho
+                          <span className="text-[12.5px]">{recado.frase}</span>
+                          {recado.acao && (
+                            <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                              {recado.acao}
                             </span>
                           )}
-                          {r.retryNavegador === "persistiu" && (
-                            <span className="text-xs font-semibold text-danger-fg">é o IP</span>
-                          )}
-                          {r.causa && (
-                            <span className="text-xs font-semibold text-danger-fg">{r.causa}</span>
-                          )}
-                          {!r.retryNavegador && !r.causa && (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
+                          {/* O número técnico continua na tela — embaixo do
+                              recado, que é onde ele serve de prova e não de
+                              obstáculo. */}
+                          <span className="mt-1 block text-[11px] tabular-nums text-muted-foreground/80">
+                            {r.status ?? "—"} · {r.ms}ms · {v.rotulo}
+                            {r.causa ? ` · ${r.causa}` : ""}
+                            {r.retryNavegador ? ` · UA ${r.retryNavegador}` : ""}
+                          </span>
                         </TableCell>
                       </TableRow>
                       {aberto === i && (
                         <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/40">
+                          <TableCell colSpan={2} className="bg-muted/40">
                             {r.erro && (
                               <p className="mb-2 text-xs text-danger-fg">erro: {r.erro}</p>
                             )}
@@ -559,8 +583,8 @@ function PainelSondagem() {
             </Table>
 
             <p className="text-[11px] text-muted-foreground">
-              Clique numa linha pra ver o começo do corpo cru — é dele que sai o formato real
-              dos campos. Copie o das que responderam JSON.
+              Clique numa linha pra ver por dentro (o que o site respondeu, cru). Só é preciso
+              olhar isso quando o recado pedir conserto do nosso lado.
             </p>
           </div>
         )}

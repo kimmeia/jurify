@@ -64,7 +64,12 @@ import {
   Sparkles,
   TriangleAlert,
 } from "lucide-react";
-import { ehConversaUna, type ConversaUnaGravada, type ProvaGravada } from "@shared/jurisia-una";
+import {
+  ehConversaUna,
+  rotuloCitacoes,
+  type ConversaUnaGravada,
+  type ProvaGravada,
+} from "@shared/jurisia-una";
 import type { ComposicaoAcervo } from "@shared/jurisia-acervo";
 import type { Comparacao } from "@shared/jurisia-estrategia";
 import type { ComposicaoNatureza } from "@shared/jurisia-grau";
@@ -518,7 +523,7 @@ function ChipsConsulta({ c }: { c: ConversaUnaGravada["consulta"] }) {
     chips.push({
       chave: "ementas",
       icone: Library,
-      texto: `citou ${c.ementas} ementa${(c.ementas ?? 0) > 1 ? "s" : ""} de acórdão`,
+      texto: `citou ${c.ementas} texto${(c.ementas ?? 0) > 1 ? "s" : ""} oficial${(c.ementas ?? 0) > 1 ? "is" : ""} (súmula ou acórdão)`,
       realce: true,
     });
   }
@@ -683,8 +688,7 @@ function RespostaUna({
           <div className="mt-2 rounded-xl border border-info/30 bg-info-bg/30 p-3">
             <p className="flex items-center gap-1.5 text-[9.5px] font-extrabold uppercase tracking-[0.06em] text-info-fg">
               <Library className="h-3 w-3" />
-              O que os tribunais decidiram · {r.jurisprudencia.length}{" "}
-              {r.jurisprudencia.length === 1 ? "ementa" : "ementas"}
+              O que sustenta a resposta · {rotuloCitacoes(r.jurisprudencia)}
             </p>
             <div className="mt-2 space-y-2">
               {r.jurisprudencia.map((e) => (
@@ -711,8 +715,9 @@ function RespostaUna({
               ))}
             </div>
             <p className="mt-2 text-[10.5px] text-muted-foreground">
-              Ementa é acórdão publicado — entra na peça. O painel abaixo é estatística: diz como
-              costuma terminar, não fundamenta.
+              Súmula é entendimento firmado do tribunal e ementa é acórdão publicado — as duas
+              entram na peça. O painel abaixo é estatística: diz como costuma terminar, não
+              fundamenta.
             </p>
           </div>
         )}
@@ -859,8 +864,8 @@ function PainelContexto({
         </div>
         <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
           {ementas && ementas.total > 0
-            ? `Ementas de acórdão de ${ementas.tribunais} ${ementas.tribunais > 1 ? "tribunais" : "tribunal"}. É o que a resposta cita, com link pro site oficial.`
-            : "Nenhuma ementa coletada ainda — sem ela a resposta mede, mas não cita."}
+            ? `Súmulas e ementas de ${ementas.tribunais} ${ementas.tribunais > 1 ? "tribunais" : "tribunal"}. É o que a resposta cita, com link pro site oficial.`
+            : "Nada coletado ainda — sem súmula e sem ementa a resposta mede, mas não cita."}
         </p>
       </div>
 

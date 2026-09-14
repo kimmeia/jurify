@@ -54,6 +54,8 @@ import {
   type LadoCliente,
 } from "./resumir-movimentacao";
 import { persistirAnalise } from "./aplicar-analise";
+import { classificarGrupo } from "./router-movimentacoes";
+import { donoQueQuerTudo } from "../_core/preferencias-notificacao";
 
 /**
  * Idade máxima (em anos) que um CNJ pode ter pra ser considerado "novo"
@@ -498,6 +500,8 @@ export async function pollarUmMonitoramentoMovs(
         mov: typeof resultado.movimentacoes[number];
         eventoId: number;
         resumoIa?: string | null;
+        /** Decisão · exige providência · rotina — decide se o celular toca. */
+        classe?: string | null;
       }> = [];
       for (const mov of resultado.movimentacoes) {
         const { dedup, jaConhecida } = await resolverDedupMovimentacao(
@@ -624,6 +628,14 @@ export async function pollarUmMonitoramentoMovs(
               { escritorioId: mon.escritorioId, ladoCliente, nomeCliente: mon.apelido ?? undefined },
             );
             m.resumoIa = analise?.titulo ?? null;
+            // A MESMA classificação que a Central usa pra separar o feed
+            // decide agora se o celular toca: "exige providência" na tela e no
+            // aviso têm que querer dizer a mesma coisa.
+            m.classe = classificarGrupo({
+              relevancia: analise?.relevancia ?? null,
+              temPrazoPendente: false,
+              analise: analise ?? null,
+            });
             if (!analise) return;
             await persistirAnalise({
               eventoId: m.eventoId,
@@ -648,16 +660,22 @@ export async function pollarUmMonitoramentoMovs(
         }
 
         const resumoUltima = movsParaNotif[0]?.resumoIa;
-        emitirNotificacao(mon.criadoPor, {
-          tipo: "movimentacao_processo",
+        const avisoMov = {
+          tipo: "movimentacao_processo" as const,
           titulo: "Nova movimentação",
           mensagem: `${mon.apelido ?? mon.searchKey}: ${resumoUltima ?? ultimaMov.texto.slice(0, 100)}`,
           dados: {
             monitoramentoId: mon.id,
             cnj: mon.searchKey,
             totalNovas: movsNovas.length,
+            classe: movsParaNotif[0]?.classe ?? null,
           },
-        });
+        };
+        emitirNotificacao(mon.criadoPor, avisoMov);
+        // O aviso sempre foi só pra quem cadastrou o vigia. O dono que ligou
+        // "quero o que é dos meus colaboradores" recebe a mesma coisa.
+        const donoTambem = await donoQueQuerTudo(mon.escritorioId, mon.criadoPor);
+        if (donoTambem) emitirNotificacao(donoTambem, avisoMov);
 
         detectadasMon = movsNovas.length;
       } else {
@@ -1181,15 +1199,18 @@ export async function pollarUmMonitoramentoNovasAcoes(
           /* best-effort */
         }
 
-        emitirNotificacao(mon.criadoPor, {
-          tipo: "nova_acao",
+        const avisoAcao = {
+          tipo: "nova_acao" as const,
           titulo: "Nova ação detectada",
           mensagem: `${cnjsRelevantes.length} processo(s) novo(s) contra ${mon.apelido ?? mon.searchKey}`,
           dados: {
             monitoramentoId: mon.id,
             cnjsNovos: cnjsRelevantes,
           },
-        });
+        };
+        emitirNotificacao(mon.criadoPor, avisoAcao);
+        const donoDaAcao = await donoQueQuerTudo(mon.escritorioId, mon.criadoPor);
+        if (donoDaAcao) emitirNotificacao(donoDaAcao, avisoAcao);
       }
 
       return {

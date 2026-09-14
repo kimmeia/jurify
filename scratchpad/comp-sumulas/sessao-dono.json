@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "app_session_id",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJvcGVuSWQiOiJlbWFpbC1aRzl1YnkxemJXOXJaVUJxZFhKcFpHWnNiM2N1WTI5dExtSnkiLCJhcHBJZCI6Imp1cmlmeSIsIm5hbWUiOiJEb25vIFNtb2tlIiwiZXhwIjoxNzg5OTU0NzAwfQ.tWr3xw6ngvq69cQH-2yE214FpiUuukbzE7v_08cKorM",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1789954700.759743,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "sidebar-width",
+          "value": "260"
+        }
+      ]
+    }
+  ]
+}
