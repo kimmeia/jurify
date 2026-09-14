@@ -3694,3 +3694,117 @@ Baseline na ponta do merge: **6.103 testes verdes em 412 arquivos**, `pnpm
 check` limpo e `pnpm vite build` passando. O número CAIU em relação aos 6.167
 medidos antes de trazer `develop` porque de lá veio a remoção do módulo de
 ajuda, que levou as amarras dele junto.
+
+## 33. As marcas dos cards passaram a ser as REAIS (13/09)
+
+Pedido do dono, com todas as letras: *"esse card conexão simplificada acho que
+pode remover pq ja podemos conectar com 1 clique. Tambem quero que use as logos
+reais nos cards (whatsapp, facebool, instagram) em canais e app externos. nada
+de parecido, quero icones reais."*
+
+### 32.1 As marcas
+
+`client/src/components/logos-marcas.tsx` (padrão do `IconeTwilio`, que já
+existia): SVG embutido, traçado do Simple Icons (dados em CC0), cor da MARCA e
+não do tema — `currentColor` faria um WhatsApp roxo no dia em que a paleta
+mudar. Cinco: WhatsApp (#25D366), Instagram (degradê oficial — chapado ele
+deixa de ser a marca que se reconhece), Messenger (#0866FF), OpenAI (preta, com
+`dark:fill-white` pra não sumir no tema escuro) e Claude (#D97757).
+
+Saíram da tela os emojis 💬 📸 💙 🤖 🦾.
+
+**O ladrilho mudou junto, e precisava:** ele era um degradê CHEIO da cor do
+canal, desenhado para um emoji branco por cima. Marca verde sobre ladrilho
+verde some. Agora é claro, com borda; o degradê sobrou só no cartão
+"+ Adicionar outro", que não tem marca.
+
+**Uma escolha dita na cara:** o card é "Facebook Messenger", então leva a marca
+do **Messenger** — o "f" azul é o Facebook, que é outro produto.
+
+**O Asaas entrou na segunda rodada** (*"só o ícone do asaas que não tem nada a
+ver"*, e ele tinha razão: era um saco de dinheiro). A marca não está no Simple
+Icons e o proxy do ambiente bloqueia o site deles, mas o registro do npm passa
+— o traçado veio do pacote `@asaasbr/n8n-nodes-asaas`, o nó de integração com a
+Asaas, **copiado do arquivo, não redesenhado**. É a única das seis que é um
+QUADRADO (azul #0030B9 com o desenho vazado em branco): é o ícone de aplicativo
+deles, e é assim que a Asaas se apresenta — por isso entra no card com canto
+arredondado, e não como glifo solto.
+
+Lição que fica pro ambiente: quando um CDN de ícone estiver bloqueado, o
+**registro do npm não está** (`registry.npmjs.org` é exceção no proxy). Marca de
+serviço costuma viajar dentro do pacote de integração dele.
+
+### 32.2 O banner saiu — e o que ele carregava, não
+
+O banner azul "conexão simplificada" saiu: os cards já conectam com 1 clique e
+o texto repetia isso.
+
+**O cuidado que valeu:** dentro dele morava a ÚNICA porta do **cadastro manual
+do WhatsApp Cloud** — o caminho de quando o OAuth não roda (App Review
+pendente, Tech Provider não aprovado, BM dona do app). Tirar o banner inteiro
+levaria junto uma função que ninguém mandou remover. Ela virou uma linha
+discreta embaixo dos cards, com o mesmo clique.
+
+O aviso "Instagram e Messenger: em breve", que o banner também dava, continua
+na descrição de cada card, no pill ao lado do nome e no botão travado — o teste
+`instagram-em-breve` foi ajustado para conferir esses três em vez do banner.
+
+Amarra: `logos-reais-nas-integracoes.test.ts` (7 testes) — 10 mutações vermelhas
+em `scratchpad/mutar-logos-reais.py`.
+
+## 34. Cartões do topo fora dos painéis; busca na linha das abas (13/09)
+
+Pedido do dono: *"vamos remover esses cards superiores dos dashboards
+comercial, operacional e financeiro. Opção de buscar vamos alinhar junto do
+menu com as quatro opções na extremidade da direita."* Aprovado com *"pode
+fazer"*; comparador `mockup-paineis-cards-e-busca.html`.
+
+### 34.1 A faixa de cartões saiu dos três painéis
+
+`<FaixaAcoes>` com os `<AcaoCard>` saiu de `DashboardComercial`,
+`DashboardOperacional` e `DashboardFinanceiro` (o `DashboardGeral` já tinha
+perdido a dele em 12/09). **Nenhum dado foi apagado** — os cartões eram atalhos:
+
+| o cartão dizia | onde o número continua |
+|---|---|
+| clientes com cobrança vencida | Financeiro → Clientes, chip "inadimplentes"; e "Vencido no período", em dinheiro, no bloco principal do próprio painel |
+| cobranças vencidas no período | Financeiro |
+| abaixo da meta · sem meta | ranking do painel Comercial e Configurações → Equipe |
+| contratos fechados sem pagamento | Financeiro |
+| tarefas e compromissos atrasados | Tarefas e Agenda, que já mostram o atraso na lista |
+
+**Os componentes `FaixaAcoes` e `AcaoCard` continuam em `dashboards/common.tsx`,
+agora sem nenhum usuário.** Apagá-los não foi autorizado; a amarra guarda a
+decisão (nenhum painel volta a montá-los), não o código.
+
+O que se perdeu de fato, e está dito no comparador: o aviso passivo. "341
+clientes vencidos" aparecia sem abrir o Financeiro. A recomendação registrada
+é NÃO trazer os cartões de volta e sim usar o sino de notificações, que já
+existe e é o lugar certo pra "alguém precisa de você".
+
+### 34.2 A busca subiu pra régua de abas
+
+`BuscaDoTopo` deixou de ser privada de `common.tsx` e passou a ser montada pelo
+`DashboardComTabs`, na ponta direita da fileira das abas. Três detalhes:
+
+- **A linha agora é da FILEIRA**, não da tira de abas: o `border-b` saiu do
+  invólucro das abas e foi pro `div` que contém abas + busca. É a resposta ao
+  que o dono estranhou na entrega anterior ("essa linha só dura do tamanho do
+  menu") — na época a medida mostrou que a linha tinha a largura do conteúdo,
+  mas ela de fato parava antes da borda direita do bloco.
+- **`BuscaJaNoTopo`** (contexto, default `false`) é o que evita DUAS buscas:
+  `PainelTopo` só desenha a sua quando ninguém desenhou acima. Quem não tem
+  abas — colaborador de um setor só, variante processual — continua com a busca
+  no título do painel, como antes.
+- **No celular** a busca leva `w-full sm:w-auto` e cai pra linha de baixo, em
+  vez de espremer as quatro abas em 190px. `max-w-full overflow-x-auto` seguem
+  no invólucro das abas.
+
+Amarra: 2 testes novos em `telas-cabem-no-celular.test.ts` — 8 mutações
+vermelhas em `scratchpad/mutar-busca-nas-abas.py`.
+
+### 34.3 Anotado e NÃO corrigido
+
+No celular o painel Financeiro rola **8px** de lado (398px num aparelho de 390).
+Medido nas duas versões, antes e depois: **não veio desta mudança**. É o bloco
+do gráfico.

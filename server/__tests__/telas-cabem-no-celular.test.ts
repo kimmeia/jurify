@@ -96,6 +96,50 @@ describe("as telas cabem num celular de 390px", () => {
     expect(proc.slice(i, i + 120)).toContain("lg:col-span-3");
   });
 
+  it("Dashboard: a busca fica na LINHA das abas, na ponta direita, e a linha atravessa a fileira", () => {
+    // Pedido do dono (13/09): "opção de buscar vamos alinhar junto do menu com
+    // as quatro opções na extremidade da direita". Três coisas seguram isso.
+    const src = tela("Dashboard.tsx");
+    const i = src.indexOf("<TabsList");
+    const j = src.indexOf("<BuscaDoTopo", i);
+    expect(j, "a busca saiu da linha das abas").toBeGreaterThan(i);
+
+    // 1. a fileira é quem leva o `border-b` — antes a linha terminava onde as
+    //    abas terminavam, e o dono reclamou disso.
+    const fileira = src.slice(0, i).match(/<div className="(flex flex-wrap[^"]*)"[^>]*>\s*(?:\{\/\*[\s\S]*?\*\/\}\s*)?<div className="[^"]*"[^>]*>\s*$/);
+    expect(fileira, "fileira das abas não encontrada").toBeTruthy();
+    expect(fileira![1], "a linha voltou a ser só da tira de abas").toContain("border-b");
+
+    // 2. no celular a busca ocupa a linha inteira em vez de espremer as abas.
+    const busca = src.slice(j, src.indexOf("/>", j));
+    expect(busca).toContain("w-full sm:w-auto");
+
+    // 3. quem está DENTRO das abas não desenha a própria busca — senão o dono
+    //    veria duas, uma na régua e outra no título do painel.
+    expect(src).toContain("<BuscaJaNoTopo.Provider value>");
+    const comum = readFileSync(
+      join(__dirname, "..", "..", "client", "src", "pages", "dashboards", "common.tsx"),
+      "utf8",
+    );
+    expect(comum).toContain("const buscaLaEmCima = useContext(BuscaJaNoTopo);");
+    expect(comum).toContain("{!buscaLaEmCima && <BuscaDoTopo />}");
+  });
+
+  it("Dashboard: os cartões de ação saíram dos três painéis de setor", () => {
+    // "vamos remover esses cards superiores dos dashboards comercial,
+    // operacional e financeiro". Os componentes `FaixaAcoes`/`AcaoCard`
+    // continuam em `common.tsx` — apagá-los não foi autorizado —, mas nenhum
+    // painel pode voltar a montá-los sem ele pedir.
+    for (const arq of ["DashboardComercial", "DashboardOperacional", "DashboardFinanceiro", "DashboardGeral"]) {
+      const src = readFileSync(
+        join(__dirname, "..", "..", "client", "src", "pages", "dashboards", `${arq}.tsx`),
+        "utf8",
+      );
+      expect(src, `${arq}: a faixa de cartões voltou`).not.toContain("<FaixaAcoes");
+      expect(src, `${arq}: cartão de ação voltou`).not.toContain("<AcaoCard");
+    }
+  });
+
   it("Financeiro: abas rolam e as duas tabelas rolam dentro da moldura", () => {
     const src = tela("Financeiro.tsx");
     // A régua principal da tela (7 abas). A outra TabsList do arquivo é a

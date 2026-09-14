@@ -91,11 +91,12 @@ describe("os textos avisam 'em breve' sem apagar o Instagram", () => {
     expect(fonte).toMatch(/Instagram <span[^>]*bg-warning-bg[^>]*>[^<]*<i[^>]*bg-warning[^>]*\/> em breve<\/span>/);
   });
 
-  it("aba Canais: banner, descrição dos cards e botão 'Em breve'", () => {
+  it("aba Canais: descrição dos cards e botão 'Em breve'", () => {
     const fonte = ler(ARQUIVOS.configuracoes).replace(/\s+/g, " ");
-    expect(fonte).toContain(
-      "O WhatsApp se conecta com 1 clique, sem copiar tokens ou IDs — basta autorizar pelo Facebook Login. Instagram e Messenger: em breve.",
-    );
+    // O banner azul que também dizia "Instagram e Messenger: em breve" saiu a
+    // pedido do dono (13/09). O aviso NÃO se perdeu: ele continua na descrição
+    // de cada card, no pill ao lado do nome e no botão travado — os três
+    // conferidos logo abaixo, que é o que de fato o usuário lê.
     expect(fonte).not.toContain("WhatsApp, Instagram e Messenger se conectam com 1 clique");
     const descricao =
       "Ainda não recebe nem envia mensagens. Quando estiver pronto, você conecta com 1 clique pelo Facebook Login.";
