@@ -835,6 +835,16 @@ export const contatos = mysqlTable("contatos", {
     "uniao_estavel",
   ]),
   nacionalidade: varchar("nacionalidadeContato", { length: 50 }),
+  /**
+   * Data de nascimento. Opcional em toda tela — NULL quer dizer "não sei".
+   * Coluna própria (e não campo personalizado) porque precisa ser PROCURADA:
+   * é ela que responde "quem faz aniversário hoje".
+   */
+  // `mode: "string"` de propósito: o valor entra e sai como "YYYY-MM-DD", o
+  // mesmo de um `<input type="date">`. Virar Date faria o dia passear de fuso
+  // — 12/03 vira 11/03 depois das 21h, que é o defeito corrigido nas outras
+  // datas de calendário do sistema.
+  dataNascimento: date("dataNascimentoContato", { mode: "string" }),
   /** Endereço estruturado. CEP no formato "12345-678" (com hífen). */
   cep: varchar("cepContato", { length: 9 }),
   logradouro: varchar("logradouroContato", { length: 200 }),

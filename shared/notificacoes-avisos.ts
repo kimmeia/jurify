@@ -34,7 +34,7 @@ export interface Aviso {
   quemVe: QuemVe;
 }
 
-export type GrupoDeAviso = "processos" | "atendimento" | "dinheiro" | "documentos" | "saude";
+export type GrupoDeAviso = "processos" | "atendimento" | "clientes" | "dinheiro" | "documentos" | "saude";
 
 export const GRUPOS: Array<{ id: GrupoDeAviso; titulo: string; descricao: string; quemVe: QuemVe }> = [
   {
@@ -48,6 +48,12 @@ export const GRUPOS: Array<{ id: GrupoDeAviso; titulo: string; descricao: string
     id: "atendimento",
     titulo: "Atendimento",
     descricao: "Antes desta tela, o celular do dono tocava a cada mensagem de qualquer conversa.",
+    quemVe: "todos",
+  },
+  {
+    id: "clientes",
+    titulo: "Clientes",
+    descricao: "Lembretes do relacionamento — o que não vem de processo nem de cobrança.",
     quemVe: "todos",
   },
   {
@@ -143,6 +149,17 @@ export const AVISOS: readonly Aviso[] = [
     titulo: "Cliente esperando resposta há mais de 15 minutos",
     explica: "Um toque só, por conversa, quando ninguém respondeu.",
     padrao: false,
+    quemVe: "todos",
+  },
+
+  // ── Clientes ─────────────────────────────────────────────────────────────
+  {
+    id: "clientes.aniversario",
+    grupo: "clientes",
+    titulo: "Aniversário de cliente",
+    explica:
+      "De manhã, uma vez por dia, com todos os aniversariantes do dia num aviso só. Só entra quem tem a data de nascimento no cadastro.",
+    padrao: true,
     quemVe: "todos",
   },
 
@@ -270,6 +287,8 @@ export function avisoDoTipo(
       return "atendimento.atribuida";
     case "cliente_esperando":
       return "atendimento.esperando";
+    case "aniversario_cliente":
+      return "clientes.aniversario";
     case "pagamento_recebido":
       return "dinheiro.pago";
     case "cobranca_vencida":

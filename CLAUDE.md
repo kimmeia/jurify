@@ -2123,6 +2123,55 @@ Configurações → Apps externos → ChatGPT sempre usou `ENCRYPTION_KEY`
   que o silêncio só estava guardado por texto — daí `decidirPush` virar pura e
   ganhar teste de comportamento de verdade).
 
+- **Entregue 14/09, data de nascimento no cadastro + lembrete de aniversário —
+  "pode fazer" do dono no comparador `comparador-aniversario-cliente.html`
+  (seção 35 do documento de estado).** Pedido: *"Quero um campo no cadastro do
+  cliente para colocar sua data de nascimento para me lembrar do seu
+  aniversário."*
+  - **Por que campo de verdade e não campo personalizado**: o mecanismo de
+    campos extras já existia e **guardaria** a data sem servir pro pedido — o
+    valor mora num JSON em `TEXT` e nenhuma consulta alcança o que está lá
+    dentro. Dava pra escrever a data e não dava pra ser lembrado dela. Daí a
+    coluna `contatos.dataNascimento` (migration 0232, `DATE NULL`), ao lado da
+    qualificação civil. **`mode: "string"` no schema**: vira `Date` e o dia
+    passeia de fuso — 12/03 vira 11/03 depois das 21h.
+  - **Regras puras em `shared/aniversario.ts`**, fonte única da tela, do filtro
+    e do cron: `partesDaData` RECUSA 31 de fevereiro em vez de deixar o `Date`
+    empurrar pra março; o aniversário de HOJE é o próximo, não o do ano que vem;
+    **29 de fevereiro é comemorado em 28** nos anos sem o dia 29; "neste mês" é
+    o mês do CALENDÁRIO, não os próximos 30 dias; idade só aparece com o ano
+    conhecido.
+  - **O achado que só a FOTO pegou**: a 1ª versão usava `<input type="date">` e
+    saiu **`09/14/1985`** — o campo nativo desenha no idioma do NAVEGADOR. O
+    repo já sabia disso no filtro "Cadastro", com o motivo escrito no código.
+    Virou texto mascarado `dd/mm/aaaa` (`mascararDataBR`/`brParaIsoData`/
+    `isoParaBrData` na shared), e data que não existe fica vermelha SEM gravar.
+  - **Tela**: campo em `CamposQualificacaoEndereco` (um componente, duas telas)
+    e **fora** de `CAMPOS_OBRIGATORIOS_QUALIFICACAO` — exigir travaria contrato
+    pra carteira inteira; `SeloAniversarioHero` na ficha (sem data, sem selo) com
+    «mandar parabéns» por `wa.me`; filtro "Aniversário" na lista, com o servidor
+    usando `passaNoFiltro`, a MESMA função da tela; e `?aniversario=hoje` lido na
+    inicialização — senão o push cairia na lista inteira.
+  - **Cron** `rodarLembretesDeAniversario`: de hora em hora, por escritório.
+    **Um aviso por dia com todos dentro** (cinco aniversários viram cinco toques
+    = a pessoa desliga tudo); **quem guarda "já mandei" é o BANCO**, pelo
+    prefixo do título — memória de processo morre em redeploy e o aviso sairia
+    de novo; **`>=` a hora e não `===`**, senão reiniciar às 8h em ponto custa o
+    dia; responsável + dono com a chave de alcance (`somarNomes` junta, não
+    sobrescreve). Encerrado/cancelado/rescindido ficam fora.
+  - **Decisão do dono que fica registrada**: os parabéns são MANUAIS, pelo
+    WhatsApp dele. Disparo automático pelo número do escritório é mensagem
+    proativa da plataforma — o padrão dos avisos da Meta — e seria pedido à
+    parte (hoje `GatilhoSmartflow` não tem gatilho de data).
+  - **Anotado e NÃO feito**: `cliente.dataNascimento` não entrou nas variáveis
+    de contrato; lead entra no lembrete junto com cliente; no celular a tela de
+    Clientes já leva pro Atendimento (de antes, não mexido).
+  Amarra: `aniversario-do-cliente` (27 testes) — **42 mutações vermelhas**
+  (`scratchpad/mutar-aniversario.py`; 8 sobreviveram na 1ª volta, sete pelo
+  motivo de sempre — a amarra conferia o NOME e não a CHAMADA — e uma era
+  mutante equivalente: a faixa de mês/dia é caminho rápido, quem recusa mês 13
+  é a volta pelo `Date`).
+
 ## Fila combinada com o dono (31/08/2026)
 
 Ordem que ele pediu. Não pular sem ele mandar. Estado conferido em 03/09:

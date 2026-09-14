@@ -50,6 +50,7 @@ export interface Notificacao {
     | "cobranca_vencida"
     | "contrato_fechado"
     | "cliente_esperando"
+    | "aniversario_cliente"
     | "info";
   titulo: string;
   mensagem: string;
@@ -143,6 +144,7 @@ const TIPOS_PUSH = new Set<Notificacao["tipo"]>([
   "cobranca_vencida",
   "contrato_fechado",
   "cliente_esperando",
+  "aniversario_cliente",
 ]);
 
 /** Rota que a notificação abre ao ser tocada. */
@@ -157,6 +159,7 @@ function rotaPush(n: Omit<Notificacao, "timestamp">): string {
   if (n.tipo === "prazo_vencendo") return "/agenda";
   if (n.tipo === "pagamento_recebido" || n.tipo === "cobranca_vencida") return "/financeiro";
   if (n.tipo === "contrato_fechado") return "/relatorios";
+  if (n.tipo === "aniversario_cliente") return "/clientes?aniversario=hoje";
   return "/atendimento";
 }
 

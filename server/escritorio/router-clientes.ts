@@ -4,7 +4,7 @@ import { protectedProcedure, router } from "../_core/trpc";
 import { getEscritorioPorUsuario } from "../escritorio/db-escritorio";
 import { getDb } from "../db";
 import { contatos, clienteArquivos, clienteAnotacoes, clientePastas, conversas, leads, colaboradores, users, escritorios, asaasCobrancas } from "../../drizzle/schema";
-import { eq, and, desc, like, or, sql, inArray, isNull, gte, lt, lte } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, inArray, isNull, isNotNull, gte, lt, lte } from "drizzle-orm";
 import { alias } from "drizzle-orm/mysql-core";
 import { checkPermission } from "./check-permission";
 import { cancelarContratosDoContato } from "./cancelar-contrato";
@@ -18,10 +18,87 @@ import { reconciliarCobrancasOrfas } from "./db-financeiro";
 import { criarLead } from "./db-crm";
 import { createLogger } from "../_core/logger";
 import { toIsoString, diaAtualEmTz } from "../_core/dates";
+import {
+  MENSAGEM_DATA_INVALIDA,
+  passaNoFiltro,
+  validarNascimento,
+  type FiltroAniversario,
+} from "../../shared/aniversario";
 
 const log = createLogger("router-clientes");
 
 const ORIGEM_CONTATO = ["whatsapp", "instagram", "facebook", "telefone", "manual", "site", "asaas"] as const;
+
+/**
+ * Data de nascimento como veio do `<input type="date">`: `YYYY-MM-DD`, ""
+ * quando o campo ficou vazio, ou null pra apagar. A validação de conteúdo
+ * (ano antigo demais, data no futuro) fica em `validarNascimento`, que roda
+ * com o "hoje" do fuso do escritório — o zod aqui só garante o formato.
+ */
+const dataNascimentoZod = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .or(z.literal(""))
+  .nullable()
+  .optional();
+
+/**
+ * A coluna `date` do driver volta como Date ou string dependendo da versão —
+ * a parte de data é lida em UTC, que é onde o dia foi gravado.
+ */
+function paraIsoDeData(valor: unknown): string | null {
+  if (!valor) return null;
+  if (valor instanceof Date) return valor.toISOString().slice(0, 10);
+  return String(valor).slice(0, 10);
+}
+
+/**
+ * "Hoje" no fuso do escritório, só quando o campo veio no pedido.
+ *
+ * Nascimento no futuro é erro de digitação, e "futuro" depende de onde a
+ * pessoa está: Fernando de Noronha vira o dia uma hora antes de Brasília.
+ * Sem o campo no pedido, nem consulta o banco — não vale uma query por
+ * cadastro salvo pra uma data que ninguém mandou.
+ */
+async function hojeDoEscritorio(
+  db: any,
+  escritorioId: number,
+  valor: string | null | undefined,
+): Promise<string> {
+  if (valor === undefined || valor === null || valor === "") return dataHojeBR();
+  return dataHojeBR(await fusoDoEscritorio(db, escritorioId));
+}
+
+/** O fuso do escritório — "hoje" de aniversário é onde a pessoa está. */
+async function fusoDoEscritorio(db: any, escritorioId: number): Promise<string> {
+  try {
+    const [e] = await db
+      .select({ fuso: escritorios.fusoHorario })
+      .from(escritorios)
+      .where(eq(escritorios.id, escritorioId))
+      .limit(1);
+    return e?.fuso || FUSO_HORARIO_PADRAO;
+  } catch {
+    return FUSO_HORARIO_PADRAO;
+  }
+}
+
+/**
+ * O valor que vai pra coluna `date`, ou undefined quando o caller não mandou
+ * nada (campo ausente nunca apaga o que está gravado).
+ */
+function nascimentoParaColuna(
+  valor: string | null | undefined,
+  hoje: string,
+): string | null | undefined {
+  if (valor === undefined) return undefined;
+  if (valor === null || valor === "") return null;
+  const v = validarNascimento(valor, hoje);
+  if (!v.ok) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: MENSAGEM_DATA_INVALIDA[v.motivo] });
+  }
+  return valor;
+}
 
 
 /** Remove entradas vazias/nulas e serializa pra TEXT.
@@ -231,6 +308,8 @@ export const clientesRouter = router({
     cadastroAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     /** "Ver na lista" da Conferência de cadastros: só as fichas daquela falta. */
     conferencia: z.enum(FALTA_TIPOS).optional(),
+    /** Aniversariantes: hoje · próximos 7 dias · neste mês. */
+    aniversario: z.enum(["hoje", "semana", "mes"]).optional(),
   }).optional()).query(async ({ ctx, input }) => {
     const perm = await checkPermission(ctx.user.id, "clientes", "ver");
     if (!perm.allowed) return { clientes: [], total: 0 };
@@ -384,6 +463,21 @@ export const clientesRouter = router({
       where = and(where, idsFalta.length > 0 ? inArray(contatos.id, idsFalta) : sql`1 = 0`);
     }
 
+    if (input?.aniversario) {
+      // A conta roda em JS, com a MESMA função da tela (`passaNoFiltro`): a
+      // janela de 7 dias atravessa a virada do ano e o dia 29 de fevereiro
+      // muda de lugar — regra que não cabe num WHERE sem virar outra regra.
+      const comData = await db
+        .select({ id: contatos.id, dataNascimento: contatos.dataNascimento })
+        .from(contatos)
+        .where(and(eq(contatos.escritorioId, perm.escritorioId), isNotNull(contatos.dataNascimento)));
+      const hoje = dataHojeBR(await fusoDoEscritorio(db, perm.escritorioId));
+      const idsAniv = comData
+        .filter((r) => passaNoFiltro(paraIsoDeData(r.dataNascimento), input.aniversario as FiltroAniversario, hoje))
+        .map((r) => r.id);
+      where = and(where, idsAniv.length > 0 ? inArray(contatos.id, idsAniv) : sql`1 = 0`);
+    }
+
     const rows = await db.select().from(contatos).where(where).orderBy(desc(contatos.createdAt)).limit(limite).offset(offset);
     const [cnt] = await db.select({ count: sql`COUNT(*)` }).from(contatos).where(where);
 
@@ -468,7 +562,7 @@ export const clientesRouter = router({
     return { ...c, createdAt: toIsoString(c.createdAt) ?? "", updatedAt: toIsoString(c.updatedAt) ?? "", servicoEncerradoEm: toIsoString(c.servicoEncerradoEm) ?? null, servicoEncerradoPorNome, totalConversas: Number((cc as { count: number } | undefined)?.count || 0), totalLeads: Number((lc as { count: number } | undefined)?.count || 0), totalArquivos: Number((ac as { count: number } | undefined)?.count || 0), totalAnotacoes: Number((nc as { count: number } | undefined)?.count || 0) };
   }),
 
-  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.enum(ORIGEM_CONTATO).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
+  criar: protectedProcedure.input(z.object({ nome: z.string().min(2).max(255), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), origem: z.enum(ORIGEM_CONTATO).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), dataNascimento: dataNascimentoZod, cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional(),
     /**
      * Marcar cliente como JÁ FECHADO no momento do cadastro manual.
      * Quando true, cria lead automaticamente com etapaFunil="fechado_ganho" —
@@ -558,6 +652,7 @@ export const clientesRouter = router({
           profissao: input.profissao || alvo.profissao || null,
           estadoCivil: input.estadoCivil || alvo.estadoCivil || null,
           nacionalidade: input.nacionalidade || alvo.nacionalidade || null,
+          dataNascimento: nascimentoParaColuna(input.dataNascimento, await hojeDoEscritorio(db, perm.escritorioId, input.dataNascimento)) || alvo.dataNascimento || null,
           cep: input.cep || alvo.cep || null,
           logradouro: input.logradouro || alvo.logradouro || null,
           numeroEndereco: input.numeroEndereco || alvo.numeroEndereco || null,
@@ -578,7 +673,13 @@ export const clientesRouter = router({
             });
           }
         }
-        const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
+        // Fora do objeto do insert de propósito: a validação pode recusar a
+        // data, e recusa tem que acontecer ANTES de escrever qualquer linha.
+        const nascimentoDoInput = nascimentoParaColuna(
+          input.dataNascimento,
+          await hojeDoEscritorio(db, perm.escritorioId, input.dataNascimento),
+        );
+        const [r] = await db.insert(contatos).values({ escritorioId: perm.escritorioId, nome: input.nome, telefone: input.telefone || null, email: input.email || null, cpfCnpj: input.cpfCnpj || null, origem: input.origem ?? "manual", observacoes: input.observacoes || null, tags: input.tags || null, responsavelId: respId, documentacaoPendente: input.documentacaoPendente ?? false, documentacaoObservacoes: input.documentacaoObservacoes || null, camposPersonalizados: camposJson, profissao: input.profissao || null, estadoCivil: input.estadoCivil || null, nacionalidade: input.nacionalidade || null, dataNascimento: nascimentoDoInput ?? null, cep: input.cep || null, logradouro: input.logradouro || null, numeroEndereco: input.numeroEndereco || null, complemento: input.complemento || null, bairro: input.bairro || null, cidade: input.cidade || null, uf: input.uf || null });
         contatoId = (r as { insertId: number }).insertId;
       }
 
@@ -854,7 +955,7 @@ export const clientesRouter = router({
       return { success: true, situacaoServico: "ativo" as const };
     }),
 
-  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
+  atualizar: protectedProcedure.input(z.object({ id: z.number(), nome: z.string().min(2).max(255).optional(), telefone: z.string().max(20).optional(), email: z.string().max(320).optional(), cpfCnpj: z.string().max(18).optional(), observacoes: z.string().optional(), tags: z.string().optional(), responsavelId: z.number().nullable().optional(), documentacaoPendente: z.boolean().optional(), documentacaoObservacoes: z.string().max(1000).nullable().optional(), camposPersonalizados: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(), profissao: z.string().max(100).nullable().optional(), estadoCivil: z.enum(["solteiro", "casado", "divorciado", "viuvo", "uniao_estavel"]).nullable().optional(), nacionalidade: z.string().max(50).nullable().optional(), dataNascimento: dataNascimentoZod, cep: z.string().max(9).nullable().optional(), logradouro: z.string().max(200).nullable().optional(), numeroEndereco: z.string().max(20).nullable().optional(), complemento: z.string().max(100).nullable().optional(), bairro: z.string().max(100).nullable().optional(), cidade: z.string().max(100).nullable().optional(), uf: z.string().length(2).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const perm = await checkPermission(ctx.user.id, "clientes", "editar");
       if (!perm.allowed) throw new Error("Sem permissão para editar clientes.");
@@ -964,6 +1065,10 @@ export const clientesRouter = router({
       if (d.profissao !== undefined) u.profissao = d.profissao || null;
       if (d.estadoCivil !== undefined) u.estadoCivil = d.estadoCivil || null;
       if (d.nacionalidade !== undefined) u.nacionalidade = d.nacionalidade || null;
+      if (d.dataNascimento !== undefined) {
+        u.dataNascimento =
+          nascimentoParaColuna(d.dataNascimento, await hojeDoEscritorio(db, perm.escritorioId, d.dataNascimento)) ?? null;
+      }
       if (d.cep !== undefined) u.cep = d.cep || null;
       if (d.logradouro !== undefined) u.logradouro = d.logradouro || null;
       if (d.numeroEndereco !== undefined) u.numeroEndereco = d.numeroEndereco || null;

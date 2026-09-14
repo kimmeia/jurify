@@ -599,6 +599,17 @@ export function iniciarJobs() {
     }
   }, 5 * 60 * 1000);
 
+  // De hora em hora: aniversário de cliente. Sem horário fixo aqui de
+  // propósito — quem decide a hora é o fuso de cada escritório.
+  setInterval(async () => {
+    try {
+      const { rodarLembretesDeAniversario } = await import("../escritorio/cron-aniversarios");
+      await rodarLembretesDeAniversario();
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err }, "[Cron] aniversários falhou");
+    }
+  }, 60 * 60 * 1000);
+
   // A cada 1 minuto: dispara lembretes pré-evento (15min/30min/1h/1d antes).
   // Granularidade fina pra não atrasar o "30min antes" que o usuário configurou.
   setInterval(async () => {

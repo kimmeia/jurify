@@ -25,12 +25,14 @@ import {
   FileSignature,
   HeartPulse,
   Moon,
+  Cake,
 } from "lucide-react";
 import { toast } from "sonner";
 
 const ICONE: Record<string, React.ReactNode> = {
   processos: <Gavel className="h-4 w-4" />,
   atendimento: <MessageCircle className="h-4 w-4" />,
+  clientes: <Cake className="h-4 w-4" />,
   dinheiro: <DollarSign className="h-4 w-4" />,
   documentos: <FileSignature className="h-4 w-4" />,
   saude: <HeartPulse className="h-4 w-4" />,

@@ -1,6 +1,6 @@
 # Estado do sistema — JuridFlow
 
-**Última conferência: 12/09/2026.** Feita lendo o código, não o histórico.
+**Última conferência: 14/09/2026.** Feita lendo o código, não o histórico.
 
 Este arquivo responde uma pergunta só: **onde o produto está hoje, e o que falta
 terminar.** Se você tem trinta segundos, leia "O retrato em dezesseis linhas". Se tem
@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.176 verdes, 414 arquivos** (14/09, com a seção 34; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.203 verdes, 415 arquivos** (14/09, com a seção 35; 6.176 em 414 na seção 34; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -3992,3 +3992,147 @@ recomendações do mockup: a lista inteira entrou; os padrões marcados viraram 
 de fábrica; o dono PODE receber o que é dos colaboradores (chave desligada, na
 mão dele); e "cliente esperando 15 minutos" foi construído, desligado por
 padrão.
+
+---
+
+## 35. Data de nascimento no cadastro, e o lembrete do aniversário — ENTREGUE (14/09)
+
+**Pedido do dono**: *"Quero um campo no cadastro do cliente para colocar sua
+data de nascimento para me lembrar do seu aniversário."* Aprovado com **"pode
+fazer"** no comparador `comparador-aniversario-cliente.html` — quatro
+comparações, anel medido no navegador, conferido por Playwright.
+
+### 35.1 Por que um campo de verdade, e não um campo personalizado
+
+O mecanismo de campos extras já existia (Configurações → Campos de cliente,
+tipo "data", `camposPersonalizadosCliente` + `contatos.camposPersonalizados`).
+Ele **guardaria** a data e **não serviria** pro pedido: o valor mora num JSON
+serializado em `TEXT`, e nenhuma consulta alcança o que está lá dentro. Dava
+pra escrever a data e não dava pra ser lembrado dela — que é o pedido inteiro.
+
+Daí a coluna própria `contatos.dataNascimento` (migration 0232, `DATE NULL`),
+ao lado de profissão/estado civil/nacionalidade, que é onde a qualificação
+civil já mora. Índice `idx_contato_nascimento` cobre o recorte
+(escritório + tem data); `MONTH()`/`DAY()` não são indexáveis sem coluna
+gerada, e na escala de uma carteira de escritório a conta é barata.
+
+**`mode: "string"` no schema, de propósito.** A coluna entra e sai como
+`"YYYY-MM-DD"`. Virar `Date` faria o dia passear de fuso — 12/03 vira 11/03
+depois das 21h —, que é exatamente o defeito corrigido em 03/09 nas outras
+datas de calendário.
+
+### 35.2 As regras, num lugar só
+
+`shared/aniversario.ts` é puro e é a fonte única da tela, do filtro e do cron:
+
+- `partesDaData` **recusa** o que não existe em vez de normalizar: o `Date`
+  empurra 31 de fevereiro pra março sozinho, e data que "existe" errada é pior
+  do que data recusada.
+- `validarNascimento` separa três motivos — formato, ano anterior a 1900,
+  data no futuro —, e o "hoje" entra por parâmetro.
+- `proximoAniversario` trata **o aniversário de hoje como o próximo**, não como
+  o do ano que vem; `diasAte` atravessa a virada do ano contando dias.
+- **29 de fevereiro é comemorado em 28** nos anos sem o dia 29
+  (`diaComemoradoNoAno`). A alternativa, 1º de março, atrasa e muda de mês.
+- `rotuloAniversario` é a MESMA frase na ficha e na lista: perto conta os dias
+  ("Faz 41 anos em 3 dias"), longe mostra a data e a idade ("12 de março ·
+  41 anos"). `JANELA_PROXIMO_DIAS = 7` é a régua do destaque e do rótulo.
+- `passaNoFiltro` responde os três recortes. **"Neste mês" é o mês do
+  calendário**, não os próximos 30 dias: quem fez dia 2 continua aparecendo no
+  dia 14.
+- **Idade só aparece quando o ano é conhecido.**
+
+### 35.3 O campo, e o achado que só a foto pegou
+
+`CamposQualificacaoEndereco` é um componente só, usado pelo "Novo cliente" e
+pela edição da ficha — o campo nasceu nos dois de uma vez. Ele é **opcional** e
+ficou **fora** de `CAMPOS_OBRIGATORIOS_QUALIFICACAO`: exigir agora travaria a
+geração de contrato pra toda a carteira que já existe.
+
+A primeira versão usava `<input type="date">`. Na foto ele saiu **`09/14/1985`**
+— mês antes do dia — porque o campo nativo desenha no idioma do **navegador**.
+Num cadastro jurídico isso é risco: quem digita "03/04" não sabe se marcou 3 de
+abril ou 4 de março. O repo já tinha aprendido isso no filtro "Cadastro", com o
+motivo escrito no código. O campo virou texto mascarado `dd/mm/aaaa`
+(`mascararDataBR`/`brParaIsoData`/`isoParaBrData` em `shared/data-calendario.ts`),
+e data que não existe fica em vermelho **sem gravar**.
+
+### 35.4 Onde o aniversário aparece
+
+- **Ficha**: `SeloAniversarioHero` na linha de contato do cabeçalho. Sem data
+  gravada **não existe selo nenhum** — a linha fica como sempre foi. A 7 dias
+  ou menos o selo ganha fundo e o atalho «mandar parabéns», que abre `wa.me`
+  com `mensagemParabens` (primeiro nome) no WhatsApp **de quem clicou**.
+- **Lista**: filtro "Aniversário" entre "Cadastro" e "Mais", com hoje ·
+  próximos 7 dias · neste mês. O servidor aplica `passaNoFiltro` — a MESMA
+  função da tela — sobre as fichas com data, do jeito que o filtro
+  `conferencia` já fazia: regra em JS, `inArray` no WHERE.
+- **`/clientes?aniversario=hoje`** é lido na inicialização dos filtros. Sem
+  isso, tocar a notificação no celular cairia na lista inteira e o aviso estaria
+  prometendo o que a tela não faz.
+
+### 35.5 O lembrete
+
+Aviso novo `clientes.aniversario` num grupo novo **Clientes** no catálogo de
+`shared/notificacoes-avisos.ts` — entra na tela de Notificações da seção 34 com
+a mesma mecânica: **ligado de fábrica**, desligável, e só o que diverge do
+padrão fica gravado.
+
+`rodarLembretesDeAniversario` (`server/escritorio/cron-aniversarios.ts`) roda de
+hora em hora e decide por escritório. Quatro decisões carregam o resto:
+
+1. **Um aviso por dia, por pessoa, com todos os aniversariantes dentro.** Cinco
+   aniversários não podem virar cinco toques — é assim que a pessoa desliga o
+   aviso inteiro e perde junto o que importava. `resumoDoDia` monta o texto e
+   corta em três nomes ("e mais 2").
+2. **Quem guarda "já mandei hoje" é o BANCO, não a memória do processo.** Um
+   redeploy às 8h zeraria um `Set` em memória e o aviso sairia de novo. A
+   pergunta é feita ao `notificacoes` pelo prefixo do título
+   (`PREFIXO_TITULO_ANIVERSARIO`), que é o registro que sobrevive ao restart.
+3. **`>=` a hora, não `===`.** Com igualdade, o processo reiniciando às 8h em
+   ponto custaria o dia inteiro. Com `>=` o primeiro ciclo depois disso entrega,
+   e a dedup garante uma vez só.
+4. **Quem recebe é o responsável pelo cadastro**, mais o dono quando ligou
+   "quero receber também o que é dos meus colaboradores" (`donoQueQuerTudo`, a
+   mesma régua da movimentação). Ficha sem responsável vai pro dono de qualquer
+   jeito — senão o aniversário não alcançaria ninguém. `somarNomes` junta em vez
+   de sobrescrever: o dono costuma ser responsável por parte da carteira **e**
+   ter o alcance ligado.
+
+Serviço **encerrado, cancelado ou rescindido** fica de fora. Parabenizar quem
+rescindiu é pior do que não parabenizar.
+
+Conferido no app rodando, com banco de verdade: duas fichas fazendo aniversário
+no mesmo dia geraram **um** aviso ("José Ribamar e Maria Aparecida fazem
+aniversário hoje"), a segunda volta do cron não duplicou, e a ficha com serviço
+encerrado não entrou.
+
+### 35.6 As quatro decisões da proposta, resolvidas no padrão
+
+Ele respondeu "pode fazer" sem escolher item a item, então valeram as
+recomendações do comparador:
+
+1. **Parabéns manual.** O botão abre o WhatsApp **dele** com o texto pronto.
+   Disparo automático pelo número do escritório é mensagem proativa da
+   plataforma — o padrão por trás dos dois avisos da Meta de agosto — e fica
+   como pedido à parte, com modelo aprovado e gatilho novo no SmartFlow (hoje
+   `GatilhoSmartflow` não tem nada de data).
+2. **8h da manhã**, no fuso do escritório, no próprio dia.
+3. **Responsável + dono com a chave de alcance ligada.**
+4. **Empresa fica em branco.** CNPJ não tem nascimento; data de fundação seria
+   outro campo.
+
+### 35.7 Anotado e NÃO feito
+
+- **`cliente.dataNascimento` não entrou nas variáveis de contrato**
+  (`shared/modelos-contrato-variaveis.ts`), onde profissão, estado civil e
+  nacionalidade já moram. É adição natural e não foi pedida.
+- **Lead entra no lembrete** junto com cliente — é o mesmo cadastro, mesma
+  tabela. Se virar ruído, o corte é por `estagio`.
+- **No celular a tela de Clientes leva pro Atendimento** (`isMobile &&
+  !mobileCompleto` no AppLayout). É de antes e não foi mexido: o campo se
+  preenche no computador, o lembrete chega no celular normalmente.
+- A busca do filtro varre as fichas com data do escritório a cada consulta.
+  Barato na escala de hoje; se crescer, vira coluna gerada com índice.
+- Baseline: **6.203 testes verdes em 415 arquivos**, `pnpm check` limpo,
+  `vite build` passando.
