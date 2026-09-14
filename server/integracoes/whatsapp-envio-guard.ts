@@ -438,9 +438,14 @@ export async function podeDispararTemplate(opts: {
 }
 
 /**
- * Pós-envio bem-sucedido: registra o disparo nos tetos (só se proativo) e, se o
- * canal estava restrito, rearma o disjuntor (a Meta voltou a aceitar). Chamado
- * só em sucesso.
+ * Pós-envio bem-sucedido: registra o disparo nos tetos (só se proativo).
+ *
+ * NÃO rearma o disjuntor. Conta restrita continua aceitando o POST e devolvendo
+ * 200 com id de mensagem — a Meta só mata a entrega depois, no webhook `failed`.
+ * Tratar esse 200 como "voltou a funcionar" desarmava a restrição no primeiro
+ * inbound seguinte, e o sistema seguia enviando contra conta bloqueada até virar
+ * ban. Sair da restrição exige sinal real: `metaChannels.testConnection`
+ * (consulta a saúde do número na Graph API) ou liberação manual do operador.
  */
 export async function registrarSucessoEnvio(opts: {
   db: any;
@@ -454,7 +459,6 @@ export async function registrarSucessoEnvio(opts: {
     registrarDisparoRate(opts.canalId, agoraMs);
     await incrementarDisparoDia(opts.db, opts.canalId, agoraMs);
   }
-  await limparCanalRestrito(opts.db, opts.canalId);
 }
 
 /** Compat: sucesso de template (sempre proativo). */
