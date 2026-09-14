@@ -119,6 +119,13 @@ Regras que saem disso:
   Signup a partir do BM dele — **não é mais preciso atribuir a Devular como
   parceira/admin do BM do cliente**. O modelo de parceria do onboarding
   manual só vale como plano B, e cobra esse preço.
+- **Nunca entrar como admin pessoal no BM do cliente.** A conexão do
+  Boyadjian foi feita assim (02/09, restrição em 14/09). Uma conta pessoal
+  administrando o BM de toda a carteira vira denominador comum: um cliente
+  banido dá à Meta um laço entre ele e todos os outros. O Embedded Signup
+  existe pra evitar isso — o cliente conecta com a conta dele e a plataforma
+  recebe token limitado àquela WABA. Se o caminho manual for inevitável,
+  entre, faça e **saia** do BM.
 - Enquanto a apelação da conta banida seguir aberta, qualquer ativo novo do
   mesmo cliente tende a ser restrito de novo — resolver o caso antigo vem
   antes de conectar número novo.
