@@ -1,0 +1,60 @@
+/* 3 · MARCA EM BLOCO — a identidade carrega a estrutura: faixa da marca no
+   topo de cada tela, cartão branco recortado sobre ela, e o violeta/marinho
+   aparecendo como cor de sistema, não como detalhe. */
+:root {
+  --background: #f6f7fb;
+  --foreground: #16182a;
+  --card: #ffffff;
+  --card-foreground: #16182a;
+  --secondary: #efeffb;
+  --secondary-foreground: #3a3a63;
+  --muted: #f0f1f8;
+  --muted-foreground: #6b6f8a;
+  --accent: #efeafe;
+  --accent-foreground: #5b3fd6;
+  --border: #e6e6f2;
+  --input: #ddddef;
+  --primary: #4b31c3;
+  --primary-foreground: #ffffff;
+  --ring: #7c5cff;
+  --accent-purple: #7c5cff; --accent-purple-bg: #efeafe; --accent-purple-fg: #4b31c3;
+  --radius: 0.625rem;
+}
+/* A faixa: o conteúdo começa dentro da marca, não ao lado dela. */
+main { position: relative; }
+main::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 300px;
+  background:
+    linear-gradient(180deg, rgba(25,18,41,0) 72%, #f6f7fb 100%),
+    linear-gradient(120deg, #191229 0%, #2d1e63 58%, #4b31c3 100%);
+  z-index: 0;
+}
+main > * { position: relative; z-index: 1; }
+/* Tudo que vive DENTRO da faixa lê em branco — inclusive a tira de abas. */
+main h1, main h1 + p, main > div:first-child a, main > div:first-child button,
+main [role="tablist"] a, main [role="tablist"] button {
+  color: #ffffff !important;
+}
+main [role="tablist"] { border-color: rgba(255,255,255,.25) !important; }
+main [role="tablist"] [aria-selected="true"], main [role="tablist"] .border-primary {
+  border-color: #ffffff !important; color: #ffffff !important;
+}
+main input, main input::placeholder { color: #ffffff !important; }
+main input { background: rgba(255,255,255,.12) !important; border-color: rgba(255,255,255,.3) !important; }
+.bg-card, [class*="bg-white"] {
+  box-shadow: 0 2px 6px rgba(25,18,41,.08), 0 18px 36px -24px rgba(25,18,41,.45);
+  border-color: transparent !important;
+}
+.rounded-md, .rounded-lg { border-radius: 10px !important; }
+.rounded-xl, .rounded-2xl { border-radius: 14px !important; }
+h1, h2 { font-family: "Poppins", Inter, sans-serif; letter-spacing: -0.02em; font-weight: 600; }
+.tabular-nums { font-family: "Poppins", Inter, sans-serif; font-weight: 600; }
+
+/* A busca do topo mora DENTRO da faixa: fundo translúcido, texto branco. */
+main > div:first-child button, main > div:first-child [role="button"] {
+  background: rgba(255,255,255,.14) !important;
+  border-color: rgba(255,255,255,.35) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+main > div:first-child svg { color: rgba(255,255,255,.8); }

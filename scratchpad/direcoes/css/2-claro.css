@@ -1,0 +1,42 @@
+/* 2 · ESCRITÓRIO CLARO — luz do dia, mas com ar e profundidade de verdade.
+   O fundo sai do cinza-clínico e vira papel quente; o cartão é branco puro,
+   flutua (a sombra substitui o fio de 1px) e respira. É a direção que menos
+   assusta quem já usa o sistema e ainda assim muda a sensação por completo. */
+:root {
+  --background: #f1ede6;
+  --foreground: #1d1b16;
+  --card: #ffffff;
+  --card-foreground: #1d1b16;
+  --popover: #ffffff;
+  --secondary: #f6f3ed;
+  --secondary-foreground: #3d3a32;
+  --muted: #f3efe8;
+  --muted-foreground: #6c675d;
+  --accent: #eef1fb;
+  --accent-foreground: #1f2f6b;
+  --border: #e5dfd4;
+  --input: #ded7c9;
+  --primary: #1b2a63;
+  --primary-foreground: #ffffff;
+  --ring: #1b2a63;
+  --info: #1b2a63; --info-bg: #eef1fb; --info-fg: #1b2a63;
+  --success: #216e4e; --success-bg: #e8f3ed; --success-fg: #216e4e;
+  --warning: #8a5a12; --warning-bg: #fbf1df; --warning-fg: #8a5a12;
+  --danger: #9b2c2c; --danger-bg: #fbeceb; --danger-fg: #9b2c2c;
+  --radius: 0.875rem;
+}
+/* Elevação real: o cartão deixa de ser um retângulo desenhado a fio. */
+.bg-card, [class*="bg-white"] {
+  box-shadow: 0 1px 2px rgba(29,27,22,.05), 0 20px 40px -24px rgba(29,27,22,.45);
+  border-color: transparent !important;
+}
+.rounded-md, .rounded-lg { border-radius: 14px !important; }
+.rounded-xl, .rounded-2xl { border-radius: 20px !important; }
+h1, h2, h3 { font-family: "Poppins", Inter, sans-serif; letter-spacing: -0.025em; font-weight: 600; }
+.tabular-nums { font-family: "Poppins", Inter, sans-serif; font-weight: 600; letter-spacing: -0.02em; }
+/* Ar: o aperto de hoje é metade da sensação de "feito às pressas". */
+main .p-3 { padding: 1.15rem !important; }
+main .p-4 { padding: 1.5rem !important; }
+main .gap-3 { gap: 1.15rem !important; }
+main .gap-4 { gap: 1.5rem !important; }
+main .space-y-3 > * + * { margin-top: 1.15rem !important; }

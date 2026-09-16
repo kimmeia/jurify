@@ -1,0 +1,43 @@
+/* 1 · PAINEL ESCURO — a linguagem do print que ele mandou.
+   Superfície escura no app inteiro (o menu deixa de ser tarja e vira a mesma
+   peça), elevação de verdade, canto de 14px, acento violeta da marca. */
+:root, .dark {
+  --background: #0a0c12;
+  --foreground: #e9edf6;
+  --card: #141822;
+  --card-foreground: #e9edf6;
+  --popover: #161b26;
+  --popover-foreground: #e9edf6;
+  --primary: #7c5cff;
+  --primary-foreground: #ffffff;
+  --secondary: #1b2130;
+  --secondary-foreground: #c8d0e0;
+  --muted: #1b2130;
+  --muted-foreground: #8e97ac;
+  --accent: #1e2536;
+  --accent-foreground: #c9b8ff;
+  --border: #232a3a;
+  --input: #232a3a;
+  --ring: #7c5cff;
+  --sidebar: #07060f;
+  --sidebar-foreground: #c7cbdb;
+  --info: #7aa2ff; --info-bg: #17203a; --info-fg: #a9c2ff;
+  --warning: #f0b45c; --warning-bg: #2a2114; --warning-fg: #f6cd8e;
+  --success: #3ecf8e; --success-bg: #12271f; --success-fg: #74e3b3;
+  --danger: #ff6b6b; --danger-bg: #2c1618; --danger-fg: #ff9d9d;
+  --neutral: #8e97ac; --neutral-bg: #1b2130; --neutral-fg: #c8d0e0;
+  --accent-purple: #a78bfa; --accent-purple-bg: #221a3a; --accent-purple-fg: #c9b8ff;
+  --radius: 0.75rem;
+}
+/* Elevação: nada de cartão branco sobre branco separado por um fio. */
+.bg-card, [class*="bg-white"], .bg-background {
+  box-shadow: 0 1px 2px rgba(0,0,0,.45), 0 14px 32px -18px rgba(0,0,0,.8);
+}
+.rounded-md, .rounded-lg { border-radius: 12px !important; }
+.rounded-xl, .rounded-2xl { border-radius: 16px !important; }
+/* Números com presença — é o que o print dele tem e o nosso não. */
+.tabular-nums, [class*="text-[22px]"], [class*="--text-numero"] {
+  font-family: "Poppins", Inter, sans-serif; font-weight: 600; letter-spacing: -0.02em;
+}
+h1, h2 { font-family: "Poppins", Inter, sans-serif; letter-spacing: -0.02em; }
+input, textarea, select { background: #121722 !important; }
