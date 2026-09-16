@@ -3,7 +3,7 @@
 import { chromium } from "/home/user/jurify/node_modules/.pnpm/playwright@1.59.1/node_modules/playwright/index.mjs";
 const b = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
 const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
-await p.goto("file:///home/user/jurify/tres-direcoes-visuais.html");
+await p.goto("file:///home/user/jurify/tres-estruturas.html");
 await p.waitForTimeout(2500);
 
 const r = await p.evaluate(() => {
@@ -30,7 +30,7 @@ const troca = await p.evaluate(() => {
 console.log("botão troca a foto:", troca.trocou, "· volta:", troca.voltou);
 
 await p.screenshot({ path: "/home/user/jurify/scratchpad/direcoes/pagina-topo.png" });
-await p.evaluate(() => document.querySelector("#d-2-claro").scrollIntoView());
+await p.evaluate(() => document.querySelector("#d-b-bancada").scrollIntoView());
 await p.waitForTimeout(600);
 await p.screenshot({ path: "/home/user/jurify/scratchpad/direcoes/pagina-meio.png" });
 await p.setViewportSize({ width: 390, height: 844 });

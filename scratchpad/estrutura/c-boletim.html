@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>C · O boletim</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* C · O BOLETIM
+     A tela não imita painel de startup: imita o que um chefe de gabinete
+     deixaria na mesa. Uma folha, com largura de leitura, hierarquia de
+     documento e os números escritos DENTRO das frases. Sem menu lateral
+     permanente — o menu é um botão, porque documento não tem cromo em volta.
+     Imprime igual ao que se vê. */
+  :root {
+    --tinta:#1a1815; --apoio:#6b6459; --fraco:#9a9287; --regua:#ded7ca;
+    --papel:#f7f4ee; --folha:#fffdf9;
+    --urgente:#a32b20; --ok:#1c6b4a; --marca:#33256b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--papel); color:var(--tinta);
+         font:16px/1.7 Newsreader,Georgia,serif; -webkit-font-smoothing:antialiased; }
+  .barra { display:flex; align-items:center; gap:14px; padding:12px 22px;
+           background:var(--folha); border-bottom:1px solid var(--regua); position:sticky; top:0; z-index:2; }
+  .barra .j { width:26px; height:26px; border-radius:7px; background:var(--marca); color:#fff;
+              font:600 13px/1 Inter,sans-serif; display:grid; place-items:center; }
+  .barra .menu, .barra .busca { font:500 13px/1 Inter,sans-serif; color:var(--apoio);
+                                border:1px solid var(--regua); background:#fff; border-radius:7px;
+                                padding:8px 12px; cursor:pointer; }
+  .barra .busca { flex:1; max-width:340px; text-align:left; color:var(--fraco); }
+  .barra .eu { margin-left:auto; font:500 13px/1 Inter,sans-serif; color:var(--apoio); }
+
+  .folha { max-width:780px; margin:34px auto 70px; background:var(--folha);
+           border:1px solid var(--regua); padding:48px 56px 56px;
+           box-shadow:0 1px 1px rgba(26,24,21,.04), 0 24px 48px -30px rgba(26,24,21,.4); }
+
+  .selo { font:600 11px/1 Inter,sans-serif; letter-spacing:.2em; text-transform:uppercase;
+          color:var(--fraco); }
+  h1 { font:600 40px/1.15 Newsreader,serif; letter-spacing:-0.02em; margin:10px 0 6px; }
+  .sub { color:var(--apoio); font-size:17px; margin:0 0 26px; }
+  .abertura { font-size:19px; line-height:1.65; margin:0 0 30px; }
+  .abertura b { font-weight:600; }
+  .abertura .mal { color:var(--urgente); font-weight:600; }
+  .abertura .bem { color:var(--ok); font-weight:600; }
+
+  h2 { font:600 12px/1 Inter,sans-serif; letter-spacing:.18em; text-transform:uppercase;
+       color:var(--apoio); margin:34px 0 0; padding-bottom:8px; border-bottom:2px solid var(--tinta); }
+  .item { display:grid; grid-template-columns:96px 1fr auto; gap:16px; align-items:baseline;
+          padding:13px 0; border-bottom:1px solid var(--regua); }
+  .quando { font:500 13px/1.5 Inter,sans-serif; color:var(--apoio); font-variant-numeric:tabular-nums; }
+  .quando.mal { color:var(--urgente); font-weight:600; }
+  .oque { min-width:0; }
+  .oque .t { font-size:17px; font-weight:500; }
+  .oque .q { font:400 13.5px/1.5 Inter,sans-serif; color:var(--apoio); }
+  .fazer { font:600 12.5px/1 Inter,sans-serif; color:var(--marca); text-decoration:none;
+           border-bottom:1px solid currentColor; white-space:nowrap; }
+
+  .conta { display:grid; grid-template-columns:1fr auto; gap:10px; padding:11px 0;
+           border-bottom:1px solid var(--regua); font-size:16px; }
+  .conta .v { font:600 16px/1.5 Inter,sans-serif; font-variant-numeric:tabular-nums; }
+  .conta .v.mal { color:var(--urgente); } .conta .v.bem { color:var(--ok); }
+  .nota { font:400 13.5px/1.6 Inter,sans-serif; color:var(--apoio); margin-top:12px; }
+  .assinatura { margin-top:40px; padding-top:18px; border-top:1px solid var(--regua);
+                display:flex; justify-content:space-between; font:400 12.5px/1.6 Inter,sans-serif; color:var(--fraco); }
+  @media (max-width:820px) {
+    .folha { margin:14px 10px 40px; padding:26px 20px 34px; }
+    h1 { font-size:30px; }
+    .abertura { font-size:17px; }
+    .item { grid-template-columns:78px 1fr; }
+    .item .fazer { grid-column:2; }
+    .barra .busca { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="barra">
+  <span class="j">J</span>
+  <button class="menu">☰ Menu</button>
+  <button class="busca">Buscar processo, cliente, valor…  ⌘K</button>
+  <span class="eu">Rafael · Boyadjian Advogados</span>
+</div>
+
+<article class="folha">
+  <div class="selo">Boletim do dia · quarta-feira, 16 de setembro de 2026</div>
+  <h1>Bom dia, Rafael.</h1>
+  <p class="sub">O que precisa de você hoje, em ordem.</p>
+
+  <p class="abertura">
+    Você tem <b>uma audiência às 8h30</b> e mais três compromissos. Um prazo
+    <span class="mal">venceu ontem</span> e continua em aberto. Duas pessoas
+    esperam resposta no WhatsApp — <span class="mal">com uma delas a janela de 24h já fechou</span>.
+    No dinheiro, setembro trouxe <span class="bem">R$ 10.700,00</span>, há
+    <b>R$ 7.750,00</b> a receber em dia e <span class="mal">R$ 1.600,00 vencidos</span>.
+  </p>
+
+  <h2>Primeiro — o que já passou do prazo</h2>
+  <div class="item">
+    <div class="quando mal">ontem<br>12:00</div>
+    <div class="oque">
+      <div class="t">Contestação — 0801234-55.2026.8.06.0001</div>
+      <div class="q">Maria Aparecida Nogueira de Sousa · TJCE, 1ª Vara Cível</div>
+    </div>
+    <a class="fazer" href="#">abrir processo</a>
+  </div>
+
+  <h2>Hoje</h2>
+  <div class="item">
+    <div class="quando">08:30<br>1h30</div>
+    <div class="oque">
+      <div class="t">Audiência de instrução</div>
+      <div class="q">José Ribamar da Silva Filho · Fórum Clóvis Beviláqua, sala 4</div>
+    </div>
+    <a class="fazer" href="#">preparar</a>
+  </div>
+  <div class="item">
+    <div class="quando">10:00<br>30 min</div>
+    <div class="oque">
+      <div class="t">Reunião — proposta de acordo</div>
+      <div class="q">Cleide Farias do Nascimento · videochamada</div>
+    </div>
+    <a class="fazer" href="#">entrar</a>
+  </div>
+  <div class="item">
+    <div class="quando">14:00<br>1h</div>
+    <div class="oque">
+      <div class="t">Perícia médica</div>
+      <div class="q">Francisco Edilson Martins Rocha · INSS Aldeota</div>
+    </div>
+    <a class="fazer" href="#">ver pauta</a>
+  </div>
+  <div class="item">
+    <div class="quando">16:30<br>15 min</div>
+    <div class="oque">
+      <div class="t">Ligar para a cliente</div>
+      <div class="q">Tirzah Barbosa de Lima · (85) 99999-0002</div>
+    </div>
+    <a class="fazer" href="#">ligar</a>
+  </div>
+
+  <h2>Quem está esperando</h2>
+  <div class="item">
+    <div class="quando mal">há 1 dia<br>janela fechada</div>
+    <div class="oque">
+      <div class="t">Antônia Gomes Vasconcelos</div>
+      <div class="q">«Consigo pagar na sexta, pode ser?» — só sai template aprovado</div>
+    </div>
+    <a class="fazer" href="#">responder</a>
+  </div>
+  <div class="item">
+    <div class="quando">há 22h<br>faltam 1h24</div>
+    <div class="oque">
+      <div class="t">Cleide Farias do Nascimento</div>
+      <div class="q">«Então eu levo os exames amanhã?» — em atendimento</div>
+    </div>
+    <a class="fazer" href="#">responder</a>
+  </div>
+
+  <h2>O dinheiro</h2>
+  <div class="conta"><span>Recebido em setembro</span><span class="v bem">R$ 10.700,00</span></div>
+  <div class="conta"><span>A receber, em dia — 3 cobranças</span><span class="v">R$ 7.750,00</span></div>
+  <div class="conta"><span>Vencido — Antônia Gomes, parcela 2/3</span><span class="v mal">R$ 1.600,00</span></div>
+  <div class="conta"><span>Em negociação no funil — 4 leads</span><span class="v">R$ 22.700,00</span></div>
+  <p class="nota">
+    Dois contratos fechados no mês, nenhum perdido. O que mais trouxe cliente foi
+    o <b>Instagram</b> (R$ 9.800,00), seguido de <b>indicação</b> (R$ 7.400,00).
+  </p>
+
+  <div class="assinatura">
+    <span>Consultas de processo 0 de 2.500 · buscas por CPF 0 de 300 · cálculos 0 de 300</span>
+    <span>Geral · Comercial · Operacional · Financeiro</span>
+  </div>
+</article>
+</body>
+</html>

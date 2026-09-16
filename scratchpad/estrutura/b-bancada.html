@@ -13,7 +13,7 @@
      vira o centro. Densidade é a estética. */
   :root {
     --fundo:#0c0e13; --painel:#11141b; --linha:#1e222c; --linha2:#272c38;
-    --tinta:#e6e9f0; --apoio:#8b93a5; --fraco:#606personally;
+    --tinta:#e6e9f0; --apoio:#8b93a5; 
     --acento:#7c5cff; --ok:#3ecf8e; --alerta:#ffb057; --erro:#ff6b6b;
   }
   :root { --fraco:#606877; }
@@ -54,17 +54,20 @@
   .faixa kbd { font-family:"JetBrains Mono",monospace; font-size:10px; border:1px solid var(--linha2);
                border-radius:3px; padding:1px 4px; color:var(--apoio); }
 
-  .paineis { flex:1; display:grid; grid-template-columns:1.25fr 1fr; min-height:0; }
+  .paineis { display:grid; grid-template-columns:1.25fr 1fr; min-height:0; }
+  .baixo { flex:1; border-top:1px solid var(--linha); display:flex; flex-direction:column; min-height:0; }
+  .baixo > header { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--linha); }
+  .baixo h2 { margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--apoio); font-weight:600; }
   .painel { min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--linha); }
   .painel:last-child { border-right:0; }
   .painel > header { display:flex; align-items:center; gap:10px; padding:9px 14px;
                      border-bottom:1px solid var(--linha); }
   .painel h2 { margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--apoio); font-weight:600; }
   .painel .cont { color:var(--fraco); font-size:11px; }
-  .painel .filtros { margin-left:auto; display:flex; gap:4px; }
-  .painel .filtros span { font-size:11px; color:var(--fraco); border:1px solid var(--linha2);
-                          border-radius:4px; padding:2px 7px; }
-  .painel .filtros span.on { color:var(--tinta); border-color:#3a4252; background:#171b23; }
+  .filtros { margin-left:auto; display:flex; gap:4px; }
+  .filtros span { font-size:11px; color:var(--fraco); border:1px solid var(--linha2);
+                  border-radius:4px; padding:2px 7px; }
+  .filtros span.on { color:var(--tinta); border-color:#3a4252; background:#171b23; }
   table { width:100%; border-collapse:collapse; }
   thead th { text-align:left; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
              color:var(--fraco); font-weight:600; padding:7px 14px; border-bottom:1px solid var(--linha);
@@ -227,6 +230,47 @@
         <div class="rodape"><span>Cobranças vencidas <b>R$ 1.600,00</b></span><span>a vencer em 7d <b>R$ 3.400,00</b></span><span>Instagram <b>R$ 9.800</b></span></div>
       </section>
     </div>
+
+    <section class="baixo">
+      <header>
+        <h2>Movimentações dos processos</h2><span class="cont">últimas 24h · 3 novas</span>
+        <div class="filtros"><span class="on">Não lidas</span><span>Todas</span><span>Com prazo</span></div>
+      </header>
+      <table>
+        <thead><tr><th>Processo</th><th>Movimento</th><th>Cliente</th><th class="dir">Quando</th><th class="dir">Tribunal</th></tr></thead>
+        <tbody>
+          <tr class="sel">
+            <td class="num">0801234-55.2026.8.06.0001</td>
+            <td><div class="quem">Sentença publicada — procedência parcial</div><div class="sub">prazo sugerido: recurso inominado, 10 dias</div></td>
+            <td>Maria Aparecida Nogueira</td>
+            <td class="dir num">há 3h</td>
+            <td class="dir">TJCE</td>
+          </tr>
+          <tr>
+            <td class="num">0800987-12.2026.8.06.0112</td>
+            <td><div class="quem">Juntada de petição da parte contrária</div><div class="sub">contestação com preliminar de incompetência</div></td>
+            <td>José Ribamar da Silva Filho</td>
+            <td class="dir num">há 9h</td>
+            <td class="dir">TJCE</td>
+          </tr>
+          <tr>
+            <td class="num">5001122-45.2026.4.05.8100</td>
+            <td><div class="quem">Perícia designada</div><div class="sub">16/09 14:00 · INSS Aldeota</div></td>
+            <td>Francisco Edilson M. Rocha</td>
+            <td class="dir num">há 1d</td>
+            <td class="dir">TRF5</td>
+          </tr>
+          <tr>
+            <td class="num">0802233-90.2026.8.06.0001</td>
+            <td><div class="quem">Nova ação em nome do cliente</div><div class="sub">polo passivo · busca e apreensão</div></td>
+            <td>Antônia Gomes Vasconcelos</td>
+            <td class="dir num">há 2d</td>
+            <td class="dir">TJCE</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="rodape"><span>Vigiados <b>128 processos</b></span><span>CPFs vigiados <b>15</b></span><span>Consultas no mês <b>0 / 2.500</b></span></div>
+    </section>
   </div>
 </div>
 </body>
