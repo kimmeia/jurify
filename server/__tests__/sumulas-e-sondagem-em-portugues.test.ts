@@ -442,3 +442,38 @@ describe("súmula e ementa contam separado na resposta", () => {
     expect(rotuloCitacoes(undefined)).toBe("");
   });
 });
+
+describe("a tabela de fontes cabe na tela do admin", () => {
+  /**
+   * Medido no app rodando em 14/09: a tabela pedia 1.389px numa área de
+   * 1.082 — rolava 307px de lado e a ÚLTIMA coluna, onde moram «Colar texto
+   * oficial», «Coletar» e a chave de ligar, ficava fora da tela. Coluna de
+   * tabela sem largura declarada cresce até o conteúdo: o nome do tribunal
+   * levou a coluna «Fonte» a 404px sozinho.
+   */
+  const arq = readFileSync(
+    join(__dirname, "../../client/src/pages/admin/ConhecimentoJuridicoTab.tsx"),
+    "utf-8",
+  );
+
+  it("a coluna da fonte tem teto, senão o nome do tribunal empurra a tabela", () => {
+    expect(arq).toContain('<TableCell className="w-[190px] max-w-[190px] whitespace-normal align-top">');
+  });
+
+  it("a coluna que CEDE é a da frase, e ela tem piso em vez de largura fixa", () => {
+    expect(arq).toContain('<TableCell className="min-w-[280px] whitespace-normal align-top">');
+    expect(arq).not.toContain('w-[440px] max-w-[440px]');
+  });
+
+  it("os botões quebram linha em vez de empurrar a tabela pra fora", () => {
+    expect(arq).toContain('className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1"');
+  });
+
+  it("as colunas estreitas declaram largura — as sete somam menos que a área", () => {
+    const larguras = [...arq.matchAll(/<TableCell className="w-\[(\d+)px\]/g)].map((m) => Number(m[1]));
+    // fonte(190) + volta(86) + acervo(74) + coleta(96) + estado(118) + ações(168)
+    expect(larguras.length).toBeGreaterThanOrEqual(6);
+    const soma = larguras.reduce((a, b) => a + b, 0) + 280; // + o piso da frase
+    expect(soma).toBeLessThanOrEqual(1082);
+  });
+});

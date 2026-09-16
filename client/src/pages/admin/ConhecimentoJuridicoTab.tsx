@@ -300,8 +300,12 @@ function FontesOficiais() {
           <TableBody>
             {fontes.map((f) => (
               <TableRow key={f.id}>
-                <TableCell>
-                  <div className="font-semibold">{f.nome}</div>
+                {/* Largura declarada: sem teto, o nome do tribunal puxava a
+                    coluna pra 404px e a tabela inteira pedia 1.389px numa
+                    área de 1.082 — a última coluna, com os botões, ficava
+                    fora da tela. */}
+                <TableCell className="w-[190px] max-w-[190px] whitespace-normal align-top">
+                  <div className="font-semibold leading-tight">{f.nome}</div>
                   <div className="text-[11px] text-muted-foreground">{f.orgao}</div>
                 </TableCell>
                 {/* A célula da tabela nasce `whitespace-nowrap`: sem soltar a
@@ -310,7 +314,7 @@ function FontesOficiais() {
                     propósito: em coluna separada, a tabela passou de oito
                     colunas e espremeu a frase num fio de dez caracteres — a
                     largura de um cartão de lista não é a largura da tela. */}
-                <TableCell className="w-[440px] max-w-[440px] whitespace-normal align-top">
+                <TableCell className="min-w-[280px] whitespace-normal align-top">
                   <span
                     className={`mr-1.5 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${MATERIAL[f.material].cls}`}
                   >
@@ -340,19 +344,19 @@ function FontesOficiais() {
                     <span className="mt-1 block text-[11px] text-danger-fg">{f.ultimoErro}</span>
                   )}
                 </TableCell>
-                <TableCell className="text-[12px] text-muted-foreground">
+                <TableCell className="w-[86px] text-[12px] text-muted-foreground">
                   {rotuloCadencia(f.cadenciaHoras)}
                 </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums">
+                <TableCell className="w-[74px] text-right font-semibold tabular-nums">
                   {f.material === "metadado" ? "—" : nf.format(f.itens)}
                 </TableCell>
-                <TableCell className="text-[12px] text-muted-foreground">{quando(f.ultimaColetaEm)}</TableCell>
-                <TableCell>
+                <TableCell className="w-[96px] text-[12px] text-muted-foreground">{quando(f.ultimaColetaEm)}</TableCell>
+                <TableCell className="w-[118px]">
                   <Selo estado={f.status} />
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="w-[168px] text-right">
                   {f.material !== "metadado" ? (
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
                       {f.material === "sumula" && (
                         <Button
                           variant="ghost"

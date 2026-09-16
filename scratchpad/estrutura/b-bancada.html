@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>B · Bancada</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* B · BANCADA
+     Ferramenta de quem trabalha o dia inteiro dentro dela. Nada de cartão:
+     tudo é TABELA, com fio de 1px e números tabulares. A tela mostra muito de
+     uma vez e se opera pelo teclado — o ⌘K já existe no JuridFlow, aqui ele
+     vira o centro. Densidade é a estética. */
+  :root {
+    --fundo:#0c0e13; --painel:#11141b; --linha:#1e222c; --linha2:#272c38;
+    --tinta:#e6e9f0; --apoio:#8b93a5; --fraco:#606personally;
+    --acento:#7c5cff; --ok:#3ecf8e; --alerta:#ffb057; --erro:#ff6b6b;
+  }
+  :root { --fraco:#606877; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fundo); color:var(--tinta);
+         font:13px/1.5 Inter,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
+  .num { font-family:"JetBrains Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+  .app { display:flex; height:100vh; overflow:hidden; }
+
+  /* Lateral estreita, tudo em uma letra de altura. */
+  .lado { width:186px; flex:none; border-right:1px solid var(--linha); padding:10px 8px;
+          display:flex; flex-direction:column; gap:1px; }
+  .lado .topo { display:flex; align-items:center; gap:8px; padding:6px 8px 12px; }
+  .lado .j { width:22px; height:22px; border-radius:6px; background:var(--acento); color:#fff;
+             font-weight:700; font-size:12px; display:grid; place-items:center; }
+  .lado .nome { font-weight:600; letter-spacing:-0.01em; }
+  .lado a { display:flex; align-items:center; justify-content:space-between; gap:8px;
+            padding:5px 8px; border-radius:5px; color:var(--apoio); text-decoration:none; font-size:12.5px; }
+  .lado a.on { background:#181c25; color:var(--tinta); }
+  .lado a b { font-weight:500; color:var(--fraco); font-size:11px; }
+  .lado .grupo { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:#4a5160;
+                 padding:12px 8px 4px; }
+  .lado .fim { margin-top:auto; border-top:1px solid var(--linha); padding-top:8px; }
+
+  .centro { flex:1; min-width:0; display:flex; flex-direction:column; }
+
+  /* Faixa de números: uma linha, sem caixa. */
+  .faixa { display:flex; align-items:center; gap:0; border-bottom:1px solid var(--linha);
+           padding:0 14px; height:46px; }
+  .faixa .item { padding:0 18px; border-right:1px solid var(--linha); height:100%;
+                 display:flex; flex-direction:column; justify-content:center; }
+  .faixa .item:first-child { padding-left:0; }
+  .faixa .r { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--fraco); }
+  .faixa .v { font-weight:600; font-size:14px; letter-spacing:-0.01em; }
+  .faixa .v.ok { color:var(--ok); } .faixa .v.erro { color:var(--erro); }
+  .faixa .busca { margin-left:auto; display:flex; align-items:center; gap:8px; color:var(--fraco);
+                  border:1px solid var(--linha2); border-radius:6px; padding:5px 10px; font-size:12px; }
+  .faixa kbd { font-family:"JetBrains Mono",monospace; font-size:10px; border:1px solid var(--linha2);
+               border-radius:3px; padding:1px 4px; color:var(--apoio); }
+
+  .paineis { flex:1; display:grid; grid-template-columns:1.25fr 1fr; min-height:0; }
+  .painel { min-width:0; display:flex; flex-direction:column; border-right:1px solid var(--linha); }
+  .painel:last-child { border-right:0; }
+  .painel > header { display:flex; align-items:center; gap:10px; padding:9px 14px;
+                     border-bottom:1px solid var(--linha); }
+  .painel h2 { margin:0; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--apoio); font-weight:600; }
+  .painel .cont { color:var(--fraco); font-size:11px; }
+  .painel .filtros { margin-left:auto; display:flex; gap:4px; }
+  .painel .filtros span { font-size:11px; color:var(--fraco); border:1px solid var(--linha2);
+                          border-radius:4px; padding:2px 7px; }
+  .painel .filtros span.on { color:var(--tinta); border-color:#3a4252; background:#171b23; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { text-align:left; font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+             color:var(--fraco); font-weight:600; padding:7px 14px; border-bottom:1px solid var(--linha);
+             position:sticky; top:0; background:var(--fundo); }
+  tbody td { padding:8px 14px; border-bottom:1px solid var(--linha); vertical-align:middle; }
+  tbody tr:hover { background:#141821; }
+  tbody tr.sel { background:#171b26; box-shadow:inset 2px 0 0 var(--acento); }
+  .quem { font-weight:500; letter-spacing:-0.01em; }
+  .sub { color:var(--apoio); font-size:12px; }
+  .pill { display:inline-block; font-size:10px; font-weight:600; letter-spacing:.06em;
+          text-transform:uppercase; padding:2px 6px; border-radius:3px; border:1px solid transparent; }
+  .p-espera { color:var(--alerta); border-color:#40331d; background:#241c10; }
+  .p-bot { color:var(--ok); border-color:#1c3a2c; background:#0f2119; }
+  .p-fechada { color:var(--erro); border-color:#3d2023; background:#231315; }
+  .p-prazo { color:var(--erro); border-color:#3d2023; background:#231315; }
+  .p-aud { color:#b9a6ff; border-color:#332a5c; background:#191635; }
+  .dir { text-align:right; }
+  .rodape { border-top:1px solid var(--linha); padding:7px 14px; display:flex; gap:16px;
+            color:var(--fraco); font-size:11px; }
+  .rodape b { color:var(--apoio); font-weight:500; }
+  @media (max-width:820px) {
+    .app { display:block; height:auto; }
+    .lado { width:100%; flex-direction:row; overflow:auto; border-right:0; border-bottom:1px solid var(--linha); }
+    .lado .grupo, .lado .fim, .lado a b { display:none; }
+    .paineis { grid-template-columns:1fr; }
+    .painel { border-right:0; border-bottom:1px solid var(--linha); }
+    .faixa { overflow:auto; }
+    .faixa .busca { display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="lado">
+    <div class="topo"><span class="j">J</span><span class="nome">JuridFlow</span></div>
+    <a class="on">Bancada</a>
+    <a>Agenda <b>12</b></a>
+    <a>Atendimento <b>2</b></a>
+    <div class="grupo">Carteira</div>
+    <a>Clientes</a>
+    <a>Processos <b>2</b></a>
+    <a>Acordos</a>
+    <a>Kanban</a>
+    <div class="grupo">Ferramentas</div>
+    <a>JurisIA</a>
+    <a>Cálculos</a>
+    <a>Modelos</a>
+    <a>Automações</a>
+    <div class="grupo">Gestão</div>
+    <a>Financeiro</a>
+    <a>Relatórios</a>
+    <div class="fim"><a>Dono Smoke</a></div>
+  </nav>
+
+  <div class="centro">
+    <div class="faixa">
+      <div class="item"><span class="r">Recebido set.</span><span class="v ok num">R$ 10.700,00</span></div>
+      <div class="item"><span class="r">A receber</span><span class="v num">R$ 7.750,00</span></div>
+      <div class="item"><span class="r">Vencido</span><span class="v erro num">R$ 1.600,00</span></div>
+      <div class="item"><span class="r">Pipeline</span><span class="v num">R$ 22.700,00</span></div>
+      <div class="item"><span class="r">Ganhos/perdas</span><span class="v num">2 / 0</span></div>
+      <div class="busca">Buscar processo, cliente, valor… <kbd>⌘K</kbd></div>
+    </div>
+
+    <div class="paineis">
+      <section class="painel">
+        <header>
+          <h2>Conversas</h2><span class="cont">6 abertas · 2 esperando resposta</span>
+          <div class="filtros"><span class="on">Todas</span><span>Esperando</span><span>Minhas</span></div>
+        </header>
+        <table>
+          <thead><tr><th>Cliente</th><th>Última mensagem</th><th class="dir">Espera</th><th class="dir">Janela</th></tr></thead>
+          <tbody>
+            <tr class="sel">
+              <td><div class="quem">Antônia Gomes Vasconcelos</div><div class="sub">(88) 99733-1201</div></td>
+              <td><div>«Consigo pagar na sexta, pode ser?»</div><div class="sub">SLA crítico · sem atendente</div></td>
+              <td class="dir num">1d 6h</td>
+              <td class="dir"><span class="pill p-fechada">fechada</span></td>
+            </tr>
+            <tr>
+              <td><div class="quem">Cleide Farias do Nascimento</div><div class="sub">(88) 99733-4412</div></td>
+              <td><div>«Então eu levo os exames amanhã?»</div><div class="sub">em atendimento · Atendente</div></td>
+              <td class="dir num">22h 30</td>
+              <td class="dir"><span class="pill p-espera">1h24</span></td>
+            </tr>
+            <tr>
+              <td><div class="quem">Tirzah Barbosa de Lima</div><div class="sub">(85) 9999-0002</div></td>
+              <td><div>«Perfeito, obrigada!»</div><div class="sub">aguardando · robô respondeu</div></td>
+              <td class="dir num">2h 02</td>
+              <td class="dir"><span class="pill p-bot">21h58</span></td>
+            </tr>
+            <tr>
+              <td><div class="quem">Maria Aparecida Nogueira</div><div class="sub">(85) 98811-1508</div></td>
+              <td><div>«Dra., confirmo presença na audiência»</div><div class="sub">em atendimento · Dono</div></td>
+              <td class="dir num">2d</td>
+              <td class="dir"><span class="pill p-fechada">fechada</span></td>
+            </tr>
+            <tr>
+              <td><div class="quem">José Ribamar da Silva Filho</div><div class="sub">(85) 98123-4477</div></td>
+              <td><div>«Eu quero recorrer sim, o que precisa?»</div><div class="sub">SLA crítico · Dono</div></td>
+              <td class="dir num">2d</td>
+              <td class="dir"><span class="pill p-fechada">fechada</span></td>
+            </tr>
+            <tr>
+              <td><div class="quem">Francisco Edilson M. Rocha</div><div class="sub">(85) 99180-2233</div></td>
+              <td><div>«Obrigado, doutor! Até amanhã.»</div><div class="sub">resolvido</div></td>
+              <td class="dir num">3d</td>
+              <td class="dir"><span class="pill p-fechada">fechada</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="rodape"><span><b>J</b>/<b>K</b> navega</span><span><b>R</b> responder</span><span><b>T</b> transferir</span><span><b>E</b> encerrar</span></div>
+      </section>
+
+      <section class="painel">
+        <header>
+          <h2>Prazos e audiências</h2><span class="cont">1 vencido · 4 hoje</span>
+          <div class="filtros"><span class="on">7 dias</span><span>Mês</span></div>
+        </header>
+        <table>
+          <thead><tr><th>Quando</th><th>O quê</th><th class="dir">Tipo</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="num" style="color:var(--erro)">ontem 12:00</td>
+              <td><div class="quem">Contestação — 0801234-55.2026.8.06.0001</div><div class="sub">Maria Aparecida · TJCE 1ª Vara Cível</div></td>
+              <td class="dir"><span class="pill p-prazo">prazo</span></td>
+            </tr>
+            <tr>
+              <td class="num">hoje 08:30</td>
+              <td><div class="quem">Audiência de instrução</div><div class="sub">José Ribamar · Fórum Clóvis Beviláqua, sala 4</div></td>
+              <td class="dir"><span class="pill p-aud">audiência</span></td>
+            </tr>
+            <tr>
+              <td class="num">hoje 10:00</td>
+              <td><div class="quem">Reunião — proposta de acordo</div><div class="sub">Cleide Farias · videochamada</div></td>
+              <td class="dir"><span class="pill">reunião</span></td>
+            </tr>
+            <tr>
+              <td class="num">hoje 14:00</td>
+              <td><div class="quem">Perícia médica</div><div class="sub">Francisco Edilson · INSS Aldeota</div></td>
+              <td class="dir"><span class="pill p-aud">perícia</span></td>
+            </tr>
+            <tr>
+              <td class="num">hoje 16:30</td>
+              <td><div class="quem">Ligar para a cliente</div><div class="sub">Tirzah Barbosa</div></td>
+              <td class="dir"><span class="pill">tarefa</span></td>
+            </tr>
+            <tr>
+              <td class="num">18/09 09:00</td>
+              <td><div class="quem">Audiência de conciliação</div><div class="sub">Antônia Gomes · CEJUSC</div></td>
+              <td class="dir"><span class="pill p-aud">audiência</span></td>
+            </tr>
+            <tr>
+              <td class="num">19/09 15:00</td>
+              <td><div class="quem">Protocolar recurso inominado</div><div class="sub">Francisco Edilson · JEF</div></td>
+              <td class="dir"><span class="pill">tarefa</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="rodape"><span>Cobranças vencidas <b>R$ 1.600,00</b></span><span>a vencer em 7d <b>R$ 3.400,00</b></span><span>Instagram <b>R$ 9.800</b></span></div>
+      </section>
+    </div>
+  </div>
+</div>
+</body>
+</html>
