@@ -265,9 +265,24 @@ export async function enviarInterativoPeloCanalApi(opts: {
       telefone,
       proativo,
       exigirOptin: opts.exigirOptin,
+      // Botão e lista são conteúdo livre pra Meta: fora da janela de 24h a
+      // recusa é a mesma do texto.
+      textoLivre: true,
     });
     if (!permitido.ok) {
       log.warn({ canalId: cred.canalId, tipo: permitido.tipo }, "[Guard] interativo bloqueado antes do envio");
+      if (permitido.tipo === "janela") {
+        const alvo = permitido.contatoId ?? opts.contatoId;
+        if (alvo) {
+          const { registrarJanelaFechadaNaConversa } = await import("./recado-janela-fechada");
+          await registrarJanelaFechadaNaConversa({
+            db,
+            escritorioId: opts.escritorioId,
+            contatoId: alvo,
+            canalId: cred.canalId,
+          });
+        }
+      }
       return { ok: false, erro: permitido.erro, provider: "whatsapp_api", canalId: cred.canalId, bloqueio: permitido.tipo };
     }
   }
@@ -395,9 +410,22 @@ async function enviarViaCloudApi(canal: any, opts: EnvioMensagemOpts): Promise<E
         telefone,
         proativo: opts.proativo,
         exigirOptin: opts.exigirOptin,
+        textoLivre: true,
       });
       if (!permitido.ok) {
         log.warn({ canalId: canal.id, tipo: permitido.tipo }, "[Guard] texto bloqueado antes do envio");
+        if (permitido.tipo === "janela") {
+          const alvo = permitido.contatoId ?? opts.contatoId;
+          if (alvo) {
+            const { registrarJanelaFechadaNaConversa } = await import("./recado-janela-fechada");
+            await registrarJanelaFechadaNaConversa({
+              db,
+              escritorioId: canal.escritorioId,
+              contatoId: alvo,
+              canalId: canal.id,
+            });
+          }
+        }
         return { ok: false, erro: permitido.erro, provider: "whatsapp_api", canalId: canal.id, bloqueio: permitido.tipo };
       }
     }

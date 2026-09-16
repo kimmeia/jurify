@@ -8,7 +8,7 @@
  * livre e interativo). O disjuntor, especificamente, cobre TODO envio — inclusive
  * resposta manual — porque com a conta restrita pela Meta nenhum envio deve sair.
  *
- * Quatro camadas, aplicadas em `podeEnviar` antes de cada disparo:
+ * Cinco camadas, aplicadas em `podeEnviar` antes de cada disparo:
  *
  *  1. DISJUNTOR (circuit breaker). Ao detectar restrição/spam da Meta — síncrono
  *     no envio, assíncrono no webhook `failed`, OU no webhook `account_update` de
@@ -30,6 +30,11 @@
  *  4. OPT-IN. Disparo automático só sai pra contato que já iniciou conversa OU
  *     tem relação transacional (cliente Asaas). Mensagem "fria" iniciada pela
  *     empresa pra estranho é justamente o que a Meta trata como spam.
+ *
+ *  5. JANELA DE 24H (só conteúdo livre: texto, mídia, botões). Fora dela a Meta
+ *     recusa com 131047 — o cliente não recebe nada e a tentativa desgasta o
+ *     número. Template aprovado é a exceção por desenho: é o formato criado pra
+ *     reabrir conversa fria, então NÃO passa por esta camada.
  */
 
 import { canaisIntegrados, mensagens, conversas, asaasClientes } from "../../drizzle/schema";
@@ -313,11 +318,11 @@ export async function incrementarDisparoDia(db: any, canalId: number, agoraMs: n
 
 // ─── Orquestrador ────────────────────────────────────────────────────────────
 
-export type MotivoBloqueio = "restrito" | "qualidade" | "diario" | "rate" | "optin" | "optout";
+export type MotivoBloqueio = "restrito" | "qualidade" | "diario" | "rate" | "optin" | "optout" | "janela";
 
 /**
  * Decide se um envio PODE sair agora. Ordem: disjuntor → teto diário → rate
- * limit → opt-in. Retorna erro legível (que vira o status/execução na UI)
+ * limit → opt-out → opt-in → janela de 24h. Retorna erro legível (que vira o status/execução na UI)
  * quando bloqueia. Não registra o disparo — quem envia chama
  * `registrarSucessoEnvio` no sucesso.
  *
@@ -336,8 +341,18 @@ export async function podeEnviar(opts: {
   telefone?: string | null;
   proativo?: boolean;
   exigirOptin?: boolean;
+  /**
+   * O conteúdo é LIVRE (texto, mídia, botões)? Só ele depende da janela de
+   * 24h — template aprovado existe justamente pra sair fora dela. Entra por
+   * opção explícita, e não por default, pra não passar a barrar caminho que
+   * ninguém pediu (a chamada de voz, por exemplo, não é mensagem).
+   */
+  textoLivre?: boolean;
   agoraMs?: number;
-}): Promise<{ ok: true } | { ok: false; erro: string; tipo: MotivoBloqueio }> {
+  // `contatoId` volta na recusa por janela porque quem chama nem sempre o
+  // tinha: o guard resolve pelo telefone, e é esse id que acha a conversa
+  // onde o recado interno precisa aparecer.
+}): Promise<{ ok: true } | { ok: false; erro: string; tipo: MotivoBloqueio; contatoId?: number }> {
   const agoraMs = opts.agoraMs ?? Date.now();
   let estado: EstadoCanal | null = null;
 
@@ -425,12 +440,31 @@ export async function podeEnviar(opts: {
     }
   }
 
+  // Janela de 24h — a última trava, e a que faltava. Opt-in NÃO cobre isto:
+  // ele diz "já falou comigo alguma vez", e a Meta pergunta "falou nas
+  // últimas 24h". Sem esta camada o fluxo mandava texto livre pra conversa
+  // fria, a Meta recusava com 131047 (o cliente não recebia NADA) e a
+  // tentativa ainda contava contra a reputação do número.
+  //
+  // Sem contato ou sem canal não dá pra medir a janela: passa. Indeterminação
+  // não é prova de janela fechada, e barrar por dúvida calaria envio legítimo.
+  if (opts.proativo && opts.textoLivre && contatoId && opts.canalId) {
+    const { ultimaEntradaDoContatoNoCanal } = await import("./whatsapp-optout");
+    const { janela24hAberta, MENSAGEM_BLOQUEIO_JANELA } = await import("../../shared/janela-24h");
+    const ultimaEntrada = await ultimaEntradaDoContatoNoCanal(opts.db, contatoId, opts.canalId);
+    if (!janela24hAberta(ultimaEntrada, agoraMs)) {
+      return { ok: false, tipo: "janela", erro: MENSAGEM_BLOQUEIO_JANELA, contatoId };
+    }
+  }
+
   return { ok: true };
 }
 
 /**
  * Compat: gate específico de template. Template é SEMPRE proativo (mensagem
- * iniciada pela empresa). Delega pra `podeEnviar`.
+ * iniciada pela empresa). Delega pra `podeEnviar` — sem `textoLivre`, porque
+ * template é exatamente o que a Meta aceita FORA da janela de 24h. Barrá-lo
+ * por janela fechada tiraria do escritório a única saída pra reabrir conversa.
  */
 export async function podeDispararTemplate(opts: {
   db: any;

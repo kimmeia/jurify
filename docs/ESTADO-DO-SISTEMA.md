@@ -161,7 +161,7 @@ Rodado neste container, em 12/09/2026, com `pnpm install` feito na hora:
 
 | medida | resultado | comando |
 |---|---|---|
-| testes | **6.281 verdes, 420 arquivos** (14/09, com o aniversário obrigatório no cadastro novo; 6.239 em 418 na ponta do merge das três entregas do dia; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
+| testes | **6.302 verdes, 421 arquivos** (16/09, com a janela de 24h do robô; 6.281 em 420 com o aniversário obrigatório no cadastro novo; 6.239 em 418 na ponta do merge das três entregas do dia; 6.203 em 415 só com a seção 38; 6.176 em 414 na seção 37; 6.103 em 412 na seção 32 — o módulo de ajuda saiu em develop e levou as amarras dele; 5.570 em 380 no início da auditoria) | `pnpm test` |
 | tipos | **limpo, saída 0** | `pnpm check` |
 | lint | **não existe** — nenhum eslint/biome/oxlint no repo; `check` é só `tsc --noEmit` | `package.json` |
 
@@ -4516,3 +4516,88 @@ o por grupo também). O conserto foi simplificar o código, não engordar o test
 `cancelar-contrato` teve UM `expect` trocado: ele travava a adjacência de dois
 campos no payload e passou a conferir que a lista está lá, conferido por
 mutação.
+
+## 41. A janela de 24h do WhatsApp: o robô passou a conferir antes de mandar (16/09)
+
+Origem: pergunta do dono — *&ldquo;temos que guardar o início e fim da janela de 24
+horas pq depois disso, se o cliente manda nova mensagem, a janela reabre né n?
+verifique isso&rdquo;*. A verificação achou três coisas; a primeira responde a
+pergunta, as outras duas eram furo de verdade.
+
+### 41.1 Não se guarda a janela — calcula-se, e é por isso que ela reabre sozinha
+
+A régua é `janela24hAberta`: *a última mensagem RECEBIDA daquele cliente naquele
+número tem menos de 24h?* Como o que manda é o carimbo da última entrada, cada
+mensagem nova do cliente empurra o prazo 24h para frente **sem ninguém precisar
+atualizar nada**. A medição é pelo PAR cliente × número
+(`ultimaEntradaDoContatoNoCanal`), atravessando conversas encerradas — que é
+como a Meta mede — e recado interno (`tipo: "sistema"`) não conta como entrada.
+
+Guardar início e fim numa coluna seria uma segunda verdade para manter em dia. O
+caminho que esquecesse de atualizar deixaria o campo travado com a janela aberta
+— ou, pior, deixaria sair texto livre fora dela. A decisão está escrita no topo
+de `shared/janela-24h.ts` para ninguém &ldquo;otimizar&rdquo; isso depois.
+
+### 41.2 O furo: o robô não conferia a janela em lugar nenhum
+
+As travas anti-ban eram quatro — conta restrita, teto diário, rajada e opt-in — e
+**nenhuma era a janela**. E opt-in não substitui: ele diz *já falou comigo alguma
+vez*; a Meta pergunta *falou nas últimas 24h*. Sem a camada, o fluxo mandava
+texto livre para conversa fria, a Meta recusava com 131047 — o cliente **não
+recebia nada** — e a tentativa ainda contava contra a reputação do número. Era o
+que já tinha aparecido nos prints do dono.
+
+A conferência virou a 5ª camada de `podeEnviar`, e entra por opção explícita
+(`textoLivre: true`) nas duas portas de conteúdo livre de `canal-envio` (texto e
+interativo). Opção explícita, e não default, para não passar a barrar caminho que
+ninguém pediu — a chamada de voz, por exemplo, não é mensagem. Sem contato ou sem
+canal resolvido, **passa**: indeterminação não é prova de janela fechada, e
+barrar por dúvida calaria envio legítimo.
+
+### 41.3 Template é a exceção, por desenho
+
+`podeDispararTemplate` não manda `textoLivre`. Template aprovado é exatamente o
+formato que a Meta aceita FORA da janela; barrá-lo tiraria do escritório a única
+saída para reabrir conversa. Há mutação travando os dois lados (o template
+passando fora da janela, e o gate não ganhando a marca por acidente).
+
+### 41.4 Bloqueou, quem atende fica sabendo
+
+Decisão do dono entre as três opções oferecidas: **não manda e avisa na
+conversa**. `registrarJanelaFechadaNaConversa` deixa a nota cinza de recado
+interno — a mesma que o limite por contato já usava — dizendo o prazo e a saída
+(&ldquo;envie um template aprovado&rdquo;). **Um recado por episódio, não por
+tentativa**: um lembrete que tenta todo dia contra a mesma conversa fria deixaria
+uma nota por dia, e coluna de aviso repetido ninguém lê. O episódio termina
+quando o cliente escreve — é a mensagem dele que reabre a janela —, então a dedup
+pergunta se já existe recado DEPOIS da última entrada. Silencioso por desenho:
+falhar a nota não pode virar exceção em cima de um envio já decidido.
+
+### 41.5 Uma fonte para a conta
+
+A conta pura saiu para `shared/janela-24h.ts` e o servidor a reexporta, porque a
+tela do Atendimento precisa da MESMA régua — dois cálculos parecidos são o que
+produz cadeado travado com a janela aberta. A shared já leva o que a tela vai
+usar: `msRestantesDaJanela`, `rotuloTempoRestante` (&ldquo;3h05&rdquo;,
+&ldquo;48 min&rdquo;, &ldquo;menos de 1 min&rdquo;) e `janelaAcabando`.
+
+### 41.6 O que ficou anotado e NÃO foi feito
+
+- **A tela ainda conta sozinha.** `Atendimento.tsx` decide o cadeado olhando só
+  as mensagens da conversa aberta que já carregaram; o servidor olha o cliente
+  inteiro naquele número. Conversa nova para o mesmo telefone pode aparecer
+  travada com a janela aberta. O conserto e o relógio (&ldquo;faltam 3h20&rdquo;)
+  saem no comparador antes de virar código — o dono escolheu assim.
+- **Resposta manual não foi tocada**: quem cuida dela é o bloqueio de
+  `router-crm`, que já existia e mostra outro texto.
+- **Os outros furos do SmartFlow seguem abertos** e estão fora desta entrega: o
+  limite por contato só é consultado quando o fluxo COMEÇA (a retomada passa por
+  fora); a retomada pelo relógio responde fora de hora com o texto do momento
+  anterior; e a resposta automática do canal fala logo depois do recado &ldquo;o
+  robô não respondeu&rdquo;, porque o bloqueio devolve `executou: false`.
+
+Baseline desta fatia: **6.302 testes verdes em 421 arquivos**, `pnpm check`
+limpo. Amarra: `janela-24h-do-robo.test.ts` (21 testes) — **24/24 mutações
+vermelhas** em `scratchpad/mutar-janela-24h.py`. Uma sobreviveu na primeira
+volta: carimbo ilegível abrindo a janela, porque a amarra só testava data
+ausente, nunca data quebrada.

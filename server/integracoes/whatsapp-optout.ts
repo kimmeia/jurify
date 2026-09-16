@@ -202,19 +202,14 @@ export async function registrarOptInSeAusente(
 
 // ─── Janela de 24h (atendimento) ─────────────────────────────────────────────
 
-export const JANELA_24H_MS = 24 * 60 * 60 * 1000;
-
 /**
- * A janela de atendimento do WhatsApp está aberta? Aberta = última mensagem
- * RECEBIDA do contato há menos de 24h. Fora dela, a Meta rejeita texto
- * livre (131047) — só template sai. Pura, testável.
+ * A conta da janela é PURA e mora na shared, porque a tela do Atendimento
+ * precisa da mesma régua do servidor — dois cálculos parecidos davam cadeado
+ * travado com a janela aberta. Reexportado aqui porque este módulo é a porta
+ * por onde o servidor sempre entrou.
  */
-export function janela24hAberta(ultimaEntradaAt: Date | null | undefined, agoraMs: number): boolean {
-  if (!ultimaEntradaAt) return false;
-  const t = ultimaEntradaAt instanceof Date ? ultimaEntradaAt.getTime() : new Date(ultimaEntradaAt as any).getTime();
-  if (Number.isNaN(t)) return false;
-  return agoraMs - t < JANELA_24H_MS;
-}
+export { JANELA_24H_MS, janela24hAberta } from "../../shared/janela-24h";
+import { janela24hAberta } from "../../shared/janela-24h";
 
 /** Busca o timestamp da última mensagem RECEBIDA da conversa. */
 export async function ultimaEntradaDaConversa(db: any, conversaId: number): Promise<Date | null> {
